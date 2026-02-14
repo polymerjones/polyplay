@@ -28,7 +28,7 @@
           </div>
         </div>
         <div class="controls">
-          <button class="ctrl track prev" aria-label="Previous track">
+          <button class="ctrl track prev" data-track="prev" aria-label="Previous track">
             <span class="track-icon prev-icon" aria-hidden="true"></span>
           </button>
           <button class="ctrl skip" data-skip="-30">-30</button>
@@ -39,13 +39,15 @@
           </button>
           <button class="ctrl skip" data-skip="10">+10</button>
           <button class="ctrl skip" data-skip="30">+30</button>
-          <button class="ctrl track next" aria-label="Next track">
+          <button class="ctrl track next" data-track="next" aria-label="Next track">
             <span class="track-icon next-icon" aria-hidden="true"></span>
           </button>
         </div>
         <div class="aux">
+          <button class="ghost aux-track prev" data-track="prev" aria-label="Previous track">Prev</button>
           <button class="ghost">Add Note</button>
           <button class="ghost aura-btn">Aura +</button>
+          <button class="ghost aux-track next" data-track="next" aria-label="Next track">Next</button>
           <button class="ghost loop-btn">Loop Off</button>
         </div>
         <div class="waveform" aria-hidden="true">

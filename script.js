@@ -3,8 +3,8 @@ const nowTitle = document.querySelector(".np-title");
 const nowSub = document.querySelector(".np-sub");
 const auraBtn = document.querySelector(".aura-btn");
 const playBtn = document.querySelector(".ctrl.play");
-const prevBtn = document.querySelector(".ctrl.track.prev");
-const nextBtn = document.querySelector(".ctrl.track.next");
+const prevButtons = document.querySelectorAll("[data-track='prev']");
+const nextButtons = document.querySelectorAll("[data-track='next']");
 const loopBtn = document.querySelector(".loop-btn");
 const skipButtons = document.querySelectorAll(".ctrl.skip");
 const player = document.querySelector("#player");
@@ -289,14 +289,18 @@ playBtn.addEventListener("click", () => {
   togglePlay();
 });
 
-prevBtn.addEventListener("click", () => {
-  sparkleAndHaptic(prevBtn);
-  moveTrack(-1);
+prevButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    sparkleAndHaptic(btn);
+    moveTrack(-1);
+  });
 });
 
-nextBtn.addEventListener("click", () => {
-  sparkleAndHaptic(nextBtn);
-  moveTrack(1);
+nextButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    sparkleAndHaptic(btn);
+    moveTrack(1);
+  });
 });
 
 skipButtons.forEach((btn) => {
