@@ -3,12 +3,15 @@ const nowTitle = document.querySelector(".np-title");
 const nowSub = document.querySelector(".np-sub");
 const auraBtn = document.querySelector(".aura-btn");
 const playBtn = document.querySelector(".ctrl.play");
+const prevBtn = document.querySelector(".ctrl.track.prev");
+const nextBtn = document.querySelector(".ctrl.track.next");
 const loopBtn = document.querySelector(".loop-btn");
 const skipButtons = document.querySelectorAll(".ctrl.skip");
 const player = document.querySelector("#player");
 const npArt = document.querySelector("#npArt");
 const waveCanvas = document.querySelector("#waveCanvas");
 const waveCtx = waveCanvas.getContext("2d");
+const nowPlaying = document.querySelector(".now-playing");
 
 let currentTrackId = null;
 let isPlaying = false;
@@ -108,6 +111,34 @@ function updateAura(tile, delta) {
   if (trackId && !trackId.startsWith("sample-")) saveAura(Number(trackId), count);
 }
 
+function getTiles() {
+  return [...grid.querySelectorAll(".tile")];
+}
+
+function moveTrack(direction) {
+  const tiles = getTiles();
+  if (!tiles.length) return;
+  const currentIndex = tiles.findIndex((tile) => tile.dataset.trackId === String(currentTrackId));
+  const safeIndex = currentIndex === -1 ? 0 : currentIndex;
+  const nextIndex = (safeIndex + direction + tiles.length) % tiles.length;
+  const nextTile = tiles[nextIndex];
+  if (!nextTile) return;
+  setNowPlaying(nextTile);
+  if (!isPlaying) togglePlay();
+}
+
+function sparkleAndHaptic(button) {
+  if (button) {
+    button.classList.remove("sparkle");
+    // Force reflow to restart animation
+    void button.offsetWidth;
+    button.classList.add("sparkle");
+  }
+  if (navigator.vibrate) {
+    navigator.vibrate(10);
+  }
+}
+
 function setNowPlaying(tile) {
   const nextTrackId = tile.dataset.trackId || null;
   const isSameTrack = nextTrackId && nextTrackId === currentTrackId;
@@ -116,6 +147,11 @@ function setNowPlaying(tile) {
   nowTitle.textContent = title;
   nowSub.textContent = `${sub} • 03:28`;
   currentTrackId = nextTrackId;
+
+  grid.querySelectorAll(".tile.is-playing").forEach((node) => node.classList.remove("is-playing"));
+  if (isPlaying) {
+    tile.classList.add("is-playing");
+  }
 
   const track = trackCache.get(currentTrackId);
   if (track && track.audioUrl) {
@@ -130,7 +166,7 @@ function setNowPlaying(tile) {
   } else if (track && track.artGrad) {
     npArt.style.backgroundImage = track.artGrad;
   } else {
-    npArt.style.backgroundImage = `url('${DEFAULT_ART}')`;
+    npArt.style.backgroundImage = "url('logo.jpg')";
   }
 
   drawWaveform();
@@ -161,19 +197,23 @@ function buildTile(track) {
 
   const art = document.createElement("div");
   art.className = "art";
+  let tileBg = "";
   if (track.artUrl) {
-    art.style.backgroundImage = `url('${track.artUrl}')`;
+    tileBg = `url('${track.artUrl}')`;
+    art.style.backgroundImage = tileBg;
   } else if (track.artGrad) {
-    art.style.backgroundImage = track.artGrad;
+    tileBg = track.artGrad;
+    art.style.backgroundImage = tileBg;
   } else {
-    art.style.backgroundImage = `url('${DEFAULT_ART}')`;
+    tileBg = `url('${DEFAULT_ART}')`;
+    art.style.backgroundImage = tileBg;
   }
+  button.style.setProperty("--tile-bg", tileBg);
 
   const meta = document.createElement("div");
   meta.className = "meta";
   meta.innerHTML = `
     <div class="title">${track.title}</div>
-    <div class="sub">${track.sub || ""}</div>
     <div class="aura-meter">Aura ${track.aura || 0}</div>
   `;
 
@@ -234,10 +274,29 @@ function togglePlay() {
   playBtn.classList.toggle("paused", !isPlaying);
   if (isPlaying) player.play().catch(() => {});
   else player.pause();
+
+  const tiles = grid.querySelectorAll(".tile");
+  tiles.forEach((tile) => {
+    if (tile.dataset.trackId === String(currentTrackId)) {
+      tile.classList.toggle("is-playing", isPlaying);
+    } else {
+      tile.classList.remove("is-playing");
+    }
+  });
 }
 
 playBtn.addEventListener("click", () => {
   togglePlay();
+});
+
+prevBtn.addEventListener("click", () => {
+  sparkleAndHaptic(prevBtn);
+  moveTrack(-1);
+});
+
+nextBtn.addEventListener("click", () => {
+  sparkleAndHaptic(nextBtn);
+  moveTrack(1);
 });
 
 skipButtons.forEach((btn) => {
@@ -262,6 +321,7 @@ loopBtn.addEventListener("click", () => {
   isLooping = !isLooping;
   player.loop = isLooping;
   loopBtn.textContent = isLooping ? "Loop On" : "Loop Off";
+  loopBtn.classList.toggle("active", isLooping);
 });
 
 function getGradientColorsFromImage(url) {
@@ -306,6 +366,8 @@ function getGradientColorsFromImage(url) {
 
 async function ensureWaveform(track) {
   if (!track.audioBlob || track.peaks) return;
+  waveCanvas.classList.remove("wave-ready");
+  waveCanvas.classList.add("wave-loading");
   const ctx = ensureAudioContext();
   const arrayBuffer = await track.audioBlob.arrayBuffer();
   const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
@@ -334,30 +396,46 @@ async function ensureWaveform(track) {
 }
 
 function drawWaveform() {
-  const width = waveCanvas.width;
-  const height = waveCanvas.height;
+  const rect = waveCanvas.getBoundingClientRect();
+  if (rect.width && rect.height) {
+    waveCanvas.width = Math.floor(rect.width * window.devicePixelRatio);
+    waveCanvas.height = Math.floor(rect.height * window.devicePixelRatio);
+    waveCtx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+  }
+  const width = waveCanvas.width / window.devicePixelRatio;
+  const height = waveCanvas.height / window.devicePixelRatio;
   waveCtx.clearRect(0, 0, width, height);
 
   const track = trackCache.get(currentTrackId);
   const peaks = track?.peaks;
   const progress = player.duration ? player.currentTime / player.duration : 0;
+  const t = Date.now() / 1000;
+  const pulse = 0.35 + 0.35 * (0.5 + 0.5 * Math.sin(t * 3.2));
+
+  if (!peaks) {
+    waveCanvas.classList.remove("wave-ready");
+    waveCanvas.classList.add("wave-loading");
+    return;
+  }
+  waveCanvas.classList.remove("wave-loading");
+  waveCanvas.classList.add("wave-ready");
 
   const bars = peaks ? peaks.length : 60;
   const gap = 2;
   const barWidth = (width - gap * (bars - 1)) / bars;
 
-  const gradColors = track?.waveGradient || ["rgba(123, 224, 255, 0.95)", "rgba(255, 128, 200, 0.85)"];
+  const gradColors = track?.waveGradient || ["rgba(92, 36, 150, 0.98)", "rgba(210, 140, 255, 1)"];
   const gradient = waveCtx.createLinearGradient(0, 0, width, 0);
   gradient.addColorStop(0, gradColors[0]);
-  gradient.addColorStop(1, gradColors[1]);
+  gradient.addColorStop(1, gradColors[1].replace("1", (0.8 + pulse).toFixed(2)));
 
   for (let i = 0; i < bars; i += 1) {
     const magnitude = peaks ? peaks[i] : 0.3 + ((i * 37) % 100) / 100;
-    const barHeight = Math.max(4, magnitude * height * 0.9);
+    const barHeight = Math.max(4, magnitude * height * 0.98);
     const x = i * (barWidth + gap);
     const y = (height - barHeight) / 2;
 
-    waveCtx.fillStyle = i / bars <= progress ? gradient : "rgba(123, 224, 255, 0.25)";
+    waveCtx.fillStyle = i / bars <= progress ? gradient : "rgba(120, 70, 180, 0.6)";
     waveCtx.fillRect(x, y, barWidth, barHeight);
   }
 }
@@ -367,6 +445,10 @@ function tick() {
   rafId = requestAnimationFrame(tick);
 }
 
+window.addEventListener("resize", () => {
+  drawWaveform();
+});
+
 waveCanvas.addEventListener("click", (event) => {
   if (!player.duration) return;
   const rect = waveCanvas.getBoundingClientRect();
@@ -375,6 +457,23 @@ waveCanvas.addEventListener("click", (event) => {
   player.currentTime = player.duration * ratio;
   drawWaveform();
 });
+
+function scrubFromEvent(event) {
+  if (!player.duration) return;
+  const target = event.target;
+  if (target.closest(".controls") || target.closest(".aux") || target.closest(".ctrl") || target.closest(".ghost")) {
+    return;
+  }
+  const rect = nowPlaying.getBoundingClientRect();
+  const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+  const x = clientX - rect.left;
+  const ratio = Math.min(1, Math.max(0, x / rect.width));
+  player.currentTime = player.duration * ratio;
+  drawWaveform();
+}
+
+nowPlaying.addEventListener("click", scrubFromEvent);
+nowPlaying.addEventListener("touchstart", scrubFromEvent);
 
 player.addEventListener("play", () => {
   cancelAnimationFrame(rafId);
@@ -389,5 +488,11 @@ player.addEventListener("pause", () => {
 player.addEventListener("loadedmetadata", () => {
   drawWaveform();
 });
+
+npArt.addEventListener("click", () => {
+  npArt.classList.toggle("expanded");
+});
+
+npArt.style.backgroundImage = "url('logo.jpg')";
 
 loadTracks();
