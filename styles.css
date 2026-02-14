@@ -658,6 +658,48 @@ body::before {
   font-size: 12px;
 }
 
+@media (max-width: 480px) {
+  .now-playing {
+    padding: 8px 10px;
+  }
+  .controls {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    max-width: 100%;
+  }
+  .ctrl {
+    min-height: 54px;
+    min-width: 54px;
+    font-size: 14px;
+    border-radius: 12px;
+  }
+  .ctrl.play {
+    min-height: 64px;
+    min-width: 64px;
+  }
+  .ctrl.track {
+    font-size: 18px;
+  }
+  .track-icon {
+    width: 28px;
+    height: 16px;
+  }
+  .track-icon::before {
+    width: 4px;
+  }
+  .track-icon::after {
+    width: 16px;
+  }
+  .aux {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .ghost {
+    min-height: 36px;
+    font-size: 11px;
+  }
+}
+
 .admin-card {
   background: rgba(17, 24, 34, 0.7);
   border-radius: var(--radius);
