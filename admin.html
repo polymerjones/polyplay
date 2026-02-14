@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Polyplay Music App Beta v0 — Admin Upload</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app admin">
+      <header class="topbar">
+        <div class="brand">Admin • Upload</div>
+        <a class="back-link" href="index.html" aria-label="Back to player">
+          <span class="back-icon" aria-hidden="true">↩︎</span>
+        </a>
+        <div class="hint">Upload audio, title, and artwork</div>
+      </header>
+
+      <main class="admin-card">
+        <form class="admin-form">
+          <label class="field">
+            <span>Track title</span>
+            <input type="text" name="title" />
+          </label>
+
+          <label class="field">
+            <span>Audio file (.wav or .mp3)</span>
+            <input type="file" name="audio" accept="audio/wav,audio/x-wav,audio/mpeg" />
+          </label>
+
+          <label class="field">
+            <span>Artwork image</span>
+            <input type="file" name="art" accept="image/*" />
+          </label>
+
+          <div class="admin-actions">
+            <button type="submit" class="ctrl">Upload</button>
+            <button type="reset" class="ghost">Clear</button>
+          </div>
+          <button type="button" class="ghost reset-aura">Reset Aura</button>
+          <div class="admin-status" aria-live="polite"></div>
+        </form>
+      </main>
+    </div>
+    <script src="admin.js"></script>
+  </body>
+</html>

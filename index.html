@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Polyplay Music App Beta v0</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="safe-tap">
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">Polyplay Music App Beta v0</div>
+        <a class="gear-link" href="admin.html" aria-label="Open upload page">
+          <span class="gear-icon" aria-hidden="true">⚙︎</span>
+        </a>
+        <div class="hint">Tap tiles to play • Tap artwork to build aura</div>
+      </header>
+
+      <main class="grid" id="grid"></main>
+
+      <section class="now-playing">
+        <div class="np-track">
+          <div class="np-art" id="npArt"></div>
+          <div class="np-meta">
+            <div class="np-title">Select a track</div>
+            <div class="np-sub">Ready to play</div>
+          </div>
+        </div>
+        <div class="waveform">
+          <canvas class="wave-canvas" id="waveCanvas" width="800" height="120"></canvas>
+        </div>
+        <div class="controls">
+          <button class="ctrl skip" data-skip="-30">-30</button>
+          <button class="ctrl skip" data-skip="-10">-10</button>
+          <button class="ctrl play paused" aria-label="Play or pause">
+            <span class="icon-play"></span>
+            <span class="icon-pause"></span>
+          </button>
+          <button class="ctrl skip" data-skip="10">+10</button>
+          <button class="ctrl skip" data-skip="30">+30</button>
+        </div>
+        <div class="aux">
+          <button class="ghost">Add Note</button>
+          <button class="ghost aura-btn">Aura +</button>
+          <button class="ghost loop-btn">Loop Off</button>
+        </div>
+      </section>
+    </div>
+    <audio id="player"></audio>
+    <script src="script.js"></script>
+  </body>
+</html>
