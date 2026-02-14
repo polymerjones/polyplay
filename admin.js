@@ -48,14 +48,17 @@ async function resetAllAura() {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const title = form.title.value.trim();
   const audioFile = form.audio.files[0];
   const artFile = form.art.files[0];
 
-  if (!title || !audioFile || !artFile) {
-    setStatus("Please provide title, audio, and artwork.");
+  if (!audioFile) {
+    setStatus("Please provide an audio file.");
     return;
   }
+
+  const rawTitle = form.title.value.trim();
+  const fallbackTitle = audioFile.name.replace(/\.[^/.]+$/, "").trim();
+  const title = rawTitle || fallbackTitle || "Untitled";
 
   try {
     const db = await openDb();
@@ -66,7 +69,7 @@ form.addEventListener("submit", async (event) => {
         title,
         sub: "Uploaded",
         audio: audioFile,
-        art: artFile,
+        art: artFile || null,
         aura: 0,
         createdAt: Date.now(),
       };

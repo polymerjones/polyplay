@@ -17,6 +17,8 @@ let rafId = null;
 let audioCtx = null;
 const trackCache = new Map();
 
+const DEFAULT_ART = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23263140'/%3E%3Cstop offset='100%25' stop-color='%23101822'/%3E%3C/linearGradient%3E%3CradialGradient id='shine' cx='30%25' cy='20%25' r='60%25'%3E%3Cstop offset='0%25' stop-color='rgba(255,255,255,0.6)'/%3E%3Cstop offset='50%25' stop-color='rgba(255,255,255,0.15)'/%3E%3Cstop offset='100%25' stop-color='rgba(255,255,255,0)'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='400' height='400' rx='36' fill='url(%23g)'/%3E%3Crect width='400' height='400' rx='36' fill='url(%23shine)'/%3E%3Cpath d='M240 110v140c0 22-20 40-44 40-25 0-46-19-46-42s21-42 46-42c8 0 15 2 22 5V126l102-26z' fill='%23e9f0f7' fill-opacity='0.9'/%3E%3Cpath d='M240 126l102-26v38l-102 26z' fill='%23b8c9dc' fill-opacity='0.9'/%3E%3C/svg%3E";
+
 const sampleTracks = [
   { id: "sample-1", title: "Neon Drive", sub: "Mix v12", aura: 28, artGrad: "linear-gradient(135deg, #09121f, #2b5c7a)" },
   { id: "sample-2", title: "Midnight Loop", sub: "Mix v7", aura: 12, artGrad: "linear-gradient(135deg, #1b2a4a, #4d2d6c)" },
@@ -125,8 +127,10 @@ function setNowPlaying(tile) {
 
   if (track && track.artUrl) {
     npArt.style.backgroundImage = `url('${track.artUrl}')`;
+  } else if (track && track.artGrad) {
+    npArt.style.backgroundImage = track.artGrad;
   } else {
-    npArt.style.backgroundImage = "linear-gradient(135deg, #2f3b50 0%, #1a2432 100%)";
+    npArt.style.backgroundImage = `url('${DEFAULT_ART}')`;
   }
 
   drawWaveform();
@@ -161,6 +165,8 @@ function buildTile(track) {
     art.style.backgroundImage = `url('${track.artUrl}')`;
   } else if (track.artGrad) {
     art.style.backgroundImage = track.artGrad;
+  } else {
+    art.style.backgroundImage = `url('${DEFAULT_ART}')`;
   }
 
   const meta = document.createElement("div");
