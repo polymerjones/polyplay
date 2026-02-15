@@ -12,6 +12,12 @@ const npArt = document.querySelector("#npArt");
 const waveCanvas = document.querySelector("#waveCanvas");
 const waveCtx = waveCanvas.getContext("2d");
 const nowPlaying = document.querySelector(".now-playing");
+const waveform = document.querySelector('.waveform');
+const loopOverlay = document.querySelector('.loop-overlay');
+const loopRange = document.querySelector('.loop-range');
+const loopStartHandle = document.querySelector('.loop-handle.start');
+const loopEndHandle = document.querySelector('.loop-handle.end');
+const clearLoopBtn = document.querySelector('.clear-loop');
 
 let currentTrackId = null;
 let isPlaying = false;
@@ -19,6 +25,10 @@ let isLooping = false;
 let rafId = null;
 let audioCtx = null;
 const trackCache = new Map();
+let loopRegion = { start: 0, end: 0, active: false, editing: false };
+let loopDrag = null;
+let pressTimer = null;
+const LONG_PRESS_MS = 450;
 
 const DEFAULT_ART = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23263140'/%3E%3Cstop offset='100%25' stop-color='%23101822'/%3E%3C/linearGradient%3E%3CradialGradient id='shine' cx='30%25' cy='20%25' r='60%25'%3E%3Cstop offset='0%25' stop-color='rgba(255,255,255,0.6)'/%3E%3Cstop offset='50%25' stop-color='rgba(255,255,255,0.15)'/%3E%3Cstop offset='100%25' stop-color='rgba(255,255,255,0)'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='400' height='400' rx='36' fill='url(%23g)'/%3E%3Crect width='400' height='400' rx='36' fill='url(%23shine)'/%3E%3Cpath d='M240 110v140c0 22-20 40-44 40-25 0-46-19-46-42s21-42 46-42c8 0 15 2 22 5V126l102-26z' fill='%23e9f0f7' fill-opacity='0.9'/%3E%3Cpath d='M240 126l102-26v38l-102 26z' fill='%23b8c9dc' fill-opacity='0.9'/%3E%3C/svg%3E";
 
@@ -92,16 +102,59 @@ function setAuraClass(tile, count) {
   else tile.classList.add("aura-low");
 }
 
+
+function clamp(val, min, max) {
+  return Math.max(min, Math.min(max, val));
+}
+
+function updateLoopOverlay() {
+  if (!loopOverlay || !loopRange || !loopStartHandle || !loopEndHandle || !player.duration) return;
+  const startPct = clamp(loopRegion.start / player.duration, 0, 1);
+  const endPct = clamp(loopRegion.end / player.duration, 0, 1);
+  loopRange.style.left = `${startPct * 100}%`;
+  loopRange.style.width = `${Math.max(0, endPct - startPct) * 100}%`;
+  loopStartHandle.style.left = `${startPct * 100}%`;
+  loopEndHandle.style.left = `${endPct * 100}%`;
+  nowPlaying.classList.toggle('loop-editing', loopRegion.editing);
+  loopBtn.classList.toggle('active', loopRegion.active);
+}
+
+function setLoopRegion(start, end, active = true, editing = true) {
+  if (!player.duration) return;
+  const safeStart = clamp(start, 0, player.duration);
+  const safeEnd = clamp(end, safeStart + 0.1, player.duration);
+  loopRegion = { start: safeStart, end: safeEnd, active, editing };
+  player.loop = false;
+  updateLoopOverlay();
+}
+
+function clearLoop() {
+  loopRegion = { start: 0, end: 0, active: false, editing: false };
+  isLooping = false;
+  player.loop = false;
+  updateLoopOverlay();
+}
+
+function loopFromEvent(event) {
+  const rect = waveform.getBoundingClientRect();
+  const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+  const ratio = clamp((clientX - rect.left) / rect.width, 0, 1);
+  return ratio * player.duration;
+}
+
 function setAuraHeat(tile, count) {
-  const heat = Math.min(1, Math.pow(count / 60, 0.85));
+  const heat = Math.min(1, count / 100);
   const hue = 60 - 60 * heat; // 60=yellow -> 0=red
-  const boost = Math.min(6, count * 0.3);
+  const boost = Math.min(140, count * 1.8);
+  const level = Math.min(1, count / 100);
   tile.style.setProperty("--glow-hue", hue.toFixed(1));
   tile.style.setProperty("--glow-boost", `${boost}px`);
+  tile.style.setProperty("--aura-level", level.toFixed(2));
 }
 
 function updateAura(tile, delta) {
-  const count = Number(tile.dataset.aura || "0") + delta;
+  const next = Number(tile.dataset.aura || "0") + delta;
+  const count = Math.max(0, Math.min(100, next));
   tile.dataset.aura = String(count);
   const meter = tile.querySelector(".aura-meter");
   if (meter) meter.textContent = `Aura ${count}`;
@@ -166,7 +219,7 @@ function setNowPlaying(tile) {
   } else if (track && track.artGrad) {
     npArt.style.backgroundImage = track.artGrad;
   } else {
-    npArt.style.backgroundImage = "url('logo.jpg')";
+    npArt.style.backgroundImage = "url('logo.png')";
   }
 
   drawWaveform();
@@ -197,18 +250,20 @@ function buildTile(track) {
 
   const art = document.createElement("div");
   art.className = "art";
-  let tileBg = "";
   if (track.artUrl) {
-    tileBg = `url('${track.artUrl}')`;
-    art.style.backgroundImage = tileBg;
+    const img = document.createElement("img");
+    img.src = track.artUrl;
+    img.alt = track.title || "Artwork";
+    art.appendChild(img);
   } else if (track.artGrad) {
-    tileBg = track.artGrad;
-    art.style.backgroundImage = tileBg;
+    art.style.backgroundImage = track.artGrad;
+    art.classList.add("art-grad");
   } else {
-    tileBg = `url('${DEFAULT_ART}')`;
-    art.style.backgroundImage = tileBg;
+    const img = document.createElement("img");
+    img.src = DEFAULT_ART;
+    img.alt = track.title || "Artwork";
+    art.appendChild(img);
   }
-  button.style.setProperty("--tile-bg", tileBg);
 
   const meta = document.createElement("div");
   meta.className = "meta";
@@ -217,24 +272,44 @@ function buildTile(track) {
     <div class="aura-meter">Aura ${track.aura || 0}</div>
   `;
 
+  const auraBtn = document.createElement("button");
+  auraBtn.className = "aura-like";
+  auraBtn.type = "button";
+  auraBtn.setAttribute("aria-label", "Give aura");
+  auraBtn.textContent = "👍";
+
   button.appendChild(art);
   button.appendChild(meta);
+  button.appendChild(auraBtn);
 
   setAuraClass(button, track.aura || 0);
   setAuraHeat(button, track.aura || 0);
 
+  auraBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    updateAura(button, 1);
+    auraBtn.classList.remove("aura-bounce");
+    void auraBtn.offsetWidth;
+    auraBtn.classList.add("aura-bounce");
+    const sparkle = document.createElement("span");
+    sparkle.className = "aura-sparkle";
+    auraBtn.appendChild(sparkle);
+    sparkle.addEventListener("animationend", () => sparkle.remove());
+    if (navigator.vibrate) navigator.vibrate(12);
+  });
+
   button.addEventListener("click", (event) => {
+    if (event.target.closest(".aura-like")) return;
     const { x, y } = getRelativePoint(button, event);
     spawnRipple(button, x, y);
-    updateAura(button, 1);
     setNowPlaying(button);
     if (!isPlaying) togglePlay();
   });
 
   button.addEventListener("touchstart", (event) => {
+    if (event.target.closest(".aura-like")) return;
     const { x, y } = getRelativePoint(button, event);
     spawnRipple(button, x, y);
-    updateAura(button, 1);
     setNowPlaying(button);
     if (!isPlaying) togglePlay();
   });
@@ -322,9 +397,14 @@ auraBtn.addEventListener("click", () => {
 });
 
 loopBtn.addEventListener("click", () => {
+  if (loopRegion.end > loopRegion.start) {
+    loopRegion.active = !loopRegion.active;
+    loopRegion.editing = false;
+    loopBtn.classList.toggle('active', loopRegion.active);
+    return;
+  }
   isLooping = !isLooping;
   player.loop = isLooping;
-  loopBtn.textContent = isLooping ? "Loop On" : "Loop Off";
   loopBtn.classList.toggle("active", isLooping);
 });
 
@@ -462,8 +542,68 @@ waveCanvas.addEventListener("click", (event) => {
   drawWaveform();
 });
 
+if (waveform) {
+  const startPress = (event) => {
+    if (!player.duration) return;
+    if (event.target.closest('.controls') || event.target.closest('.aux')) return;
+    pressTimer = setTimeout(() => {
+      const start = loopFromEvent(event);
+      const end = clamp(start + 5, 0, player.duration);
+      setLoopRegion(start, end, true, true);
+    }, LONG_PRESS_MS);
+  };
+  const cancelPress = () => {
+    if (pressTimer) clearTimeout(pressTimer);
+    pressTimer = null;
+  };
+  waveform.addEventListener('touchstart', startPress, { passive: true });
+  waveform.addEventListener('touchend', cancelPress);
+  waveform.addEventListener('mousedown', () => {
+    // allow normal scroll on desktop unless editing
+  });
+  waveform.addEventListener('dblclick', (event) => {
+    if (!player.duration) return;
+    const start = loopFromEvent(event);
+    const end = clamp(start + 5, 0, player.duration);
+    setLoopRegion(start, end, true, true);
+  });
+  waveform.addEventListener('click', () => {
+    if (loopRegion.editing) {
+      loopRegion.editing = false;
+      updateLoopOverlay();
+    }
+  });
+}
+
+const handleDrag = (event) => {
+  if (!loopDrag || !player.duration) return;
+  const t = loopFromEvent(event);
+  if (loopDrag === 'start') {
+    loopRegion.start = clamp(t, 0, loopRegion.end - 0.1);
+  } else {
+    loopRegion.end = clamp(t, loopRegion.start + 0.1, player.duration);
+  }
+  updateLoopOverlay();
+};
+
+const stopDrag = () => {
+  loopDrag = null;
+};
+
+if (loopStartHandle && loopEndHandle) {
+  loopStartHandle.addEventListener('mousedown', () => (loopDrag = 'start'));
+  loopEndHandle.addEventListener('mousedown', () => (loopDrag = 'end'));
+  loopStartHandle.addEventListener('touchstart', () => (loopDrag = 'start'), { passive: true });
+  loopEndHandle.addEventListener('touchstart', () => (loopDrag = 'end'), { passive: true });
+  window.addEventListener('mousemove', handleDrag);
+  window.addEventListener('touchmove', handleDrag, { passive: true });
+  window.addEventListener('mouseup', stopDrag);
+  window.addEventListener('touchend', stopDrag);
+}
+
 function scrubFromEvent(event) {
   if (!player.duration) return;
+  if (loopRegion.editing) return;
   const target = event.target;
   if (target.closest(".controls") || target.closest(".aux") || target.closest(".ctrl") || target.closest(".ghost")) {
     return;
@@ -497,6 +637,20 @@ npArt.addEventListener("click", () => {
   npArt.classList.toggle("expanded");
 });
 
-npArt.style.backgroundImage = "url('logo.jpg')";
+if (clearLoopBtn) {
+  clearLoopBtn.addEventListener('click', () => {
+    clearLoop();
+  });
+}
+
+npArt.style.backgroundImage = "url('logo.png')";
 
 loadTracks();
+
+player.addEventListener("timeupdate", () => {
+  if (loopRegion.active && loopRegion.end > loopRegion.start) {
+    if (player.currentTime >= loopRegion.end || player.currentTime < loopRegion.start) {
+      player.currentTime = loopRegion.start;
+    }
+  }
+});

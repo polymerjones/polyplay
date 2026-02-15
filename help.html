@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Polyplay Music App Beta v0 — Help</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app admin">
+      <header class="topbar">
+        <div class="brand">Help • Tips</div>
+        <a class="back-link" href="index.html" aria-label="Back to player">
+          <span class="back-icon" aria-hidden="true">↩︎</span>
+        </a>
+        <div class="hint">How to use Polyplay</div>
+      </header>
+
+      <main class="admin-card">
+        <div class="splash-media">
+          <video class="splash-video" src="polyplaylogoanimate.mp4" playsinline></video>
+        </div>
+        <div class="admin-form">
+          <div class="field">
+            <span>Quick actions</span>
+            <div>Tap a track to play. Tap artwork to build aura.</div>
+          </div>
+          <div class="field">
+            <span>Scrub</span>
+            <div>Tap or drag across the player panel to jump in the song.</div>
+          </div>
+          <div class="field">
+            <span>Controls</span>
+            <div>Use +/- buttons to skip, Prev/Next to change tracks.</div>
+          </div>
+          <div class="field">
+            <span>Upload</span>
+            <div>Go to Settings to upload audio and artwork.</div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script id="help-video-script">
+      const helpVideo = document.querySelector('.splash-video');
+      if (helpVideo) {
+        helpVideo.volume = 0.5;
+        helpVideo.addEventListener('loadedmetadata', () => {
+          helpVideo.currentTime = 0;
+          helpVideo.play().catch(() => {});
+        });
+      }
+    </script>
+  </body>
+</html>
