@@ -1,11 +1,23 @@
 const form = document.querySelector(".admin-form");
 const statusEl = document.querySelector(".admin-status");
+const conversionProgress = document.querySelector(".conversion-progress");
+const progressBar = document.querySelector(".progress-bar span");
+const cancelConversionBtn = document.querySelector(".cancel-conversion");
 const resetBtn = document.querySelector(".reset-aura");
 const artworkForm = document.querySelector(".artwork-form");
 const trackSelect = document.querySelector(".track-select");
 const artworkStatus = document.querySelector(".artwork-status");
 const updateArtworkBtn = document.querySelector(".update-artwork");
 const artworkThumb = document.querySelector(".artwork-thumb");
+const uploadArtworkCanvas = document.querySelector(".upload-artwork-canvas");
+const uploadArtworkCtx = uploadArtworkCanvas?.getContext("2d");
+const uploadZoom = form?.querySelector("input[name="uploadZoom"]");
+const uploadPanX = form?.querySelector("input[name="uploadPanX"]");
+const uploadPanY = form?.querySelector("input[name="uploadPanY"]");
+const videoPicker = document.querySelector(".video-frame-picker");
+const frameVideo = document.querySelector(".frame-video");
+const frameSlider = document.querySelector(".frame-slider");
+const captureFrameBtn = document.querySelector(".capture-frame");
 const artworkCanvas = document.querySelector(".artwork-canvas");
 const artworkCtx = artworkCanvas?.getContext("2d");
 const cropControls = document.querySelector(".crop-controls");
@@ -16,6 +28,17 @@ const removeForm = document.querySelector(".remove-form");
 const removeSelect = document.querySelector(".remove-track-select");
 const removeBtn = document.querySelector(".remove-track");
 const removeStatus = document.querySelector(".remove-status");
+const replaceAudioForm = document.querySelector(".replace-audio-form");
+const replaceAudioSelect = document.querySelector(".replace-audio-select");
+const replaceAudioBtn = document.querySelector(".replace-audio");
+const replaceAudioStatus = document.querySelector(".replace-audio-status");
+const nukeBtn = document.querySelector(".nuke-polyplaylist");
+const nukeModal = document.querySelector(".nuke-modal");
+const nukeCancel = document.querySelector("[data-nuke-cancel]");
+const nukeConfirm = document.querySelector("[data-nuke-confirm]");
+const nukeCountdown = document.querySelector(".nuke-countdown");
+const nukeNumber = document.querySelector(".nuke-number");
+const nukeAbort = document.querySelector(".nuke-abort");
 const splashVideo = document.querySelector(".splash-video");
 
 function openDb() {
@@ -34,6 +57,82 @@ function openDb() {
 
 function setStatus(text) {
   statusEl.textContent = text;
+}
+
+function showProgress() {
+  if (conversionProgress) conversionProgress.hidden = false;
+  if (progressBar) progressBar.style.width = '0%';
+}
+
+function hideProgress() {
+  if (conversionProgress) conversionProgress.hidden = true;
+}
+
+let ffmpeg;
+let ffmpegLoading = false;
+let cancelConversion = false;
+async function ensureFfmpeg() {
+  if (ffmpeg) return ffmpeg;
+  if (ffmpegLoading) return new Promise((resolve) => {
+    const check = setInterval(() => {
+      if (ffmpeg) { clearInterval(check); resolve(ffmpeg); }
+    }, 200);
+  });
+  ffmpegLoading = true;
+  const { createFFmpeg, fetchFile } = FFmpeg;
+  ffmpeg = createFFmpeg({ log: false });
+  ffmpeg.setProgress(({ ratio }) => {
+    if (progressBar) progressBar.style.width = `${Math.round(ratio * 100)}%`;
+    if (cancelConversion && ffmpeg) {
+      try { ffmpeg.exit(); } catch {}
+      ffmpeg = null;
+      ffmpegLoading = false;
+    }
+  });
+  await ffmpeg.load();
+  ffmpeg.fetchFile = fetchFile;
+  ffmpegLoading = false;
+  return ffmpeg;
+}
+
+async function getSampleRate(file) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const buf = await file.arrayBuffer();
+    const audio = await ctx.decodeAudioData(buf);
+    ctx.close();
+    return audio.sampleRate;
+  } catch {
+    return null;
+  }
+}
+
+async function convertToMp3(file) {
+  cancelConversion = false;
+  showProgress();
+  const engine = await ensureFfmpeg();
+  const inputName = 'input.' + (file.name.split('.').pop() || 'media');
+  const outputName = file.name.replace(/\.[^/.]+$/, '') + '_polyplay.mp3';
+  engine.FS('writeFile', inputName, await engine.fetchFile(file));
+  const sampleRate = await getSampleRate(file);
+  const args = ['-i', inputName, '-b:a', '320k'];
+  if (sampleRate) args.push('-ar', String(sampleRate));
+  args.push(outputName);
+  await engine.run(...args);
+  if (cancelConversion) { hideProgress(); throw new Error("Conversion cancelled"); }
+  const data = engine.FS('readFile', outputName);
+  engine.FS('unlink', inputName);
+  engine.FS('unlink', outputName);
+  return new File([data.buffer], outputName, { type: 'audio/mpeg' });
+}
+
+
+function sparkleButton(button) {
+  if (!button) return;
+  button.classList.remove('sparkle');
+  void button.offsetWidth;
+  button.classList.add('sparkle');
+  if (navigator.vibrate) navigator.vibrate(12);
 }
 
 function setArtworkStatus(text) {
@@ -131,6 +230,10 @@ function setRemoveStatus(text) {
   removeStatus.textContent = text;
 }
 
+function setReplaceAudioStatus(text) {
+  replaceAudioStatus.textContent = text;
+}
+
 async function getTracks() {
   const db = await openDb();
   return await new Promise((resolve, reject) => {
@@ -148,6 +251,7 @@ async function refreshTrackSelect() {
     const trackMap = new Map(tracks.map((t) => [String(t.id), t]));
     trackSelect.innerHTML = "";
     removeSelect.innerHTML = "";
+    replaceAudioSelect.innerHTML = "";
     if (!tracks.length) {
       const opt = document.createElement("option");
       opt.value = "";
@@ -158,12 +262,16 @@ async function refreshTrackSelect() {
       updateArtworkBtn.disabled = true;
       removeSelect.disabled = true;
       removeBtn.disabled = true;
+      replaceAudioSelect.disabled = true;
+      replaceAudioBtn.disabled = true;
       return;
     }
     trackSelect.disabled = false;
     updateArtworkBtn.disabled = false;
     removeSelect.disabled = false;
     removeBtn.disabled = false;
+    replaceAudioSelect.disabled = false;
+    replaceAudioBtn.disabled = false;
     tracks.forEach((track) => {
       const opt = document.createElement("option");
       opt.value = String(track.id);
@@ -171,6 +279,8 @@ async function refreshTrackSelect() {
       trackSelect.appendChild(opt);
       const opt2 = opt.cloneNode(true);
       removeSelect.appendChild(opt2);
+      const opt3 = opt.cloneNode(true);
+      replaceAudioSelect.appendChild(opt3);
     });
     const initial = trackSelect.value || tracks[0]?.id;
     if (initial) {
@@ -233,12 +343,21 @@ async function resetAllAura() {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const audioFile = form.audio.files[0];
+  sparkleButton(form.querySelector(".admin-primary"));
+  let audioFile = form.audio.files[0];
   const artFile = form.art.files[0];
 
   if (!audioFile) {
     setStatus("Please provide an audio file.");
     return;
+  }
+  const isMp3 = audioFile.type === "audio/mpeg" || audioFile.name.toLowerCase().endsWith(".mp3");
+  const isVideo = audioFile.type.startsWith("video/");
+  if (!isMp3) {
+    const ok = confirm("This file is not an MP3. Convert to 320kbps MP3 for best performance?");
+    if (!ok) return;
+    setStatus("Converting to MP3...");
+    audioFile = await convertToMp3(audioFile);
   }
 
   const rawTitle = form.title.value.trim();
@@ -254,7 +373,7 @@ form.addEventListener("submit", async (event) => {
         title,
         sub: "Uploaded",
         audio: audioFile,
-        art: artFile || null,
+        art: (uploadCropBlob || (await getUploadCroppedBlob()) || artFile || null),
         aura: 0,
         createdAt: Date.now(),
       };
@@ -403,3 +522,224 @@ setupDropZone(document.querySelector('[data-drop="audio"]'), audioInput);
 setupDropZone(document.querySelector('[data-drop="art"]'), artInput);
 setupDropZone(document.querySelector('[data-drop="artwork"]'), artworkInput);
 
+
+const replaceAudioInput = replaceAudioForm?.querySelector("input[name='audio']");
+setupDropZone(document.querySelector('[data-drop="audio-replace"]'), replaceAudioInput);
+
+replaceAudioBtn?.addEventListener('click', async () => {
+  const trackId = replaceAudioSelect.value;
+  const audioFile = replaceAudioForm.audio.files[0];
+  if (!trackId) {
+    setReplaceAudioStatus('Select a track first.');
+    return;
+  }
+  if (!audioFile) {
+    setReplaceAudioStatus('Choose a new audio file.');
+    return;
+  }
+  setReplaceAudioStatus('Replacing audio...');
+  try {
+    const db = await openDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('tracks', 'readwrite');
+      const store = tx.objectStore('tracks');
+      const getReq = store.get(Number(trackId));
+      getReq.onsuccess = () => {
+        const record = getReq.result;
+        if (!record) {
+          reject(new Error('Track not found'));
+          return;
+        }
+        record.audio = audioFile;
+        const putReq = store.put(record);
+        putReq.onsuccess = () => resolve();
+        putReq.onerror = () => reject(putReq.error);
+      };
+      getReq.onerror = () => reject(getReq.error);
+    });
+    setReplaceAudioStatus('Audio replaced. Refresh the main page.');
+    replaceAudioForm.reset();
+    refreshTrackSelect();
+  } catch {
+    setReplaceAudioStatus('Replace failed. Try again.');
+  }
+});
+
+let uploadCropImage = null;
+let uploadCropUrl = null;
+let uploadCropBlob = null;
+
+function setUploadCanvasEmpty() {
+  if (!uploadArtworkCtx || !uploadArtworkCanvas) return;
+  uploadArtworkCtx.clearRect(0, 0, uploadArtworkCanvas.width, uploadArtworkCanvas.height);
+  uploadArtworkCtx.fillStyle = '#111824';
+  uploadArtworkCtx.fillRect(0, 0, uploadArtworkCanvas.width, uploadArtworkCanvas.height);
+  uploadArtworkCtx.fillStyle = 'rgba(233, 240, 247, 0.7)';
+  uploadArtworkCtx.font = '12px Avenir, sans-serif';
+  uploadArtworkCtx.textAlign = 'center';
+  uploadArtworkCtx.textBaseline = 'middle';
+  uploadArtworkCtx.fillText('No artwork', uploadArtworkCanvas.width / 2, uploadArtworkCanvas.height / 2);
+}
+
+function loadUploadCropFromBlob(blob) {
+  if (!blob || !uploadArtworkCanvas) return;
+  if (uploadCropUrl) URL.revokeObjectURL(uploadCropUrl);
+  uploadCropUrl = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = () => {
+    uploadCropImage = img;
+    drawUploadCrop();
+  };
+  img.src = uploadCropUrl;
+}
+
+function drawUploadCrop() {
+  if (!uploadArtworkCtx || !uploadArtworkCanvas) return;
+  if (!uploadCropImage) {
+    setUploadCanvasEmpty();
+    return;
+  }
+  const zoom = Number(uploadZoom?.value || 1);
+  const panX = Number(uploadPanX?.value || 0);
+  const panY = Number(uploadPanY?.value || 0);
+  const cw = uploadArtworkCanvas.width;
+  const ch = uploadArtworkCanvas.height;
+  const iw = uploadCropImage.width;
+  const ih = uploadCropImage.height;
+  const baseScale = Math.max(cw / iw, ch / ih);
+  const scale = baseScale * zoom;
+  const drawW = iw * scale;
+  const drawH = ih * scale;
+  const offsetX = (cw - drawW) / 2 + panX * cw;
+  const offsetY = (ch - drawH) / 2 + panY * ch;
+  uploadArtworkCtx.clearRect(0, 0, cw, ch);
+  uploadArtworkCtx.fillStyle = '#111824';
+  uploadArtworkCtx.fillRect(0, 0, cw, ch);
+  uploadArtworkCtx.drawImage(uploadCropImage, offsetX, offsetY, drawW, drawH);
+}
+
+async function getUploadCroppedBlob() {
+  return new Promise((resolve) => {
+    if (!uploadArtworkCanvas) return resolve(null);
+    uploadArtworkCanvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
+  });
+}
+
+
+const uploadArtInput = form?.querySelector("input[name='art']");
+if (uploadArtInput) {
+  uploadArtInput.addEventListener('change', () => {
+    const file = uploadArtInput.files[0];
+    if (!file) return;
+    if (file.type.startsWith('video/')) {
+      if (videoPicker) videoPicker.hidden = false;
+      if (frameVideo) {
+        frameVideo.src = URL.createObjectURL(file);
+        frameVideo.onloadedmetadata = () => {
+          frameSlider.max = frameVideo.duration || 1;
+        };
+      }
+      return;
+    }
+    if (videoPicker) videoPicker.hidden = true;
+    loadUploadCropFromBlob(file);
+  });
+}
+
+if (frameSlider && frameVideo) {
+  frameSlider.addEventListener('input', () => {
+    frameVideo.currentTime = Number(frameSlider.value);
+  });
+}
+
+if (captureFrameBtn && frameVideo) {
+  captureFrameBtn.addEventListener('click', async () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = frameVideo.videoWidth || 720;
+    canvas.height = frameVideo.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(frameVideo, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+    uploadCropBlob = blob;
+    loadUploadCropFromBlob(blob);
+    if (videoPicker) videoPicker.hidden = true;
+  });
+}
+
+if (uploadZoom || uploadPanX || uploadPanY) {
+  [uploadZoom, uploadPanX, uploadPanY].forEach((input) => input?.addEventListener('input', drawUploadCrop));
+}
+
+setUploadCanvasEmpty();
+
+if (cancelConversionBtn) {
+  cancelConversionBtn.addEventListener('click', () => {
+    cancelConversion = true;
+    setStatus('Conversion cancelled.');
+  });
+}
+
+let nukeTimer = null;
+let nukeTimeLeft = 0;
+
+function showNukeModal() {
+  if (!nukeModal) return;
+  nukeModal.hidden = false;
+  nukeModal.setAttribute('aria-hidden', 'false');
+  if (nukeCountdown) nukeCountdown.hidden = true;
+}
+
+function hideNukeModal() {
+  if (!nukeModal) return;
+  nukeModal.hidden = true;
+  nukeModal.setAttribute('aria-hidden', 'true');
+}
+
+async function nukeAllTracks() {
+  const db = await openDb();
+  return await new Promise((resolve, reject) => {
+    const tx = db.transaction('tracks', 'readwrite');
+    const store = tx.objectStore('tracks');
+    const req = store.clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function startNukeCountdown() {
+  nukeTimeLeft = 4;
+  if (nukeCountdown) nukeCountdown.hidden = false;
+  if (nukeNumber) nukeNumber.textContent = String(nukeTimeLeft);
+  document.body.classList.add('nuke-shake', 'nuke-flash');
+  nukeTimer = setInterval(async () => {
+    nukeTimeLeft -= 1;
+    if (nukeNumber) nukeNumber.textContent = String(Math.max(nukeTimeLeft, 1));
+    if (nukeTimeLeft <= 0) {
+      clearInterval(nukeTimer);
+      nukeTimer = null;
+      try {
+        await nukeAllTracks();
+        setStatus('All tracks nuked. Refresh the main page.');
+      } catch {
+        setStatus('Nuke failed. Try again.');
+      }
+      document.body.classList.remove('nuke-shake', 'nuke-flash');
+      hideNukeModal();
+      refreshTrackSelect();
+    }
+  }, 1000);
+}
+
+function abortNuke() {
+  if (nukeTimer) {
+    clearInterval(nukeTimer);
+    nukeTimer = null;
+  }
+  document.body.classList.remove('nuke-shake', 'nuke-flash');
+  hideNukeModal();
+}
+
+if (nukeBtn) nukeBtn.addEventListener('click', showNukeModal);
+if (nukeCancel) nukeCancel.addEventListener('click', hideNukeModal);
+if (nukeConfirm) nukeConfirm.addEventListener('click', startNukeCountdown);
+if (nukeAbort) nukeAbort.addEventListener('click', abortNuke);

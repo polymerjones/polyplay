@@ -338,7 +338,7 @@ function buildTile(track) {
 async function loadTracks() {
   const tracks = await getTracks();
   const data = tracks.length
-    ? tracks.map((t) => ({
+    ? tracks.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map((t) => ({
         id: t.id,
         title: t.title,
         sub: t.sub || "",
