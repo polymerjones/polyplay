@@ -96,6 +96,30 @@ function setupDropZone(label, input) {
 
 let cropImage = null;
 let cropImageUrl = null;
+const ART_EXPORT_SIZE = 1024;
+
+function renderCroppedBlob(image, zoom, panX, panY, size = ART_EXPORT_SIZE) {
+  return new Promise((resolve) => {
+    if (!image) return resolve(null);
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return resolve(null);
+    const iw = image.width;
+    const ih = image.height;
+    const baseScale = Math.max(size / iw, size / ih);
+    const scale = baseScale * zoom;
+    const drawW = iw * scale;
+    const drawH = ih * scale;
+    const offsetX = (size - drawW) / 2 + panX * size;
+    const offsetY = (size - drawH) / 2 + panY * size;
+    ctx.fillStyle = "#111824";
+    ctx.fillRect(0, 0, size, size);
+    ctx.drawImage(image, offsetX, offsetY, drawW, drawH);
+    canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.92);
+  });
+}
 
 function setCanvasEmpty(message) {
   if (!artworkCtx || !artworkCanvas) return;
@@ -147,10 +171,10 @@ function drawCrop() {
 }
 
 function getCroppedBlob() {
-  return new Promise((resolve) => {
-    if (!artworkCanvas) return resolve(null);
-    artworkCanvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.9);
-  });
+  const zoom = Number(zoomInput?.value || 1);
+  const panX = Number(panXInput?.value || 0);
+  const panY = Number(panYInput?.value || 0);
+  return renderCroppedBlob(cropImage, zoom, panX, panY);
 }
 
 function setRemoveStatus(text) {
@@ -284,7 +308,7 @@ form.addEventListener("submit", async (event) => {
   const title = rawTitle || fallbackTitle || "Untitled";
 
   try {
-    const finalArt = uploadCropBlob || (await getUploadCroppedBlob()) || artFile || null;
+    const finalArt = artFile ? ((await getUploadCroppedBlob()) || artFile) : null;
     const db = await openDb();
     await new Promise((resolve, reject) => {
       const tx = db.transaction("tracks", "readwrite");
@@ -486,6 +510,7 @@ replaceAudioBtn?.addEventListener('click', async () => {
 let uploadCropImage = null;
 let uploadCropUrl = null;
 let uploadCropBlob = null;
+let uploadCropReady = false;
 
 function setUploadCanvasEmpty() {
   if (!uploadArtworkCtx || !uploadArtworkCanvas) return;
@@ -506,6 +531,7 @@ function loadUploadCropFromBlob(blob) {
   const img = new Image();
   img.onload = () => {
     uploadCropImage = img;
+    uploadCropReady = true;
     drawUploadCrop();
   };
   img.src = uploadCropUrl;
@@ -537,10 +563,11 @@ function drawUploadCrop() {
 }
 
 async function getUploadCroppedBlob() {
-  return new Promise((resolve) => {
-    if (!uploadArtworkCanvas) return resolve(null);
-    uploadArtworkCanvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
-  });
+  if (!uploadCropReady || !uploadCropImage) return null;
+  const zoom = Number(uploadZoom?.value || 1);
+  const panX = Number(uploadPanX?.value || 0);
+  const panY = Number(uploadPanY?.value || 0);
+  return renderCroppedBlob(uploadCropImage, zoom, panX, panY);
 }
 
 
@@ -630,6 +657,7 @@ form.addEventListener('reset', () => {
   if (uploadArtworkCrop) uploadArtworkCrop.hidden = true;
   uploadCropBlob = null;
   uploadCropImage = null;
+  uploadCropReady = false;
   if (typeof setUploadCanvasEmpty === 'function') setUploadCanvasEmpty();
 });
 
@@ -640,6 +668,7 @@ if (uploadArtInput) {
   uploadArtInput.addEventListener('change', () => {
     const file = uploadArtInput.files[0];
     if (!file) return;
+    uploadCropReady = false;
     if (uploadArtworkCrop) uploadArtworkCrop.hidden = false;
     loadUploadCropFromBlob(file);
   });

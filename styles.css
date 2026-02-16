@@ -198,6 +198,13 @@ body::before {
   break-inside: avoid;
 }
 
+.tile,
+.tile * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 .tile:active {
   transform: scale(1.02);
 }

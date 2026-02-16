@@ -357,6 +357,7 @@ function buildTile(track) {
   button.className = "tile";
   button.dataset.aura = String(track.aura || 0);
   button.dataset.trackId = String(track.id);
+  button.addEventListener("contextmenu", (event) => event.preventDefault());
 
   const art = document.createElement("div");
   art.className = "art";
