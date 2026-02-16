@@ -206,7 +206,8 @@ function sparkleAndHaptic(button) {
 function updateTimecode() {
   const current = formatTime(player.currentTime || 0);
   const total = formatTime(player.duration || 0);
-  nowSub.textContent = `${current} / ${total}`;
+  const aura = trackCache.get(currentTrackId)?.aura ?? (document.querySelector(`.tile[data-track-id="${currentTrackId}"]`)?.dataset.aura || 0);
+  nowSub.textContent = `${current} / ${total} • Aura ${aura}/5`;
 }
 
 function setNowPlaying(tile) {
@@ -215,7 +216,8 @@ function setNowPlaying(tile) {
   const title = tile.querySelector(".title")?.textContent || "Unknown";
   const sub = tile.querySelector(".sub")?.textContent || "";
   nowTitle.textContent = title;
-  nowSub.textContent = `0:00 / 0:00`;
+  const aura = tile.dataset.aura || "0";
+  nowSub.textContent = `0:00 / 0:00 • Aura ${aura}/5`;
   currentTrackId = nextTrackId;
   nowPlaying.classList.remove('empty');
 
@@ -237,7 +239,7 @@ function setNowPlaying(tile) {
   } else if (track && track.artGrad) {
     npArt.style.backgroundImage = track.artGrad;
   } else {
-    npArt.style.backgroundImage = "url('logo.png')";
+    npArt.style.backgroundImage = `url('${DEFAULT_ART}')`;
   }
 
   drawWaveform();
@@ -695,7 +697,7 @@ npArt.addEventListener('click', () => {
   updateLoopOverlay();
 });
 
-npArt.style.backgroundImage = "url('logo.png')";
+npArt.style.backgroundImage = `url('${DEFAULT_ART}')`;
 
 loadTracks();
 

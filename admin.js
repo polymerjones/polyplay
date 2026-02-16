@@ -1,8 +1,5 @@
 const form = document.querySelector(".admin-form");
 const statusEl = document.querySelector(".admin-status");
-const conversionProgress = document.querySelector(".conversion-progress");
-const progressBar = document.querySelector(".progress-bar span");
-const cancelConversionBtn = document.querySelector(".cancel-conversion");
 const resetBtn = document.querySelector(".reset-aura");
 const artworkForm = document.querySelector(".artwork-form");
 const trackSelect = document.querySelector(".track-select");
@@ -10,14 +7,11 @@ const artworkStatus = document.querySelector(".artwork-status");
 const updateArtworkBtn = document.querySelector(".update-artwork");
 const artworkThumb = document.querySelector(".artwork-thumb");
 const uploadArtworkCanvas = document.querySelector(".upload-artwork-canvas");
+const uploadArtworkCrop = document.querySelector(".upload-artwork-crop");
 const uploadArtworkCtx = uploadArtworkCanvas?.getContext("2d");
-const uploadZoom = form?.querySelector("input[name="uploadZoom"]");
-const uploadPanX = form?.querySelector("input[name="uploadPanX"]");
-const uploadPanY = form?.querySelector("input[name="uploadPanY"]");
-const videoPicker = document.querySelector(".video-frame-picker");
-const frameVideo = document.querySelector(".frame-video");
-const frameSlider = document.querySelector(".frame-slider");
-const captureFrameBtn = document.querySelector(".capture-frame");
+const uploadZoom = form?.querySelector("input[name=\"uploadZoom\"]");
+const uploadPanX = form?.querySelector("input[name=\"uploadPanX\"]");
+const uploadPanY = form?.querySelector("input[name=\"uploadPanY\"]");
 const artworkCanvas = document.querySelector(".artwork-canvas");
 const artworkCtx = artworkCanvas?.getContext("2d");
 const cropControls = document.querySelector(".crop-controls");
@@ -57,73 +51,6 @@ function openDb() {
 
 function setStatus(text) {
   statusEl.textContent = text;
-}
-
-function showProgress() {
-  if (conversionProgress) conversionProgress.hidden = false;
-  if (progressBar) progressBar.style.width = '0%';
-}
-
-function hideProgress() {
-  if (conversionProgress) conversionProgress.hidden = true;
-}
-
-let ffmpeg;
-let ffmpegLoading = false;
-let cancelConversion = false;
-async function ensureFfmpeg() {
-  if (ffmpeg) return ffmpeg;
-  if (ffmpegLoading) return new Promise((resolve) => {
-    const check = setInterval(() => {
-      if (ffmpeg) { clearInterval(check); resolve(ffmpeg); }
-    }, 200);
-  });
-  ffmpegLoading = true;
-  const { createFFmpeg, fetchFile } = FFmpeg;
-  ffmpeg = createFFmpeg({ log: false });
-  ffmpeg.setProgress(({ ratio }) => {
-    if (progressBar) progressBar.style.width = `${Math.round(ratio * 100)}%`;
-    if (cancelConversion && ffmpeg) {
-      try { ffmpeg.exit(); } catch {}
-      ffmpeg = null;
-      ffmpegLoading = false;
-    }
-  });
-  await ffmpeg.load();
-  ffmpeg.fetchFile = fetchFile;
-  ffmpegLoading = false;
-  return ffmpeg;
-}
-
-async function getSampleRate(file) {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const buf = await file.arrayBuffer();
-    const audio = await ctx.decodeAudioData(buf);
-    ctx.close();
-    return audio.sampleRate;
-  } catch {
-    return null;
-  }
-}
-
-async function convertToMp3(file) {
-  cancelConversion = false;
-  showProgress();
-  const engine = await ensureFfmpeg();
-  const inputName = 'input.' + (file.name.split('.').pop() || 'media');
-  const outputName = file.name.replace(/\.[^/.]+$/, '') + '_polyplay.mp3';
-  engine.FS('writeFile', inputName, await engine.fetchFile(file));
-  const sampleRate = await getSampleRate(file);
-  const args = ['-i', inputName, '-b:a', '320k'];
-  if (sampleRate) args.push('-ar', String(sampleRate));
-  args.push(outputName);
-  await engine.run(...args);
-  if (cancelConversion) { hideProgress(); throw new Error("Conversion cancelled"); }
-  const data = engine.FS('readFile', outputName);
-  engine.FS('unlink', inputName);
-  engine.FS('unlink', outputName);
-  return new File([data.buffer], outputName, { type: 'audio/mpeg' });
 }
 
 
@@ -351,20 +278,13 @@ form.addEventListener("submit", async (event) => {
     setStatus("Please provide an audio file.");
     return;
   }
-  const isMp3 = audioFile.type === "audio/mpeg" || audioFile.name.toLowerCase().endsWith(".mp3");
-  const isVideo = audioFile.type.startsWith("video/");
-  if (!isMp3) {
-    const ok = confirm("This file is not an MP3. Convert to 320kbps MP3 for best performance?");
-    if (!ok) return;
-    setStatus("Converting to MP3...");
-    audioFile = await convertToMp3(audioFile);
-  }
 
   const rawTitle = form.title.value.trim();
   const fallbackTitle = audioFile.name.replace(/\.[^/.]+$/, "").trim();
   const title = rawTitle || fallbackTitle || "Untitled";
 
   try {
+    const finalArt = uploadCropBlob || (await getUploadCroppedBlob()) || artFile || null;
     const db = await openDb();
     await new Promise((resolve, reject) => {
       const tx = db.transaction("tracks", "readwrite");
@@ -373,7 +293,7 @@ form.addEventListener("submit", async (event) => {
         title,
         sub: "Uploaded",
         audio: audioFile,
-        art: (uploadCropBlob || (await getUploadCroppedBlob()) || artFile || null),
+        art: finalArt,
         aura: 0,
         createdAt: Date.now(),
       };
@@ -627,44 +547,7 @@ async function getUploadCroppedBlob() {
 
 
 const uploadArtInput = form?.querySelector("input[name='art']");
-if (uploadArtInput) {
-  uploadArtInput.addEventListener('change', () => {
-    const file = uploadArtInput.files[0];
-    if (!file) return;
-    if (file.type.startsWith('video/')) {
-      if (videoPicker) videoPicker.hidden = false;
-      if (frameVideo) {
-        frameVideo.src = URL.createObjectURL(file);
-        frameVideo.onloadedmetadata = () => {
-          frameSlider.max = frameVideo.duration || 1;
-        };
-      }
-      return;
-    }
-    if (videoPicker) videoPicker.hidden = true;
-    loadUploadCropFromBlob(file);
-  });
-}
 
-if (frameSlider && frameVideo) {
-  frameSlider.addEventListener('input', () => {
-    frameVideo.currentTime = Number(frameSlider.value);
-  });
-}
-
-if (captureFrameBtn && frameVideo) {
-  captureFrameBtn.addEventListener('click', async () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = frameVideo.videoWidth || 720;
-    canvas.height = frameVideo.videoHeight || 720;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(frameVideo, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-    uploadCropBlob = blob;
-    loadUploadCropFromBlob(blob);
-    if (videoPicker) videoPicker.hidden = true;
-  });
-}
 
 if (uploadZoom || uploadPanX || uploadPanY) {
   [uploadZoom, uploadPanX, uploadPanY].forEach((input) => input?.addEventListener('input', drawUploadCrop));
@@ -672,12 +555,6 @@ if (uploadZoom || uploadPanX || uploadPanY) {
 
 setUploadCanvasEmpty();
 
-if (cancelConversionBtn) {
-  cancelConversionBtn.addEventListener('click', () => {
-    cancelConversion = true;
-    setStatus('Conversion cancelled.');
-  });
-}
 
 let nukeTimer = null;
 let nukeTimeLeft = 0;
@@ -743,3 +620,31 @@ if (nukeBtn) nukeBtn.addEventListener('click', showNukeModal);
 if (nukeCancel) nukeCancel.addEventListener('click', hideNukeModal);
 if (nukeConfirm) nukeConfirm.addEventListener('click', startNukeCountdown);
 if (nukeAbort) nukeAbort.addEventListener('click', abortNuke);
+
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    hideNukeModal();
+    if (nukeCountdown) nukeCountdown.hidden = true;
+  } catch {}
+});
+
+form.addEventListener('reset', () => {
+  if (uploadArtworkCrop) uploadArtworkCrop.hidden = true;
+  if (videoPicker) videoPicker.hidden = true;
+  uploadCropBlob = null;
+  uploadCropImage = null;
+  if (typeof setUploadCanvasEmpty === 'function') setUploadCanvasEmpty();
+});
+
+if (uploadArtworkCrop) uploadArtworkCrop.hidden = true;
+if (typeof setUploadCanvasEmpty === 'function') setUploadCanvasEmpty();
+
+if (uploadArtInput) {
+  uploadArtInput.addEventListener('change', () => {
+    const file = uploadArtInput.files[0];
+    if (!file) return;
+    if (uploadArtworkCrop) uploadArtworkCrop.hidden = false;
+    loadUploadCropFromBlob(file);
+  });
+}
+

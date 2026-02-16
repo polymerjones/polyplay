@@ -18,7 +18,7 @@
 
       <main class="admin-card">
         <div class="splash-media">
-          <video class="splash-video" src="polyplaylogoanimate.mp4" playsinline></video>
+          <video class="splash-video" src="polyplaylogoanimate.mp4" playsinline autoplay></video>
         </div>
         <form class="admin-form">
           <label class="field">
@@ -37,7 +37,7 @@
             <input type="file" name="art" accept="image/*" />
             <small class="drop-hint">Drag & drop artwork here</small>
           </label>
-          <div class="artwork-crop upload-artwork-crop">
+          <div class="artwork-crop upload-artwork-crop" hidden>
             <div class="artwork-label">Upload artwork crop (square)</div>
             <canvas class="artwork-canvas upload-artwork-canvas" width="220" height="220"></canvas>
             <div class="crop-controls">
@@ -53,27 +53,17 @@
                 <span>Pan Y</span>
                 <input type="range" name="uploadPanY" min="-0.5" max="0.5" step="0.01" value="0" />
               </label>
-            </div>
-          </div>
-          <div class="video-frame-picker" hidden>
-            <div class="artwork-label">Video frame picker</div>
-            <video class="frame-video" controls playsinline></video>
-            <input type="range" class="frame-slider" min="0" max="1" step="0.01" value="0" />
-            <button type="button" class="ghost capture-frame">Use This Frame</button>
-          </div>
 
           <div class="admin-actions">
             <button type="submit" class="ctrl admin-primary">Upload</button>
             <button type="reset" class="ghost">Clear</button>
           </div>
           <div class="admin-status" aria-live="polite"></div>
-          <div class="conversion-progress" hidden>
-            <div class="progress-bar"><span></span></div>
-            <button type="button" class="ghost cancel-conversion">Cancel Conversion</button>
-          </div>
         </form>
-        <div class="admin-divider"></div>
-        <form class="admin-form artwork-form">
+        <details class="advanced-settings">
+          <summary>Advanced options</summary>
+          <div class="admin-divider"></div>
+          <form class="admin-form artwork-form">
           <label class="field">
             <span>Update artwork for existing track</span>
             <select name="track" class="track-select"></select>
@@ -156,9 +146,9 @@
           </div>
         </div>
         <button type="button" class="ghost reset-aura danger">Reset Aura</button>
+        </details>
       </main>
     </div>
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/ffmpeg.min.js"></script>
     <script src="admin.js"></script>
   </body>
 </html>
