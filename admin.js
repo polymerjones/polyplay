@@ -12,9 +12,9 @@ const uploadArtworkCtx = uploadArtworkCanvas?.getContext("2d");
 const uploadZoom = form?.querySelector("input[name=\"uploadZoom\"]");
 const uploadPanX = form?.querySelector("input[name=\"uploadPanX\"]");
 const uploadPanY = form?.querySelector("input[name=\"uploadPanY\"]");
-const artworkCanvas = document.querySelector(".artwork-canvas");
+const artworkCanvas = artworkForm?.querySelector(".artwork-canvas");
 const artworkCtx = artworkCanvas?.getContext("2d");
-const cropControls = document.querySelector(".crop-controls");
+const cropControls = artworkForm?.querySelector(".crop-controls");
 const zoomInput = artworkForm?.querySelector("input[name='zoom']");
 const panXInput = artworkForm?.querySelector("input[name='panX']");
 const panYInput = artworkForm?.querySelector("input[name='panY']");
@@ -301,9 +301,10 @@ form.addEventListener("submit", async (event) => {
       req.onsuccess = () => resolve();
       req.onerror = () => reject(req.error);
     });
-    setStatus("Uploaded. Open the main page and refresh.");
+    setStatus("Uploaded. Opening music page...");
     form.reset();
-    refreshTrackSelect();
+    await refreshTrackSelect();
+    window.location.href = "index.html";
   } catch {
     setStatus("Upload failed. Try again.");
   }
@@ -406,13 +407,10 @@ removeSelect.addEventListener("change", () => {
 refreshTrackSelect();
 
 if (splashVideo) {
-  splashVideo.volume = 0.5;
+  splashVideo.muted = true;
   splashVideo.addEventListener("loadedmetadata", () => {
     splashVideo.currentTime = 0;
     splashVideo.play().catch(() => {});
-  });
-  splashVideo.addEventListener("ended", () => {
-    splashVideo.pause();
   });
 }
 
@@ -630,7 +628,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 form.addEventListener('reset', () => {
   if (uploadArtworkCrop) uploadArtworkCrop.hidden = true;
-  if (videoPicker) videoPicker.hidden = true;
   uploadCropBlob = null;
   uploadCropImage = null;
   if (typeof setUploadCanvasEmpty === 'function') setUploadCanvasEmpty();
@@ -647,4 +644,3 @@ if (uploadArtInput) {
     loadUploadCropFromBlob(file);
   });
 }
-

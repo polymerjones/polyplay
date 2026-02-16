@@ -18,7 +18,7 @@
 
       <main class="admin-card">
         <div class="splash-media">
-          <video class="splash-video" src="polyplaylogoanimate.mp4" playsinline></video>
+          <video class="splash-video" src="polyplaylogoanimate.mp4" playsinline autoplay muted loop preload="metadata"></video>
         </div>
         <div class="admin-form">
           <div class="field">
@@ -44,7 +44,7 @@
     <script id="help-video-script">
       const helpVideo = document.querySelector('.splash-video');
       if (helpVideo) {
-        helpVideo.volume = 0.5;
+        helpVideo.muted = true;
         helpVideo.addEventListener('loadedmetadata', () => {
           helpVideo.currentTime = 0;
           helpVideo.play().catch(() => {});

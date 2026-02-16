@@ -32,6 +32,10 @@ let loopRegion = { start: 0, end: 0, active: false, editing: false };
 let loopDrag = null;
 let pressTimer = null;
 const LONG_PRESS_MS = 450;
+const isTouchDevice = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+const TILE_HOLD_MS = 260;
+const TILE_HOLD_MOVE_PX = 14;
+const loopByTrack = new Map();
 
 const DEFAULT_ART = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23263140'/%3E%3Cstop offset='100%25' stop-color='%23101822'/%3E%3C/linearGradient%3E%3CradialGradient id='shine' cx='30%25' cy='20%25' r='60%25'%3E%3Cstop offset='0%25' stop-color='rgba(255,255,255,0.6)'/%3E%3Cstop offset='50%25' stop-color='rgba(255,255,255,0.15)'/%3E%3Cstop offset='100%25' stop-color='rgba(255,255,255,0)'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='400' height='400' rx='36' fill='url(%23g)'/%3E%3Crect width='400' height='400' rx='36' fill='url(%23shine)'/%3E%3Cpath d='M240 110v140c0 22-20 40-44 40-25 0-46-19-46-42s21-42 46-42c8 0 15 2 22 5V126l102-26z' fill='%23e9f0f7' fill-opacity='0.9'/%3E%3Cpath d='M240 126l102-26v38l-102 26z' fill='%23b8c9dc' fill-opacity='0.9'/%3E%3C/svg%3E";
 
@@ -118,16 +122,49 @@ function clamp(val, min, max) {
 }
 
 function updateLoopOverlay() {
-  if (!loopOverlay || !loopRange || !loopStartHandle || !loopEndHandle || !player.duration) return;
-  const startPct = clamp(loopRegion.start / player.duration, 0, 1);
-  const endPct = clamp(loopRegion.end / player.duration, 0, 1);
-  loopRange.style.left = `${startPct * 100}%`;
-  loopRange.style.width = `${Math.max(0, endPct - startPct) * 100}%`;
-  loopStartHandle.style.left = `${startPct * 100}%`;
-  loopEndHandle.style.left = `${endPct * 100}%`;
+  if (!loopOverlay || !loopRange || !loopStartHandle || !loopEndHandle) return;
+  const hasLoop = loopRegion.end > loopRegion.start;
+  if (!player.duration || !hasLoop) {
+    loopRange.style.left = "0%";
+    loopRange.style.width = "0%";
+    loopStartHandle.style.left = "0%";
+    loopEndHandle.style.left = "0%";
+  } else {
+    const startPct = clamp(loopRegion.start / player.duration, 0, 1);
+    const endPct = clamp(loopRegion.end / player.duration, 0, 1);
+    loopRange.style.left = `${startPct * 100}%`;
+    loopRange.style.width = `${Math.max(0, endPct - startPct) * 100}%`;
+    loopStartHandle.style.left = `${startPct * 100}%`;
+    loopEndHandle.style.left = `${endPct * 100}%`;
+  }
   nowPlaying.classList.toggle('loop-editing', loopRegion.editing);
   nowPlaying.classList.toggle('loop-active', loopRegion.active);
   loopBtn.classList.toggle('active', loopRegion.active);
+}
+
+function persistLoopForTrack(trackId = currentTrackId) {
+  if (!trackId) return;
+  const hasLoop = loopRegion.end > loopRegion.start;
+  if (!hasLoop) {
+    loopByTrack.delete(String(trackId));
+    return;
+  }
+  loopByTrack.set(String(trackId), { ...loopRegion, editing: false });
+}
+
+function loadLoopForTrack(trackId) {
+  if (!trackId) {
+    loopRegion = { start: 0, end: 0, active: false, editing: false };
+    updateLoopOverlay();
+    return;
+  }
+  const saved = loopByTrack.get(String(trackId));
+  if (saved) {
+    loopRegion = { ...saved, editing: false };
+  } else {
+    loopRegion = { start: 0, end: 0, active: false, editing: false };
+  }
+  updateLoopOverlay();
 }
 
 function setLoopRegion(start, end, active = true, editing = true) {
@@ -136,6 +173,7 @@ function setLoopRegion(start, end, active = true, editing = true) {
   const safeEnd = clamp(end, safeStart + 0.1, player.duration);
   loopRegion = { start: safeStart, end: safeEnd, active, editing };
   player.loop = false;
+  persistLoopForTrack();
   updateLoopOverlay();
 }
 
@@ -143,6 +181,7 @@ function clearLoop() {
   loopRegion = { start: 0, end: 0, active: false, editing: false };
   isLooping = false;
   player.loop = false;
+  persistLoopForTrack();
   updateLoopOverlay();
 }
 
@@ -163,6 +202,14 @@ function setAuraHeat(tile, count) {
   tile.style.setProperty("--aura-level", level.toFixed(2));
 }
 
+function setNowPlayingAura(count) {
+  const safeCount = clamp(Number(count) || 0, 0, 5);
+  const level = safeCount / 5;
+  const hue = 300 + 16 * level;
+  nowPlaying.style.setProperty("--wave-aura-level", level.toFixed(2));
+  nowPlaying.style.setProperty("--wave-aura-hue", hue.toFixed(1));
+}
+
 function updateAura(tile, delta) {
   const next = Number(tile.dataset.aura || "0") + delta;
   const count = Math.max(0, Math.min(5, next));
@@ -172,6 +219,13 @@ function updateAura(tile, delta) {
   setAuraClass(tile, count);
   setAuraHeat(tile, count);
   const trackId = tile.dataset.trackId;
+  const cached = trackCache.get(String(trackId));
+  if (cached) cached.aura = count;
+  if (String(trackId) === String(currentTrackId)) {
+    setNowPlayingAura(count);
+    updateTimecode();
+    drawWaveform();
+  }
   if (trackId && !trackId.startsWith("sample-")) saveAura(Number(trackId), count);
 }
 
@@ -193,10 +247,15 @@ function moveTrack(direction) {
 
 function sparkleAndHaptic(button) {
   if (button) {
-    button.classList.remove("sparkle");
+    button.classList.remove("sparkle", "track-btn-flash");
     // Force reflow to restart animation
     void button.offsetWidth;
     button.classList.add("sparkle");
+    button.classList.add("track-btn-flash");
+    const sparkle = document.createElement("span");
+    sparkle.className = "track-btn-sparkle";
+    button.appendChild(sparkle);
+    sparkle.addEventListener("animationend", () => sparkle.remove());
   }
   if (navigator.vibrate) {
     navigator.vibrate(10);
@@ -218,7 +277,16 @@ function setNowPlaying(tile) {
   nowTitle.textContent = title;
   const aura = tile.dataset.aura || "0";
   nowSub.textContent = `0:00 / 0:00 • Aura ${aura}/5`;
+  setNowPlayingAura(Number(aura));
+  if (!isSameTrack) {
+    persistLoopForTrack(currentTrackId);
+    isLooping = false;
+    player.loop = false;
+  }
   currentTrackId = nextTrackId;
+  if (!isSameTrack) {
+    loadLoopForTrack(currentTrackId);
+  }
   nowPlaying.classList.remove('empty');
 
   grid.querySelectorAll(".tile.is-playing").forEach((node) => node.classList.remove("is-playing"));
@@ -260,6 +328,28 @@ function getRelativePoint(el, event) {
   const clientX = event.touches ? event.touches[0].clientX : event.clientX;
   const clientY = event.touches ? event.touches[0].clientY : event.clientY;
   return { x: clientX - rect.left, y: clientY - rect.top };
+}
+
+function triggerAuraIconFeedback(button) {
+  if (!button) return;
+  button.classList.remove("aura-bounce");
+  void button.offsetWidth;
+  button.classList.add("aura-bounce");
+  const sparkle = document.createElement("span");
+  sparkle.className = "aura-sparkle";
+  button.appendChild(sparkle);
+  sparkle.addEventListener("animationend", () => sparkle.remove());
+}
+
+function triggerAuraBarFeedback() {
+  if (!auraBtn) return;
+  auraBtn.classList.remove("aura-btn-flash");
+  void auraBtn.offsetWidth;
+  auraBtn.classList.add("aura-btn-flash");
+  const sparkle = document.createElement("span");
+  sparkle.className = "aura-btn-sparkle";
+  auraBtn.appendChild(sparkle);
+  sparkle.addEventListener("animationend", () => sparkle.remove());
 }
 
 function buildTile(track) {
@@ -308,18 +398,13 @@ function buildTile(track) {
   auraBtn.addEventListener("click", (event) => {
     event.stopPropagation();
     updateAura(button, 1);
-    auraBtn.classList.remove("aura-bounce");
-    void auraBtn.offsetWidth;
-    auraBtn.classList.add("aura-bounce");
-    const sparkle = document.createElement("span");
-    sparkle.className = "aura-sparkle";
-    auraBtn.appendChild(sparkle);
-    sparkle.addEventListener("animationend", () => sparkle.remove());
+    triggerAuraIconFeedback(auraBtn);
     if (navigator.vibrate) navigator.vibrate(12);
   });
 
   button.addEventListener("click", (event) => {
     if (event.target.closest(".aura-like")) return;
+    if (isTouchDevice) return;
     const { x, y } = getRelativePoint(button, event);
     spawnRipple(button, x, y);
     setNowPlaying(button);
@@ -328,11 +413,37 @@ function buildTile(track) {
 
   button.addEventListener("touchstart", (event) => {
     if (event.target.closest(".aura-like")) return;
-    const { x, y } = getRelativePoint(button, event);
-    spawnRipple(button, x, y);
-    setNowPlaying(button);
-    if (!isPlaying) togglePlay();
-  });
+    const touch = event.touches?.[0];
+    if (!touch) return;
+    const startX = touch.clientX;
+    const startY = touch.clientY;
+    const triggerPlay = () => {
+      const rect = button.getBoundingClientRect();
+      const x = startX - rect.left;
+      const y = startY - rect.top;
+      spawnRipple(button, x, y);
+      setNowPlaying(button);
+      if (!isPlaying) togglePlay();
+      if (navigator.vibrate) navigator.vibrate(8);
+    };
+    const holdTimer = setTimeout(triggerPlay, TILE_HOLD_MS);
+    const cancelHold = () => {
+      clearTimeout(holdTimer);
+      button.removeEventListener("touchmove", onMove);
+      button.removeEventListener("touchend", cancelHold);
+      button.removeEventListener("touchcancel", cancelHold);
+    };
+    const onMove = (moveEvent) => {
+      const moveTouch = moveEvent.touches?.[0];
+      if (!moveTouch) return;
+      const dx = Math.abs(moveTouch.clientX - startX);
+      const dy = Math.abs(moveTouch.clientY - startY);
+      if (dx > TILE_HOLD_MOVE_PX || dy > TILE_HOLD_MOVE_PX) cancelHold();
+    };
+    button.addEventListener("touchmove", onMove, { passive: true });
+    button.addEventListener("touchend", cancelHold, { passive: true });
+    button.addEventListener("touchcancel", cancelHold, { passive: true });
+  }, { passive: true });
 
   return button;
 }
@@ -413,13 +524,18 @@ auraBtn.addEventListener("click", () => {
   const tile = [...grid.querySelectorAll(".tile")].find(
     (node) => node.dataset.trackId === String(currentTrackId)
   );
-  if (tile) updateAura(tile, 1);
+  if (!tile) return;
+  updateAura(tile, 1);
+  triggerAuraIconFeedback(tile.querySelector(".aura-like"));
+  triggerAuraBarFeedback();
+  if (navigator.vibrate) navigator.vibrate(12);
 });
 
 loopBtn.addEventListener("click", () => {
   if (loopRegion.end > loopRegion.start) {
     loopRegion.active = !loopRegion.active;
     loopRegion.editing = false;
+    persistLoopForTrack();
     loopBtn.classList.toggle('active', loopRegion.active);
     return;
   }
@@ -517,6 +633,8 @@ function drawWaveform() {
     const progress = player.duration ? player.currentTime / player.duration : 0;
     const t = Date.now() / 1000;
     const pulse = 0.35 + 0.35 * (0.5 + 0.5 * Math.sin(t * 3.2));
+    const auraCount = Number(track?.aura || 0);
+    const auraLevel = clamp(auraCount / 5, 0, 1);
 
     if (!peaks) {
       canvas.classList.remove("wave-ready");
@@ -553,6 +671,21 @@ function drawWaveform() {
       }
       ctx.fillRect(x, y, barWidth, barHeight);
     }
+
+    const playheadX = clamp(progress, 0, 1) * width;
+    const strobe = isPlaying ? 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t * 20)) : 0.5;
+    const glowWidth = (8 + auraLevel * 12 + strobe * 6) * 0.75;
+    const coreWidth = (2 + auraLevel * 1.5) * 0.75;
+    const glowAlpha = 0.32 + auraLevel * 0.3 + strobe * 0.2;
+    const coreAlpha = 0.75 + strobe * 0.25;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.fillStyle = `rgba(255, 65, 186, ${glowAlpha.toFixed(3)})`;
+    ctx.fillRect(playheadX - glowWidth / 2, 0, glowWidth, height);
+    ctx.fillStyle = `rgba(255, 180, 235, ${coreAlpha.toFixed(3)})`;
+    ctx.fillRect(playheadX - coreWidth / 2, 0, coreWidth, height);
+    ctx.restore();
   };
 
   drawTo(waveCanvas, waveCtx);
@@ -569,19 +702,28 @@ window.addEventListener("resize", () => {
   drawWaveform();
 });
 
-waveCanvas.addEventListener("click", (event) => {
-  if (!player.duration) return;
+function scrubWaveFromEvent(event) {
+  if (!player.duration || !waveHeader) return;
+  if (loopRegion.editing) return;
+  const target = event.target;
+  if (target.closest(".controls") || target.closest(".aux") || target.closest(".ctrl") || target.closest(".ghost") || target.closest(".loop-handle")) {
+    return;
+  }
+  const point = event.touches?.[0] || event.changedTouches?.[0] || event;
   const rect = waveHeader.getBoundingClientRect();
-  const x = event.clientX - rect.left;
+  const x = point.clientX - rect.left;
   const ratio = Math.min(1, Math.max(0, x / rect.width));
   player.currentTime = player.duration * ratio;
   drawWaveform();
-});
+}
+
+waveCanvas.addEventListener("click", scrubWaveFromEvent);
 
 if (waveHeader) {
   const startPress = (event) => {
     if (!player.duration) return;
     if (event.target.closest('.controls') || event.target.closest('.aux')) return;
+    if (event.target.closest('.loop-handle') || event.target.closest('.loop-range')) return;
     pressTimer = setTimeout(() => {
       const start = loopFromEvent(event);
       const end = clamp(start + 5, 0, player.duration);
@@ -593,7 +735,10 @@ if (waveHeader) {
     pressTimer = null;
   };
   waveHeader.addEventListener('touchstart', startPress, { passive: true });
-  waveHeader.addEventListener('touchend', cancelPress);
+  waveHeader.addEventListener('touchend', (event) => {
+    cancelPress();
+    if (isTouchDevice) scrubWaveFromEvent(event);
+  }, { passive: true });
   waveHeader.addEventListener('mousedown', () => {
     // allow normal scroll on desktop unless editing
   });
@@ -607,6 +752,7 @@ if (waveHeader) {
     if (event.target.closest('.loop-handle')) return;
     if (loopRegion.editing) {
       loopRegion.editing = false;
+      persistLoopForTrack();
       updateLoopOverlay();
     }
   });
@@ -621,18 +767,40 @@ const handleDrag = (event) => {
   } else {
     loopRegion.end = clamp(t, loopRegion.start + 0.1, player.duration);
   }
+  persistLoopForTrack();
   updateLoopOverlay();
 };
 
 const stopDrag = () => {
+  if (loopDrag) {
+    loopRegion.editing = false;
+    persistLoopForTrack();
+    updateLoopOverlay();
+  }
   loopDrag = null;
 };
 
 if (loopStartHandle && loopEndHandle) {
-  loopStartHandle.addEventListener('mousedown', () => (loopDrag = 'start'));
-  loopEndHandle.addEventListener('mousedown', () => (loopDrag = 'end'));
-  loopStartHandle.addEventListener('touchstart', () => (loopDrag = 'start'), { passive: true });
-  loopEndHandle.addEventListener('touchstart', () => (loopDrag = 'end'), { passive: true });
+  loopStartHandle.addEventListener('mousedown', () => {
+    loopDrag = 'start';
+    loopRegion.editing = true;
+    updateLoopOverlay();
+  });
+  loopEndHandle.addEventListener('mousedown', () => {
+    loopDrag = 'end';
+    loopRegion.editing = true;
+    updateLoopOverlay();
+  });
+  loopStartHandle.addEventListener('touchstart', () => {
+    loopDrag = 'start';
+    loopRegion.editing = true;
+    updateLoopOverlay();
+  }, { passive: true });
+  loopEndHandle.addEventListener('touchstart', () => {
+    loopDrag = 'end';
+    loopRegion.editing = true;
+    updateLoopOverlay();
+  }, { passive: true });
   window.addEventListener('mousemove', handleDrag);
   window.addEventListener('touchmove', handleDrag, { passive: false });
   window.addEventListener('mouseup', stopDrag);
@@ -655,7 +823,6 @@ function scrubFromEvent(event) {
 }
 
 nowPlaying.addEventListener("click", scrubFromEvent);
-nowPlaying.addEventListener("touchstart", scrubFromEvent);
 
 player.addEventListener("play", () => {
   cancelAnimationFrame(rafId);
@@ -669,6 +836,7 @@ player.addEventListener("pause", () => {
 });
 
 player.addEventListener("loadedmetadata", () => {
+  updateLoopOverlay();
   drawWaveform();
   updateTimecode();
 });
@@ -690,20 +858,23 @@ npArt.addEventListener('click', () => {
   if (loopRegion.active && loopRegion.editing) {
     loopRegion.end = clamp(player.currentTime, loopRegion.start + 0.1, player.duration);
     loopRegion.editing = false;
+    persistLoopForTrack();
     updateLoopOverlay();
     return;
   }
   loopRegion.editing = !loopRegion.editing;
+  persistLoopForTrack();
   updateLoopOverlay();
 });
 
 npArt.style.backgroundImage = `url('${DEFAULT_ART}')`;
+setNowPlayingAura(0);
 
 loadTracks();
 
 player.addEventListener("timeupdate", () => {
   updateTimecode();
-  if (loopRegion.active && loopRegion.end > loopRegion.start) {
+  if (loopRegion.active && loopRegion.end > loopRegion.start && !loopDrag && !loopRegion.editing) {
     if (player.currentTime >= loopRegion.end || player.currentTime < loopRegion.start) {
       player.currentTime = loopRegion.start;
     }
