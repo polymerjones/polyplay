@@ -1046,7 +1046,7 @@ body::before {
   }
   .grid {
     column-count: 1;
-    padding-bottom: 240px;
+    padding-bottom: calc(320px + env(safe-area-inset-bottom));
     gap: 16px;
   }
   .tile {
@@ -1057,9 +1057,9 @@ body::before {
     width: 48px;
     height: 48px;
     font-size: 22px;
-    top: auto;
+    top: 8px;
     right: 8px;
-    bottom: 8px;
+    bottom: auto;
   }
 }
 

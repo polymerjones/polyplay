@@ -586,6 +586,9 @@ let nukeTimeLeft = 0;
 
 function showNukeModal() {
   if (!nukeModal) return;
+  if (nukeModal.parentElement !== document.body) {
+    document.body.appendChild(nukeModal);
+  }
   nukeModal.hidden = false;
   nukeModal.setAttribute('aria-hidden', 'false');
   if (nukeCountdown) nukeCountdown.hidden = true;
@@ -645,6 +648,18 @@ if (nukeBtn) nukeBtn.addEventListener('click', showNukeModal);
 if (nukeCancel) nukeCancel.addEventListener('click', hideNukeModal);
 if (nukeConfirm) nukeConfirm.addEventListener('click', startNukeCountdown);
 if (nukeAbort) nukeAbort.addEventListener('click', abortNuke);
+if (nukeCancel) nukeCancel.addEventListener('touchend', (event) => {
+  event.preventDefault();
+  hideNukeModal();
+}, { passive: false });
+if (nukeConfirm) nukeConfirm.addEventListener('touchend', (event) => {
+  event.preventDefault();
+  startNukeCountdown();
+}, { passive: false });
+if (nukeAbort) nukeAbort.addEventListener('touchend', (event) => {
+  event.preventDefault();
+  abortNuke();
+}, { passive: false });
 
 document.addEventListener('DOMContentLoaded', () => {
   try {
