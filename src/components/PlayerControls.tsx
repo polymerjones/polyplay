@@ -11,6 +11,7 @@ type Props = {
   onPlayPause: () => void;
   onNext: () => void;
   onSeek: (seconds: number) => void;
+  onSetLoop: () => void;
   onToggleLoop: () => void;
   onClearLoop: () => void;
   onAuraUp?: () => void;
@@ -31,6 +32,7 @@ export function PlayerControls({
   onPlayPause,
   onNext,
   onSeek,
+  onSetLoop,
   onToggleLoop,
   onClearLoop,
   onAuraUp,
@@ -135,6 +137,9 @@ export function PlayerControls({
           onClick={onToggleLoop}
         >
           Loop
+        </button>
+        <button type="button" className="pc-btn pc-btn--sm" onClick={onSetLoop}>
+          Set Loop
         </button>
         <button type="button" className="pc-btn pc-btn--sm" onClick={onClearLoop}>
           Clear Loop

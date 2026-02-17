@@ -237,17 +237,22 @@ export default function App() {
     }));
   };
 
+  const setLoopFromCurrent = () => {
+    if (!currentTrackId || duration <= 0) return;
+    const now = audioRef.current?.currentTime || 0;
+    const safeStart = Math.max(0, Math.min(duration, now));
+    const safeEnd = Math.max(safeStart + 0.1, Math.min(duration, safeStart + 5));
+    setLoopByTrack((prev) => ({
+      ...prev,
+      [currentTrackId]: { start: safeStart, end: safeEnd, active: true, editing: false }
+    }));
+  };
+
   const toggleLoopActive = () => {
     if (!currentTrackId) return;
     setLoopByTrack((prev) => {
       const current = prev[currentTrackId] ?? EMPTY_LOOP;
-      if (current.end <= current.start) {
-        const now = audioRef.current?.currentTime || 0;
-        return {
-          ...prev,
-          [currentTrackId]: { start: now, end: Math.min(duration || 0, now + 5), active: true, editing: false }
-        };
-      }
+      if (current.end <= current.start) return prev;
       return {
         ...prev,
         [currentTrackId]: { ...current, active: !current.active, editing: false }
@@ -286,7 +291,7 @@ export default function App() {
         <header className="topbar">
           <div className="brand">
             <img className="brand-logo" src={logo} alt="Polyplay logo" />
-            <span>Polyplay Music App Beta v1</span>
+            <span>Polyplay Music App Beta v101</span>
           </div>
           <div className="top-actions">
             <button
@@ -339,6 +344,7 @@ export default function App() {
         onSeek={seekTo}
         onSkip={skip}
         onSetLoopRange={setLoopRange}
+        onSetLoop={setLoopFromCurrent}
         onToggleLoopActive={toggleLoopActive}
         onClearLoop={clearLoop}
         onOpenFullscreen={() => {
@@ -358,6 +364,7 @@ export default function App() {
           onPlayPause={togglePlayPause}
           onNext={playNext}
           onSeek={seekTo}
+          onSetLoop={setLoopFromCurrent}
           onToggleLoopActive={toggleLoopActive}
           onClearLoop={clearLoop}
           onAuraUp={() => {

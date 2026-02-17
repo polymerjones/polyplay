@@ -18,6 +18,7 @@ type Props = {
   onSeek: (seconds: number) => void;
   onSkip: (delta: number) => void;
   onSetLoopRange: (start: number, end: number, active: boolean) => void;
+  onSetLoop: () => void;
   onToggleLoopActive: () => void;
   onClearLoop: () => void;
   onOpenFullscreen: () => void;
@@ -39,6 +40,7 @@ export function MiniPlayerBar({
   onSeek,
   onSkip,
   onSetLoopRange,
+  onSetLoop,
   onToggleLoopActive,
   onClearLoop,
   onOpenFullscreen
@@ -98,6 +100,7 @@ export function MiniPlayerBar({
         onPlayPause={onPlayPause}
         onNext={onNext}
         onSeek={onSeek}
+        onSetLoop={onSetLoop}
         onToggleLoop={onToggleLoopActive}
         onClearLoop={onClearLoop}
         onAuraUp={

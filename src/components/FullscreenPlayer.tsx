@@ -15,6 +15,7 @@ type Props = {
   onPlayPause: () => void;
   onNext: () => void;
   onSeek: (seconds: number) => void;
+  onSetLoop: () => void;
   onToggleLoopActive: () => void;
   onClearLoop: () => void;
   onAuraUp: () => void;
@@ -35,6 +36,7 @@ export function FullscreenPlayer({
   onPlayPause,
   onNext,
   onSeek,
+  onSetLoop,
   onToggleLoopActive,
   onClearLoop,
   onAuraUp,
@@ -98,6 +100,7 @@ export function FullscreenPlayer({
           onPlayPause={onPlayPause}
           onNext={onNext}
           onSeek={onSeek}
+          onSetLoop={onSetLoop}
           onToggleLoop={onToggleLoopActive}
           onClearLoop={onClearLoop}
           onAuraUp={() => {

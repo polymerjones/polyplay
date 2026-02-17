@@ -13,7 +13,6 @@ type Props = {
 
 type Handle = "start" | "end";
 
-const LONG_PRESS_MS = 450;
 const MIN_LOOP_SECONDS = 0.1;
 
 let audioCtx: AudioContext | null = null;
@@ -60,8 +59,6 @@ export function WaveformLoop({
   const waveRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const decorCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const longPressTimerRef = useRef<number | null>(null);
-  const longPressTriggeredRef = useRef(false);
 
   const [peaks, setPeaks] = useState<number[]>(() => fallbackPeaks());
   const [draggingHandle, setDraggingHandle] = useState<Handle | null>(null);
@@ -80,13 +77,6 @@ export function WaveformLoop({
   const hasLoopRange = hasDuration && safeEnd > safeStart;
   const startPct = hasDuration ? (safeStart / duration) * 100 : 0;
   const endPct = hasDuration ? (safeEnd / duration) * 100 : 0;
-
-  const clearLongPressTimer = () => {
-    if (longPressTimerRef.current) {
-      window.clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  };
 
   const secondsFromClientX = (clientX: number): number => {
     if (!hasDuration || !waveRef.current) return 0;
@@ -213,26 +203,11 @@ export function WaveformLoop({
         onPointerDown={(event) => {
           if (!hasDuration || event.button !== 0) return;
           event.preventDefault();
-          clearLongPressTimer();
-          longPressTriggeredRef.current = false;
-          longPressTimerRef.current = window.setTimeout(() => {
-            const start = secondsFromClientX(event.clientX);
-            const end = Math.min(duration, start + 5);
-            onSetLoopRange(start, Math.max(start + MIN_LOOP_SECONDS, end), true);
-            longPressTriggeredRef.current = true;
-          }, LONG_PRESS_MS);
         }}
         onPointerUp={(event) => {
-          clearLongPressTimer();
           if (!hasDuration) return;
-          if (longPressTriggeredRef.current) {
-            longPressTriggeredRef.current = false;
-            return;
-          }
           onSeek(secondsFromClientX(event.clientX));
         }}
-        onPointerCancel={clearLongPressTimer}
-        onPointerLeave={clearLongPressTimer}
         onContextMenu={(event) => event.preventDefault()}
       >
         <canvas ref={canvasRef} className={`pc-wave__canvas ${track ? "is-ready" : "is-loading"}`} />
