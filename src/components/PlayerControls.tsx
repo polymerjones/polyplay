@@ -73,7 +73,7 @@ export function PlayerControls({
 
       <div className="pc-row" role="group" aria-label="Transport controls">
         <button type="button" className="pc-btn pc-btn--icon" aria-label="Previous track" onClick={onPrev}>
-          ⏮
+          <span className="pc-icon pc-icon--prev" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -81,10 +81,10 @@ export function PlayerControls({
           aria-label={isPlaying ? "Pause" : "Play"}
           onClick={onPlayPause}
         >
-          {isPlaying ? "⏸" : "▶"}
+          <span className={`pc-icon ${isPlaying ? "pc-icon--pause" : "pc-icon--play"}`} aria-hidden="true" />
         </button>
         <button type="button" className="pc-btn pc-btn--icon" aria-label="Next track" onClick={onNext}>
-          ⏭
+          <span className="pc-icon pc-icon--next" aria-hidden="true" />
         </button>
       </div>
 

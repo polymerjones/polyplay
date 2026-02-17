@@ -130,10 +130,14 @@ export function WaveformLoop({
 
       const width = rect.width;
       const height = rect.height;
-      const bars = peaks.length;
-      const gap = 2;
-      const barWidth = Math.max(1, (width - gap * (bars - 1)) / bars);
+      const minBarWidth = 1.2;
+      const gap = 1.2;
+      const maxBarsByWidth = Math.max(24, Math.floor((width + gap) / (minBarWidth + gap)));
+      const bars = Math.max(1, Math.min(peaks.length, maxBarsByWidth));
+      const barWidth = Math.max(0.8, (width - gap * (bars - 1)) / bars);
       const progress = duration > 0 ? Math.max(0, Math.min(1, currentTime / duration)) : 0;
+      const loopStartRatio = duration > 0 ? safeStart / duration : 0;
+      const loopEndRatio = duration > 0 ? safeEnd / duration : 0;
       ctx.clearRect(0, 0, width, height);
 
       const grad = ctx.createLinearGradient(0, 0, width, 0);
@@ -141,17 +145,17 @@ export function WaveformLoop({
       grad.addColorStop(1, `rgba(255, 128, 200, ${0.9 * alpha})`);
 
       for (let i = 0; i < bars; i += 1) {
-        const ratio = bars > 1 ? i / (bars - 1) : 0;
-        const magnitude = peaks[i] ?? 0.3;
+        const peakIndex = bars > 1 ? Math.round((i / (bars - 1)) * (peaks.length - 1)) : 0;
+        const magnitude = peaks[peakIndex] ?? 0.3;
         const h = Math.max(4, magnitude * height * 0.98);
         const x = i * (barWidth + gap);
+        const centerRatio = Math.max(0, Math.min(1, (x + barWidth * 0.5) / Math.max(1, width)));
         const y = (height - h) / 2;
 
-        const inLoop =
-          loopRegion.active && hasLoopRange && ratio >= safeStart / duration && ratio <= safeEnd / duration;
+        const inLoop = loopRegion.active && hasLoopRange && centerRatio >= loopStartRatio && centerRatio <= loopEndRatio;
 
         if (inLoop) ctx.fillStyle = `rgba(255, 214, 92, ${0.95 * alpha})`;
-        else ctx.fillStyle = ratio <= progress ? grad : `rgba(120, 70, 180, ${0.55 * alpha})`;
+        else ctx.fillStyle = centerRatio <= progress ? grad : `rgba(120, 70, 180, ${0.55 * alpha})`;
 
         ctx.fillRect(x, y, barWidth, h);
       }

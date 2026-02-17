@@ -47,6 +47,83 @@
   padding: 0;
 }
 
+.pc-icon {
+  position: relative;
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+}
+
+.pc-icon::before,
+.pc-icon::after {
+  content: "";
+  position: absolute;
+}
+
+.pc-icon--play::before {
+  left: 6px;
+  top: 4px;
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 11px solid currentColor;
+}
+
+.pc-icon--pause::before,
+.pc-icon--pause::after {
+  top: 4px;
+  width: 4px;
+  height: 14px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.pc-icon--pause::before {
+  left: 6px;
+}
+
+.pc-icon--pause::after {
+  left: 13px;
+}
+
+.pc-icon--prev::before,
+.pc-icon--next::before {
+  top: 4px;
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+}
+
+.pc-icon--prev::before {
+  left: 7px;
+  border-right: 10px solid currentColor;
+}
+
+.pc-icon--prev::after {
+  left: 4px;
+  top: 4px;
+  width: 2px;
+  height: 14px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.pc-icon--next::before {
+  left: 5px;
+  border-left: 10px solid currentColor;
+}
+
+.pc-icon--next::after {
+  left: 16px;
+  top: 4px;
+  width: 2px;
+  height: 14px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
 .pc-btn--primary {
   width: 68px;
   min-width: 68px;
