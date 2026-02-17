@@ -1,17 +1,24 @@
+import { useRef } from "react";
 import type { CSSProperties } from "react";
 import { formatTime } from "../lib/time";
-import type { Track } from "../types";
+import type { LoopRegion, Track } from "../types";
+import { PlayerControls } from "./PlayerControls";
 
 type Props = {
   track: Track;
   isPlaying: boolean;
   currentTime: number;
   duration: number;
+  loopRegion: LoopRegion;
   onClose: () => void;
   onPrev: () => void;
   onPlayPause: () => void;
   onNext: () => void;
   onSeek: (seconds: number) => void;
+  onToggleLoopActive: () => void;
+  onClearLoop: () => void;
+  onAuraUp: () => void;
+  onSkip: (delta: number) => void;
 };
 
 const DEFAULT_ART =
@@ -22,61 +29,83 @@ export function FullscreenPlayer({
   isPlaying,
   currentTime,
   duration,
+  loopRegion,
   onClose,
   onPrev,
   onPlayPause,
   onNext,
-  onSeek
+  onSeek,
+  onToggleLoopActive,
+  onClearLoop,
+  onAuraUp,
+  onSkip
 }: Props) {
+  const artRef = useRef<HTMLDivElement | null>(null);
   const artStyle = track.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
     : ({ backgroundImage: track.artGrad || `url('${DEFAULT_ART}')` } as CSSProperties);
+  const hasArtworkVideo = Boolean(track.artVideoUrl);
+
+  const triggerArtworkFlash = () => {
+    const art = artRef.current;
+    if (!art) return;
+    art.classList.remove("is-aura-flash");
+    void art.offsetWidth;
+    art.classList.add("is-aura-flash");
+  };
 
   return (
-    <section className="fullscreen-player" role="dialog" aria-modal="true" aria-label="Fullscreen player">
-      <div className="fullscreen-player-bg" style={artStyle} aria-hidden="true" />
+    <section className="fullscreen-player-shell" role="dialog" aria-modal="true" aria-label="Fullscreen player">
+      <div className="fullscreen-player-shell__bg" style={artStyle} aria-hidden="true" />
 
-      <button className="fullscreen-close" aria-label="Close fullscreen player" onClick={onClose}>
+      <button className="fullscreen-player-shell__close" aria-label="Close fullscreen player" onClick={onClose}>
         ✕
       </button>
 
-      <div className="fullscreen-content">
-        <div className="fullscreen-art" style={artStyle} />
+      <div className="fullscreen-player-shell__content">
+        <div
+          className={`fullscreen-player-shell__art ${hasArtworkVideo ? "has-video" : ""}`}
+          ref={artRef}
+          style={hasArtworkVideo ? undefined : artStyle}
+        >
+          {hasArtworkVideo && (
+            <video
+              key={track.artVideoUrl}
+              className="fullscreen-player-shell__art-video"
+              src={track.artVideoUrl}
+              muted
+              loop
+              autoPlay
+              playsInline
+            />
+          )}
+        </div>
 
-        <div className="fullscreen-meta">
+        <div className="fullscreen-player-shell__meta">
           <h2>{track.title}</h2>
           <p>
             {formatTime(currentTime)} / {formatTime(duration)} • Aura {track.aura}/5
           </p>
         </div>
 
-        <div className="fullscreen-time-row">
-          <span>{formatTime(currentTime)}</span>
-          <span>{formatTime(duration)}</span>
-        </div>
-
-        <input
-          className="fullscreen-seek"
-          type="range"
-          min={0}
-          max={duration || 0}
-          step={0.1}
-          value={Math.min(duration || 0, Math.max(0, currentTime))}
-          onChange={(event) => onSeek(Number(event.currentTarget.value))}
-          aria-label="Seek"
+        <PlayerControls
+          variant="fullscreen"
+          isPlaying={isPlaying}
+          currentTime={currentTime}
+          duration={duration}
+          loopActive={loopRegion.active}
+          onPrev={onPrev}
+          onPlayPause={onPlayPause}
+          onNext={onNext}
+          onSeek={onSeek}
+          onToggleLoop={onToggleLoopActive}
+          onClearLoop={onClearLoop}
+          onAuraUp={() => {
+            triggerArtworkFlash();
+            onAuraUp();
+          }}
+          onSkip={onSkip}
         />
-
-        <div className="fullscreen-controls">
-          <button className="fs-ctrl" aria-label="Previous" onClick={onPrev}>
-            ⏮
-          </button>
-          <button className="fs-ctrl fs-play" aria-label="Play or pause" onClick={onPlayPause}>
-            {isPlaying ? "⏸" : "▶"}
-          </button>
-          <button className="fs-ctrl" aria-label="Next" onClick={onNext}>
-            ⏭
-          </button>
-        </div>
       </div>
     </section>
   );

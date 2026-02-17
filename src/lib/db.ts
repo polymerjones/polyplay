@@ -6,7 +6,8 @@ export type DbTrackRecord = {
   sub?: string;
   aura?: number;
   audio?: Blob;
-  art?: Blob;
+  art?: Blob | null;
+  artVideo?: Blob | null;
   createdAt?: number;
 };
 
@@ -54,7 +55,11 @@ export async function getTracksFromDb(): Promise<Track[]> {
     .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
     .map((row) => {
       const audioUrl = row.audio ? URL.createObjectURL(row.audio) : undefined;
-      const artUrl = row.art ? URL.createObjectURL(row.art) : undefined;
+      const hasDedicatedArtVideo = Boolean(row.artVideo);
+      const legacyVideoInArt = !hasDedicatedArtVideo && Boolean(row.art?.type?.startsWith("video/"));
+      const artUrl = row.art && !legacyVideoInArt ? URL.createObjectURL(row.art) : undefined;
+      const artVideoBlob = row.artVideo || (legacyVideoInArt ? row.art : null);
+      const artVideoUrl = artVideoBlob ? URL.createObjectURL(artVideoBlob) : undefined;
 
       return {
         id: String(row.id),
@@ -63,8 +68,9 @@ export async function getTracksFromDb(): Promise<Track[]> {
         aura: clampAura(row.aura ?? 0),
         audioUrl,
         artUrl,
+        artVideoUrl,
         audioBlob: row.audio,
-        artBlob: row.art,
+        artBlob: row.art ?? undefined,
         persistedNumericId: row.id
       } satisfies Track;
     });
@@ -80,7 +86,8 @@ export async function addTrackToDb(params: {
   title: string;
   sub?: string;
   audio: Blob;
-  art?: Blob | null;
+  artPoster?: Blob | null;
+  artVideo?: Blob | null;
 }): Promise<void> {
   const db = await openDb();
 
@@ -91,7 +98,8 @@ export async function addTrackToDb(params: {
       title: params.title,
       sub: params.sub || "Uploaded",
       audio: params.audio,
-      art: params.art || null,
+      art: params.artPoster || null,
+      artVideo: params.artVideo || null,
       aura: 0,
       createdAt: Date.now()
     });
@@ -125,10 +133,17 @@ export async function saveAuraToDb(trackId: number, aura: number): Promise<void>
   });
 }
 
-export async function updateArtworkInDb(trackId: number, art: Blob): Promise<void> {
+export async function updateArtworkInDb(
+  trackId: number,
+  artwork: {
+    artPoster: Blob | null;
+    artVideo?: Blob | null;
+  }
+): Promise<void> {
   const db = await openDb();
   await updateTrackById(db, trackId, (row) => {
-    row.art = art;
+    row.art = artwork.artPoster;
+    row.artVideo = artwork.artVideo || null;
   });
 }
 

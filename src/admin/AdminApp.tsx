@@ -16,15 +16,72 @@ function formatTrackLabel(track: DbTrackRecord): string {
   return `${track.title?.trim() || `Track ${track.id}`} (#${track.id})`;
 }
 
+function isVideoArtwork(file: File | null): boolean {
+  return Boolean(file?.type?.startsWith("video/"));
+}
+
+async function capturePosterFrame(videoFile: File, timeSec: number): Promise<Blob> {
+  const objectUrl = URL.createObjectURL(videoFile);
+  try {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.playsInline = true;
+    video.src = objectUrl;
+
+    await new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => resolve();
+      video.onerror = () => reject(new Error("Unable to load video metadata"));
+    });
+
+    const safeDuration = Number.isFinite(video.duration) ? Math.max(0, video.duration) : 0;
+    const safeTime = Math.max(0, Math.min(Math.max(0, safeDuration - 0.05), timeSec || 0));
+
+    await new Promise<void>((resolve, reject) => {
+      video.currentTime = safeTime;
+      video.onseeked = () => resolve();
+      video.onerror = () => reject(new Error("Unable to seek video frame"));
+    });
+
+    const sourceWidth = Math.max(1, video.videoWidth || 1);
+    const sourceHeight = Math.max(1, video.videoHeight || 1);
+    const maxEdge = 1280;
+    const scale = Math.min(1, maxEdge / Math.max(sourceWidth, sourceHeight));
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Unable to render poster frame");
+    ctx.drawImage(video, 0, 0, width, height);
+
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+    if (!blob) throw new Error("Unable to export poster frame");
+    return blob;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export function AdminApp() {
   const [tracks, setTracks] = useState<DbTrackRecord[]>([]);
   const [status, setStatus] = useState("");
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadAudio, setUploadAudio] = useState<File | null>(null);
   const [uploadArt, setUploadArt] = useState<File | null>(null);
+  const [uploadArtPreviewUrl, setUploadArtPreviewUrl] = useState("");
+  const [uploadArtDuration, setUploadArtDuration] = useState(0);
+  const [uploadArtFrameTime, setUploadArtFrameTime] = useState(0);
+  const [uploadArtPosterBlob, setUploadArtPosterBlob] = useState<Blob | null>(null);
 
   const [selectedArtworkTrackId, setSelectedArtworkTrackId] = useState<string>("");
   const [selectedArtworkFile, setSelectedArtworkFile] = useState<File | null>(null);
+  const [selectedArtPreviewUrl, setSelectedArtPreviewUrl] = useState("");
+  const [selectedArtDuration, setSelectedArtDuration] = useState(0);
+  const [selectedArtFrameTime, setSelectedArtFrameTime] = useState(0);
+  const [selectedArtPosterBlob, setSelectedArtPosterBlob] = useState<Blob | null>(null);
 
   const [selectedAudioTrackId, setSelectedAudioTrackId] = useState<string>("");
   const [selectedAudioFile, setSelectedAudioFile] = useState<File | null>(null);
@@ -62,6 +119,13 @@ export function AdminApp() {
     void refreshTracks();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (uploadArtPreviewUrl) URL.revokeObjectURL(uploadArtPreviewUrl);
+      if (selectedArtPreviewUrl) URL.revokeObjectURL(selectedArtPreviewUrl);
+    };
+  }, [selectedArtPreviewUrl, uploadArtPreviewUrl]);
+
   const notifyUploadSuccess = async () => {
     try {
       if (window.parent && window.parent !== window) {
@@ -81,6 +145,59 @@ export function AdminApp() {
     }
   };
 
+  const setUploadArtworkFile = (file: File | null) => {
+    setUploadArt(file);
+    setUploadArtPosterBlob(null);
+    setUploadArtDuration(0);
+    setUploadArtFrameTime(0);
+    if (uploadArtPreviewUrl) URL.revokeObjectURL(uploadArtPreviewUrl);
+    setUploadArtPreviewUrl(file && isVideoArtwork(file) ? URL.createObjectURL(file) : "");
+  };
+
+  const setSelectedArtworkAssetFile = (file: File | null) => {
+    setSelectedArtworkFile(file);
+    setSelectedArtPosterBlob(null);
+    setSelectedArtDuration(0);
+    setSelectedArtFrameTime(0);
+    if (selectedArtPreviewUrl) URL.revokeObjectURL(selectedArtPreviewUrl);
+    setSelectedArtPreviewUrl(file && isVideoArtwork(file) ? URL.createObjectURL(file) : "");
+  };
+
+  const buildArtworkPayload = async (
+    file: File | null,
+    frameTime: number,
+    posterBlob: Blob | null
+  ): Promise<{ artPoster: Blob | null; artVideo: Blob | null }> => {
+    if (!file) return { artPoster: null, artVideo: null };
+    if (!isVideoArtwork(file)) return { artPoster: file, artVideo: null };
+    const poster = posterBlob ?? (await capturePosterFrame(file, frameTime));
+    return { artPoster: poster, artVideo: file };
+  };
+
+  const captureUploadFrame = async () => {
+    if (!uploadArt || !isVideoArtwork(uploadArt)) return;
+    setStatus("Capturing artwork frame...");
+    try {
+      const poster = await capturePosterFrame(uploadArt, uploadArtFrameTime);
+      setUploadArtPosterBlob(poster);
+      setStatus("Frame captured.");
+    } catch {
+      setStatus("Could not capture frame from artwork video.");
+    }
+  };
+
+  const captureSelectedFrame = async () => {
+    if (!selectedArtworkFile || !isVideoArtwork(selectedArtworkFile)) return;
+    setStatus("Capturing artwork frame...");
+    try {
+      const poster = await capturePosterFrame(selectedArtworkFile, selectedArtFrameTime);
+      setSelectedArtPosterBlob(poster);
+      setStatus("Frame captured.");
+    } catch {
+      setStatus("Could not capture frame from artwork video.");
+    }
+  };
+
   const onUpload = async (event: FormEvent) => {
     event.preventDefault();
     if (!uploadAudio) {
@@ -92,15 +209,17 @@ export function AdminApp() {
     setStatus("Uploading...");
 
     try {
+      const artwork = await buildArtworkPayload(uploadArt, uploadArtFrameTime, uploadArtPosterBlob);
       await addTrackToDb({
         title: derivedTitle,
         sub: "Uploaded",
         audio: uploadAudio,
-        art: uploadArt
+        artPoster: artwork.artPoster,
+        artVideo: artwork.artVideo
       });
       setUploadTitle("");
       setUploadAudio(null);
-      setUploadArt(null);
+      setUploadArtworkFile(null);
       setStatus("Upload complete.");
       await refreshTracks();
       await notifyUploadSuccess();
@@ -115,14 +234,15 @@ export function AdminApp() {
       return;
     }
     if (!selectedArtworkFile) {
-      setStatus("Select an artwork image.");
+      setStatus("Select an artwork file.");
       return;
     }
 
     setStatus("Updating artwork...");
     try {
-      await updateArtworkInDb(Number(selectedArtworkTrackId), selectedArtworkFile);
-      setSelectedArtworkFile(null);
+      const artwork = await buildArtworkPayload(selectedArtworkFile, selectedArtFrameTime, selectedArtPosterBlob);
+      await updateArtworkInDb(Number(selectedArtworkTrackId), artwork);
+      setSelectedArtworkAssetFile(null);
       setStatus("Artwork updated.");
       await refreshTracks();
     } catch {
@@ -195,9 +315,9 @@ export function AdminApp() {
   };
 
   return (
-    <div className="admin-v1 touch-clean mx-auto min-h-screen w-full max-w-5xl px-4 pb-8 pt-4 sm:px-6">
-      <header className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-300/20 bg-slate-900/85 p-4 shadow-glow backdrop-blur">
-        <div className="flex min-w-0 items-center gap-3">
+    <div className="admin-v1 touch-clean mx-auto min-h-screen w-full max-w-5xl px-3 pb-5 pt-3 sm:px-4">
+      <header className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-300/20 bg-slate-900/85 p-3 shadow-glow backdrop-blur">
+        <div className="flex min-w-0 items-center gap-2">
           <img
             src={logo}
             alt="Polyplay logo"
@@ -219,49 +339,79 @@ export function AdminApp() {
         </div>
       </header>
 
-      <section className="admin-v1-section grid gap-4 lg:grid-cols-2">
-        <form onSubmit={onUpload} className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-4">
-          <h2 className="mb-3 text-base font-semibold text-slate-100">Upload Track</h2>
-          <div className="admin-v1-fields grid gap-3">
+      <section className="admin-v1-section grid gap-3 lg:grid-cols-2">
+        <form onSubmit={onUpload} className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
+          <h2 className="mb-2 text-base font-semibold text-slate-100">Upload Track</h2>
+          <div className="admin-v1-fields admin-upload-stack grid gap-2">
             <label className="grid gap-1 text-sm text-slate-300">
               Title
               <input
                 value={uploadTitle}
                 onChange={(event) => setUploadTitle(event.currentTarget.value)}
-                className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
+                className="admin-upload-input rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
               />
             </label>
 
-            <label className="grid gap-1 text-sm text-slate-300">
+            <label className="admin-upload-field grid gap-1 text-sm text-slate-300">
               Audio (.wav/.mp3)
               <input
                 type="file"
                 accept="audio/wav,audio/x-wav,audio/mpeg"
                 onChange={(event) => setUploadAudio(event.currentTarget.files?.[0] || null)}
-                className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
+                className="admin-upload-input admin-upload-file rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
               />
             </label>
 
-            <label className="grid gap-1 text-sm text-slate-300">
-              Artwork (optional)
+            <label className="admin-upload-field grid gap-1 text-sm text-slate-300">
+              Artwork (image, mp4, or mov, optional)
               <input
                 type="file"
-                accept="image/*"
-                onChange={(event) => setUploadArt(event.currentTarget.files?.[0] || null)}
-                className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
+                accept="image/*,video/mp4,video/quicktime,.mov"
+                onChange={(event) => setUploadArtworkFile(event.currentTarget.files?.[0] || null)}
+                className="admin-upload-input admin-upload-file rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
               />
             </label>
+            {uploadArtPreviewUrl && (
+              <div className="video-frame-picker">
+                <label className="text-xs text-slate-300">Poster frame for static artwork</label>
+                <video
+                  className="frame-video"
+                  src={uploadArtPreviewUrl}
+                  muted
+                  playsInline
+                  controls
+                  onLoadedMetadata={(event) => {
+                    const duration = Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0;
+                    setUploadArtDuration(duration);
+                    setUploadArtFrameTime(Math.min(1, duration || 0));
+                  }}
+                />
+                <input
+                  className="frame-slider"
+                  type="range"
+                  min={0}
+                  max={Math.max(0, uploadArtDuration)}
+                  step={0.05}
+                  value={Math.min(uploadArtFrameTime, Math.max(0, uploadArtDuration))}
+                  onChange={(event) => setUploadArtFrameTime(Number(event.currentTarget.value))}
+                />
+                <div className="text-xs text-slate-400">Frame: {uploadArtFrameTime.toFixed(2)}s</div>
+                <Button onClick={() => void captureUploadFrame()} className="admin-upload-btn">
+                  Use This Frame
+                </Button>
+              </div>
+            )}
 
-            <Button variant="primary" type="submit" className="admin-upload-btn">
+            <Button variant="primary" type="submit" className="admin-upload-btn admin-upload-submit">
               Upload
             </Button>
           </div>
         </form>
 
-        <div className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-4">
-          <h2 className="mb-3 text-base font-semibold text-slate-100">Track Operations</h2>
+        <div className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
+          <h2 className="mb-2 text-base font-semibold text-slate-100">Track Operations</h2>
 
-          <div className="admin-v1-fields grid gap-3">
+          <div className="admin-v1-fields grid gap-2">
             <label className="grid gap-1 text-sm text-slate-300">
               Update artwork
               <select
@@ -278,10 +428,40 @@ export function AdminApp() {
               </select>
               <input
                 type="file"
-                accept="image/*"
-                onChange={(event) => setSelectedArtworkFile(event.currentTarget.files?.[0] || null)}
+                accept="image/*,video/mp4,video/quicktime,.mov"
+                onChange={(event) => setSelectedArtworkAssetFile(event.currentTarget.files?.[0] || null)}
                 className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
               />
+              {selectedArtPreviewUrl && (
+                <div className="video-frame-picker">
+                  <label className="text-xs text-slate-300">Poster frame for static artwork</label>
+                  <video
+                    className="frame-video"
+                    src={selectedArtPreviewUrl}
+                    muted
+                    playsInline
+                    controls
+                    onLoadedMetadata={(event) => {
+                      const duration = Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0;
+                      setSelectedArtDuration(duration);
+                      setSelectedArtFrameTime(Math.min(1, duration || 0));
+                    }}
+                  />
+                  <input
+                    className="frame-slider"
+                    type="range"
+                    min={0}
+                    max={Math.max(0, selectedArtDuration)}
+                    step={0.05}
+                    value={Math.min(selectedArtFrameTime, Math.max(0, selectedArtDuration))}
+                    onChange={(event) => setSelectedArtFrameTime(Number(event.currentTarget.value))}
+                  />
+                  <div className="text-xs text-slate-400">Frame: {selectedArtFrameTime.toFixed(2)}s</div>
+                  <Button onClick={() => void captureSelectedFrame()} className="admin-upload-btn">
+                    Use This Frame
+                  </Button>
+                </div>
+              )}
               <Button onClick={onUpdateArtwork} disabled={!hasTracks}>
                 Update Artwork
               </Button>
@@ -334,8 +514,8 @@ export function AdminApp() {
         </div>
       </section>
 
-      <section className="admin-v1-card mt-4 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-4">
-        <h2 className="mb-3 text-base font-semibold text-slate-100">Danger Zone</h2>
+      <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
+        <h2 className="mb-2 text-base font-semibold text-slate-100">Danger Zone</h2>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => void refreshTracks()}>
             Refresh Tracks
@@ -349,7 +529,7 @@ export function AdminApp() {
         </div>
       </section>
 
-      <p className="mt-4 rounded-xl border border-slate-300/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-200">
+      <p className="mt-3 rounded-xl border border-slate-300/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-200">
         {status || "Ready."}
       </p>
     </div>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import logo from "../logo.png";
 import { FullscreenPlayer } from "./components/FullscreenPlayer";
-import { NowPlayingBar } from "./components/NowPlayingBar";
+import { MiniPlayerBar } from "./components/MiniPlayerBar";
 import { TrackGrid } from "./components/TrackGrid";
 import { sampleTracks } from "./data/sampleTracks";
 import { getTracksFromDb, saveAuraToDb } from "./lib/db";
@@ -44,7 +44,7 @@ export default function App() {
       return loaded[0]?.id ?? null;
     });
     objectUrlsRef.current = dbTracks.flatMap((track) =>
-      [track.audioUrl, track.artUrl].filter(Boolean) as string[]
+      [track.audioUrl, track.artUrl, track.artVideoUrl].filter(Boolean) as string[]
     );
   };
 
@@ -324,7 +324,7 @@ export default function App() {
         />
       </div>
 
-      <NowPlayingBar
+      <MiniPlayerBar
         track={currentTrack}
         isPlaying={isPlaying}
         currentTime={currentTime}
@@ -352,11 +352,18 @@ export default function App() {
           isPlaying={isPlaying}
           currentTime={currentTime}
           duration={duration}
+          loopRegion={currentLoop}
           onClose={() => setIsFullscreenPlayerOpen(false)}
           onPrev={playPrev}
           onPlayPause={togglePlayPause}
           onNext={playNext}
           onSeek={seekTo}
+          onToggleLoopActive={toggleLoopActive}
+          onClearLoop={clearLoop}
+          onAuraUp={() => {
+            if (currentTrackId) void updateAura(currentTrackId, 1);
+          }}
+          onSkip={skip}
         />
       )}
 

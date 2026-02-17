@@ -7,6 +7,7 @@ export type Track = {
   aura: number;
   audioUrl?: string;
   artUrl?: string;
+  artVideoUrl?: string;
   artGrad?: string;
   audioBlob?: Blob;
   artBlob?: Blob;

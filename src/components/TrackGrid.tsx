@@ -17,7 +17,7 @@ function auraClass(aura: number): string {
 
 export function TrackGrid({ tracks, currentTrackId, isPlaying, onSelectTrack, onAuraUp }: Props) {
   return (
-    <main className="grid" id="grid">
+    <main className="track-grid" id="grid">
       {tracks.map((track) => {
         const active = track.id === currentTrackId;
         const auraLevel = Math.max(0, Math.min(1, track.aura / 5));
@@ -57,13 +57,29 @@ export function TrackGrid({ tracks, currentTrackId, isPlaying, onSelectTrack, on
               onClick={(event) => {
                 event.stopPropagation();
                 const button = event.currentTarget;
-                button.classList.remove("aura-bounce");
+                const tile = button.closest(".tile");
+                const art = tile?.querySelector(".art");
+                if (art instanceof HTMLElement) {
+                  art.classList.remove("is-aura-flash");
+                  void art.offsetWidth;
+                  art.classList.add("is-aura-flash");
+                }
+                button.classList.remove("aura-like--burst");
                 void button.offsetWidth;
-                button.classList.add("aura-bounce");
-                const sparkle = document.createElement("span");
-                sparkle.className = "aura-sparkle";
-                button.appendChild(sparkle);
-                sparkle.addEventListener("animationend", () => sparkle.remove(), { once: true });
+                button.classList.add("aura-like--burst");
+                const burst = document.createElement("span");
+                burst.className = "aura-burst";
+                for (let i = 0; i < 7; i += 1) {
+                  const sparkle = document.createElement("span");
+                  sparkle.className = "aura-burst__spark";
+                  const angle = (i / 7) * Math.PI * 2;
+                  sparkle.style.setProperty("--tx", `${Math.cos(angle) * 26}px`);
+                  sparkle.style.setProperty("--ty", `${Math.sin(angle) * 26}px`);
+                  sparkle.style.setProperty("--delay", `${i * 34}ms`);
+                  burst.appendChild(sparkle);
+                }
+                button.appendChild(burst);
+                burst.addEventListener("animationend", () => burst.remove(), { once: true });
                 if (navigator.vibrate) navigator.vibrate(12);
                 onAuraUp(track.id);
               }}

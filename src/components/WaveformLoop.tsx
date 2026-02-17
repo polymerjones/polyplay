@@ -193,7 +193,7 @@ export function WaveformLoop({
     <>
       <div
         ref={waveRef}
-        className="wave-header"
+        className="pc-wave"
         onPointerDown={(event) => {
           if (!hasDuration || event.button !== 0) return;
           clearLongPressTimer();
@@ -217,11 +217,11 @@ export function WaveformLoop({
         onPointerCancel={clearLongPressTimer}
         onPointerLeave={clearLongPressTimer}
       >
-        <canvas ref={canvasRef} className={`wave-canvas ${track ? "wave-ready" : "wave-loading"}`} />
-        <div className="loop-overlay" aria-hidden="true">
-          <div className="loop-range" style={{ left: `${startPct}%`, width: `${Math.max(0, endPct - startPct)}%` }} />
+        <canvas ref={canvasRef} className={`pc-wave__canvas ${track ? "is-ready" : "is-loading"}`} />
+        <div className="pc-wave__loop-overlay" aria-hidden="true">
+          <div className="pc-wave__loop-range" style={{ left: `${startPct}%`, width: `${Math.max(0, endPct - startPct)}%` }} />
           <button
-            className="loop-handle start"
+            className="pc-wave__loop-handle is-start"
             style={{ left: `${startPct}%` }}
             aria-label="Loop start"
             onPointerDown={(event) => {
@@ -230,7 +230,7 @@ export function WaveformLoop({
             }}
           />
           <button
-            className="loop-handle end"
+            className="pc-wave__loop-handle is-end"
             style={{ left: `${endPct}%` }}
             aria-label="Loop end"
             onPointerDown={(event) => {
@@ -240,8 +240,8 @@ export function WaveformLoop({
           />
         </div>
       </div>
-      <div className="wave-decor" aria-hidden="true">
-        <canvas ref={decorCanvasRef} className={`wave-canvas ${track ? "wave-ready" : "wave-loading"}`} />
+      <div className="pc-wave__decor" aria-hidden="true">
+        <canvas ref={decorCanvasRef} className={`pc-wave__canvas ${track ? "is-ready" : "is-loading"}`} />
       </div>
     </>
   );
