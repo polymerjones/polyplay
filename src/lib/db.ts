@@ -1,6 +1,23 @@
 import type { Track } from "../types";
+import { getMediaUrl, revokeAllMediaUrls, revokeMediaUrl } from "./player/media";
+import { deleteBlob, getBlob, initDB, putBlob } from "./storage/db";
+import { loadLibrary, saveLibrary, type LibraryState, type TrackRecord } from "./storage/library";
 
 export type DbTrackRecord = {
+  id: string;
+  title?: string;
+  sub?: string;
+  aura?: number;
+  audioKey?: string | null;
+  artKey?: string | null;
+  artVideoKey?: string | null;
+  createdAt?: number;
+  updatedAt?: number;
+  missingAudio?: boolean;
+  missingArt?: boolean;
+};
+
+type LegacyDbTrackRecord = {
   id: number;
   title?: string;
   sub?: string;
@@ -11,75 +28,207 @@ export type DbTrackRecord = {
   createdAt?: number;
 };
 
-const DB_NAME = "carplay_app";
-const DB_VERSION = 1;
-const STORE_NAME = "tracks";
-
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function readAllRows(db: IDBDatabase): Promise<DbTrackRecord[]> {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const store = tx.objectStore(STORE_NAME);
-    const req = store.getAll();
-
-    req.onsuccess = () => resolve((req.result ?? []) as DbTrackRecord[]);
-    req.onerror = () => reject(req.error);
-  });
-}
+const LEGACY_DB_NAME = "carplay_app";
+const LEGACY_DB_VERSION = 1;
+const LEGACY_STORE_NAME = "tracks";
+const LEGACY_MIGRATION_FLAG = "showoff_legacy_migrated_v1";
 
 function clampAura(aura: number): number {
   return Math.max(0, Math.min(5, Math.round(aura)));
 }
 
+function now(): number {
+  return Date.now();
+}
+
+function makeId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getTrackOrder(library: LibraryState): string[] {
+  const playlist = library.activePlaylistId ? library.playlistsById[library.activePlaylistId] : undefined;
+  const fromPlaylist = playlist?.trackIds || [];
+  if (fromPlaylist.length) return fromPlaylist;
+
+  return Object.values(library.tracksById)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .map((track) => track.id);
+}
+
+async function maybeMigrateLegacyTracks(): Promise<void> {
+  if (localStorage.getItem(LEGACY_MIGRATION_FLAG) === "1") return;
+
+  const library = loadLibrary();
+  if (Object.keys(library.tracksById).length > 0) {
+    localStorage.setItem(LEGACY_MIGRATION_FLAG, "1");
+    return;
+  }
+
+  const legacyRows = await readLegacyTracks().catch(() => [] as LegacyDbTrackRecord[]);
+  if (!legacyRows.length) {
+    localStorage.setItem(LEGACY_MIGRATION_FLAG, "1");
+    return;
+  }
+
+  await initDB();
+  const nextLibrary = loadLibrary();
+  const ordered = legacyRows.slice().sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+  const activePlaylist = nextLibrary.activePlaylistId
+    ? nextLibrary.playlistsById[nextLibrary.activePlaylistId]
+    : undefined;
+
+  for (const row of ordered) {
+    const trackId = makeId();
+    const createdAt = row.createdAt ?? now();
+    let audioKey: string | null = null;
+    let artKey: string | null = null;
+    let artVideoKey: string | null = null;
+
+    if (row.audio) {
+      audioKey = makeId();
+      await putBlob(audioKey, row.audio, { type: "audio", createdAt });
+    }
+
+    const hasDedicatedArtVideo = Boolean(row.artVideo);
+    const legacyVideoInArt = !hasDedicatedArtVideo && Boolean(row.art?.type?.startsWith("video/"));
+    if (legacyVideoInArt && row.art) {
+      artVideoKey = makeId();
+      await putBlob(artVideoKey, row.art, { type: "video", createdAt });
+    } else if (row.art) {
+      artKey = makeId();
+      await putBlob(artKey, row.art, { type: "image", createdAt });
+    }
+
+    if (row.artVideo) {
+      artVideoKey = makeId();
+      await putBlob(artVideoKey, row.artVideo, { type: "video", createdAt });
+    }
+
+    nextLibrary.tracksById[trackId] = {
+      id: trackId,
+      title: row.title?.trim() || `Track ${row.id}`,
+      sub: row.sub || "Uploaded",
+      artist: null,
+      duration: null,
+      aura: clampAura(row.aura ?? 0),
+      audioKey,
+      artKey,
+      artVideoKey,
+      createdAt,
+      updatedAt: createdAt
+    };
+
+    if (activePlaylist && !activePlaylist.trackIds.includes(trackId)) {
+      activePlaylist.trackIds.push(trackId);
+      activePlaylist.updatedAt = now();
+    }
+  }
+
+  saveLibrary(nextLibrary);
+  localStorage.setItem(LEGACY_MIGRATION_FLAG, "1");
+}
+
+function readLegacyTracks(): Promise<LegacyDbTrackRecord[]> {
+  return new Promise((resolve, reject) => {
+    const openReq = indexedDB.open(LEGACY_DB_NAME, LEGACY_DB_VERSION);
+    openReq.onsuccess = () => {
+      const db = openReq.result;
+      if (!db.objectStoreNames.contains(LEGACY_STORE_NAME)) {
+        db.close();
+        resolve([]);
+        return;
+      }
+      const tx = db.transaction(LEGACY_STORE_NAME, "readonly");
+      const store = tx.objectStore(LEGACY_STORE_NAME);
+      const getAllReq = store.getAll();
+      getAllReq.onsuccess = () => {
+        db.close();
+        resolve((getAllReq.result ?? []) as LegacyDbTrackRecord[]);
+      };
+      getAllReq.onerror = () => {
+        db.close();
+        reject(getAllReq.error);
+      };
+    };
+    openReq.onerror = () => reject(openReq.error);
+    openReq.onupgradeneeded = () => {
+      openReq.result.close();
+      resolve([]);
+    };
+  });
+}
+
+async function toTrack(record: TrackRecord): Promise<Track> {
+  const [audioBlob, artBlob, artVideoBlob] = await Promise.all([
+    record.audioKey ? getBlob(record.audioKey) : Promise.resolve(null),
+    record.artKey ? getBlob(record.artKey) : Promise.resolve(null),
+    record.artVideoKey ? getBlob(record.artVideoKey) : Promise.resolve(null)
+  ]);
+
+  const audioUrl = await getMediaUrl(record.audioKey);
+  const artUrl = await getMediaUrl(record.artKey);
+  const artVideoUrl = await getMediaUrl(record.artVideoKey);
+
+  return {
+    id: record.id,
+    title: record.title,
+    sub: record.sub || "Uploaded",
+    aura: clampAura(record.aura),
+    audioUrl,
+    artUrl,
+    artVideoUrl,
+    audioBlob: audioBlob ?? undefined,
+    artBlob: artBlob ?? undefined,
+    persistedId: record.id,
+    missingAudio: Boolean(record.audioKey) && !audioBlob,
+    missingArt: (Boolean(record.artKey) && !artBlob) || (Boolean(record.artVideoKey) && !artVideoBlob)
+  } satisfies Track;
+}
+
 export async function getTracksFromDb(): Promise<Track[]> {
-  const db = await openDb();
-  const rows = await readAllRows(db);
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const trackIds = getTrackOrder(library);
+  const records = trackIds.map((id) => library.tracksById[id]).filter(Boolean);
 
-  return rows
-    .slice()
-    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
-    .map((row) => {
-      const audioUrl = row.audio ? URL.createObjectURL(row.audio) : undefined;
-      const hasDedicatedArtVideo = Boolean(row.artVideo);
-      const legacyVideoInArt = !hasDedicatedArtVideo && Boolean(row.art?.type?.startsWith("video/"));
-      const artUrl = row.art && !legacyVideoInArt ? URL.createObjectURL(row.art) : undefined;
-      const artVideoBlob = row.artVideo || (legacyVideoInArt ? row.art : null);
-      const artVideoUrl = artVideoBlob ? URL.createObjectURL(artVideoBlob) : undefined;
-
-      return {
-        id: String(row.id),
-        title: row.title?.trim() || `Track ${row.id}`,
-        sub: row.sub || "Uploaded",
-        aura: clampAura(row.aura ?? 0),
-        audioUrl,
-        artUrl,
-        artVideoUrl,
-        audioBlob: row.audio,
-        artBlob: row.art ?? undefined,
-        persistedNumericId: row.id
-      } satisfies Track;
-    });
+  const tracks = await Promise.all(records.map((record) => toTrack(record)));
+  return tracks.slice().sort((a, b) => {
+    const aCreated = library.tracksById[a.id]?.createdAt ?? 0;
+    const bCreated = library.tracksById[b.id]?.createdAt ?? 0;
+    return bCreated - aCreated;
+  });
 }
 
 export async function getTrackRowsFromDb(): Promise<DbTrackRecord[]> {
-  const db = await openDb();
-  const rows = await readAllRows(db);
-  return rows.slice().sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const records = Object.values(library.tracksById).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+
+  const rows = await Promise.all(
+    records.map(async (record) => {
+      const [audioBlob, artBlob, artVideoBlob] = await Promise.all([
+        record.audioKey ? getBlob(record.audioKey) : Promise.resolve(null),
+        record.artKey ? getBlob(record.artKey) : Promise.resolve(null),
+        record.artVideoKey ? getBlob(record.artVideoKey) : Promise.resolve(null)
+      ]);
+      return {
+        id: record.id,
+        title: record.title,
+        sub: record.sub || "Uploaded",
+        aura: clampAura(record.aura),
+        audioKey: record.audioKey,
+        artKey: record.artKey,
+        artVideoKey: record.artVideoKey || null,
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+        missingAudio: Boolean(record.audioKey) && !audioBlob,
+        missingArt: (Boolean(record.artKey) && !artBlob) || (Boolean(record.artVideoKey) && !artVideoBlob)
+      } satisfies DbTrackRecord;
+    })
+  );
+
+  return rows;
 }
 
 export async function addTrackToDb(params: {
@@ -89,148 +238,174 @@ export async function addTrackToDb(params: {
   artPoster?: Blob | null;
   artVideo?: Blob | null;
 }): Promise<void> {
-  const db = await openDb();
+  await maybeMigrateLegacyTracks();
+  await initDB();
 
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const store = tx.objectStore(STORE_NAME);
-    const req = store.add({
-      title: params.title,
-      sub: params.sub || "Uploaded",
-      audio: params.audio,
-      art: params.artPoster || null,
-      artVideo: params.artVideo || null,
-      aura: 0,
-      createdAt: Date.now()
-    });
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  const ts = now();
+  const trackId = makeId();
+  const audioKey = makeId();
+  let artKey: string | null = null;
+  let artVideoKey: string | null = null;
+
+  await putBlob(audioKey, params.audio, { type: "audio", createdAt: ts });
+  if (params.artPoster) {
+    artKey = makeId();
+    await putBlob(artKey, params.artPoster, { type: "image", createdAt: ts });
+  }
+  if (params.artVideo) {
+    artVideoKey = makeId();
+    await putBlob(artVideoKey, params.artVideo, { type: "video", createdAt: ts });
+  }
+
+  const library = loadLibrary();
+  library.tracksById[trackId] = {
+    id: trackId,
+    title: params.title.trim() || "Untitled",
+    sub: params.sub || "Uploaded",
+    artist: null,
+    duration: null,
+    aura: 0,
+    audioKey,
+    artKey,
+    artVideoKey,
+    createdAt: ts,
+    updatedAt: ts
+  };
+
+  const playlist = library.activePlaylistId ? library.playlistsById[library.activePlaylistId] : undefined;
+  if (playlist) {
+    playlist.trackIds.unshift(trackId);
+    playlist.updatedAt = ts;
+  }
+
+  saveLibrary(library);
 }
 
-export async function saveAuraToDb(trackId: number, aura: number): Promise<void> {
-  const db = await openDb();
-
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const store = tx.objectStore(STORE_NAME);
-    const getReq = store.get(trackId);
-
-    getReq.onsuccess = () => {
-      const row = getReq.result as DbTrackRecord | undefined;
-      if (!row) {
-        resolve();
-        return;
-      }
-
-      row.aura = clampAura(aura);
-      const putReq = store.put(row);
-      putReq.onsuccess = () => resolve();
-      putReq.onerror = () => reject(putReq.error);
-    };
-
-    getReq.onerror = () => reject(getReq.error);
-  });
+export async function saveAuraToDb(trackId: string, aura: number): Promise<void> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const track = library.tracksById[trackId];
+  if (!track) return;
+  track.aura = clampAura(aura);
+  track.updatedAt = now();
+  saveLibrary(library);
 }
 
 export async function updateArtworkInDb(
-  trackId: number,
+  trackId: string,
   artwork: {
     artPoster: Blob | null;
     artVideo?: Blob | null;
   }
 ): Promise<void> {
-  const db = await openDb();
-  await updateTrackById(db, trackId, (row) => {
-    row.art = artwork.artPoster;
-    row.artVideo = artwork.artVideo || null;
-  });
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const track = library.tracksById[trackId];
+  if (!track) throw new Error("Track not found");
+
+  const oldArtKey = track.artKey;
+  const oldArtVideoKey = track.artVideoKey || null;
+  const ts = now();
+
+  let nextArtKey: string | null = null;
+  let nextArtVideoKey: string | null = null;
+  if (artwork.artPoster) {
+    nextArtKey = makeId();
+    await putBlob(nextArtKey, artwork.artPoster, { type: "image", createdAt: ts });
+  }
+  if (artwork.artVideo) {
+    nextArtVideoKey = makeId();
+    await putBlob(nextArtVideoKey, artwork.artVideo, { type: "video", createdAt: ts });
+  }
+
+  track.artKey = nextArtKey;
+  track.artVideoKey = nextArtVideoKey;
+  track.updatedAt = ts;
+  saveLibrary(library);
+
+  if (oldArtKey) {
+    await deleteBlob(oldArtKey);
+    revokeMediaUrl(oldArtKey);
+  }
+  if (oldArtVideoKey) {
+    await deleteBlob(oldArtVideoKey);
+    revokeMediaUrl(oldArtVideoKey);
+  }
 }
 
-export async function replaceAudioInDb(trackId: number, audio: Blob): Promise<void> {
-  const db = await openDb();
-  await updateTrackById(db, trackId, (row) => {
-    row.audio = audio;
-  });
+export async function replaceAudioInDb(trackId: string, audio: Blob): Promise<void> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const track = library.tracksById[trackId];
+  if (!track) throw new Error("Track not found");
+
+  const oldAudioKey = track.audioKey;
+  const nextAudioKey = makeId();
+  await putBlob(nextAudioKey, audio, { type: "audio", createdAt: now() });
+  track.audioKey = nextAudioKey;
+  track.updatedAt = now();
+  saveLibrary(library);
+
+  if (oldAudioKey) {
+    await deleteBlob(oldAudioKey);
+    revokeMediaUrl(oldAudioKey);
+  }
 }
 
-export async function removeTrackFromDb(trackId: number): Promise<void> {
-  const db = await openDb();
+export async function removeTrackFromDb(trackId: string): Promise<void> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const track = library.tracksById[trackId];
+  if (!track) return;
 
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const store = tx.objectStore(STORE_NAME);
-    const req = store.delete(trackId);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  const keys = [track.audioKey, track.artKey, track.artVideoKey].filter(Boolean) as string[];
+  for (const key of keys) {
+    await deleteBlob(key);
+    revokeMediaUrl(key);
+  }
+
+  delete library.tracksById[trackId];
+  for (const playlist of Object.values(library.playlistsById)) {
+    playlist.trackIds = playlist.trackIds.filter((id) => id !== trackId);
+    playlist.updatedAt = now();
+  }
+
+  saveLibrary(library);
 }
 
 export async function resetAuraInDb(): Promise<number> {
-  const db = await openDb();
-
-  return await new Promise<number>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const store = tx.objectStore(STORE_NAME);
-    let updated = 0;
-    const cursorReq = store.openCursor();
-
-    cursorReq.onsuccess = () => {
-      const cursor = cursorReq.result;
-      if (!cursor) {
-        resolve(updated);
-        return;
-      }
-
-      const row = cursor.value as DbTrackRecord;
-      row.aura = 0;
-      const updateReq = cursor.update(row);
-      updateReq.onsuccess = () => {
-        updated += 1;
-        cursor.continue();
-      };
-      updateReq.onerror = () => reject(updateReq.error);
-    };
-
-    cursorReq.onerror = () => reject(cursorReq.error);
-  });
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  let updated = 0;
+  for (const track of Object.values(library.tracksById)) {
+    if ((track.aura ?? 0) !== 0) {
+      track.aura = 0;
+      track.updatedAt = now();
+      updated += 1;
+    }
+  }
+  saveLibrary(library);
+  return updated;
 }
 
 export async function clearTracksInDb(): Promise<void> {
-  const db = await openDb();
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const keys = Object.values(library.tracksById)
+    .flatMap((track) => [track.audioKey, track.artKey, track.artVideoKey])
+    .filter(Boolean) as string[];
 
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const store = tx.objectStore(STORE_NAME);
-    const req = store.clear();
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  for (const key of keys) {
+    await deleteBlob(key);
+    revokeMediaUrl(key);
+  }
+
+  for (const playlist of Object.values(library.playlistsById)) {
+    playlist.trackIds = [];
+    playlist.updatedAt = now();
+  }
+  library.tracksById = {};
+  saveLibrary(library);
+  revokeAllMediaUrls();
 }
 
-async function updateTrackById(
-  db: IDBDatabase,
-  trackId: number,
-  mutator: (row: DbTrackRecord) => void
-): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const store = tx.objectStore(STORE_NAME);
-    const getReq = store.get(trackId);
-
-    getReq.onsuccess = () => {
-      const row = getReq.result as DbTrackRecord | undefined;
-      if (!row) {
-        reject(new Error("Track not found"));
-        return;
-      }
-
-      mutator(row);
-      const putReq = store.put(row);
-      putReq.onsuccess = () => resolve();
-      putReq.onerror = () => reject(putReq.error);
-    };
-
-    getReq.onerror = () => reject(getReq.error);
-  });
-}

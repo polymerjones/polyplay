@@ -5,6 +5,7 @@ import { MiniPlayerBar } from "./components/MiniPlayerBar";
 import { TrackGrid } from "./components/TrackGrid";
 import { sampleTracks } from "./data/sampleTracks";
 import { getTracksFromDb, saveAuraToDb } from "./lib/db";
+import { revokeAllMediaUrls } from "./lib/player/media";
 import type { LoopRegion, Track } from "./types";
 
 const EMPTY_LOOP: LoopRegion = { start: 0, end: 0, active: false, editing: false };
@@ -32,7 +33,6 @@ export default function App() {
   const [overlayPage, setOverlayPage] = useState<"help" | "settings" | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const objectUrlsRef = useRef<string[]>([]);
   const pendingAutoPlayRef = useRef(false);
 
   const refreshTracks = async () => {
@@ -43,9 +43,6 @@ export default function App() {
       if (prev && loaded.some((track) => track.id === prev)) return prev;
       return loaded[0]?.id ?? null;
     });
-    objectUrlsRef.current = dbTracks.flatMap((track) =>
-      [track.audioUrl, track.artUrl, track.artVideoUrl].filter(Boolean) as string[]
-    );
   };
 
   useEffect(() => {
@@ -63,7 +60,7 @@ export default function App() {
 
     return () => {
       mounted = false;
-      for (const url of objectUrlsRef.current) URL.revokeObjectURL(url);
+      revokeAllMediaUrls();
     };
   }, []);
 
@@ -160,14 +157,14 @@ export default function App() {
 
   const updateAura = async (trackId: string, delta: number) => {
     let nextAuraForDb: number | null = null;
-    let persistedId: number | null = null;
+    let persistedId: string | null = null;
 
     setTracks((prev) =>
       prev.map((track) => {
         if (track.id !== trackId) return track;
         const aura = clampAura(track.aura + delta);
         nextAuraForDb = aura;
-        persistedId = track.persistedNumericId ?? null;
+        persistedId = track.persistedId ?? null;
         return { ...track, aura };
       })
     );
@@ -180,8 +177,10 @@ export default function App() {
   };
 
   const selectTrack = (trackId: string, autoPlay = true) => {
+    const selectedTrack = tracks.find((track) => track.id === trackId) ?? null;
+    const canPlay = Boolean(selectedTrack?.audioUrl) && !selectedTrack?.missingAudio;
     if (trackId === currentTrackId) {
-      if (autoPlay) {
+      if (autoPlay && canPlay) {
         const audio = audioRef.current;
         if (audio && audio.paused) {
           void audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
@@ -189,7 +188,7 @@ export default function App() {
       }
       return;
     }
-    pendingAutoPlayRef.current = autoPlay;
+    pendingAutoPlayRef.current = autoPlay && canPlay;
     setCurrentTrackId(trackId);
   };
 
@@ -291,7 +290,7 @@ export default function App() {
         <header className="topbar">
           <div className="brand">
             <img className="brand-logo" src={logo} alt="Polyplay logo" />
-            <span>Polyplay Music App Beta v101</span>
+            <span>Polyplay Music App Beta v102</span>
           </div>
           <div className="top-actions">
             <button

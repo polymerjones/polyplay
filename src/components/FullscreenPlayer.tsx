@@ -88,6 +88,8 @@ export function FullscreenPlayer({
           <p>
             {formatTime(currentTime)} / {formatTime(duration)} • Aura {track.aura}/5
           </p>
+          {track.missingAudio && <p>Missing audio</p>}
+          {track.missingArt && <p>Missing artwork</p>}
         </div>
 
         <PlayerControls

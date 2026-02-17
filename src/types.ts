@@ -11,7 +11,9 @@ export type Track = {
   artGrad?: string;
   audioBlob?: Blob;
   artBlob?: Blob;
-  persistedNumericId?: number;
+  persistedId?: string;
+  missingAudio?: boolean;
+  missingArt?: boolean;
 };
 
 export type LoopRegion = {

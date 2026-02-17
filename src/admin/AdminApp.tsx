@@ -13,7 +13,12 @@ import {
 import { Button } from "../components/button";
 
 function formatTrackLabel(track: DbTrackRecord): string {
-  return `${track.title?.trim() || `Track ${track.id}`} (#${track.id})`;
+  const shortId = track.id.slice(0, 8);
+  const missing = [track.missingAudio ? "Missing audio" : "", track.missingArt ? "Missing artwork" : ""]
+    .filter(Boolean)
+    .join(", ");
+  const suffix = missing ? ` • ${missing}` : "";
+  return `${track.title?.trim() || `Track ${shortId}`} (#${shortId})${suffix}`;
 }
 
 function isVideoArtwork(file: File | null): boolean {
@@ -241,7 +246,7 @@ export function AdminApp() {
     setStatus("Updating artwork...");
     try {
       const artwork = await buildArtworkPayload(selectedArtworkFile, selectedArtFrameTime, selectedArtPosterBlob);
-      await updateArtworkInDb(Number(selectedArtworkTrackId), artwork);
+      await updateArtworkInDb(selectedArtworkTrackId, artwork);
       setSelectedArtworkAssetFile(null);
       setStatus("Artwork updated.");
       await refreshTracks();
@@ -262,7 +267,7 @@ export function AdminApp() {
 
     setStatus("Replacing audio...");
     try {
-      await replaceAudioInDb(Number(selectedAudioTrackId), selectedAudioFile);
+      await replaceAudioInDb(selectedAudioTrackId, selectedAudioFile);
       setSelectedAudioFile(null);
       setStatus("Audio replaced.");
       await refreshTracks();
@@ -280,7 +285,7 @@ export function AdminApp() {
     if (!window.confirm("Remove this track?")) return;
     setStatus("Removing track...");
     try {
-      await removeTrackFromDb(Number(selectedRemoveTrackId));
+      await removeTrackFromDb(selectedRemoveTrackId);
       setStatus("Track removed.");
       await refreshTracks();
     } catch {

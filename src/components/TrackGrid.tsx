@@ -23,6 +23,8 @@ export function TrackGrid({ tracks, currentTrackId, isPlaying, onSelectTrack, on
         const auraLevel = Math.max(0, Math.min(1, track.aura / 5));
         const glowHue = 275 + 35 * auraLevel;
         const glowBoost = Math.min(180, track.aura * 36);
+        const missingAudio = Boolean(track.missingAudio);
+        const missingArt = Boolean(track.missingArt);
         const artStyle = track.artUrl
           ? { backgroundImage: `url('${track.artUrl}')` }
           : { backgroundImage: track.artGrad || "linear-gradient(135deg,#2f3b50,#1a2432)" };
@@ -46,6 +48,8 @@ export function TrackGrid({ tracks, currentTrackId, isPlaying, onSelectTrack, on
               <div className="meta">
                 <div className="title">{track.title}</div>
                 <div className="sub">{track.sub || "Uploaded"}</div>
+                {missingAudio && <div className="sub">Missing audio</div>}
+                {missingArt && <div className="sub">Missing artwork</div>}
                 <div className="aura-meter">Aura {track.aura}/5</div>
               </div>
             </button>
