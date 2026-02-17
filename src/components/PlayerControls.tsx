@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { formatTime } from "../lib/time";
 
 type Props = {
@@ -35,11 +36,24 @@ export function PlayerControls({
   onAuraUp,
   onSkip
 }: Props) {
+  const rootRef = useRef<HTMLElement | null>(null);
   const safeDuration = Math.max(0, duration || 0);
   const safeCurrent = clampTime(currentTime, safeDuration);
 
+  useEffect(() => {
+    const onAuraTrigger = () => {
+      const root = rootRef.current;
+      if (!root) return;
+      root.classList.remove("is-aura-pulse");
+      void root.offsetWidth;
+      root.classList.add("is-aura-pulse");
+    };
+    window.addEventListener("polyplay:aura-trigger", onAuraTrigger);
+    return () => window.removeEventListener("polyplay:aura-trigger", onAuraTrigger);
+  }, []);
+
   return (
-    <section className={`player-controls player-controls--${variant}`} aria-label="Player controls">
+    <section ref={rootRef} className={`player-controls player-controls--${variant}`} aria-label="Player controls">
       <div className="pc-progress">
         <input
           className="pc-range"
@@ -108,6 +122,7 @@ export function PlayerControls({
               button.appendChild(burst);
               burst.addEventListener("animationend", () => burst.remove(), { once: true });
               if (navigator.vibrate) navigator.vibrate(12);
+              window.dispatchEvent(new CustomEvent("polyplay:aura-trigger"));
               onAuraUp();
             }}
           >

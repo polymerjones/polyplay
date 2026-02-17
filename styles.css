@@ -1144,7 +1144,7 @@ body::before {
     font-size: 11px;
     border-radius: 10px;
   }
-  .grid {
+  .track-grid {
     column-count: 1;
     padding-bottom: calc(320px + env(safe-area-inset-bottom));
     gap: 16px;

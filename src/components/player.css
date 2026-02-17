@@ -246,6 +246,9 @@
 .pc-progress {
   display: grid;
   gap: var(--pc-space-1);
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
 }
 
 .pc-range {
@@ -296,6 +299,33 @@
   overflow: hidden;
   background: rgba(7, 10, 14, 0.32);
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pc-wave::after,
+.pc-progress::after {
+  content: "";
+  position: absolute;
+  inset: -16%;
+  opacity: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 24% 18%, rgba(255, 196, 240, 0.86), rgba(255, 196, 240, 0) 34%),
+    radial-gradient(circle at 76% 82%, rgba(255, 86, 194, 0.78), rgba(255, 86, 194, 0) 44%);
+}
+
+.pc-wave::before,
+.pc-progress::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 14% 68%, rgba(255, 255, 255, 0.95) 0 2px, transparent 3px),
+    radial-gradient(circle at 32% 28%, rgba(255, 218, 245, 0.92) 0 2px, transparent 3px),
+    radial-gradient(circle at 54% 62%, rgba(255, 255, 255, 0.95) 0 2px, transparent 3px),
+    radial-gradient(circle at 76% 34%, rgba(255, 226, 247, 0.9) 0 2px, transparent 3px),
+    radial-gradient(circle at 90% 74%, rgba(255, 255, 255, 0.95) 0 2px, transparent 3px);
 }
 
 .pc-wave__canvas {
@@ -368,6 +398,75 @@
 
 .pc-wave__decor {
   display: none;
+}
+
+.player-controls.is-aura-pulse .pc-progress {
+  animation: pc-playback-flash 1200ms ease-out;
+}
+
+.player-controls.is-aura-pulse .pc-progress::after {
+  animation: pc-playback-overlay 1200ms ease-out;
+}
+
+.player-controls.is-aura-pulse .pc-progress::before {
+  animation: pc-playback-sparkles 1200ms ease-out;
+}
+
+.pc-wave.is-aura-pulse {
+  animation: pc-playback-flash 1200ms ease-out;
+}
+
+.pc-wave.is-aura-pulse::after {
+  animation: pc-playback-overlay 1200ms ease-out;
+}
+
+.pc-wave.is-aura-pulse::before {
+  animation: pc-playback-sparkles 1200ms ease-out;
+}
+
+@keyframes pc-playback-flash {
+  0% {
+    filter: brightness(1) saturate(1);
+  }
+  28% {
+    filter: brightness(1.46) saturate(1.58) hue-rotate(-9deg);
+    box-shadow:
+      0 0 24px rgba(255, 98, 198, 0.48),
+      0 0 42px rgba(162, 92, 255, 0.36);
+  }
+  100% {
+    filter: brightness(1) saturate(1);
+  }
+}
+
+@keyframes pc-playback-overlay {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  24% {
+    opacity: 0.94;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes pc-playback-sparkles {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(2px);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.08) translateY(-4px);
+  }
 }
 
 .fullscreen-player-shell {

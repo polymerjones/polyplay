@@ -189,6 +189,18 @@ export function WaveformLoop({
     };
   }, [draggingHandle, hasDuration, onSetLoopRange, safeEnd, safeStart]);
 
+  useEffect(() => {
+    const onAuraTrigger = () => {
+      const wave = waveRef.current;
+      if (!wave) return;
+      wave.classList.remove("is-aura-pulse");
+      void wave.offsetWidth;
+      wave.classList.add("is-aura-pulse");
+    };
+    window.addEventListener("polyplay:aura-trigger", onAuraTrigger);
+    return () => window.removeEventListener("polyplay:aura-trigger", onAuraTrigger);
+  }, []);
+
   return (
     <>
       <div

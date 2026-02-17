@@ -76,13 +76,14 @@ export function TrackGrid({ tracks, currentTrackId, isPlaying, onSelectTrack, on
                   sparkle.style.setProperty("--tx", `${Math.cos(angle) * 26}px`);
                   sparkle.style.setProperty("--ty", `${Math.sin(angle) * 26}px`);
                   sparkle.style.setProperty("--delay", `${i * 34}ms`);
-                  burst.appendChild(sparkle);
-                }
-                button.appendChild(burst);
-                burst.addEventListener("animationend", () => burst.remove(), { once: true });
-                if (navigator.vibrate) navigator.vibrate(12);
-                onAuraUp(track.id);
-              }}
+                burst.appendChild(sparkle);
+              }
+              button.appendChild(burst);
+              burst.addEventListener("animationend", () => burst.remove(), { once: true });
+              if (navigator.vibrate) navigator.vibrate(12);
+              window.dispatchEvent(new CustomEvent("polyplay:aura-trigger"));
+              onAuraUp(track.id);
+            }}
             >
               <span className="aura-icon" aria-hidden="true" />
             </button>
