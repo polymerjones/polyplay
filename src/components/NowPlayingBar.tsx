@@ -82,31 +82,31 @@ export function NowPlayingBar({
       <div className="control-stack">
         <ControlsVisualizer isPlaying={isPlaying} />
         <div className="controls">
+          <button className="ctrl skip" onClick={() => onSkip(-10)}>
+            -10
+          </button>
+          <button className="ctrl skip" onClick={() => onSkip(-5)}>
+            -5
+          </button>
           <button className="ctrl track prev" onClick={onPrev} aria-label="Previous track">
             <span className="track-icon prev-icon" aria-hidden="true">
               ⏮
             </span>
           </button>
-          <button className="ctrl skip" onClick={() => onSkip(-5)}>
-            -5
-          </button>
-          <button className="ctrl skip" onClick={() => onSkip(-10)}>
-            -10
-          </button>
           <button className={`ctrl play ${isPlaying ? "playing" : "paused"}`} onClick={onPlayPause} aria-label="Play or pause">
             <span className="icon-play" />
             <span className="icon-pause" />
+          </button>
+          <button className="ctrl track next" onClick={onNext} aria-label="Next track">
+            <span className="track-icon next-icon" aria-hidden="true">
+              ⏭
+            </span>
           </button>
           <button className="ctrl skip" onClick={() => onSkip(5)}>
             +5
           </button>
           <button className="ctrl skip" onClick={() => onSkip(10)}>
             +10
-          </button>
-          <button className="ctrl track next" onClick={onNext} aria-label="Next track">
-            <span className="track-icon next-icon" aria-hidden="true">
-              ⏭
-            </span>
           </button>
         </div>
 

@@ -180,6 +180,15 @@ export default function App() {
   };
 
   const selectTrack = (trackId: string, autoPlay = true) => {
+    if (trackId === currentTrackId) {
+      if (autoPlay) {
+        const audio = audioRef.current;
+        if (audio && audio.paused) {
+          void audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+        }
+      }
+      return;
+    }
     pendingAutoPlayRef.current = autoPlay;
     setCurrentTrackId(trackId);
   };
@@ -273,7 +282,7 @@ export default function App() {
         }}
         aria-hidden="true"
       />
-      <div className="app">
+      <div className="app touch-clean">
         <header className="topbar">
           <div className="brand">
             <img className="brand-logo" src={logo} alt="Polyplay logo" />

@@ -195,7 +195,7 @@ export function AdminApp() {
   };
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-8 pt-4 sm:px-6">
+    <div className="admin-v1 touch-clean mx-auto min-h-screen w-full max-w-5xl px-4 pb-8 pt-4 sm:px-6">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-300/20 bg-slate-900/85 p-4 shadow-glow backdrop-blur">
         <div className="flex min-w-0 items-center gap-3">
           <img
@@ -219,10 +219,10 @@ export function AdminApp() {
         </div>
       </header>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <form onSubmit={onUpload} className="rounded-2xl border border-slate-300/20 bg-slate-900/70 p-4">
+      <section className="admin-v1-section grid gap-4 lg:grid-cols-2">
+        <form onSubmit={onUpload} className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-4">
           <h2 className="mb-3 text-base font-semibold text-slate-100">Upload Track</h2>
-          <div className="grid gap-3">
+          <div className="admin-v1-fields grid gap-3">
             <label className="grid gap-1 text-sm text-slate-300">
               Title
               <input
@@ -252,16 +252,16 @@ export function AdminApp() {
               />
             </label>
 
-            <Button variant="primary" type="submit">
+            <Button variant="primary" type="submit" className="admin-upload-btn">
               Upload
             </Button>
           </div>
         </form>
 
-        <div className="rounded-2xl border border-slate-300/20 bg-slate-900/70 p-4">
+        <div className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-4">
           <h2 className="mb-3 text-base font-semibold text-slate-100">Track Operations</h2>
 
-          <div className="grid gap-3">
+          <div className="admin-v1-fields grid gap-3">
             <label className="grid gap-1 text-sm text-slate-300">
               Update artwork
               <select
@@ -334,7 +334,7 @@ export function AdminApp() {
         </div>
       </section>
 
-      <section className="mt-4 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-4">
+      <section className="admin-v1-card mt-4 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-4">
         <h2 className="mb-3 text-base font-semibold text-slate-100">Danger Zone</h2>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => void refreshTracks()}>
