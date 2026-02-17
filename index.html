@@ -1,77 +1,13 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Polyplay Music App Beta v0</title>
-    <link rel="stylesheet" href="styles.css" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Polyplay Music App Beta v1</title>
+    <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body class="safe-tap">
-    <div class="app">
-      <header class="topbar">
-        <div class="brand">
-          <img class="brand-logo" src="logo.png" alt="Polyplay logo" />
-          <span>Polyplay Music App Beta v0</span>
-        </div>
-        <div class="top-actions">
-          <a class="help-link" href="help.html" aria-label="Open help page">
-            <span class="help-icon" aria-hidden="true">?</span>
-          </a>
-          <a class="gear-link" href="admin.html" aria-label="Open upload page">
-            <span class="gear-icon" aria-hidden="true">⚙︎</span>
-          </a>
-        </div>
-        <div class="hint">Tap tiles to play • Tap artwork to build aura</div>
-      </header>
-
-      <section class="now-playing">
-        <div class="np-track">
-          <div class="np-art" id="npArt"></div>
-          <div class="np-meta">
-            <div class="np-title">Select a track</div>
-            <div class="np-sub">Ready to play</div>
-          </div>
-        </div>
-        <div class="controls">
-          <button class="ctrl track prev" data-track="prev" aria-label="Previous track"><span class="track-icon prev-icon" aria-hidden="true">⏮</span></button>
-          <button class="ctrl skip" data-skip="-5">-5</button>
-          <button class="ctrl skip" data-skip="-10">-10</button>
-          <button class="ctrl play paused" aria-label="Play or pause">
-            <span class="icon-play"></span>
-            <span class="icon-pause"></span>
-          </button>
-          <button class="ctrl skip" data-skip="5">+5</button>
-          <button class="ctrl skip" data-skip="10">+10</button>
-          <button class="ctrl track next" data-track="next" aria-label="Next track"><span class="track-icon next-icon" aria-hidden="true">⏭</span></button>
-        </div>
-        <div class="aux">
-          <button class="ghost aux-track prev" data-track="prev" aria-label="Previous track">
-            <span class="track-icon prev-icon" aria-hidden="true">⏮</span>
-          </button>
-          <button class="ghost aura-btn">Aura +</button>
-          <button class="ghost aux-track next" data-track="next" aria-label="Next track">
-            <span class="track-icon next-icon" aria-hidden="true">⏭</span>
-          </button>
-          <button class="ghost">Add Note</button>
-          <button class="ghost loop-btn">⟲ Loop</button>
-          <button class="ghost clear-loop">Clear Loop</button>
-        </div>
-        <div class="wave-header" aria-hidden="true">
-          <canvas class="wave-canvas" id="waveCanvas" width="800" height="120"></canvas>
-          <div class="loop-overlay" aria-hidden="true">
-            <div class="loop-range"></div>
-            <button class="loop-handle start" aria-label="Loop start"></button>
-            <button class="loop-handle end" aria-label="Loop end"></button>
-          </div>
-        </div>
-        <div class="wave-decor" aria-hidden="true">
-          <canvas class="wave-canvas" id="waveCanvasDecor" width="800" height="120"></canvas>
-        </div>
-      </section>
-
-      <main class="grid" id="grid"></main>
-    </div>
-    <audio id="player"></audio>
-    <script src="script.js"></script>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
