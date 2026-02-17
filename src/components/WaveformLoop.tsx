@@ -212,6 +212,7 @@ export function WaveformLoop({
         className="pc-wave"
         onPointerDown={(event) => {
           if (!hasDuration || event.button !== 0) return;
+          event.preventDefault();
           clearLongPressTimer();
           longPressTriggeredRef.current = false;
           longPressTimerRef.current = window.setTimeout(() => {
@@ -232,6 +233,7 @@ export function WaveformLoop({
         }}
         onPointerCancel={clearLongPressTimer}
         onPointerLeave={clearLongPressTimer}
+        onContextMenu={(event) => event.preventDefault()}
       >
         <canvas ref={canvasRef} className={`pc-wave__canvas ${track ? "is-ready" : "is-loading"}`} />
         <div className="pc-wave__loop-overlay" aria-hidden="true">
@@ -241,6 +243,7 @@ export function WaveformLoop({
             style={{ left: `${startPct}%` }}
             aria-label="Loop start"
             onPointerDown={(event) => {
+              event.preventDefault();
               event.stopPropagation();
               setDraggingHandle("start");
             }}
@@ -250,6 +253,7 @@ export function WaveformLoop({
             style={{ left: `${endPct}%` }}
             aria-label="Loop end"
             onPointerDown={(event) => {
+              event.preventDefault();
               event.stopPropagation();
               setDraggingHandle("end");
             }}
