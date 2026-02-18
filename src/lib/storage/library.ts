@@ -8,6 +8,8 @@ export type TrackRecord = {
   audioKey: string | null;
   artKey: string | null;
   artVideoKey?: string | null;
+  artworkSource?: "auto" | "user";
+  autoArtwork?: boolean;
   createdAt: number;
   updatedAt: number;
 };
@@ -74,6 +76,9 @@ export function migrateLibraryIfNeeded(input: unknown): LibraryState {
       audioKey: t.audioKey || null,
       artKey: t.artKey || null,
       artVideoKey: t.artVideoKey || null,
+      artworkSource:
+        t.artworkSource === "auto" || t.artworkSource === "user" ? t.artworkSource : Boolean(t.autoArtwork) ? "auto" : "user",
+      autoArtwork: Boolean(t.autoArtwork),
       createdAt,
       updatedAt
     };
@@ -125,4 +130,3 @@ export function loadLibrary(): LibraryState {
 export function saveLibrary(libraryState: LibraryState): void {
   localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(migrateLibraryIfNeeded(libraryState)));
 }
-

@@ -1,7 +1,9 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
+import { buildPeaksFromAudioBlob, fallbackPeaks } from "../lib/artwork/waveformArtwork";
 import { formatTime } from "../lib/time";
-import type { LoopRegion, Track } from "../types";
+import type { LoopMode, Track } from "../types";
 import { PlayerControls } from "./PlayerControls";
 
 type Props = {
@@ -9,44 +11,129 @@ type Props = {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
-  loopRegion: LoopRegion;
+  loopMode: LoopMode;
   onClose: () => void;
   onPrev: () => void;
   onPlayPause: () => void;
   onNext: () => void;
   onSeek: (seconds: number) => void;
   onSetLoop: () => void;
-  onToggleLoopActive: () => void;
+  onToggleLoopMode: () => void;
   onClearLoop: () => void;
   onAuraUp: () => void;
   onSkip: (delta: number) => void;
 };
-
-const DEFAULT_ART =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23263140'/%3E%3Cstop offset='100%25' stop-color='%23101822'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='400' height='400' rx='36' fill='url(%23g)'/%3E%3C/svg%3E";
 
 export function FullscreenPlayer({
   track,
   isPlaying,
   currentTime,
   duration,
-  loopRegion,
+  loopMode,
   onClose,
   onPrev,
   onPlayPause,
   onNext,
   onSeek,
   onSetLoop,
-  onToggleLoopActive,
+  onToggleLoopMode,
   onClearLoop,
   onAuraUp,
   onSkip
 }: Props) {
   const artRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const artStyle = track.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
-    : ({ backgroundImage: track.artGrad || `url('${DEFAULT_ART}')` } as CSSProperties);
+    : ({ backgroundImage: track.artGrad || `url('${DEFAULT_ARTWORK_URL}')` } as CSSProperties);
   const hasArtworkVideo = Boolean(track.artVideoUrl);
+  const shouldAnimateGenerated = track.artworkSource === "auto" && !hasArtworkVideo;
+  const [peaks, setPeaks] = useState<number[]>(() => fallbackPeaks(120));
+
+  useEffect(() => {
+    let canceled = false;
+    if (!shouldAnimateGenerated || !track.audioBlob) {
+      setPeaks(fallbackPeaks(120));
+      return;
+    }
+    buildPeaksFromAudioBlob(track.audioBlob, 120)
+      .then((next) => {
+        if (!canceled) setPeaks(next);
+      })
+      .catch(() => {
+        if (!canceled) setPeaks(fallbackPeaks(120));
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [shouldAnimateGenerated, track.audioBlob, track.id]);
+
+  useEffect(() => {
+    if (!shouldAnimateGenerated) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let raf = 0;
+    let lastFrame = 0;
+    let prevWidth = 0;
+    let prevHeight = 0;
+    const loopMs = 4000;
+    const maxFps = 30;
+    const frameBudget = 1000 / maxFps;
+
+    const draw = (timestamp: number) => {
+      raf = window.requestAnimationFrame(draw);
+      if (timestamp - lastFrame < frameBudget) return;
+      lastFrame = timestamp;
+
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const width = Math.max(1, rect.width);
+      const height = Math.max(1, rect.height);
+      if (width !== prevWidth || height !== prevHeight) {
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        prevWidth = width;
+        prevHeight = height;
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+
+      const t = ((timestamp % loopMs) / loopMs) * Math.PI * 2;
+      const bars = Math.min(90, peaks.length);
+      const gap = 2;
+      const barWidth = (width - (bars - 1) * gap) / bars;
+      const centerY = height * 0.5;
+      const sway = Math.sin(t) * 0.08 + 1;
+
+      const grad = ctx.createLinearGradient(0, centerY - height * 0.24, 0, centerY + height * 0.24);
+      grad.addColorStop(0, "rgba(124, 229, 255, 0.45)");
+      grad.addColorStop(0.6, "rgba(176, 110, 255, 0.4)");
+      grad.addColorStop(1, "rgba(255, 112, 214, 0.35)");
+      ctx.fillStyle = grad;
+
+      for (let i = 0; i < bars; i += 1) {
+        const idx = bars > 1 ? Math.round((i / (bars - 1)) * (peaks.length - 1)) : 0;
+        const peak = Math.max(0.03, peaks[idx] ?? 0.15);
+        const pulse = 0.75 + 0.25 * Math.sin(t + i * 0.11);
+        const barHeight = Math.max(8, height * 0.36 * peak * pulse * sway);
+        const x = i * (barWidth + gap);
+        const y = centerY - barHeight / 2;
+        ctx.fillRect(x, y, barWidth, barHeight);
+      }
+
+      const vignette = ctx.createRadialGradient(width * 0.5, height * 0.5, height * 0.22, width * 0.5, height * 0.5, height * 0.8);
+      vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+      vignette.addColorStop(1, "rgba(0, 0, 0, 0.28)");
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, width, height);
+    };
+
+    raf = window.requestAnimationFrame(draw);
+    return () => window.cancelAnimationFrame(raf);
+  }, [shouldAnimateGenerated, peaks]);
 
   const triggerArtworkFlash = () => {
     const art = artRef.current;
@@ -70,6 +157,7 @@ export function FullscreenPlayer({
           ref={artRef}
           style={hasArtworkVideo ? undefined : artStyle}
         >
+          {shouldAnimateGenerated && <canvas ref={canvasRef} className="fullscreen-player-shell__art-canvas" />}
           {hasArtworkVideo && (
             <video
               key={track.artVideoUrl}
@@ -97,13 +185,13 @@ export function FullscreenPlayer({
           isPlaying={isPlaying}
           currentTime={currentTime}
           duration={duration}
-          loopActive={loopRegion.active}
+          loopMode={loopMode}
           onPrev={onPrev}
           onPlayPause={onPlayPause}
           onNext={onNext}
           onSeek={onSeek}
           onSetLoop={onSetLoop}
-          onToggleLoop={onToggleLoopActive}
+          onToggleLoopMode={onToggleLoopMode}
           onClearLoop={onClearLoop}
           onAuraUp={() => {
             triggerArtworkFlash();

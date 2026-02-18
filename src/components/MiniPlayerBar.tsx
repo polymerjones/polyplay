@@ -1,7 +1,8 @@
 import { useRef } from "react";
 import type { CSSProperties } from "react";
 import { formatTime } from "../lib/time";
-import type { LoopRegion, Track } from "../types";
+import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
+import type { LoopMode, LoopRegion, Track } from "../types";
 import { WaveformLoop } from "./WaveformLoop";
 import { PlayerControls } from "./PlayerControls";
 
@@ -11,6 +12,7 @@ type Props = {
   currentTime: number;
   duration: number;
   loopRegion: LoopRegion;
+  loopMode: LoopMode;
   onPrev: () => void;
   onPlayPause: () => void;
   onNext: () => void;
@@ -19,13 +21,10 @@ type Props = {
   onSkip: (delta: number) => void;
   onSetLoopRange: (start: number, end: number, active: boolean) => void;
   onSetLoop: () => void;
-  onToggleLoopActive: () => void;
+  onToggleLoopMode: () => void;
   onClearLoop: () => void;
   onOpenFullscreen: () => void;
 };
-
-const DEFAULT_ART =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23263140'/%3E%3Cstop offset='100%25' stop-color='%23101822'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='400' height='400' rx='36' fill='url(%23g)'/%3E%3C/svg%3E";
 
 export function MiniPlayerBar({
   track,
@@ -33,6 +32,7 @@ export function MiniPlayerBar({
   currentTime,
   duration,
   loopRegion,
+  loopMode,
   onPrev,
   onPlayPause,
   onNext,
@@ -41,14 +41,14 @@ export function MiniPlayerBar({
   onSkip,
   onSetLoopRange,
   onSetLoop,
-  onToggleLoopActive,
+  onToggleLoopMode,
   onClearLoop,
   onOpenFullscreen
 }: Props) {
   const artRef = useRef<HTMLButtonElement | null>(null);
   const artStyle = track?.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
-    : ({ backgroundImage: track?.artGrad || `url('${DEFAULT_ART}')` } as CSSProperties);
+    : ({ backgroundImage: track?.artGrad || `url('${DEFAULT_ARTWORK_URL}')` } as CSSProperties);
   const classes = ["mini-player-bar"];
   if (loopRegion.active) classes.push("is-loop-active");
   if (loopRegion.editing) classes.push("is-loop-editing");
@@ -68,7 +68,7 @@ export function MiniPlayerBar({
         {
           "--player-artwork": track?.artUrl
             ? `url('${track.artUrl}')`
-            : track?.artGrad || `url('${DEFAULT_ART}')`
+            : track?.artGrad || `url('${DEFAULT_ARTWORK_URL}')`
         } as CSSProperties
       }
       aria-label="Mini player"
@@ -97,13 +97,13 @@ export function MiniPlayerBar({
         isPlaying={isPlaying}
         currentTime={currentTime}
         duration={duration}
-        loopActive={loopRegion.active}
+        loopMode={loopMode}
         onPrev={onPrev}
         onPlayPause={onPlayPause}
         onNext={onNext}
         onSeek={onSeek}
         onSetLoop={onSetLoop}
-        onToggleLoop={onToggleLoopActive}
+        onToggleLoopMode={onToggleLoopMode}
         onClearLoop={onClearLoop}
         onAuraUp={
           track

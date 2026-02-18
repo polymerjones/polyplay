@@ -10,7 +10,7 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const variantClasses: Record<Variant, string> = {
   primary:
-    "border-sky-300/60 bg-sky-400 text-slate-950 hover:bg-sky-300 active:bg-sky-500",
+    "border-white/25 bg-[radial-gradient(circle_at_30%_24%,#855de2_0%,#6f44d1_56%,#4b2d9a_100%)] text-white shadow-[inset_0_2px_10px_rgba(255,255,255,0.24),inset_0_-10px_22px_rgba(0,0,0,0.25),0_10px_22px_rgba(34,16,70,0.35)] hover:brightness-110 active:scale-[1.02]",
   secondary:
     "border-slate-300/20 bg-slate-800/70 text-slate-100 hover:bg-slate-700/70 active:bg-slate-600/70",
   ghost:

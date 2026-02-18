@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { buildPeaksFromAudioBlob, fallbackPeaks } from "../lib/artwork/waveformArtwork";
 import type { LoopRegion, Track } from "../types";
 
 type Props = {
@@ -14,38 +15,6 @@ type Props = {
 type Handle = "start" | "end";
 
 const MIN_LOOP_SECONDS = 0.1;
-
-let audioCtx: AudioContext | null = null;
-
-function getAudioContext(): AudioContext {
-  if (!audioCtx) {
-    const Ctx =
-      window.AudioContext ||
-      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) throw new Error("AudioContext not available");
-    audioCtx = new Ctx();
-  }
-  return audioCtx;
-}
-
-async function buildPeaksFromBlob(blob: Blob, bars = 220): Promise<number[]> {
-  const arrayBuffer = await blob.arrayBuffer();
-  const audioBuffer = await getAudioContext().decodeAudioData(arrayBuffer);
-  const channel = audioBuffer.getChannelData(0);
-  const blockSize = Math.max(1, Math.floor(channel.length / bars));
-
-  return new Array(bars).fill(0).map((_, i) => {
-    const start = i * blockSize;
-    const end = Math.min(channel.length, start + blockSize);
-    let peak = 0;
-    for (let j = start; j < end; j += 1) peak = Math.max(peak, Math.abs(channel[j] ?? 0));
-    return peak;
-  });
-}
-
-function fallbackPeaks(length = 220): number[] {
-  return new Array(length).fill(0).map((_, i) => 0.2 + 0.5 * Math.abs(Math.sin(i / 11)));
-}
 
 export function WaveformLoop({
   track,
@@ -93,7 +62,7 @@ export function WaveformLoop({
       return;
     }
 
-    buildPeaksFromBlob(track.audioBlob)
+    buildPeaksFromAudioBlob(track.audioBlob)
       .then((nextPeaks) => {
         if (!canceled) setPeaks(nextPeaks);
       })

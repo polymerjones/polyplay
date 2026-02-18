@@ -1,3 +1,4 @@
+import type { LoopMode } from "../types";
 import { useEffect, useRef } from "react";
 import { formatTime } from "../lib/time";
 
@@ -6,13 +7,13 @@ type Props = {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
-  loopActive: boolean;
+  loopMode: LoopMode;
   onPrev: () => void;
   onPlayPause: () => void;
   onNext: () => void;
   onSeek: (seconds: number) => void;
   onSetLoop: () => void;
-  onToggleLoop: () => void;
+  onToggleLoopMode: () => void;
   onClearLoop: () => void;
   onAuraUp?: () => void;
   onSkip?: (delta: number) => void;
@@ -27,13 +28,13 @@ export function PlayerControls({
   isPlaying,
   currentTime,
   duration,
-  loopActive,
+  loopMode,
   onPrev,
   onPlayPause,
   onNext,
   onSeek,
   onSetLoop,
-  onToggleLoop,
+  onToggleLoopMode,
   onClearLoop,
   onAuraUp,
   onSkip
@@ -133,10 +134,13 @@ export function PlayerControls({
         )}
         <button
           type="button"
-          className={`pc-btn pc-btn--sm pc-btn--toggle ${loopActive ? "is-active" : ""}`}
-          onClick={onToggleLoop}
+          className={`pc-btn pc-btn--sm pc-btn--toggle ${loopMode !== "off" ? "is-active" : ""} ${
+            loopMode === "region" ? "is-region" : ""
+          }`.trim()}
+          onClick={onToggleLoopMode}
         >
-          Loop
+          Loop {loopMode === "track" ? "Track" : loopMode === "region" ? "Region" : "Off"}
+          {loopMode === "region" && <span className="pc-loop-badge">REGION</span>}
         </button>
         <button type="button" className="pc-btn pc-btn--sm" onClick={onSetLoop}>
           Set Loop

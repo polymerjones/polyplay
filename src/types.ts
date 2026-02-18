@@ -14,6 +14,7 @@ export type Track = {
   persistedId?: string;
   missingAudio?: boolean;
   missingArt?: boolean;
+  artworkSource?: "auto" | "user";
 };
 
 export type LoopRegion = {
@@ -22,3 +23,5 @@ export type LoopRegion = {
   active: boolean;
   editing: boolean;
 };
+
+export type LoopMode = "off" | "track" | "region";

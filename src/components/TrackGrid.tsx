@@ -1,10 +1,13 @@
 import type { CSSProperties } from "react";
+import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
 import type { Track } from "../types";
+import { TrackRow } from "./TrackRow";
 
 type Props = {
   tracks: Track[];
   currentTrackId: string | null;
   isPlaying: boolean;
+  layoutMode: "grid" | "list";
   onSelectTrack: (trackId: string) => void;
   onAuraUp: (trackId: string) => void;
 };
@@ -15,11 +18,24 @@ function auraClass(aura: number): string {
   return "aura-low";
 }
 
-export function TrackGrid({ tracks, currentTrackId, isPlaying, onSelectTrack, onAuraUp }: Props) {
+export function TrackGrid({ tracks, currentTrackId, isPlaying, layoutMode, onSelectTrack, onAuraUp }: Props) {
   return (
-    <main className="track-grid" id="grid">
+    <main className={`track-grid ${layoutMode === "list" ? "track-grid--list" : ""}`.trim()} id="grid">
       {tracks.map((track) => {
         const active = track.id === currentTrackId;
+        if (layoutMode === "list") {
+          return (
+            <TrackRow
+              key={track.id}
+              track={track}
+              active={active}
+              isPlaying={isPlaying}
+              onSelectTrack={onSelectTrack}
+              onAuraUp={onAuraUp}
+            />
+          );
+        }
+
         const auraLevel = Math.max(0, Math.min(1, track.aura / 5));
         const glowHue = 275 + 35 * auraLevel;
         const glowBoost = Math.min(180, track.aura * 36);
@@ -27,7 +43,7 @@ export function TrackGrid({ tracks, currentTrackId, isPlaying, onSelectTrack, on
         const missingArt = Boolean(track.missingArt);
         const artStyle = track.artUrl
           ? { backgroundImage: `url('${track.artUrl}')` }
-          : { backgroundImage: track.artGrad || "linear-gradient(135deg,#2f3b50,#1a2432)" };
+          : { backgroundImage: track.artGrad || `url('${DEFAULT_ARTWORK_URL}')` };
 
         return (
           <div
@@ -43,6 +59,7 @@ export function TrackGrid({ tracks, currentTrackId, isPlaying, onSelectTrack, on
               } as CSSProperties
             }
           >
+            {track.artworkSource === "auto" && <div className="track-art-badge track-art-badge--tile">AUTO ART</div>}
             <button type="button" className="tile-hit" onClick={() => onSelectTrack(track.id)} aria-label={`Play ${track.title}`}>
               <div className="art art-grad" style={artStyle} />
               <div className="meta">
@@ -80,14 +97,14 @@ export function TrackGrid({ tracks, currentTrackId, isPlaying, onSelectTrack, on
                   sparkle.style.setProperty("--tx", `${Math.cos(angle) * 26}px`);
                   sparkle.style.setProperty("--ty", `${Math.sin(angle) * 26}px`);
                   sparkle.style.setProperty("--delay", `${i * 34}ms`);
-                burst.appendChild(sparkle);
-              }
-              button.appendChild(burst);
-              burst.addEventListener("animationend", () => burst.remove(), { once: true });
-              if (navigator.vibrate) navigator.vibrate(12);
-              window.dispatchEvent(new CustomEvent("polyplay:aura-trigger"));
-              onAuraUp(track.id);
-            }}
+                  burst.appendChild(sparkle);
+                }
+                button.appendChild(burst);
+                burst.addEventListener("animationend", () => burst.remove(), { once: true });
+                if (navigator.vibrate) navigator.vibrate(12);
+                window.dispatchEvent(new CustomEvent("polyplay:aura-trigger"));
+                onAuraUp(track.id);
+              }}
             >
               <span className="aura-icon" aria-hidden="true" />
             </button>

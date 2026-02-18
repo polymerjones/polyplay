@@ -10,6 +10,7 @@ import {
   updateArtworkInDb,
   type DbTrackRecord
 } from "../lib/db";
+import { titleFromFilename } from "../lib/title";
 import { Button } from "../components/button";
 
 function formatTrackLabel(track: DbTrackRecord): string {
@@ -210,7 +211,7 @@ export function AdminApp() {
       return;
     }
 
-    const derivedTitle = uploadTitle.trim() || uploadAudio.name.replace(/\.[^/.]+$/, "").trim() || "Untitled";
+    const derivedTitle = uploadTitle.trim() || titleFromFilename(uploadAudio.name);
     setStatus("Uploading...");
 
     try {
@@ -309,6 +310,19 @@ export function AdminApp() {
   const onNuke = async () => {
     if (!window.confirm("Delete all tracks from this device?")) return;
 
+    if (window.parent && window.parent !== window) {
+      try {
+        window.parent.postMessage({ type: "polyplay:nuke-request" }, window.location.origin);
+        setStatus("Nuking app data...");
+        window.setTimeout(() => {
+          void refreshTracks();
+        }, 1000);
+      } catch {
+        setStatus("Nuke request failed.");
+      }
+      return;
+    }
+
     setStatus("Clearing playlist...");
     try {
       await clearTracksInDb();
@@ -316,6 +330,17 @@ export function AdminApp() {
       await refreshTracks();
     } catch {
       setStatus("Nuke failed.");
+    }
+  };
+
+  const onResetOnboarding = () => {
+    if (!window.confirm("Reset onboarding and splash for this browser?")) return;
+    try {
+      localStorage.removeItem("polyplay_hasSeenSplash");
+      localStorage.removeItem("polyplay_open_state_seen_v102");
+      setStatus("Onboarding reset. Reload the player to see the splash again.");
+    } catch {
+      setStatus("Could not reset onboarding.");
     }
   };
 
@@ -401,13 +426,13 @@ export function AdminApp() {
                   onChange={(event) => setUploadArtFrameTime(Number(event.currentTarget.value))}
                 />
                 <div className="text-xs text-slate-400">Frame: {uploadArtFrameTime.toFixed(2)}s</div>
-                <Button onClick={() => void captureUploadFrame()} className="admin-upload-btn">
+                <Button variant="primary" onClick={() => void captureUploadFrame()}>
                   Use This Frame
                 </Button>
               </div>
             )}
 
-            <Button variant="primary" type="submit" className="admin-upload-btn admin-upload-submit">
+            <Button variant="primary" type="submit" className="admin-upload-submit">
               Upload
             </Button>
           </div>
@@ -462,12 +487,12 @@ export function AdminApp() {
                     onChange={(event) => setSelectedArtFrameTime(Number(event.currentTarget.value))}
                   />
                   <div className="text-xs text-slate-400">Frame: {selectedArtFrameTime.toFixed(2)}s</div>
-                  <Button onClick={() => void captureSelectedFrame()} className="admin-upload-btn">
+                  <Button variant="primary" onClick={() => void captureSelectedFrame()}>
                     Use This Frame
                   </Button>
                 </div>
               )}
-              <Button onClick={onUpdateArtwork} disabled={!hasTracks}>
+              <Button variant="primary" onClick={onUpdateArtwork} disabled={!hasTracks}>
                 Update Artwork
               </Button>
             </label>
@@ -492,7 +517,7 @@ export function AdminApp() {
                 onChange={(event) => setSelectedAudioFile(event.currentTarget.files?.[0] || null)}
                 className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
               />
-              <Button onClick={onReplaceAudio} disabled={!hasTracks}>
+              <Button variant="primary" onClick={onReplaceAudio} disabled={!hasTracks}>
                 Replace Audio
               </Button>
             </label>
@@ -524,6 +549,9 @@ export function AdminApp() {
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => void refreshTracks()}>
             Refresh Tracks
+          </Button>
+          <Button variant="secondary" onClick={onResetOnboarding}>
+            Reset Onboarding
           </Button>
           <Button variant="danger" onClick={onResetAura} disabled={!hasTracks}>
             Reset Aura

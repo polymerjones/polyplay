@@ -1,7 +1,9 @@
 import type { Track } from "../types";
+import { generateWaveformArtwork } from "./artwork/waveformArtwork";
 import { getMediaUrl, revokeAllMediaUrls, revokeMediaUrl } from "./player/media";
 import { deleteBlob, getBlob, initDB, putBlob } from "./storage/db";
 import { loadLibrary, saveLibrary, type LibraryState, type TrackRecord } from "./storage/library";
+import { titleFromFilename } from "./title";
 
 export type DbTrackRecord = {
   id: string;
@@ -15,6 +17,7 @@ export type DbTrackRecord = {
   updatedAt?: number;
   missingAudio?: boolean;
   missingArt?: boolean;
+  artworkSource?: "auto" | "user";
 };
 
 type LegacyDbTrackRecord = {
@@ -115,6 +118,7 @@ async function maybeMigrateLegacyTracks(): Promise<void> {
       audioKey,
       artKey,
       artVideoKey,
+      artworkSource: "user",
       createdAt,
       updatedAt: createdAt
     };
@@ -182,7 +186,8 @@ async function toTrack(record: TrackRecord): Promise<Track> {
     artBlob: artBlob ?? undefined,
     persistedId: record.id,
     missingAudio: Boolean(record.audioKey) && !audioBlob,
-    missingArt: (Boolean(record.artKey) && !artBlob) || (Boolean(record.artVideoKey) && !artVideoBlob)
+    missingArt: (Boolean(record.artKey) && !artBlob) || (Boolean(record.artVideoKey) && !artVideoBlob),
+    artworkSource: record.artworkSource === "auto" ? "auto" : "user"
   } satisfies Track;
 }
 
@@ -220,6 +225,7 @@ export async function getTrackRowsFromDb(): Promise<DbTrackRecord[]> {
         audioKey: record.audioKey,
         artKey: record.artKey,
         artVideoKey: record.artVideoKey || null,
+        artworkSource: record.artworkSource === "auto" ? "auto" : "user",
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
         missingAudio: Boolean(record.audioKey) && !audioBlob,
@@ -246,6 +252,7 @@ export async function addTrackToDb(params: {
   const audioKey = makeId();
   let artKey: string | null = null;
   let artVideoKey: string | null = null;
+  let artworkSource: "auto" | "user" = "user";
 
   await putBlob(audioKey, params.audio, { type: "audio", createdAt: ts });
   if (params.artPoster) {
@@ -255,6 +262,14 @@ export async function addTrackToDb(params: {
   if (params.artVideo) {
     artVideoKey = makeId();
     await putBlob(artVideoKey, params.artVideo, { type: "video", createdAt: ts });
+  }
+  if (!artKey && !artVideoKey) {
+    const generatedPoster = await generateWaveformArtwork({ audioBlob: params.audio }).catch(() => null);
+    if (generatedPoster) {
+      artKey = makeId();
+      await putBlob(artKey, generatedPoster, { type: "image", createdAt: ts });
+      artworkSource = "auto";
+    }
   }
 
   const library = loadLibrary();
@@ -268,6 +283,7 @@ export async function addTrackToDb(params: {
     audioKey,
     artKey,
     artVideoKey,
+    artworkSource,
     createdAt: ts,
     updatedAt: ts
   };
@@ -320,6 +336,7 @@ export async function updateArtworkInDb(
 
   track.artKey = nextArtKey;
   track.artVideoKey = nextArtVideoKey;
+  track.artworkSource = "user";
   track.updatedAt = ts;
   saveLibrary(library);
 
@@ -333,7 +350,7 @@ export async function updateArtworkInDb(
   }
 }
 
-export async function replaceAudioInDb(trackId: string, audio: Blob): Promise<void> {
+export async function replaceAudioInDb(trackId: string, audio: Blob, userProvidedTitle?: string | null): Promise<void> {
   await maybeMigrateLegacyTracks();
   const library = loadLibrary();
   const track = library.tracksById[trackId];
@@ -343,6 +360,14 @@ export async function replaceAudioInDb(trackId: string, audio: Blob): Promise<vo
   const nextAudioKey = makeId();
   await putBlob(nextAudioKey, audio, { type: "audio", createdAt: now() });
   track.audioKey = nextAudioKey;
+  const explicitTitle = userProvidedTitle?.trim() || "";
+  if (explicitTitle) {
+    track.title = explicitTitle;
+  } else {
+    const replacementFilename =
+      typeof (audio as File).name === "string" ? ((audio as File).name as string) : "";
+    track.title = titleFromFilename(replacementFilename);
+  }
   track.updatedAt = now();
   saveLibrary(library);
 
@@ -408,4 +433,3 @@ export async function clearTracksInDb(): Promise<void> {
   saveLibrary(library);
   revokeAllMediaUrls();
 }
-

@@ -1,0 +1,3 @@
+export const DEFAULT_ARTWORK_URL =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23262a31'/%3E%3Cstop offset='100%25' stop-color='%230f1218'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='400' height='400' rx='36' fill='url(%23g)'/%3E%3Ccircle cx='200' cy='200' r='116' fill='rgba(255,255,255,0.05)'/%3E%3Cpath fill='%23c9ced6' d='M262 106v145.5c0 30.4-24.6 55-55 55s-55-24.6-55-55 24.6-55 55-55c14 0 26.9 5.2 36.8 13.8V145l-96 21.3v105.2c0 30.4-24.6 55-55 55s-55-24.6-55-55 24.6-55 55-55c13 0 25 4.5 34.5 12V151c0-9.4 6.5-17.6 15.7-19.6l114-25.3c6-1.4 12.3.1 17.1 4 4.8 3.8 7.6 9.6 7.6 15.9z'/%3E%3C/svg%3E";
+
