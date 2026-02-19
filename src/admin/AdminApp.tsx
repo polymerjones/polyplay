@@ -26,6 +26,28 @@ function isVideoArtwork(file: File | null): boolean {
   return Boolean(file?.type?.startsWith("video/"));
 }
 
+function isSupportedTrackFile(file: File | null): file is File {
+  if (!file) return false;
+  const type = (file.type || "").toLowerCase();
+  const name = (file.name || "").toLowerCase();
+  if (
+    type.startsWith("audio/") ||
+    type === "video/mp4" ||
+    type === "audio/mp4" ||
+    type === "audio/x-m4a" ||
+    type === "audio/aac"
+  ) {
+    return true;
+  }
+  return (
+    name.endsWith(".wav") ||
+    name.endsWith(".mp3") ||
+    name.endsWith(".m4a") ||
+    name.endsWith(".aac") ||
+    name.endsWith(".mp4")
+  );
+}
+
 function getDefaultVideoFrameTime(duration: number): number {
   if (!Number.isFinite(duration) || duration <= 0) return 0.2;
   const candidate = duration * 0.28;
@@ -273,8 +295,8 @@ export function AdminApp() {
 
   const onUpload = async (event: FormEvent) => {
     event.preventDefault();
-    if (!uploadAudio) {
-      setStatus("Select an audio file.");
+    if (!isSupportedTrackFile(uploadAudio)) {
+      setStatus("Select a track file (.wav, .mp3, .m4a, or .mp4).");
       return;
     }
 
@@ -510,7 +532,7 @@ export function AdminApp() {
               Audio (.wav/.mp3)
               <input
                 type="file"
-                accept="audio/wav,audio/x-wav,audio/mpeg"
+                accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,.wav,.mp3,.m4a,.aac,.mp4"
                 onChange={(event) => setUploadAudio(event.currentTarget.files?.[0] || null)}
                 className="admin-upload-input admin-upload-file rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
               />
@@ -637,7 +659,7 @@ export function AdminApp() {
               </select>
               <input
                 type="file"
-                accept="audio/wav,audio/x-wav,audio/mpeg"
+                accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,.wav,.mp3,.m4a,.aac,.mp4"
                 onChange={(event) => setSelectedAudioFile(event.currentTarget.files?.[0] || null)}
                 className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
               />
