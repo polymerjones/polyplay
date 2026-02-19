@@ -409,9 +409,47 @@
   color: #fff;
 }
 
-.pc-glyph {
-  font-size: 18px;
-  line-height: 1;
+.pc-shuffle-icon,
+.pc-repeat-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.pc-shuffle-icon {
+  transform-origin: 50% 50%;
+}
+
+.pc-transport-btn--shuffle.is-anim-on .pc-shuffle-icon {
+  animation: pc-shuffle-on 210ms ease-out;
+}
+
+.pc-transport-btn--shuffle.is-anim-off .pc-shuffle-icon {
+  animation: pc-shuffle-off 170ms ease-out;
+}
+
+@keyframes pc-shuffle-on {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  60% {
+    transform: rotate(92deg) scale(1.06);
+  }
+  100% {
+    transform: rotate(90deg) scale(1);
+  }
+}
+
+@keyframes pc-shuffle-off {
+  0% {
+    transform: rotate(90deg) scale(1);
+  }
+  55% {
+    transform: rotate(-4deg) scale(0.97);
+  }
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
 }
 
 .pc-extras {
@@ -842,8 +880,12 @@ body.perf-lite .fullscreen-player-shell__art.is-aura-flash::after {
     height: 64px;
   }
 
-  .pc-glyph {
-    font-size: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pc-transport-btn--shuffle.is-anim-on .pc-shuffle-icon,
+  .pc-transport-btn--shuffle.is-anim-off .pc-shuffle-icon {
+    animation: none;
   }
 }
 

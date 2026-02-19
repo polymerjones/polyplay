@@ -1,7 +1,8 @@
 import type { LoopMode } from "../types";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatTime } from "../lib/time";
 import { TransportIconButton } from "./TransportIconButton";
+import type { MouseEvent } from "react";
 
 type Props = {
   variant: "mini" | "fullscreen";
@@ -49,6 +50,9 @@ export function PlayerControls({
   onSkip
 }: Props) {
   const rootRef = useRef<HTMLElement | null>(null);
+  const shuffleFxCooldownRef = useRef(0);
+  const shuffleAnimTimeoutRef = useRef<number | null>(null);
+  const [shuffleAnimState, setShuffleAnimState] = useState<"on" | "off" | null>(null);
   const safeDuration = Math.max(0, duration || 0);
   const safeCurrent = clampTime(currentTime, safeDuration);
 
@@ -63,6 +67,68 @@ export function PlayerControls({
     window.addEventListener("polyplay:aura-trigger", onAuraTrigger);
     return () => window.removeEventListener("polyplay:aura-trigger", onAuraTrigger);
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (shuffleAnimTimeoutRef.current !== null) {
+        window.clearTimeout(shuffleAnimTimeoutRef.current);
+        shuffleAnimTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  const prefersReducedMotion = () =>
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const emitPinkSparkle = (
+    button: HTMLButtonElement,
+    options?: { sparks?: number; distance?: number; includeFlash?: boolean }
+  ) => {
+    const sparks = options?.sparks ?? 7;
+    const distance = options?.distance ?? 24;
+    if (options?.includeFlash !== false) {
+      button.classList.remove("pc-btn--aura-burst");
+      void button.offsetWidth;
+      button.classList.add("pc-btn--aura-burst");
+    }
+    const burst = document.createElement("span");
+    burst.className = "pc-aura-burst";
+    for (let i = 0; i < sparks; i += 1) {
+      const sparkle = document.createElement("span");
+      sparkle.className = "pc-aura-burst__spark";
+      const angle = (i / sparks) * Math.PI * 2;
+      sparkle.style.setProperty("--tx", `${Math.cos(angle) * distance}px`);
+      sparkle.style.setProperty("--ty", `${Math.sin(angle) * distance}px`);
+      sparkle.style.setProperty("--delay", `${i * 34}ms`);
+      burst.appendChild(sparkle);
+    }
+    button.appendChild(burst);
+    burst.addEventListener("animationend", () => burst.remove(), { once: true });
+  };
+
+  const onShuffleClick = (event: MouseEvent<HTMLButtonElement>) => {
+    const button = event.currentTarget;
+    const nextEnabled = !shuffleEnabled;
+    onToggleShuffle();
+    if (prefersReducedMotion()) return;
+
+    setShuffleAnimState(nextEnabled ? "on" : "off");
+    if (shuffleAnimTimeoutRef.current !== null) {
+      window.clearTimeout(shuffleAnimTimeoutRef.current);
+    }
+    shuffleAnimTimeoutRef.current = window.setTimeout(() => {
+      setShuffleAnimState(null);
+      shuffleAnimTimeoutRef.current = null;
+    }, 240);
+
+    const now = Date.now();
+    if (nextEnabled && now - shuffleFxCooldownRef.current >= 420) {
+      shuffleFxCooldownRef.current = now;
+      emitPinkSparkle(button, { sparks: 5, distance: 18, includeFlash: true });
+    }
+  };
 
   return (
     <section ref={rootRef} className={`player-controls player-controls--${variant}`} aria-label="Player controls">
@@ -85,11 +151,34 @@ export function PlayerControls({
 
       <div className="pc-row" role="group" aria-label="Transport controls">
         <TransportIconButton
-          icon={<span className="pc-glyph" aria-hidden="true">🔀</span>}
+          icon={
+            <svg className="pc-shuffle-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M4 7h3.2c1 0 1.9.5 2.4 1.2l1.3 1.8m2.1 2.9 1.3 1.8c.5.7 1.4 1.2 2.4 1.2H20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M20 7h-3.2c-1 0-1.9.5-2.4 1.2L11 12.8M4 17h3.2c1 0 1.9-.5 2.4-1.2L11 14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path d="M17 5l3 2-3 2M17 15l3 2-3 2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          }
           active={shuffleEnabled}
-          onClick={onToggleShuffle}
+          onClick={onShuffleClick}
           ariaLabel={shuffleEnabled ? "Disable shuffle" : "Enable shuffle"}
           size="sm"
+          className={`pc-transport-btn--shuffle ${
+            shuffleAnimState === "on" ? "is-anim-on" : shuffleAnimState === "off" ? "is-anim-off" : ""
+          }`.trim()}
         />
         <button type="button" className="pc-btn pc-btn--icon" aria-label="Previous track" onClick={onPrev}>
           <span className="pc-icon pc-icon--prev" aria-hidden="true" />
@@ -106,9 +195,16 @@ export function PlayerControls({
           <span className="pc-icon pc-icon--next" aria-hidden="true" />
         </button>
         <TransportIconButton
-          icon={<span className="pc-glyph" aria-hidden="true">↻</span>}
+          icon={
+            <svg className="pc-repeat-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M17 2l3 3-3 3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M4 11V9a4 4 0 0 1 4-4h12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M7 22l-3-3 3-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M20 13v2a4 4 0 0 1-4 4H4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          }
           active={repeatTrackEnabled}
-          onClick={onToggleRepeatTrack}
+          onClick={() => onToggleRepeatTrack()}
           ariaLabel={repeatTrackEnabled ? "Disable repeat track" : "Enable repeat track"}
           size="sm"
         />
@@ -131,22 +227,7 @@ export function PlayerControls({
             className="pc-btn pc-btn--primary pc-btn--aura"
             onClick={(event) => {
               const button = event.currentTarget;
-              button.classList.remove("pc-btn--aura-burst");
-              void button.offsetWidth;
-              button.classList.add("pc-btn--aura-burst");
-              const burst = document.createElement("span");
-              burst.className = "pc-aura-burst";
-              for (let i = 0; i < 7; i += 1) {
-                const sparkle = document.createElement("span");
-                sparkle.className = "pc-aura-burst__spark";
-                const angle = (i / 7) * Math.PI * 2;
-                sparkle.style.setProperty("--tx", `${Math.cos(angle) * 24}px`);
-                sparkle.style.setProperty("--ty", `${Math.sin(angle) * 24}px`);
-                sparkle.style.setProperty("--delay", `${i * 34}ms`);
-                burst.appendChild(sparkle);
-              }
-              button.appendChild(burst);
-              burst.addEventListener("animationend", () => burst.remove(), { once: true });
+              emitPinkSparkle(button, { sparks: 7, distance: 24, includeFlash: true });
               if (navigator.vibrate) navigator.vibrate(12);
               onAuraUp();
             }}
