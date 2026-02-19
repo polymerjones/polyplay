@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import logo from "../logo.png";
 import { quickTipsContent } from "./content/quickTips";
 import { APP_TITLE, APP_VERSION } from "./config/version";
@@ -18,6 +18,7 @@ const SPLASH_SEEN_KEY = "polyplay_hasSeenSplash";
 const SPLASH_SESSION_KEY = "polyplay_hasSeenSplashSession";
 const OPEN_STATE_SEEN_KEY = "polyplay_open_state_seen_v102";
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
+const THEME_MODE_KEY = "polyplay_themeMode";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
 const SPLASH_FADE_MS = 420;
@@ -57,6 +58,9 @@ export default function App() {
   const [overlayPage, setOverlayPage] = useState<"settings" | null>(null);
   const [isTipsOpen, setIsTipsOpen] = useState(false);
   const [layoutMode, setLayoutMode] = useState<"grid" | "list">("grid");
+  const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
+  const [themeToggleAnim, setThemeToggleAnim] = useState<"on" | "off" | null>(null);
+  const [themeBloomActive, setThemeBloomActive] = useState(false);
   const [isShuffleEnabled, setIsShuffleEnabled] = useState(false);
   const [isRepeatTrackEnabled, setIsRepeatTrackEnabled] = useState(false);
   const [showOpenState, setShowOpenState] = useState(false);
@@ -75,6 +79,9 @@ export default function App() {
   const lastPlayedAtByTrackRef = useRef<Record<string, number>>({});
   const audioInstanceSeqRef = useRef(0);
   const audioInstanceIdRef = useRef(0);
+  const themeToggleCooldownRef = useRef(0);
+  const themeAnimTimeoutRef = useRef<number | null>(null);
+  const themeBloomTimeoutRef = useRef<number | null>(null);
 
   const logAudioDebug = (event: string, details?: Record<string, unknown>) => {
     try {
@@ -262,12 +269,36 @@ export default function App() {
 
   useEffect(() => {
     try {
+      const saved = localStorage.getItem(THEME_MODE_KEY);
+      if (saved === "light" || saved === "dark") setThemeMode(saved);
+    } catch {
+      // Ignore localStorage failures.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
       setIsShuffleEnabled(localStorage.getItem(SHUFFLE_ENABLED_KEY) === "true");
       setIsRepeatTrackEnabled(localStorage.getItem(REPEAT_TRACK_KEY) === "true");
     } catch {
       // Ignore localStorage failures.
     }
   }, []);
+
+  useEffect(() => {
+    document.body.classList.toggle("theme-dark", themeMode === "dark");
+    return () => {
+      document.body.classList.remove("theme-dark");
+      if (themeAnimTimeoutRef.current !== null) {
+        window.clearTimeout(themeAnimTimeoutRef.current);
+        themeAnimTimeoutRef.current = null;
+      }
+      if (themeBloomTimeoutRef.current !== null) {
+        window.clearTimeout(themeBloomTimeoutRef.current);
+        themeBloomTimeoutRef.current = null;
+      }
+    };
+  }, [themeMode]);
 
   useEffect(() => {
     try {
@@ -713,6 +744,55 @@ export default function App() {
     });
   };
 
+  const toggleTheme = (event: MouseEvent<HTMLButtonElement>) => {
+    const next = themeMode === "light" ? "dark" : "light";
+    setThemeMode(next);
+    try {
+      localStorage.setItem(THEME_MODE_KEY, next);
+    } catch {
+      // Ignore localStorage failures.
+    }
+
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!prefersReducedMotion) {
+      setThemeToggleAnim(next === "dark" ? "on" : "off");
+      if (themeAnimTimeoutRef.current !== null) window.clearTimeout(themeAnimTimeoutRef.current);
+      themeAnimTimeoutRef.current = window.setTimeout(() => {
+        setThemeToggleAnim(null);
+        themeAnimTimeoutRef.current = null;
+      }, 170);
+    }
+
+    const now = Date.now();
+    if (now - themeToggleCooldownRef.current < 320) return;
+    themeToggleCooldownRef.current = now;
+
+    setThemeBloomActive(true);
+    if (themeBloomTimeoutRef.current !== null) window.clearTimeout(themeBloomTimeoutRef.current);
+    themeBloomTimeoutRef.current = window.setTimeout(() => {
+      setThemeBloomActive(false);
+      themeBloomTimeoutRef.current = null;
+    }, 320);
+
+    const button = event.currentTarget;
+    const burst = document.createElement("span");
+    burst.className = "pc-aura-burst";
+    for (let i = 0; i < 5; i += 1) {
+      const sparkle = document.createElement("span");
+      sparkle.className = "pc-aura-burst__spark";
+      const angle = (i / 5) * Math.PI * 2;
+      sparkle.style.setProperty("--tx", `${Math.cos(angle) * 16}px`);
+      sparkle.style.setProperty("--ty", `${Math.sin(angle) * 16}px`);
+      sparkle.style.setProperty("--delay", `${i * 28}ms`);
+      burst.appendChild(sparkle);
+    }
+    button.appendChild(burst);
+    burst.addEventListener("animationend", () => burst.remove(), { once: true });
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -750,6 +830,23 @@ export default function App() {
             <span>{APP_TITLE}</span>
           </div>
           <div className="top-actions">
+            <button
+              type="button"
+              className={`theme-link nav-action-btn ${
+                themeMode === "dark" ? "is-active" : ""
+              } ${themeToggleAnim ? `is-anim-${themeToggleAnim}` : ""} ${
+                themeBloomActive ? "is-bloom" : ""
+              }`.trim()}
+              aria-label={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              onClick={toggleTheme}
+            >
+              <span className="theme-switch-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="theme-switch-svg">
+                  <rect x="3" y="7" width="18" height="10" rx="5" />
+                  <circle className="theme-switch-knob" cx={themeMode === "dark" ? 16.5 : 7.5} cy="12" r="3.2" />
+                </svg>
+              </span>
+            </button>
             <button
               type="button"
               className="help-link nav-action-btn"

@@ -186,6 +186,115 @@ body.perf-lite::before {
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
 
+.theme-link {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+  color: #fff;
+  background: rgba(17, 24, 34, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 12px rgba(123, 224, 255, 0.14);
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-link.is-active {
+  background: radial-gradient(circle at 30% 24%, #855de2 0%, #6f44d1 56%, #4b2d9a 100%);
+  border-color: rgba(255, 255, 255, 0.26);
+  box-shadow:
+    0 0 18px rgba(176, 116, 255, 0.42),
+    0 8px 18px rgba(22, 12, 40, 0.38);
+}
+
+.theme-link::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.9);
+  background: radial-gradient(circle at 50% 50%, rgba(188, 130, 255, 0.36), rgba(188, 130, 255, 0) 65%);
+}
+
+.theme-link.is-bloom::after {
+  animation: theme-bloom 320ms ease-out;
+}
+
+@keyframes theme-bloom {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  35% {
+    opacity: 0.34;
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+.theme-link.is-anim-on {
+  animation: theme-toggle-on 160ms ease-out;
+}
+
+.theme-link.is-anim-off {
+  animation: theme-toggle-off 160ms ease-out;
+}
+
+@keyframes theme-toggle-on {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  55% {
+    transform: scale(0.96) rotate(3deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes theme-toggle-off {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  55% {
+    transform: scale(0.96) rotate(-3deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.theme-switch-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+}
+
+.theme-switch-svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.theme-switch-svg rect {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.theme-switch-knob {
+  fill: currentColor;
+  transition: cx 140ms ease;
+}
+
 .help-link:active {
   transform: scale(1.03);
 }
@@ -198,6 +307,15 @@ body.perf-lite::before {
 .gear-link:active,
 .back-link:active {
   transform: scale(1.03);
+}
+
+body.theme-dark {
+  background: #12111a;
+}
+
+body.theme-dark::before {
+  animation-duration: 36s;
+  opacity: 0.28;
 }
 
 .back-link {
@@ -1424,6 +1542,14 @@ body.perf-lite::before {
 @keyframes vinyl-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-link.is-anim-on,
+  .theme-link.is-anim-off,
+  .theme-link.is-bloom::after {
+    animation: none;
+  }
 }
 
 .admin-primary {
