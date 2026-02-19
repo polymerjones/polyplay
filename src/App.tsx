@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import logo from "../logo.png";
 import { quickTipsContent } from "./content/quickTips";
+import { APP_TITLE, APP_VERSION } from "./config/version";
 import { EmptyLibraryWelcome } from "./components/EmptyLibraryWelcome";
 import { FullscreenPlayer } from "./components/FullscreenPlayer";
 import { MiniPlayerBar } from "./components/MiniPlayerBar";
@@ -16,7 +17,6 @@ const SPLASH_SEEN_KEY = "polyplay_hasSeenSplash";
 const OPEN_STATE_SEEN_KEY = "polyplay_open_state_seen_v102";
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const SPLASH_FADE_MS = 420;
-const APP_TITLE = "Polyplay Music App Beta v105";
 
 function clampAura(value: number): number {
   return Math.max(0, Math.min(5, Math.round(value)));
@@ -631,7 +631,7 @@ export default function App() {
         <header className="topbar">
           <div className="brand">
             <img className="brand-logo" src={logo} alt="Polyplay logo" />
-            <span>Polyplay Music App Beta v105</span>
+            <span>{APP_TITLE}</span>
           </div>
           <div className="top-actions">
             <button
@@ -672,7 +672,7 @@ export default function App() {
 
         {showOpenState && hasTracks && (
           <section className="open-state-card" role="region" aria-label="Welcome">
-            <div className="open-state-card__title">Welcome to Polyplay Beta v105</div>
+            <div className="open-state-card__title">{`Welcome to Polyplay Beta ${APP_VERSION}`}</div>
             <p className="open-state-card__body">Tap a tile to start playback, then use Loop modes from the player bar.</p>
             <button type="button" className="open-state-card__dismiss" onClick={dismissOpenState}>
               Start Listening
