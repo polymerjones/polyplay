@@ -19,6 +19,10 @@ type Props = {
   onPlayPause: () => void;
   onNext: () => void;
   onSeek: (seconds: number) => void;
+  shuffleEnabled: boolean;
+  repeatTrackEnabled: boolean;
+  onToggleShuffle: () => void;
+  onToggleRepeatTrack: () => void;
   onSetLoopRange: (start: number, end: number, active: boolean) => void;
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
@@ -39,6 +43,10 @@ export function FullscreenPlayer({
   onPlayPause,
   onNext,
   onSeek,
+  shuffleEnabled,
+  repeatTrackEnabled,
+  onToggleShuffle,
+  onToggleRepeatTrack,
   onSetLoopRange,
   onSetLoop,
   onToggleLoopMode,
@@ -196,6 +204,10 @@ export function FullscreenPlayer({
           onPlayPause={onPlayPause}
           onNext={onNext}
           onSeek={onSeek}
+          shuffleEnabled={shuffleEnabled}
+          repeatTrackEnabled={repeatTrackEnabled}
+          onToggleShuffle={onToggleShuffle}
+          onToggleRepeatTrack={onToggleRepeatTrack}
           onSetLoop={onSetLoop}
           onToggleLoopMode={onToggleLoopMode}
           onClearLoop={onClearLoop}

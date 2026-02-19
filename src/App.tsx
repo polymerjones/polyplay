@@ -16,6 +16,8 @@ const EMPTY_LOOP: LoopRegion = { start: 0, end: 0, active: false, editing: false
 const SPLASH_SEEN_KEY = "polyplay_hasSeenSplash";
 const OPEN_STATE_SEEN_KEY = "polyplay_open_state_seen_v102";
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
+const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
+const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
 const SPLASH_FADE_MS = 420;
 
 function clampAura(value: number): number {
@@ -41,6 +43,16 @@ function getAdjacentTrackId(
   return tracks[safeIndex]?.id ?? null;
 }
 
+function getShuffledTrackId(tracks: Track[], currentTrackId: string | null): string | null {
+  const playable = tracks.filter((track) => Boolean(track.audioUrl) && !track.missingAudio);
+  if (!playable.length) return null;
+  if (playable.length === 1) return playable[0]?.id ?? null;
+  const pool = playable.filter((track) => track.id !== currentTrackId);
+  const nextPool = pool.length ? pool : playable;
+  const index = Math.floor(Math.random() * nextPool.length);
+  return nextPool[index]?.id ?? null;
+}
+
 export default function App() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [currentTrackId, setCurrentTrackId] = useState<string | null>(null);
@@ -53,6 +65,8 @@ export default function App() {
   const [overlayPage, setOverlayPage] = useState<"settings" | null>(null);
   const [isTipsOpen, setIsTipsOpen] = useState(false);
   const [layoutMode, setLayoutMode] = useState<"grid" | "list">("grid");
+  const [isShuffleEnabled, setIsShuffleEnabled] = useState(false);
+  const [isRepeatTrackEnabled, setIsRepeatTrackEnabled] = useState(false);
   const [showOpenState, setShowOpenState] = useState(false);
   const [showSplash, setShowSplash] = useState(false);
   const [isSplashDismissing, setIsSplashDismissing] = useState(false);
@@ -255,6 +269,15 @@ export default function App() {
 
   useEffect(() => {
     try {
+      setIsShuffleEnabled(localStorage.getItem(SHUFFLE_ENABLED_KEY) === "true");
+      setIsRepeatTrackEnabled(localStorage.getItem(REPEAT_TRACK_KEY) === "true");
+    } catch {
+      // Ignore localStorage failures.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
       if (localStorage.getItem(OPEN_STATE_SEEN_KEY) !== "1") setShowOpenState(true);
     } catch {
       setShowOpenState(true);
@@ -416,6 +439,19 @@ export default function App() {
         void audio.play().catch(() => setIsPlaying(false));
         return;
       }
+      if (isRepeatTrackEnabled && currentLoopMode === "off") {
+        audio.currentTime = 0;
+        setCurrentTime(0);
+        void audio.play().catch(() => setIsPlaying(false));
+        return;
+      }
+      if (isShuffleEnabled) {
+        const nextId = getShuffledTrackId(tracks, currentTrackId);
+        if (nextId) {
+          playTrack(nextId, true);
+          return;
+        }
+      }
       setIsPlaying(false);
     };
 
@@ -450,7 +486,7 @@ export default function App() {
       }
       detachListeners();
     };
-  }, [currentTrackId, loopByTrack, currentLoopMode]);
+  }, [currentTrackId, loopByTrack, currentLoopMode, isRepeatTrackEnabled, isShuffleEnabled, tracks]);
 
   const updateAura = async (trackId: string, delta: number) => {
     let nextAuraForDb: number | null = null;
@@ -516,7 +552,9 @@ export default function App() {
   };
 
   const playNext = () => {
-    const nextId = getAdjacentTrackId(tracks, currentTrackId, 1, true);
+    const nextId = isShuffleEnabled
+      ? getShuffledTrackId(tracks, currentTrackId)
+      : getAdjacentTrackId(tracks, currentTrackId, 1, true);
     if (nextId) playTrack(nextId, true);
   };
 
@@ -631,6 +669,30 @@ export default function App() {
       const next = prev === "grid" ? "list" : "grid";
       try {
         localStorage.setItem(LAYOUT_MODE_KEY, next);
+      } catch {
+        // Ignore localStorage failures.
+      }
+      return next;
+    });
+  };
+
+  const toggleShuffle = () => {
+    setIsShuffleEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SHUFFLE_ENABLED_KEY, next ? "true" : "false");
+      } catch {
+        // Ignore localStorage failures.
+      }
+      return next;
+    });
+  };
+
+  const toggleRepeatTrack = () => {
+    setIsRepeatTrackEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(REPEAT_TRACK_KEY, next ? "true" : "false");
       } catch {
         // Ignore localStorage failures.
       }
@@ -759,6 +821,10 @@ export default function App() {
           }}
           onSeek={seekTo}
           onSkip={skip}
+          shuffleEnabled={isShuffleEnabled}
+          repeatTrackEnabled={isRepeatTrackEnabled}
+          onToggleShuffle={toggleShuffle}
+          onToggleRepeatTrack={toggleRepeatTrack}
           onSetLoopRange={setLoopRange}
           onSetLoop={setLoopFromCurrent}
           onToggleLoopMode={toggleLoopMode}
@@ -782,6 +848,10 @@ export default function App() {
           onPlayPause={togglePlayPause}
           onNext={playNext}
           onSeek={seekTo}
+          shuffleEnabled={isShuffleEnabled}
+          repeatTrackEnabled={isRepeatTrackEnabled}
+          onToggleShuffle={toggleShuffle}
+          onToggleRepeatTrack={toggleRepeatTrack}
           onSetLoopRange={setLoopRange}
           onSetLoop={setLoopFromCurrent}
           onToggleLoopMode={toggleLoopMode}

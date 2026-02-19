@@ -12,6 +12,10 @@ type Props = {
   onPlayPause: () => void;
   onNext: () => void;
   onSeek: (seconds: number) => void;
+  shuffleEnabled: boolean;
+  repeatTrackEnabled: boolean;
+  onToggleShuffle: () => void;
+  onToggleRepeatTrack: () => void;
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
   onClearLoop: () => void;
@@ -33,6 +37,10 @@ export function PlayerControls({
   onPlayPause,
   onNext,
   onSeek,
+  shuffleEnabled,
+  repeatTrackEnabled,
+  onToggleShuffle,
+  onToggleRepeatTrack,
   onSetLoop,
   onToggleLoopMode,
   onClearLoop,
@@ -131,6 +139,26 @@ export function PlayerControls({
             Aura +
           </button>
         )}
+        <button
+          type="button"
+          className={`pc-btn pc-btn--sm pc-btn--toggle ${shuffleEnabled ? "is-active" : ""}`.trim()}
+          onClick={onToggleShuffle}
+          aria-pressed={shuffleEnabled}
+          aria-label={shuffleEnabled ? "Disable shuffle" : "Enable shuffle"}
+          title={shuffleEnabled ? "Shuffle on" : "Shuffle off"}
+        >
+          🔀 {shuffleEnabled ? "On" : "Off"}
+        </button>
+        <button
+          type="button"
+          className={`pc-btn pc-btn--sm pc-btn--toggle ${repeatTrackEnabled ? "is-active" : ""}`.trim()}
+          onClick={onToggleRepeatTrack}
+          aria-pressed={repeatTrackEnabled}
+          aria-label={repeatTrackEnabled ? "Disable repeat track" : "Enable repeat track"}
+          title={repeatTrackEnabled ? "Repeat track on" : "Repeat track off"}
+        >
+          ↻ {repeatTrackEnabled ? "On" : "Off"}
+        </button>
         <button
           type="button"
           className={`pc-btn pc-btn--sm pc-btn--toggle ${loopMode !== "off" ? "is-active" : ""} ${
