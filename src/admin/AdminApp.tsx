@@ -10,6 +10,13 @@ import {
   updateArtworkInDb,
   type DbTrackRecord
 } from "../lib/db";
+import {
+  DEFAULT_GRATITUDE_SETTINGS,
+  type GratitudeFrequency,
+  type GratitudeSettings,
+  loadGratitudeSettings,
+  saveGratitudeSettings
+} from "../lib/gratitude";
 import { titleFromFilename } from "../lib/title";
 import { Button } from "../components/button";
 
@@ -174,6 +181,7 @@ export function AdminApp() {
   const [selectedAudioFile, setSelectedAudioFile] = useState<File | null>(null);
 
   const [selectedRemoveTrackId, setSelectedRemoveTrackId] = useState<string>("");
+  const [gratitudeSettings, setGratitudeSettings] = useState<GratitudeSettings>(DEFAULT_GRATITUDE_SETTINGS);
   const [isNukePromptOpen, setIsNukePromptOpen] = useState(false);
   const [nukeCountdownMs, setNukeCountdownMs] = useState(2000);
   const [isNukeRunning, setIsNukeRunning] = useState(false);
@@ -208,6 +216,10 @@ export function AdminApp() {
 
   useEffect(() => {
     void refreshTracks();
+  }, []);
+
+  useEffect(() => {
+    setGratitudeSettings(loadGratitudeSettings());
   }, []);
 
   useEffect(() => {
@@ -493,6 +505,25 @@ export function AdminApp() {
     }
   };
 
+  const updateGratitudeSettings = (next: GratitudeSettings) => {
+    setGratitudeSettings(next);
+    saveGratitudeSettings(next);
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:gratitude-settings-updated" }, window.location.origin);
+      }
+    } catch {
+      // Ignore postMessage failures.
+    }
+  };
+
+  const onChangeGratitudeFrequency = (value: string) => {
+    const nextFrequency: GratitudeFrequency =
+      value === "daily" || value === "weekly" || value === "launch" || value === "off" ? value : "daily";
+    updateGratitudeSettings({ ...gratitudeSettings, frequency: nextFrequency });
+    setStatus("Gratitude prompt frequency updated.");
+  };
+
   return (
     <div
       className={`admin-v1 touch-clean mx-auto min-h-screen w-full max-w-5xl px-3 pb-5 pt-3 sm:px-4 ${
@@ -695,6 +726,40 @@ export function AdminApp() {
               </Button>
             </label>
           </div>
+        </div>
+      </section>
+
+      <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
+        <h2 className="mb-2 text-base font-semibold text-slate-100">Gratitude Prompt</h2>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="grid gap-1 text-sm text-slate-300">
+            Enabled
+            <select
+              value={gratitudeSettings.enabled ? "enabled" : "disabled"}
+              onChange={(event) => {
+                const enabled = event.currentTarget.value === "enabled";
+                updateGratitudeSettings({ ...gratitudeSettings, enabled });
+                setStatus(`Gratitude prompt ${enabled ? "enabled" : "disabled"}.`);
+              }}
+              className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
+            >
+              <option value="enabled">Enabled</option>
+              <option value="disabled">Disabled</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm text-slate-300">
+            Frequency
+            <select
+              value={gratitudeSettings.frequency}
+              onChange={(event) => onChangeGratitudeFrequency(event.currentTarget.value)}
+              className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
+            >
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="launch">Every App Launch</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
         </div>
       </section>
 

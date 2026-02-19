@@ -4,11 +4,21 @@ import { quickTipsContent } from "./content/quickTips";
 import { APP_TITLE, APP_VERSION } from "./config/version";
 import { EmptyLibraryWelcome } from "./components/EmptyLibraryWelcome";
 import { FullscreenPlayer } from "./components/FullscreenPlayer";
+import { GratitudePrompt } from "./components/GratitudePrompt";
 import { MiniPlayerBar } from "./components/MiniPlayerBar";
 import { QuickTipsModal } from "./components/QuickTipsModal";
 import { SplashOverlay } from "./components/SplashOverlay";
 import { TrackGrid } from "./components/TrackGrid";
 import { clearTracksInDb, getTracksFromDb, saveAuraToDb } from "./lib/db";
+import {
+  appendGratitudeEntry,
+  loadGratitudeSettings,
+  loadLastGratitudePromptAt,
+  markGratitudePromptShown,
+  saveGratitudeSettings,
+  shouldShowGratitudePrompt,
+  type GratitudeSettings
+} from "./lib/gratitude";
 import { pickAuraWeightedTrack } from "./lib/aura";
 import { revokeAllMediaUrls } from "./lib/player/media";
 import type { LoopMode, LoopRegion, Track } from "./types";
@@ -58,6 +68,9 @@ export default function App() {
   const [overlayPage, setOverlayPage] = useState<"settings" | null>(null);
   const [isTipsOpen, setIsTipsOpen] = useState(false);
   const [layoutMode, setLayoutMode] = useState<"grid" | "list">("grid");
+  const [gratitudeSettings, setGratitudeSettings] = useState<GratitudeSettings>(() => loadGratitudeSettings());
+  const [isGratitudeOpen, setIsGratitudeOpen] = useState(false);
+  const [isGratitudeReactive, setIsGratitudeReactive] = useState(false);
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [themeToggleAnim, setThemeToggleAnim] = useState<"on" | "off" | null>(null);
   const [themeBloomActive, setThemeBloomActive] = useState(false);
@@ -82,6 +95,9 @@ export default function App() {
   const themeToggleCooldownRef = useRef(0);
   const themeAnimTimeoutRef = useRef<number | null>(null);
   const themeBloomTimeoutRef = useRef<number | null>(null);
+  const gratitudeTypingTimeoutRef = useRef<number | null>(null);
+  const gratitudeEvaluatedRef = useRef(false);
+  const skipGratitudeForSessionRef = useRef(false);
 
   const logAudioDebug = (event: string, details?: Record<string, unknown>) => {
     try {
@@ -202,6 +218,10 @@ export default function App() {
         nukeTimeoutRef.current = null;
         isNukingRef.current = false;
       }
+      if (gratitudeTypingTimeoutRef.current !== null) {
+        window.clearTimeout(gratitudeTypingTimeoutRef.current);
+        gratitudeTypingTimeoutRef.current = null;
+      }
       revokeAllMediaUrls();
     };
   }, []);
@@ -247,8 +267,12 @@ export default function App() {
 
   useEffect(() => {
     try {
-      if (sessionStorage.getItem(SPLASH_SESSION_KEY) !== "true") setShowSplash(true);
+      if (sessionStorage.getItem(SPLASH_SESSION_KEY) !== "true") {
+        skipGratitudeForSessionRef.current = true;
+        setShowSplash(true);
+      }
     } catch {
+      skipGratitudeForSessionRef.current = true;
       setShowSplash(true);
     }
     return () => {
@@ -275,6 +299,21 @@ export default function App() {
       // Ignore localStorage failures.
     }
   }, []);
+
+  useEffect(() => {
+    const reducedMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) {
+      document.body.classList.remove("gratitude-reactive");
+      return;
+    }
+    document.body.classList.toggle("gratitude-reactive", isGratitudeReactive);
+    return () => {
+      document.body.classList.remove("gratitude-reactive");
+    };
+  }, [isGratitudeReactive]);
 
   useEffect(() => {
     try {
@@ -347,12 +386,32 @@ export default function App() {
       }
       if (type === "polyplay:close-settings") {
         setOverlayPage(null);
+        return;
+      }
+      if (type === "polyplay:gratitude-settings-updated") {
+        const next = loadGratitudeSettings();
+        setGratitudeSettings(next);
       }
     };
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
   }, []);
+
+  useEffect(() => {
+    if (gratitudeEvaluatedRef.current) return;
+    if (skipGratitudeForSessionRef.current) {
+      gratitudeEvaluatedRef.current = true;
+      return;
+    }
+    if (showSplash || isSplashDismissing || isNuking) return;
+    const now = Date.now();
+    if (shouldShowGratitudePrompt(gratitudeSettings, loadLastGratitudePromptAt(), now)) {
+      markGratitudePromptShown(new Date(now).toISOString());
+      setIsGratitudeOpen(true);
+    }
+    gratitudeEvaluatedRef.current = true;
+  }, [gratitudeSettings, isNuking, isSplashDismissing, showSplash]);
 
   const currentTrack = useMemo(
     () => tracks.find((track) => track.id === currentTrackId) ?? null,
@@ -793,6 +852,38 @@ export default function App() {
     burst.addEventListener("animationend", () => burst.remove(), { once: true });
   };
 
+  const onGratitudeDoNotSaveChange = (next: boolean) => {
+    setGratitudeSettings((prev) => {
+      const updated = { ...prev, doNotSaveText: next };
+      saveGratitudeSettings(updated);
+      return updated;
+    });
+  };
+
+  const onGratitudeTyping = () => {
+    const reducedMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) return;
+    setIsGratitudeReactive(true);
+    if (gratitudeTypingTimeoutRef.current !== null) window.clearTimeout(gratitudeTypingTimeoutRef.current);
+    gratitudeTypingTimeoutRef.current = window.setTimeout(() => {
+      setIsGratitudeReactive(false);
+      gratitudeTypingTimeoutRef.current = null;
+    }, 1000);
+  };
+
+  const onGratitudePersist = ({ text, doNotSaveText }: { text: string; doNotSaveText: boolean }) => {
+    const nowIso = new Date().toISOString();
+    if (!doNotSaveText) appendGratitudeEntry(text, nowIso);
+    setGratitudeSettings((prev) => {
+      const updated = { ...prev, doNotSaveText };
+      saveGratitudeSettings(updated);
+      return updated;
+    });
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -998,6 +1089,17 @@ export default function App() {
 
       <QuickTipsModal open={isTipsOpen} onClose={() => setIsTipsOpen(false)} tips={quickTipsContent} />
       {showSplash && <SplashOverlay isDismissing={isSplashDismissing} onComplete={finishSplash} />}
+      <GratitudePrompt
+        open={isGratitudeOpen}
+        doNotSaveText={gratitudeSettings.doNotSaveText}
+        onDoNotSaveTextChange={onGratitudeDoNotSaveChange}
+        onTyping={onGratitudeTyping}
+        onPersist={onGratitudePersist}
+        onComplete={() => {
+          setIsGratitudeOpen(false);
+          setIsGratitudeReactive(false);
+        }}
+      />
     </>
   );
 }
