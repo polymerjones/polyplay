@@ -2,6 +2,8 @@ export type TrackId = string;
 
 export type Track = {
   id: TrackId;
+  demoId?: string;
+  isDemo?: boolean;
   title: string;
   sub?: string;
   aura: number;

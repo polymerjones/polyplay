@@ -10,6 +10,7 @@ import {
   getTrackStorageRows,
   getTrackRowsFromDb,
   isStorageCapError,
+  removeDemoTracksInDb,
   removeTrackFromDb,
   replaceAudioInDb,
   resetAuraInDb,
@@ -20,6 +21,7 @@ import {
 } from "../lib/db";
 import { generateVideoPoster } from "../lib/artwork/videoPoster";
 import { validateVideoArtworkFile } from "../lib/artwork/videoValidation";
+import { DEMO_PACK_VERSION_KEY, installDemoPackIfNeeded } from "../lib/demoPack";
 import {
   DEFAULT_GRATITUDE_SETTINGS,
   deleteGratitudeEntry,
@@ -33,6 +35,8 @@ import {
 } from "../lib/gratitude";
 import { titleFromFilename } from "../lib/title";
 import { Button } from "../components/button";
+
+const HAS_IMPORTED_KEY = "polyplay_hasImported";
 
 function formatTrackLabel(track: DbTrackRecord): string {
   const shortId = track.id.slice(0, 8);
@@ -251,6 +255,21 @@ export function AdminApp() {
     }
   };
 
+  const notifyUserImported = () => {
+    try {
+      localStorage.setItem(HAS_IMPORTED_KEY, "true");
+    } catch {
+      // Ignore storage failures.
+    }
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:user-imported" }, window.location.origin);
+      }
+    } catch {
+      // Ignore postMessage failures.
+    }
+  };
+
   const setUploadArtworkFile = (file: File | null) => {
     setUploadArt(file);
     setUploadArtPosterBlob(null);
@@ -334,6 +353,7 @@ export function AdminApp() {
         await replaceAudioInDb(selectedTransferTrackId, file);
         setStatus("Selected track audio replaced.");
       }
+      notifyUserImported();
       await refreshTracks();
       await refreshStorage();
     } catch (error) {
@@ -376,6 +396,7 @@ export function AdminApp() {
     try {
       const artwork = await buildArtworkPayload(file, null);
       await updateArtworkInDb(selectedTransferTrackId, artwork);
+      notifyUserImported();
       await refreshTracks();
       await refreshStorage();
       setStatus("Artwork applied from Artwork lane.");
@@ -450,6 +471,7 @@ export function AdminApp() {
         artPoster: artwork.artPoster,
         artVideo: artwork.artVideo
       });
+      notifyUserImported();
       setUploadTitle("");
       setUploadAudio(null);
       setUploadArtworkFile(null);
@@ -488,6 +510,7 @@ export function AdminApp() {
     try {
       const artwork = await buildArtworkPayload(selectedArtworkFile, selectedArtPosterBlob);
       await updateArtworkInDb(selectedArtworkTrackId, artwork);
+      notifyUserImported();
       setSelectedArtworkAssetFile(null);
       setStatus(
         artwork.posterCaptureFailed
@@ -522,6 +545,7 @@ export function AdminApp() {
     setStatus("Replacing audio...");
     try {
       await replaceAudioInDb(selectedAudioTrackId, selectedAudioFile);
+      notifyUserImported();
       setSelectedAudioFile(null);
       setStatus("Audio replaced.");
       await refreshTracks();
@@ -644,6 +668,7 @@ export function AdminApp() {
     try {
       localStorage.removeItem("polyplay_hasSeenSplash");
       localStorage.removeItem("polyplay_open_state_seen_v102");
+      localStorage.removeItem(HAS_IMPORTED_KEY);
       setStatus("Onboarding reset. Reload the player to see the splash again.");
     } catch {
       setStatus("Could not reset onboarding.");
@@ -710,6 +735,41 @@ export function AdminApp() {
     anchor.remove();
     URL.revokeObjectURL(url);
     setStatus("Gratitude .txt exported.");
+  };
+
+  const onRemoveDemoTracks = async () => {
+    if (!window.confirm("Remove all demo tracks?")) return;
+    try {
+      const removed = await removeDemoTracksInDb();
+      localStorage.removeItem(DEMO_PACK_VERSION_KEY);
+      setStatus(`Removed ${removed} demo track${removed === 1 ? "" : "s"}.`);
+      await refreshTracks();
+      await refreshStorage();
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
+      }
+    } catch {
+      setStatus("Failed to remove demo tracks.");
+    }
+  };
+
+  const onRestoreDemoTracks = async () => {
+    try {
+      localStorage.removeItem(DEMO_PACK_VERSION_KEY);
+      const seeded = await installDemoPackIfNeeded();
+      setStatus(
+        seeded.installed > 0
+          ? `Restored ${seeded.installed} demo track${seeded.installed === 1 ? "" : "s"}.`
+          : "Demo tracks are already restored."
+      );
+      await refreshTracks();
+      await refreshStorage();
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
+      }
+    } catch {
+      setStatus("Failed to restore demo tracks.");
+    }
   };
 
   const visibleTrackStorageRows = useMemo(() => {
@@ -1069,6 +1129,18 @@ export function AdminApp() {
             </div>
           ))}
           {!visibleTrackStorageRows.length && <div className="text-sm text-slate-400">No tracks stored.</div>}
+        </div>
+      </section>
+
+      <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
+        <h2 className="mb-2 text-base font-semibold text-slate-100">Demo Tracks</h2>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={onRestoreDemoTracks}>
+            Restore Demo Tracks
+          </Button>
+          <Button variant="danger" onClick={onRemoveDemoTracks}>
+            Remove Demo Tracks
+          </Button>
         </div>
       </section>
 

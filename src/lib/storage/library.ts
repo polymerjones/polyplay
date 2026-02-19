@@ -1,5 +1,7 @@
 export type TrackRecord = {
   id: string;
+  demoId?: string | null;
+  isDemo?: boolean;
   title: string;
   sub?: string | null;
   artist: string | null;
@@ -71,6 +73,8 @@ export function migrateLibraryIfNeeded(input: unknown): LibraryState {
     const updatedAt = Number.isFinite(t.updatedAt) ? Number(t.updatedAt) : createdAt;
     tracksById[id] = {
       id,
+      demoId: typeof t.demoId === "string" ? t.demoId : null,
+      isDemo: Boolean(t.isDemo),
       title: (t.title || "").trim() || "Untitled",
       sub: t.sub ?? "Uploaded",
       artist: t.artist ?? null,

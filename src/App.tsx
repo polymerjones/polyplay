@@ -10,6 +10,7 @@ import { QuickTipsModal } from "./components/QuickTipsModal";
 import { SplashOverlay } from "./components/SplashOverlay";
 import { TrackGrid } from "./components/TrackGrid";
 import { clearTracksInDb, getTracksFromDb, saveAuraToDb } from "./lib/db";
+import { installDemoPackIfNeeded } from "./lib/demoPack";
 import {
   appendGratitudeEntry,
   loadGratitudeSettings,
@@ -32,6 +33,7 @@ const THEME_MODE_KEY = "polyplay_themeMode";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
 const SPLASH_FADE_MS = 420;
+const HAS_IMPORTED_KEY = "polyplay_hasImported";
 
 function clampAura(value: number): number {
   return Math.max(0, Math.min(5, Math.round(value)));
@@ -97,7 +99,6 @@ export default function App() {
   const themeBloomTimeoutRef = useRef<number | null>(null);
   const gratitudeTypingTimeoutRef = useRef<number | null>(null);
   const gratitudeEvaluatedRef = useRef(false);
-  const skipGratitudeForSessionRef = useRef(false);
 
   const logAudioDebug = (event: string, details?: Record<string, unknown>) => {
     try {
@@ -204,6 +205,8 @@ export default function App() {
     (async () => {
       try {
         await refreshTracks();
+        const seeded = await installDemoPackIfNeeded().catch(() => ({ installed: 0, skipped: 0 }));
+        if (seeded.installed > 0) await refreshTracks();
       } catch {
         if (!mounted) return;
         setTracks([]);
@@ -267,12 +270,8 @@ export default function App() {
 
   useEffect(() => {
     try {
-      if (sessionStorage.getItem(SPLASH_SESSION_KEY) !== "true") {
-        skipGratitudeForSessionRef.current = true;
-        setShowSplash(true);
-      }
+      if (sessionStorage.getItem(SPLASH_SESSION_KEY) !== "true") setShowSplash(true);
     } catch {
-      skipGratitudeForSessionRef.current = true;
       setShowSplash(true);
     }
     return () => {
@@ -341,7 +340,8 @@ export default function App() {
 
   useEffect(() => {
     try {
-      if (localStorage.getItem(OPEN_STATE_SEEN_KEY) !== "1") setShowOpenState(true);
+      const hasImported = localStorage.getItem(HAS_IMPORTED_KEY) === "true";
+      if (!hasImported && localStorage.getItem(OPEN_STATE_SEEN_KEY) !== "1") setShowOpenState(true);
     } catch {
       setShowOpenState(true);
     }
@@ -368,6 +368,12 @@ export default function App() {
       if (event.origin !== window.location.origin) return;
       const type = event.data?.type;
       if (type === "polyplay:upload-success") {
+        try {
+          localStorage.setItem(HAS_IMPORTED_KEY, "true");
+        } catch {
+          // Ignore localStorage failures.
+        }
+        dismissOpenState();
         setOverlayPage(null);
         void refreshTracks();
 
@@ -388,6 +394,19 @@ export default function App() {
         setOverlayPage(null);
         return;
       }
+      if (type === "polyplay:user-imported") {
+        try {
+          localStorage.setItem(HAS_IMPORTED_KEY, "true");
+        } catch {
+          // Ignore localStorage failures.
+        }
+        dismissOpenState();
+        return;
+      }
+      if (type === "polyplay:library-updated") {
+        void refreshTracks();
+        return;
+      }
       if (type === "polyplay:gratitude-settings-updated") {
         const next = loadGratitudeSettings();
         setGratitudeSettings(next);
@@ -400,10 +419,6 @@ export default function App() {
 
   useEffect(() => {
     if (gratitudeEvaluatedRef.current) return;
-    if (skipGratitudeForSessionRef.current) {
-      gratitudeEvaluatedRef.current = true;
-      return;
-    }
     if (showSplash || isSplashDismissing || isNuking) return;
     const now = Date.now();
     if (shouldShowGratitudePrompt(gratitudeSettings, loadLastGratitudePromptAt(), now)) {

@@ -41,6 +41,7 @@ export function TrackGrid({ tracks, currentTrackId, isPlaying, layoutMode, onSel
         const glowBoost = Math.min(180, track.aura * 36);
         const missingAudio = Boolean(track.missingAudio);
         const missingArt = Boolean(track.missingArt);
+        const isLongTitle = track.title.length > 42;
         const artStyle = track.artUrl
           ? { backgroundImage: `url('${track.artUrl}')` }
           : { backgroundImage: track.artGrad || `url('${DEFAULT_ARTWORK_URL}')` };
@@ -59,11 +60,14 @@ export function TrackGrid({ tracks, currentTrackId, isPlaying, layoutMode, onSel
               } as CSSProperties
             }
           >
-            {track.artworkSource === "auto" && <div className="track-art-badge track-art-badge--tile">AUTO ART</div>}
+            <div className="track-badges">
+              {track.isDemo && <div className="track-art-badge track-art-badge--tile track-art-badge--demo">DEMO</div>}
+              {track.artworkSource === "auto" && <div className="track-art-badge track-art-badge--tile">AUTO ART</div>}
+            </div>
             <button type="button" className="tile-hit" onClick={() => onSelectTrack(track.id)} aria-label={`Play ${track.title}`}>
               <div className="art art-grad" style={artStyle} />
               <div className="meta">
-                <div className="title">{track.title}</div>
+                <div className={`tile-title ${isLongTitle ? "tile-title--compact" : ""}`.trim()}>{track.title}</div>
                 <div className="sub">{track.sub || "Uploaded"}</div>
                 {missingAudio && <div className="sub">Missing audio</div>}
                 {missingArt && <div className="sub">Missing artwork</div>}

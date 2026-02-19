@@ -17,7 +17,10 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
 
   return (
     <div className={`track-row ${active && isPlaying ? "is-playing" : ""}`.trim()} data-track-id={track.id}>
-      {track.artworkSource === "auto" && <div className="track-art-badge track-art-badge--row">AUTO ART</div>}
+      <div className="track-badges">
+        {track.isDemo && <div className="track-art-badge track-art-badge--row track-art-badge--demo">DEMO</div>}
+        {track.artworkSource === "auto" && <div className="track-art-badge track-art-badge--row">AUTO ART</div>}
+      </div>
       <button
         type="button"
         className="track-row__thumb-btn"

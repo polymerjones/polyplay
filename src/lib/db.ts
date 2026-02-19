@@ -9,6 +9,8 @@ import { titleFromFilename } from "./title";
 
 export type DbTrackRecord = {
   id: string;
+  demoId?: string | null;
+  isDemo?: boolean;
   title?: string;
   sub?: string;
   aura?: number;
@@ -149,6 +151,8 @@ async function maybeMigrateLegacyTracks(): Promise<void> {
 
     nextLibrary.tracksById[trackId] = {
       id: trackId,
+      demoId: null,
+      isDemo: false,
       title: row.title?.trim() || `Track ${row.id}`,
       sub: row.sub || "Uploaded",
       artist: null,
@@ -218,6 +222,8 @@ async function toTrack(record: TrackRecord): Promise<Track> {
 
   return {
     id: record.id,
+    demoId: record.demoId ?? undefined,
+    isDemo: Boolean(record.isDemo),
     title: record.title,
     sub: record.sub || "Uploaded",
     aura: clampAura(record.aura),
@@ -261,6 +267,8 @@ export async function getTrackRowsFromDb(): Promise<DbTrackRecord[]> {
       ]);
       return {
         id: record.id,
+        demoId: record.demoId ?? null,
+        isDemo: Boolean(record.isDemo),
         title: record.title,
         sub: record.sub || "Uploaded",
         aura: clampAura(record.aura),
@@ -283,6 +291,8 @@ export async function getTrackRowsFromDb(): Promise<DbTrackRecord[]> {
 }
 
 export async function addTrackToDb(params: {
+  demoId?: string | null;
+  isDemo?: boolean;
   title: string;
   sub?: string;
   audio: Blob;
@@ -333,6 +343,8 @@ export async function addTrackToDb(params: {
   const library = loadLibrary();
   library.tracksById[trackId] = {
     id: trackId,
+    demoId: params.demoId || null,
+    isDemo: Boolean(params.isDemo),
     title: params.title.trim() || "Untitled",
     sub: params.sub || "Uploaded",
     artist: null,
@@ -511,6 +523,42 @@ export async function clearTracksInDb(): Promise<void> {
   library.tracksById = {};
   saveLibrary(library);
   revokeAllMediaUrls();
+}
+
+export async function hasDemoTrackByDemoId(demoId: string): Promise<boolean> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  return Object.values(library.tracksById).some((track) => track.demoId === demoId);
+}
+
+export async function removeDemoTracksInDb(): Promise<number> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const demoTrackIds = Object.values(library.tracksById)
+    .filter((track) => track.isDemo)
+    .map((track) => track.id);
+  if (!demoTrackIds.length) return 0;
+
+  const keys = demoTrackIds
+    .flatMap((trackId) => {
+      const track = library.tracksById[trackId];
+      return track ? [track.audioKey, track.artKey, track.artVideoKey] : [];
+    })
+    .filter(Boolean) as string[];
+  for (const key of keys) {
+    await deleteBlob(key);
+    revokeMediaUrl(key);
+  }
+
+  for (const trackId of demoTrackIds) {
+    delete library.tracksById[trackId];
+  }
+  for (const playlist of Object.values(library.playlistsById)) {
+    playlist.trackIds = playlist.trackIds.filter((trackId) => !demoTrackIds.includes(trackId));
+    playlist.updatedAt = now();
+  }
+  saveLibrary(library);
+  return demoTrackIds.length;
 }
 
 export type StorageUsageSummary = {

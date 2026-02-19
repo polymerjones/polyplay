@@ -102,9 +102,6 @@ body.perf-lite .track-art-badge {
 }
 
 .track-art-badge {
-  position: absolute;
-  left: 10px;
-  top: 10px;
   z-index: 3;
   border: 1px solid rgba(215, 188, 255, 0.42);
   border-radius: 999px;
@@ -119,14 +116,27 @@ body.perf-lite .track-art-badge {
   pointer-events: none;
 }
 
-.track-art-badge--tile {
-  top: 10px;
+.track-badges {
+  position: absolute;
   left: 10px;
+  top: 10px;
+  display: grid;
+  gap: 6px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.track-art-badge--tile {
+  position: static;
 }
 
 .track-art-badge--row {
-  top: 8px;
-  left: 8px;
+  position: static;
+}
+
+.track-art-badge--demo {
+  background: rgba(42, 92, 168, 0.5);
+  border-color: rgba(174, 214, 255, 0.46);
 }
 
 .track-row.is-playing {
