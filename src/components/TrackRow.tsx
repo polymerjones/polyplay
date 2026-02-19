@@ -18,34 +18,53 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
   return (
     <div className={`track-row ${active && isPlaying ? "is-playing" : ""}`.trim()} data-track-id={track.id}>
       {track.artworkSource === "auto" && <div className="track-art-badge track-art-badge--row">AUTO ART</div>}
-      <button type="button" className="track-row__hit" onClick={() => onSelectTrack(track.id)} aria-label={`Play ${track.title}`}>
+      <button
+        type="button"
+        className="track-row__thumb-btn"
+        onClick={() => onSelectTrack(track.id)}
+        aria-label={`Play ${track.title}`}
+      >
         <div className="track-row__thumb" style={artStyle} />
+      </button>
+      <button
+        type="button"
+        className="track-row__meta-hit"
+        onClick={() => onSelectTrack(track.id)}
+        aria-label={`Play ${track.title}`}
+      >
         <div className="track-row__meta">
           <div className="track-row__title">{track.title}</div>
           <div className="track-row__sub">{track.sub || "Uploaded"}</div>
           <div className="track-row__aura">Aura {track.aura}/5</div>
         </div>
-        <div className="track-row__play-indicator" aria-hidden="true">
+      </button>
+      <div className="track-row__actions">
+        <button
+          type="button"
+          className="track-row__play-indicator"
+          onClick={() => onSelectTrack(track.id)}
+          aria-label={`Play ${track.title}`}
+        >
           {active && isPlaying ? "Playing" : "Play"}
-        </div>
-      </button>
-      <button
-        className="track-row__aura-btn"
-        type="button"
-        aria-label="Give aura"
-        onClick={(event) => {
-          event.stopPropagation();
-          const button = event.currentTarget;
-          button.classList.remove("track-row__aura-btn--burst");
-          void button.offsetWidth;
-          button.classList.add("track-row__aura-btn--burst");
-          window.dispatchEvent(new CustomEvent("polyplay:aura-trigger"));
-          if (navigator.vibrate) navigator.vibrate(12);
-          onAuraUp(track.id);
-        }}
-      >
-        Aura +
-      </button>
+        </button>
+        <button
+          className="track-row__aura-btn"
+          type="button"
+          aria-label="Give aura"
+          onClick={(event) => {
+            event.stopPropagation();
+            const button = event.currentTarget;
+            button.classList.remove("track-row__aura-btn--burst");
+            void button.offsetWidth;
+            button.classList.add("track-row__aura-btn--burst");
+            window.dispatchEvent(new CustomEvent("polyplay:aura-trigger"));
+            if (navigator.vibrate) navigator.vibrate(12);
+            onAuraUp(track.id);
+          }}
+        >
+          Aura +
+        </button>
+      </div>
     </div>
   );
 }
