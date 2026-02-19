@@ -260,19 +260,13 @@ export function AdminApp() {
 
   const buildArtworkPayload = async (
     file: File | null,
-    frameTime: number,
     posterBlob: Blob | null
   ): Promise<{ artPoster: Blob | null; artVideo: Blob | null; posterCaptureFailed: boolean }> => {
     if (!file) return { artPoster: null, artVideo: null, posterCaptureFailed: false };
     if (!isVideoArtwork(file)) return { artPoster: file, artVideo: null, posterCaptureFailed: false };
-    if (posterBlob) return { artPoster: posterBlob, artVideo: file, posterCaptureFailed: false };
-    try {
-      const poster = await capturePosterFrame(file, frameTime);
-      return { artPoster: poster, artVideo: file, posterCaptureFailed: false };
-    } catch {
-      // Safari can fail frame extraction for some encodes; never block track upload.
-      return { artPoster: null, artVideo: file, posterCaptureFailed: true };
-    }
+    // Never auto-capture on upload path: Safari can stall extraction for some MP4 encodes.
+    // If user tapped "Use This Frame", we already have posterBlob. Otherwise continue with video only.
+    return { artPoster: posterBlob ?? null, artVideo: file, posterCaptureFailed: !posterBlob };
   };
 
   const captureUploadFrame = async () => {
@@ -310,7 +304,7 @@ export function AdminApp() {
     setStatus("Uploading...");
 
     try {
-      const artwork = await buildArtworkPayload(uploadArt, uploadArtFrameTime, uploadArtPosterBlob);
+      const artwork = await buildArtworkPayload(uploadArt, uploadArtPosterBlob);
       await addTrackToDb({
         title: derivedTitle,
         sub: "Uploaded",
@@ -345,7 +339,7 @@ export function AdminApp() {
 
     setStatus("Updating artwork...");
     try {
-      const artwork = await buildArtworkPayload(selectedArtworkFile, selectedArtFrameTime, selectedArtPosterBlob);
+      const artwork = await buildArtworkPayload(selectedArtworkFile, selectedArtPosterBlob);
       await updateArtworkInDb(selectedArtworkTrackId, artwork);
       setSelectedArtworkAssetFile(null);
       setStatus(
