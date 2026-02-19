@@ -20,6 +20,7 @@ const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
 const SPLASH_FADE_MS = 420;
+const RETURNING_SPLASH_HOLD_MS = 1000;
 
 function clampAura(value: number): number {
   return Math.max(0, Math.min(5, Math.round(value)));
@@ -59,7 +60,7 @@ export default function App() {
   const [isShuffleEnabled, setIsShuffleEnabled] = useState(false);
   const [isRepeatTrackEnabled, setIsRepeatTrackEnabled] = useState(false);
   const [showOpenState, setShowOpenState] = useState(false);
-  const [showSplash, setShowSplash] = useState(false);
+  const [splashMode, setSplashMode] = useState<"intro" | "returning" | null>(null);
   const [isSplashDismissing, setIsSplashDismissing] = useState(false);
   const [isNuking, setIsNuking] = useState(false);
 
@@ -239,9 +240,9 @@ export default function App() {
 
   useEffect(() => {
     try {
-      if (localStorage.getItem(SPLASH_SEEN_KEY) !== "true") setShowSplash(true);
+      setSplashMode(localStorage.getItem(SPLASH_SEEN_KEY) === "true" ? "returning" : "intro");
     } catch {
-      setShowSplash(true);
+      setSplashMode("intro");
     }
     return () => {
       if (splashTimeoutRef.current !== null) {
@@ -277,7 +278,7 @@ export default function App() {
   }, []);
 
   const finishSplash = () => {
-    if (!showSplash || isSplashDismissing) return;
+    if (!splashMode || isSplashDismissing) return;
     setIsSplashDismissing(true);
     try {
       localStorage.setItem(SPLASH_SEEN_KEY, "true");
@@ -285,11 +286,24 @@ export default function App() {
       // Ignore localStorage failures.
     }
     splashTimeoutRef.current = window.setTimeout(() => {
-      setShowSplash(false);
+      setSplashMode(null);
       setIsSplashDismissing(false);
       splashTimeoutRef.current = null;
     }, SPLASH_FADE_MS);
   };
+
+  useEffect(() => {
+    if (splashMode !== "returning" || isSplashDismissing) return;
+    splashTimeoutRef.current = window.setTimeout(() => {
+      finishSplash();
+    }, RETURNING_SPLASH_HOLD_MS);
+    return () => {
+      if (splashTimeoutRef.current !== null) {
+        window.clearTimeout(splashTimeoutRef.current);
+        splashTimeoutRef.current = null;
+      }
+    };
+  }, [splashMode, isSplashDismissing]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -894,7 +908,9 @@ export default function App() {
       <audio ref={audioRef} preload="metadata" playsInline />
 
       <QuickTipsModal open={isTipsOpen} onClose={() => setIsTipsOpen(false)} tips={quickTipsContent} />
-      {showSplash && <SplashOverlay isDismissing={isSplashDismissing} onComplete={finishSplash} />}
+      {splashMode && (
+        <SplashOverlay mode={splashMode} isDismissing={isSplashDismissing} onComplete={finishSplash} />
+      )}
     </>
   );
 }

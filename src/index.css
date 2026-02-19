@@ -287,8 +287,8 @@ body.perf-lite .track-art-badge {
 }
 
 .splash-overlay__video {
-  width: min(920px, 100vw);
-  max-height: 100vh;
+  width: min(690px, 75vw);
+  max-height: 75vh;
   object-fit: cover;
 }
 
