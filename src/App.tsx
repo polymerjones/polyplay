@@ -16,6 +16,7 @@ const SPLASH_SEEN_KEY = "polyplay_hasSeenSplash";
 const OPEN_STATE_SEEN_KEY = "polyplay_open_state_seen_v102";
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const SPLASH_FADE_MS = 420;
+const APP_TITLE = "Polyplay Music App Beta v105";
 
 function clampAura(value: number): number {
   return Math.max(0, Math.min(5, Math.round(value)));
@@ -189,6 +190,10 @@ export default function App() {
       }
       revokeAllMediaUrls();
     };
+  }, []);
+
+  useEffect(() => {
+    document.title = APP_TITLE;
   }, []);
 
   useEffect(() => {
