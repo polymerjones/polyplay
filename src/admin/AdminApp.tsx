@@ -262,11 +262,17 @@ export function AdminApp() {
     file: File | null,
     frameTime: number,
     posterBlob: Blob | null
-  ): Promise<{ artPoster: Blob | null; artVideo: Blob | null }> => {
-    if (!file) return { artPoster: null, artVideo: null };
-    if (!isVideoArtwork(file)) return { artPoster: file, artVideo: null };
-    const poster = posterBlob ?? (await capturePosterFrame(file, frameTime));
-    return { artPoster: poster, artVideo: file };
+  ): Promise<{ artPoster: Blob | null; artVideo: Blob | null; posterCaptureFailed: boolean }> => {
+    if (!file) return { artPoster: null, artVideo: null, posterCaptureFailed: false };
+    if (!isVideoArtwork(file)) return { artPoster: file, artVideo: null, posterCaptureFailed: false };
+    if (posterBlob) return { artPoster: posterBlob, artVideo: file, posterCaptureFailed: false };
+    try {
+      const poster = await capturePosterFrame(file, frameTime);
+      return { artPoster: poster, artVideo: file, posterCaptureFailed: false };
+    } catch {
+      // Safari can fail frame extraction for some encodes; never block track upload.
+      return { artPoster: null, artVideo: file, posterCaptureFailed: true };
+    }
   };
 
   const captureUploadFrame = async () => {
@@ -315,7 +321,11 @@ export function AdminApp() {
       setUploadTitle("");
       setUploadAudio(null);
       setUploadArtworkFile(null);
-      setStatus("Upload complete.");
+      setStatus(
+        artwork.posterCaptureFailed
+          ? "Upload complete. Video artwork added (poster frame unavailable on this browser)."
+          : "Upload complete."
+      );
       await refreshTracks();
       await notifyUploadSuccess();
     } catch {
@@ -338,7 +348,11 @@ export function AdminApp() {
       const artwork = await buildArtworkPayload(selectedArtworkFile, selectedArtFrameTime, selectedArtPosterBlob);
       await updateArtworkInDb(selectedArtworkTrackId, artwork);
       setSelectedArtworkAssetFile(null);
-      setStatus("Artwork updated.");
+      setStatus(
+        artwork.posterCaptureFailed
+          ? "Artwork updated. Video artwork added (poster frame unavailable on this browser)."
+          : "Artwork updated."
+      );
       await refreshTracks();
     } catch {
       setStatus("Artwork update failed.");
