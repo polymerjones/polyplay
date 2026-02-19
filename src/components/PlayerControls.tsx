@@ -1,6 +1,7 @@
 import type { LoopMode } from "../types";
 import { useEffect, useRef } from "react";
 import { formatTime } from "../lib/time";
+import { TransportIconButton } from "./TransportIconButton";
 
 type Props = {
   variant: "mini" | "fullscreen";
@@ -83,6 +84,13 @@ export function PlayerControls({
       </div>
 
       <div className="pc-row" role="group" aria-label="Transport controls">
+        <TransportIconButton
+          icon={<span className="pc-glyph" aria-hidden="true">🔀</span>}
+          active={shuffleEnabled}
+          onClick={onToggleShuffle}
+          ariaLabel={shuffleEnabled ? "Disable shuffle" : "Enable shuffle"}
+          size="sm"
+        />
         <button type="button" className="pc-btn pc-btn--icon" aria-label="Previous track" onClick={onPrev}>
           <span className="pc-icon pc-icon--prev" aria-hidden="true" />
         </button>
@@ -97,6 +105,13 @@ export function PlayerControls({
         <button type="button" className="pc-btn pc-btn--icon" aria-label="Next track" onClick={onNext}>
           <span className="pc-icon pc-icon--next" aria-hidden="true" />
         </button>
+        <TransportIconButton
+          icon={<span className="pc-glyph" aria-hidden="true">↻</span>}
+          active={repeatTrackEnabled}
+          onClick={onToggleRepeatTrack}
+          ariaLabel={repeatTrackEnabled ? "Disable repeat track" : "Enable repeat track"}
+          size="sm"
+        />
       </div>
 
       <div className="pc-extras" role="group" aria-label="Playback options">
@@ -139,26 +154,6 @@ export function PlayerControls({
             Aura +
           </button>
         )}
-        <button
-          type="button"
-          className={`pc-btn pc-btn--sm pc-btn--toggle pc-btn--toggle-purple ${shuffleEnabled ? "is-active" : ""}`.trim()}
-          onClick={onToggleShuffle}
-          aria-pressed={shuffleEnabled}
-          aria-label={shuffleEnabled ? "Disable shuffle" : "Enable shuffle"}
-          title={shuffleEnabled ? "Shuffle on" : "Shuffle off"}
-        >
-          🔀 {shuffleEnabled ? "On" : "Off"}
-        </button>
-        <button
-          type="button"
-          className={`pc-btn pc-btn--sm pc-btn--toggle pc-btn--toggle-purple ${repeatTrackEnabled ? "is-active" : ""}`.trim()}
-          onClick={onToggleRepeatTrack}
-          aria-pressed={repeatTrackEnabled}
-          aria-label={repeatTrackEnabled ? "Disable repeat track" : "Enable repeat track"}
-          title={repeatTrackEnabled ? "Repeat track on" : "Repeat track off"}
-        >
-          ↻ {repeatTrackEnabled ? "On" : "Off"}
-        </button>
         <button
           type="button"
           className={`pc-btn pc-btn--sm pc-btn--toggle ${loopMode !== "off" ? "is-active" : ""} ${

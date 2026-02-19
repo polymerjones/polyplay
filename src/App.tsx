@@ -400,8 +400,8 @@ export default function App() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.loop = currentLoopMode === "track";
-  }, [currentLoopMode]);
+    audio.loop = currentLoopMode === "track" || (isRepeatTrackEnabled && currentLoopMode !== "region");
+  }, [currentLoopMode, isRepeatTrackEnabled]);
 
   useEffect(() => {
     const audio = audioRef.current;
