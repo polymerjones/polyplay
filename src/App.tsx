@@ -626,7 +626,7 @@ export default function App() {
         <header className="topbar">
           <div className="brand">
             <img className="brand-logo" src={logo} alt="Polyplay logo" />
-            <span>Polyplay Music App Beta v103</span>
+            <span>Polyplay Music App Beta v105</span>
           </div>
           <div className="top-actions">
             <button
@@ -667,7 +667,7 @@ export default function App() {
 
         {showOpenState && hasTracks && (
           <section className="open-state-card" role="region" aria-label="Welcome">
-            <div className="open-state-card__title">Welcome to Polyplay Beta v103</div>
+            <div className="open-state-card__title">Welcome to Polyplay Beta v105</div>
             <p className="open-state-card__body">Tap a tile to start playback, then use Loop modes from the player bar.</p>
             <button type="button" className="open-state-card__dismiss" onClick={dismissOpenState}>
               Start Listening
