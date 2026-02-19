@@ -56,6 +56,7 @@ export function FullscreenPlayer({
 }: Props) {
   const artRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const artworkVideoRef = useRef<HTMLVideoElement | null>(null);
   const artStyle = track.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
     : ({ backgroundImage: track.artGrad || `url('${DEFAULT_ARTWORK_URL}')` } as CSSProperties);
@@ -63,6 +64,35 @@ export function FullscreenPlayer({
   const shouldAnimateGenerated = track.artworkSource === "auto" && !hasArtworkVideo;
   const showLoopEditor = loopMode === "region" && loopRegion.active;
   const [peaks, setPeaks] = useState<number[]>(() => fallbackPeaks(120));
+
+  useEffect(() => {
+    const currentVideo = artworkVideoRef.current;
+    if (!currentVideo) return;
+    const prev = (window as Window & { __polyplayActiveArtworkVideo?: HTMLVideoElement | null })
+      .__polyplayActiveArtworkVideo;
+    if (prev && prev !== currentVideo) {
+      try {
+        prev.pause();
+        prev.removeAttribute("src");
+        prev.load();
+      } catch {}
+    }
+    (window as Window & { __polyplayActiveArtworkVideo?: HTMLVideoElement | null }).__polyplayActiveArtworkVideo =
+      currentVideo;
+    return () => {
+      try {
+        currentVideo.pause();
+        currentVideo.removeAttribute("src");
+        currentVideo.load();
+      } catch {}
+      const active = (window as Window & { __polyplayActiveArtworkVideo?: HTMLVideoElement | null })
+        .__polyplayActiveArtworkVideo;
+      if (active === currentVideo) {
+        (window as Window & { __polyplayActiveArtworkVideo?: HTMLVideoElement | null }).__polyplayActiveArtworkVideo =
+          null;
+      }
+    };
+  }, [track.artVideoUrl]);
 
   useEffect(() => {
     let canceled = false;
@@ -175,6 +205,7 @@ export function FullscreenPlayer({
           {hasArtworkVideo && (
             <video
               key={track.artVideoUrl}
+              ref={artworkVideoRef}
               className="fullscreen-player-shell__art-video"
               src={track.artVideoUrl}
               muted

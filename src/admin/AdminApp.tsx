@@ -1,18 +1,25 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import logo from "../../logo.png";
+import { TransferLaneDropZone } from "./TransferLaneDropZone";
 import { GratitudeEntriesModal } from "./GratitudeEntriesModal";
 import { GratitudeHubPanel } from "./GratitudeHubPanel";
 import {
   addTrackToDb,
   clearTracksInDb,
+  getStorageUsageSummary,
+  getTrackStorageRows,
   getTrackRowsFromDb,
+  isStorageCapError,
   removeTrackFromDb,
   replaceAudioInDb,
   resetAuraInDb,
+  type StorageUsageSummary,
+  type TrackStorageRow,
   updateArtworkInDb,
   type DbTrackRecord
 } from "../lib/db";
 import { generateVideoPoster } from "../lib/artwork/videoPoster";
+import { validateVideoArtworkFile } from "../lib/artwork/videoValidation";
 import {
   DEFAULT_GRATITUDE_SETTINGS,
   deleteGratitudeEntry,
@@ -74,6 +81,18 @@ async function capturePosterFrame(videoFile: File, timeSec: number): Promise<Blo
   return generateVideoPoster(videoFile, { timeSec });
 }
 
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let index = 0;
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024;
+    index += 1;
+  }
+  return `${value.toFixed(value >= 100 || index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
 export function AdminApp() {
   const [tracks, setTracks] = useState<DbTrackRecord[]>([]);
   const [status, setStatus] = useState("");
@@ -94,15 +113,27 @@ export function AdminApp() {
 
   const [selectedAudioTrackId, setSelectedAudioTrackId] = useState<string>("");
   const [selectedAudioFile, setSelectedAudioFile] = useState<File | null>(null);
+  const [selectedTransferTrackId, setSelectedTransferTrackId] = useState<string>("");
+  const [audioTransferMode, setAudioTransferMode] = useState<"create" | "replace">("create");
+  const [isAudioLaneBusy, setIsAudioLaneBusy] = useState(false);
+  const [isArtworkLaneBusy, setIsArtworkLaneBusy] = useState(false);
+  const [laneToast, setLaneToast] = useState<string | null>(null);
 
   const [selectedRemoveTrackId, setSelectedRemoveTrackId] = useState<string>("");
   const [gratitudeSettings, setGratitudeSettings] = useState<GratitudeSettings>(DEFAULT_GRATITUDE_SETTINGS);
   const [gratitudeEntries, setGratitudeEntries] = useState<GratitudeEntry[]>([]);
   const [selectedGratitudeEntry, setSelectedGratitudeEntry] = useState<GratitudeEntry | null>(null);
+  const [storageUsage, setStorageUsage] = useState<StorageUsageSummary | null>(null);
+  const [trackStorageRows, setTrackStorageRows] = useState<TrackStorageRow[]>([]);
+  const [sortLargestFirst, setSortLargestFirst] = useState(true);
+  const [infoModal, setInfoModal] = useState<{ title: string; message: string; openManageStorage?: boolean } | null>(
+    null
+  );
   const [isNukePromptOpen, setIsNukePromptOpen] = useState(false);
   const [nukeCountdownMs, setNukeCountdownMs] = useState(2000);
   const [isNukeRunning, setIsNukeRunning] = useState(false);
   const nukeTimerRef = useRef<number | null>(null);
+  const manageStorageRef = useRef<HTMLElement | null>(null);
 
   const hasTracks = tracks.length > 0;
 
@@ -119,6 +150,7 @@ export function AdminApp() {
         setSelectedArtworkTrackId("");
         setSelectedAudioTrackId("");
         setSelectedRemoveTrackId("");
+        setSelectedTransferTrackId("");
         return;
       }
 
@@ -126,13 +158,26 @@ export function AdminApp() {
       setSelectedArtworkTrackId((prev) => prev || first);
       setSelectedAudioTrackId((prev) => prev || first);
       setSelectedRemoveTrackId((prev) => prev || first);
+      setSelectedTransferTrackId((prev) => prev || first);
     } catch {
       setStatus("Failed to load tracks.");
     }
   };
 
+  const refreshStorage = async () => {
+    try {
+      const [usage, rows] = await Promise.all([getStorageUsageSummary(), getTrackStorageRows()]);
+      setStorageUsage(usage);
+      setTrackStorageRows(rows);
+    } catch {
+      setStorageUsage(null);
+      setTrackStorageRows([]);
+    }
+  };
+
   useEffect(() => {
     void refreshTracks();
+    void refreshStorage();
   }, []);
 
   useEffect(() => {
@@ -149,6 +194,32 @@ export function AdminApp() {
       window.removeEventListener("storage", refreshEntries);
     };
   }, []);
+
+  useEffect(() => {
+    const preventWindowDropNavigation = (event: DragEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("dragover", preventWindowDropNavigation);
+    window.addEventListener("drop", preventWindowDropNavigation);
+    return () => {
+      window.removeEventListener("dragover", preventWindowDropNavigation);
+      window.removeEventListener("drop", preventWindowDropNavigation);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!laneToast) return;
+    const timer = window.setTimeout(() => setLaneToast(null), 2400);
+    return () => window.clearTimeout(timer);
+  }, [laneToast]);
+
+  useEffect(() => {
+    if (!selectedTransferTrackId) {
+      setAudioTransferMode("create");
+      return;
+    }
+    setAudioTransferMode("replace");
+  }, [selectedTransferTrackId]);
 
   useEffect(() => {
     return () => {
@@ -196,6 +267,131 @@ export function AdminApp() {
     setSelectedArtFrameTime(0);
     if (selectedArtPreviewUrl) URL.revokeObjectURL(selectedArtPreviewUrl);
     setSelectedArtPreviewUrl(file && isVideoArtwork(file) ? URL.createObjectURL(file) : "");
+  };
+
+  const onPickUploadAudio = (file: File | null) => {
+    setUploadAudio(file);
+  };
+
+  const onPickUploadArtwork = async (file: File | null) => {
+    if (!file) {
+      setUploadArtworkFile(null);
+      return;
+    }
+    if (isVideoArtwork(file)) {
+      const validation = await validateVideoArtworkFile(file);
+      if (!validation.ok) {
+        setInfoModal({
+          title: "Artwork Video Limit",
+          message: validation.reason
+        });
+        setUploadArtworkFile(null);
+        return;
+      }
+    }
+    setUploadArtworkFile(file);
+  };
+
+  const onPickSelectedArtwork = async (file: File | null) => {
+    if (!file) {
+      setSelectedArtworkAssetFile(null);
+      return;
+    }
+    if (isVideoArtwork(file)) {
+      const validation = await validateVideoArtworkFile(file);
+      if (!validation.ok) {
+        setInfoModal({
+          title: "Artwork Video Limit",
+          message: validation.reason
+        });
+        setSelectedArtworkAssetFile(null);
+        return;
+      }
+    }
+    setSelectedArtworkAssetFile(file);
+  };
+
+  const onPickSelectedAudio = (file: File | null) => {
+    setSelectedAudioFile(file);
+  };
+
+  const runAudioLaneTransfer = async (file: File) => {
+    const mime = file.type.toLowerCase();
+    if (mime.startsWith("image/") || mime.startsWith("video/")) {
+      setLaneToast("That’s artwork — drop it in Artwork.");
+      return;
+    }
+    setIsAudioLaneBusy(true);
+    try {
+      if (!selectedTransferTrackId || audioTransferMode === "create") {
+        await addTrackToDb({
+          title: titleFromFilename(file.name),
+          sub: "Uploaded",
+          audio: file
+        });
+        setStatus("New track created from Audio Track lane.");
+      } else {
+        await replaceAudioInDb(selectedTransferTrackId, file);
+        setStatus("Selected track audio replaced.");
+      }
+      await refreshTracks();
+      await refreshStorage();
+    } catch (error) {
+      if (isStorageCapError(error)) {
+        setInfoModal({
+          title: "Storage Almost Full",
+          message: "Storage is almost full. Manage storage to free space before this transfer.",
+          openManageStorage: true
+        });
+      } else {
+        setStatus("Audio transfer failed.");
+      }
+    } finally {
+      setIsAudioLaneBusy(false);
+    }
+  };
+
+  const runArtworkLaneTransfer = async (file: File) => {
+    const mime = file.type.toLowerCase();
+    if (mime.startsWith("audio/")) {
+      setLaneToast("That’s audio — drop it in Audio Track.");
+      return;
+    }
+    if (!selectedTransferTrackId) {
+      setInfoModal({
+        title: "Choose a Track",
+        message: "Select a track first, then drop artwork.",
+        openManageStorage: false
+      });
+      return;
+    }
+    if (isVideoArtwork(file)) {
+      const validation = await validateVideoArtworkFile(file);
+      if (!validation.ok) {
+        setInfoModal({ title: "Artwork Video Limit", message: validation.reason });
+        return;
+      }
+    }
+    setIsArtworkLaneBusy(true);
+    try {
+      const artwork = await buildArtworkPayload(file, null);
+      await updateArtworkInDb(selectedTransferTrackId, artwork);
+      await refreshTracks();
+      await refreshStorage();
+      setStatus("Artwork applied from Artwork lane.");
+    } catch (error) {
+      if (isStorageCapError(error)) {
+        setInfoModal({
+          title: "Storage Almost Full",
+          message: "Storage is almost full. Manage storage to free space before this transfer.",
+          openManageStorage: true
+        });
+      } else {
+        setStatus("Artwork transfer failed.");
+      }
+    } finally {
+      setIsArtworkLaneBusy(false);
+    }
   };
 
   const buildArtworkPayload = async (
@@ -263,8 +459,17 @@ export function AdminApp() {
           : "Upload complete."
       );
       await refreshTracks();
+      await refreshStorage();
       await notifyUploadSuccess();
-    } catch {
+    } catch (error) {
+      if (isStorageCapError(error)) {
+        setInfoModal({
+          title: "Storage Almost Full",
+          message: "Storage is almost full. Manage storage to free space before uploading.",
+          openManageStorage: true
+        });
+        return;
+      }
       setStatus("Upload failed.");
     }
   };
@@ -290,7 +495,16 @@ export function AdminApp() {
           : "Artwork updated."
       );
       await refreshTracks();
-    } catch {
+      await refreshStorage();
+    } catch (error) {
+      if (isStorageCapError(error)) {
+        setInfoModal({
+          title: "Storage Almost Full",
+          message: "Storage is almost full. Manage storage to free space before updating artwork.",
+          openManageStorage: true
+        });
+        return;
+      }
       setStatus("Artwork update failed.");
     }
   };
@@ -311,7 +525,16 @@ export function AdminApp() {
       setSelectedAudioFile(null);
       setStatus("Audio replaced.");
       await refreshTracks();
-    } catch {
+      await refreshStorage();
+    } catch (error) {
+      if (isStorageCapError(error)) {
+        setInfoModal({
+          title: "Storage Almost Full",
+          message: "Storage is almost full. Manage storage to free space before replacing audio.",
+          openManageStorage: true
+        });
+        return;
+      }
       setStatus("Audio replace failed.");
     }
   };
@@ -328,6 +551,7 @@ export function AdminApp() {
       await removeTrackFromDb(selectedRemoveTrackId);
       setStatus("Track removed.");
       await refreshTracks();
+      await refreshStorage();
     } catch {
       setStatus("Track remove failed.");
     }
@@ -368,6 +592,7 @@ export function AdminApp() {
       await clearTracksInDb();
       setStatus("All tracks deleted.");
       await refreshTracks();
+      await refreshStorage();
     } catch {
       setStatus("Nuke failed.");
     }
@@ -487,6 +712,12 @@ export function AdminApp() {
     setStatus("Gratitude .txt exported.");
   };
 
+  const visibleTrackStorageRows = useMemo(() => {
+    const next = trackStorageRows.slice();
+    if (sortLargestFirst) return next.sort((a, b) => b.totalBytes - a.totalBytes);
+    return next.sort((a, b) => b.updatedAt - a.updatedAt);
+  }, [sortLargestFirst, trackStorageRows]);
+
   return (
     <div
       className={`admin-v1 touch-clean mx-auto min-h-screen w-full max-w-5xl px-3 pb-5 pt-3 sm:px-4 ${
@@ -518,6 +749,75 @@ export function AdminApp() {
       </header>
 
       <section className="admin-v1-section grid gap-3 lg:grid-cols-2">
+        <div className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3 lg:col-span-2">
+          <h2 className="mb-2 text-base font-semibold text-slate-100">Transfer Lanes</h2>
+          <div className="mb-2 grid gap-2 sm:grid-cols-2">
+            <label className="grid gap-1 text-sm text-slate-300">
+              Target Track
+              <select
+                value={selectedTransferTrackId}
+                onChange={(event) => setSelectedTransferTrackId(event.currentTarget.value)}
+                className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
+              >
+                <option value="">No track selected (create new on audio drop)</option>
+                {trackOptions.map((option) => (
+                  <option key={`lane-${option.value}`} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <fieldset className="grid gap-1 text-sm text-slate-300">
+              <legend className="text-sm text-slate-300">Audio drop behavior</legend>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  checked={audioTransferMode === "create"}
+                  onChange={() => setAudioTransferMode("create")}
+                />
+                <span>Create new track</span>
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  checked={audioTransferMode === "replace"}
+                  onChange={() => setAudioTransferMode("replace")}
+                  disabled={!selectedTransferTrackId}
+                />
+                <span>Replace selected track audio</span>
+              </label>
+            </fieldset>
+          </div>
+          <div className="grid gap-2 lg:grid-cols-2">
+            <TransferLaneDropZone
+              label="Audio Track"
+              tooltip="Drop audio files here to create a new track or replace the selected track’s audio."
+              accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,.wav,.mp3,.m4a,.aac,.mp4"
+              selectedFileName={audioTransferMode === "replace" ? selectedAudioFile?.name : uploadAudio?.name}
+              busy={isAudioLaneBusy}
+              onFileSelected={async (file) => {
+                if (!file) return;
+                if (audioTransferMode === "replace") setSelectedAudioFile(file);
+                else setUploadAudio(file);
+                await runAudioLaneTransfer(file);
+              }}
+            />
+            <TransferLaneDropZone
+              label="Artwork (Image or Video Artwork Loop)"
+              tooltip="Drop images or short video loops here to set artwork for the selected track."
+              hint="Video loops ≤20s • ≤60MB mobile"
+              accept="image/*,video/mp4,video/quicktime,.mov,.jpg,.jpeg,.png,.webp"
+              selectedFileName={selectedArtworkFile?.name || uploadArt?.name}
+              busy={isArtworkLaneBusy}
+              onFileSelected={async (file) => {
+                if (!file) return;
+                setSelectedArtworkFile(file);
+                await runArtworkLaneTransfer(file);
+              }}
+            />
+          </div>
+        </div>
+
         <form onSubmit={onUpload} className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
           <h2 className="mb-2 text-base font-semibold text-slate-100">Upload Track</h2>
           <div className="admin-v1-fields admin-upload-stack grid gap-2">
@@ -530,25 +830,21 @@ export function AdminApp() {
               />
             </label>
 
-            <label className="admin-upload-field grid gap-1 text-sm text-slate-300">
-              Audio (.wav/.mp3)
-              <input
-                type="file"
-                accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,.wav,.mp3,.m4a,.aac,.mp4"
-                onChange={(event) => setUploadAudio(event.currentTarget.files?.[0] || null)}
-                className="admin-upload-input admin-upload-file rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
-              />
-            </label>
+            <TransferLaneDropZone
+              label="Audio (.wav/.mp3)"
+              tooltip="Fallback uploader for direct track creation."
+              accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,.wav,.mp3,.m4a,.aac,.mp4"
+              selectedFileName={uploadAudio?.name}
+              onFileSelected={(file) => void onPickUploadAudio(file)}
+            />
 
-            <label className="admin-upload-field grid gap-1 text-sm text-slate-300">
-              Artwork (image, mp4, or mov, optional)
-              <input
-                type="file"
-                accept="image/*,video/mp4,video/quicktime,.mov"
-                onChange={(event) => setUploadArtworkFile(event.currentTarget.files?.[0] || null)}
-                className="admin-upload-input admin-upload-file rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
-              />
-            </label>
+            <TransferLaneDropZone
+              label="Artwork (image, mp4, or mov, optional)"
+              tooltip="Fallback artwork picker for manual upload flow."
+              accept="image/*,video/mp4,video/quicktime,.mov"
+              selectedFileName={uploadArt?.name}
+              onFileSelected={(file) => void onPickUploadArtwork(file)}
+            />
             {uploadArtPreviewUrl && (
               <div className="video-frame-picker">
                 <label className="text-xs text-slate-300">Poster frame for static artwork</label>
@@ -604,11 +900,13 @@ export function AdminApp() {
                   </option>
                 ))}
               </select>
-              <input
-                type="file"
+              <TransferLaneDropZone
+                label="New artwork file"
+                tooltip="Manual replace: choose artwork for the selected track."
                 accept="image/*,video/mp4,video/quicktime,.mov"
-                onChange={(event) => setSelectedArtworkAssetFile(event.currentTarget.files?.[0] || null)}
-                className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
+                selectedFileName={selectedArtworkFile?.name}
+                onFileSelected={(file) => void onPickSelectedArtwork(file)}
+                disabled={!hasTracks}
               />
               {selectedArtPreviewUrl && (
                 <div className="video-frame-picker">
@@ -659,11 +957,13 @@ export function AdminApp() {
                   </option>
                 ))}
               </select>
-              <input
-                type="file"
+              <TransferLaneDropZone
+                label="Replacement audio file"
+                tooltip="Manual replace: choose new audio for the selected track."
                 accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,.wav,.mp3,.m4a,.aac,.mp4"
-                onChange={(event) => setSelectedAudioFile(event.currentTarget.files?.[0] || null)}
-                className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
+                selectedFileName={selectedAudioFile?.name}
+                onFileSelected={(file) => void onPickSelectedAudio(file)}
+                disabled={!hasTracks}
               />
               <Button variant="primary" onClick={onReplaceAudio} disabled={!hasTracks}>
                 Replace Audio
@@ -706,6 +1006,72 @@ export function AdminApp() {
         onExportTxt={onExportGratitudeTxt}
       />
 
+      <section
+        ref={manageStorageRef}
+        className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold text-slate-100">Manage Storage</h2>
+          <button
+            type="button"
+            className="rounded-xl border border-slate-300/20 bg-slate-800/70 px-3 py-2 text-sm text-slate-200"
+            onClick={() => setSortLargestFirst((prev) => !prev)}
+          >
+            {sortLargestFirst ? "Sort: Largest Items" : "Sort: Most Recent"}
+          </button>
+        </div>
+
+        <div className="mt-2 text-sm text-slate-300">
+          Used: {formatBytes(storageUsage?.totalBytes ?? 0)} / {formatBytes(storageUsage?.capBytes ?? 0)}
+        </div>
+        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-800/90">
+          <div
+            className="h-full rounded-full bg-violet-400/80"
+            style={{
+              width: `${
+                storageUsage && storageUsage.capBytes > 0
+                  ? Math.min(100, (storageUsage.totalBytes / storageUsage.capBytes) * 100)
+                  : 0
+              }%`
+            }}
+          />
+        </div>
+        <div className="mt-2 grid gap-1 text-xs text-slate-400 sm:grid-cols-3">
+          <div>Audio: {formatBytes(storageUsage?.audioBytes ?? 0)}</div>
+          <div>Artwork/Posters: {formatBytes((storageUsage?.imageBytes ?? 0) + (storageUsage?.videoBytes ?? 0))}</div>
+          <div>Video artwork: {formatBytes(storageUsage?.videoBytes ?? 0)}</div>
+        </div>
+
+        <div className="mt-3 grid gap-2">
+          {visibleTrackStorageRows.slice(0, 20).map((row) => (
+            <div
+              key={`storage-${row.id}`}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-300/15 bg-slate-900/55 px-3 py-2"
+            >
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-slate-100">{row.title}</div>
+                <div className="text-xs text-slate-400">
+                  {formatBytes(row.totalBytes)} • updated {new Date(row.updatedAt).toLocaleDateString()}
+                </div>
+              </div>
+              <Button
+                variant="danger"
+                onClick={async () => {
+                  if (!window.confirm(`Remove "${row.title}" to free storage?`)) return;
+                  await removeTrackFromDb(row.id);
+                  await refreshTracks();
+                  await refreshStorage();
+                  setStatus("Track removed.");
+                }}
+              >
+                Remove
+              </Button>
+            </div>
+          ))}
+          {!visibleTrackStorageRows.length && <div className="text-sm text-slate-400">No tracks stored.</div>}
+        </div>
+      </section>
+
       <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
         <h2 className="mb-2 text-base font-semibold text-slate-100">Danger Zone</h2>
         <div className="flex flex-wrap gap-2">
@@ -727,6 +1093,11 @@ export function AdminApp() {
       <p className="mt-3 rounded-xl border border-slate-300/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-200">
         {status || "Ready."}
       </p>
+      {laneToast && (
+        <div className="admin-lane-toast" role="status" aria-live="polite">
+          {laneToast}
+        </div>
+      )}
 
       {isNukePromptOpen && (
         <section className="admin-nuke-modal" role="dialog" aria-modal="true" aria-label="Nuke countdown">
@@ -745,6 +1116,30 @@ export function AdminApp() {
         entry={selectedGratitudeEntry}
         onClose={() => setSelectedGratitudeEntry(null)}
       />
+      {infoModal && (
+        <section className="admin-nuke-modal" role="dialog" aria-modal="true" aria-label="Notice">
+          <div className="admin-nuke-modal__card">
+            <h3 className="admin-nuke-modal__title">{infoModal.title}</h3>
+            <p className="admin-nuke-modal__sub">{infoModal.message}</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {infoModal.openManageStorage && (
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    setInfoModal(null);
+                    manageStorageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                >
+                  Open Manage Storage
+                </Button>
+              )}
+              <Button variant="secondary" onClick={() => setInfoModal(null)}>
+                OK
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

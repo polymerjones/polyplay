@@ -2,7 +2,8 @@ import type { Track } from "../types";
 import { generateWaveformArtwork } from "./artwork/waveformArtwork";
 import { generateVideoPoster } from "./artwork/videoPoster";
 import { getMediaUrl, revokeAllMediaUrls, revokeMediaUrl } from "./player/media";
-import { deleteBlob, getBlob, initDB, putBlob } from "./storage/db";
+import { isConstrainedMobileDevice } from "./platform";
+import { deleteBlob, getBlob, initDB, listBlobStats, putBlob } from "./storage/db";
 import { loadLibrary, saveLibrary, type LibraryState, type TrackRecord } from "./storage/library";
 import { titleFromFilename } from "./title";
 
@@ -14,6 +15,9 @@ export type DbTrackRecord = {
   audioKey?: string | null;
   artKey?: string | null;
   artVideoKey?: string | null;
+  audioBytes?: number;
+  artworkBytes?: number;
+  posterBytes?: number;
   createdAt?: number;
   updatedAt?: number;
   missingAudio?: boolean;
@@ -36,6 +40,8 @@ const LEGACY_DB_NAME = "carplay_app";
 const LEGACY_DB_VERSION = 1;
 const LEGACY_STORE_NAME = "tracks";
 const LEGACY_MIGRATION_FLAG = "showoff_legacy_migrated_v1";
+const STORAGE_CAP_BYTES_MOBILE = 250 * 1024 * 1024;
+const STORAGE_CAP_BYTES_DESKTOP = 750 * 1024 * 1024;
 
 function clampAura(aura: number): number {
   return Math.max(0, Math.min(5, Math.round(aura)));
@@ -48,6 +54,38 @@ function now(): number {
 function makeId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export class StorageCapError extends Error {
+  capBytes: number;
+  usedBytes: number;
+  projectedBytes: number;
+  constructor(capBytes: number, usedBytes: number, projectedBytes: number) {
+    super("Storage cap exceeded");
+    this.name = "StorageCapError";
+    this.capBytes = capBytes;
+    this.usedBytes = usedBytes;
+    this.projectedBytes = projectedBytes;
+  }
+}
+
+export function isStorageCapError(error: unknown): error is StorageCapError {
+  return error instanceof StorageCapError;
+}
+
+function getStorageCapBytes(): number {
+  return isConstrainedMobileDevice() ? STORAGE_CAP_BYTES_MOBILE : STORAGE_CAP_BYTES_DESKTOP;
+}
+
+async function ensureStorageCapacity(additionalBytes: number): Promise<void> {
+  if (additionalBytes <= 0) return;
+  const stats = await listBlobStats();
+  const usedBytes = stats.reduce((sum, stat) => sum + stat.bytes, 0);
+  const projectedBytes = usedBytes + additionalBytes;
+  const capBytes = getStorageCapBytes();
+  if (projectedBytes > capBytes) {
+    throw new StorageCapError(capBytes, usedBytes, projectedBytes);
+  }
 }
 
 function getTrackOrder(library: LibraryState): string[] {
@@ -119,6 +157,9 @@ async function maybeMigrateLegacyTracks(): Promise<void> {
       audioKey,
       artKey,
       artVideoKey,
+      audioBytes: row.audio?.size ?? 0,
+      posterBytes: row.art?.size ?? 0,
+      artworkBytes: (row.art?.size ?? 0) + (row.artVideo?.size ?? 0),
       artworkSource: "user",
       createdAt,
       updatedAt: createdAt
@@ -226,6 +267,9 @@ export async function getTrackRowsFromDb(): Promise<DbTrackRecord[]> {
         audioKey: record.audioKey,
         artKey: record.artKey,
         artVideoKey: record.artVideoKey || null,
+        audioBytes: record.audioBytes,
+        artworkBytes: record.artworkBytes,
+        posterBytes: record.posterBytes,
         artworkSource: record.artworkSource === "auto" ? "auto" : "user",
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
@@ -255,8 +299,8 @@ export async function addTrackToDb(params: {
   let artVideoKey: string | null = null;
   let artworkSource: "auto" | "user" = "user";
   let artPoster = params.artPoster ?? null;
+  let posterBytes = 0;
 
-  await putBlob(audioKey, params.audio, { type: "audio", createdAt: ts });
   if (!artPoster && params.artVideo) {
     artPoster = await generateVideoPoster(params.artVideo).catch(() => null);
   }
@@ -264,6 +308,11 @@ export async function addTrackToDb(params: {
     artPoster = await generateWaveformArtwork({ audioBlob: params.audio }).catch(() => null);
     if (artPoster) artworkSource = "auto";
   }
+  const audioBytes = params.audio.size || 0;
+  const artVideoBytes = params.artVideo?.size || 0;
+  posterBytes = artPoster?.size || 0;
+  await ensureStorageCapacity(audioBytes + artVideoBytes + posterBytes);
+  await putBlob(audioKey, params.audio, { type: "audio", createdAt: ts });
   if (artPoster) {
     artKey = makeId();
     await putBlob(artKey, artPoster, { type: "image", createdAt: ts });
@@ -292,6 +341,9 @@ export async function addTrackToDb(params: {
     audioKey,
     artKey,
     artVideoKey,
+    audioBytes,
+    posterBytes,
+    artworkBytes: posterBytes + artVideoBytes,
     artworkSource,
     createdAt: ts,
     updatedAt: ts
@@ -330,6 +382,7 @@ export async function updateArtworkInDb(
 
   const oldArtKey = track.artKey;
   const oldArtVideoKey = track.artVideoKey || null;
+  const oldArtworkBytes = track.artworkBytes ?? 0;
   const ts = now();
 
   let nextArtKey: string | null = null;
@@ -342,6 +395,10 @@ export async function updateArtworkInDb(
     const sourceAudio = track.audioKey ? await getBlob(track.audioKey) : null;
     if (sourceAudio) nextArtPoster = await generateWaveformArtwork({ audioBlob: sourceAudio }).catch(() => null);
   }
+  const nextPosterBytes = nextArtPoster?.size ?? 0;
+  const nextVideoBytes = artwork.artVideo?.size ?? 0;
+  const deltaBytes = nextPosterBytes + nextVideoBytes - oldArtworkBytes;
+  await ensureStorageCapacity(deltaBytes);
   if (nextArtPoster) {
     nextArtKey = makeId();
     await putBlob(nextArtKey, nextArtPoster, { type: "image", createdAt: ts });
@@ -353,6 +410,8 @@ export async function updateArtworkInDb(
 
   track.artKey = nextArtKey;
   track.artVideoKey = nextArtVideoKey;
+  track.posterBytes = nextPosterBytes;
+  track.artworkBytes = nextPosterBytes + nextVideoBytes;
   track.artworkSource = "user";
   track.updatedAt = ts;
   saveLibrary(library);
@@ -374,9 +433,12 @@ export async function replaceAudioInDb(trackId: string, audio: Blob, userProvide
   if (!track) throw new Error("Track not found");
 
   const oldAudioKey = track.audioKey;
+  const oldAudioBytes = track.audioBytes ?? 0;
   const nextAudioKey = makeId();
+  await ensureStorageCapacity((audio.size || 0) - oldAudioBytes);
   await putBlob(nextAudioKey, audio, { type: "audio", createdAt: now() });
   track.audioKey = nextAudioKey;
+  track.audioBytes = audio.size || 0;
   const explicitTitle = userProvidedTitle?.trim() || "";
   if (explicitTitle) {
     track.title = explicitTitle;
@@ -449,4 +511,60 @@ export async function clearTracksInDb(): Promise<void> {
   library.tracksById = {};
   saveLibrary(library);
   revokeAllMediaUrls();
+}
+
+export type StorageUsageSummary = {
+  capBytes: number;
+  totalBytes: number;
+  audioBytes: number;
+  imageBytes: number;
+  videoBytes: number;
+};
+
+export type TrackStorageRow = {
+  id: string;
+  title: string;
+  totalBytes: number;
+  audioBytes: number;
+  artworkBytes: number;
+  posterBytes: number;
+  updatedAt: number;
+};
+
+export async function getStorageUsageSummary(): Promise<StorageUsageSummary> {
+  await maybeMigrateLegacyTracks();
+  const stats = await listBlobStats();
+  const totalBytes = stats.reduce((sum, stat) => sum + stat.bytes, 0);
+  const audioBytes = stats.filter((stat) => stat.type === "audio").reduce((sum, stat) => sum + stat.bytes, 0);
+  const imageBytes = stats.filter((stat) => stat.type === "image").reduce((sum, stat) => sum + stat.bytes, 0);
+  const videoBytes = stats.filter((stat) => stat.type === "video").reduce((sum, stat) => sum + stat.bytes, 0);
+  return {
+    capBytes: getStorageCapBytes(),
+    totalBytes,
+    audioBytes,
+    imageBytes,
+    videoBytes
+  };
+}
+
+export async function getTrackStorageRows(): Promise<TrackStorageRow[]> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const tracks = Object.values(library.tracksById);
+  return tracks
+    .map((track) => {
+      const audioBytes = track.audioBytes ?? 0;
+      const posterBytes = track.posterBytes ?? 0;
+      const artworkBytes = track.artworkBytes ?? posterBytes;
+      return {
+        id: track.id,
+        title: track.title || "Untitled",
+        totalBytes: audioBytes + artworkBytes,
+        audioBytes,
+        artworkBytes,
+        posterBytes,
+        updatedAt: track.updatedAt ?? track.createdAt ?? 0
+      } satisfies TrackStorageRow;
+    })
+    .sort((a, b) => b.totalBytes - a.totalBytes);
 }

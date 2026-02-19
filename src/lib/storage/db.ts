@@ -8,6 +8,13 @@ type BlobRecord = {
   createdAt: number;
 };
 
+export type BlobStat = {
+  key: string;
+  type: BlobKind;
+  bytes: number;
+  createdAt: number;
+};
+
 const DB_NAME = "showoff_db";
 const DB_VERSION = 1;
 const BLOBS_STORE = "blobs";
@@ -95,6 +102,31 @@ export async function hasBlob(key: string): Promise<boolean> {
       const store = tx.objectStore(BLOBS_STORE);
       const request = store.getKey(key);
       request.onsuccess = () => resolve(request.result !== undefined);
+      request.onerror = () => reject(request.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+export async function listBlobStats(): Promise<BlobStat[]> {
+  const db = await openDb();
+  try {
+    return await new Promise<BlobStat[]>((resolve, reject) => {
+      const tx = db.transaction(BLOBS_STORE, "readonly");
+      const store = tx.objectStore(BLOBS_STORE);
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const rows = (request.result as BlobRecord[] | undefined) ?? [];
+        resolve(
+          rows.map((row) => ({
+            key: row.key,
+            type: row.type,
+            bytes: row.blob?.size || 0,
+            createdAt: Number.isFinite(row.createdAt) ? row.createdAt : Date.now()
+          }))
+        );
+      };
       request.onerror = () => reject(request.error);
     });
   } finally {

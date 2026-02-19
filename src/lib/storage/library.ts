@@ -8,6 +8,9 @@ export type TrackRecord = {
   audioKey: string | null;
   artKey: string | null;
   artVideoKey?: string | null;
+  audioBytes?: number;
+  artworkBytes?: number;
+  posterBytes?: number;
   artworkSource?: "auto" | "user";
   autoArtwork?: boolean;
   createdAt: number;
@@ -76,6 +79,9 @@ export function migrateLibraryIfNeeded(input: unknown): LibraryState {
       audioKey: t.audioKey || null,
       artKey: t.artKey || null,
       artVideoKey: t.artVideoKey || null,
+      audioBytes: Number.isFinite(t.audioBytes) ? Number(t.audioBytes) : undefined,
+      artworkBytes: Number.isFinite(t.artworkBytes) ? Number(t.artworkBytes) : undefined,
+      posterBytes: Number.isFinite(t.posterBytes) ? Number(t.posterBytes) : undefined,
       artworkSource:
         t.artworkSource === "auto" || t.artworkSource === "user" ? t.artworkSource : Boolean(t.autoArtwork) ? "auto" : "user",
       autoArtwork: Boolean(t.autoArtwork),

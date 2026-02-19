@@ -1903,8 +1903,13 @@ body.gratitude-reactive .track-backdrop {
   .gratitude-modal__card.is-pulse-skip::after,
   .gratitude-modal__clouds,
   .gratitude-hub::before,
-  .gratitude-modal__card.is-typing::before {
+  .gratitude-modal__card.is-typing::before,
+  .transfer-lane__tip-btn.is-tip-pulse {
     animation: none;
+  }
+
+  .transfer-lane__tooltip {
+    transition: none;
   }
 }
 
@@ -1916,6 +1921,135 @@ body.gratitude-reactive .track-backdrop {
     inset 0 2px 10px rgba(255, 255, 255, 0.2),
     inset 0 -10px 22px rgba(0, 0, 0, 0.25),
     0 12px 26px rgba(34, 16, 70, 0.4);
+}
+
+.transfer-lane {
+  display: grid;
+  gap: 6px;
+  position: relative;
+}
+
+.transfer-lane__head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.transfer-lane__label {
+  color: #cbd5e1;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.transfer-lane__hint {
+  color: rgba(205, 190, 228, 0.82);
+  font-size: 0.76rem;
+}
+
+.transfer-lane__tip-btn {
+  position: relative;
+  border: 0;
+  background: transparent;
+  color: rgba(230, 221, 247, 0.62);
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.transfer-lane__tip-btn.is-tip-pulse {
+  animation: transfer-tip-pulse 1.8s ease-in-out 2;
+}
+
+.transfer-lane__tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translate(-50%, 4px) scale(0.96);
+  min-width: 220px;
+  max-width: 280px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(11, 15, 23, 0.84);
+  color: #efe8ff;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.3;
+  padding: 8px;
+  box-shadow: 0 12px 22px rgba(8, 6, 20, 0.36);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease, transform 150ms ease;
+  z-index: 4;
+}
+
+.transfer-lane__tooltip.is-open {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.transfer-lane__zone {
+  width: 100%;
+  border: 1px dashed rgba(192, 160, 255, 0.52);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 16% 14%, rgba(148, 100, 255, 0.2), transparent 54%),
+    rgba(9, 13, 22, 0.72);
+  color: #f5ebff;
+  padding: 14px 12px;
+  text-align: left;
+  display: grid;
+  gap: 4px;
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.transfer-lane__zone:hover {
+  border-color: rgba(214, 184, 255, 0.74);
+  box-shadow: 0 0 18px rgba(140, 98, 230, 0.28);
+}
+
+.transfer-lane__zone.is-drag-over {
+  border-color: rgba(235, 214, 255, 0.95);
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 20px rgba(165, 116, 255, 0.4),
+    0 10px 20px rgba(17, 11, 32, 0.32);
+}
+
+.transfer-lane__title {
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.transfer-lane__file {
+  font-size: 0.78rem;
+  color: rgba(225, 211, 246, 0.86);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transfer-lane__input {
+  display: none;
+}
+
+.admin-lane-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 18px;
+  z-index: 140;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(11, 15, 23, 0.9);
+  color: #f1e8ff;
+  font-size: 13px;
+  padding: 10px 12px;
+  box-shadow: 0 12px 24px rgba(9, 6, 20, 0.4);
+}
+
+@keyframes transfer-tip-pulse {
+  0%, 100% { text-shadow: 0 0 0 rgba(178, 128, 255, 0); }
+  50% { text-shadow: 0 0 12px rgba(178, 128, 255, 0.66); }
 }
 
 .topbar::before {
