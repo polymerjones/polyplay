@@ -471,11 +471,18 @@
 }
 
 .mini-player-bar.is-loop-active .pc-wave__loop-range,
-.mini-player-bar.is-loop-active .pc-wave__loop-handle {
+.mini-player-bar.is-loop-active .pc-wave__loop-handle,
+.pc-wave.is-loop-active .pc-wave__loop-range,
+.pc-wave.is-loop-active .pc-wave__loop-handle {
   opacity: 1;
 }
 
-.mini-player-bar.is-loop-editing .pc-wave__loop-overlay {
+.mini-player-bar.is-loop-editing .pc-wave__loop-overlay,
+.pc-wave.is-loop-editing .pc-wave__loop-overlay {
+  pointer-events: auto;
+}
+
+.pc-wave.is-loop-active .pc-wave__loop-overlay {
   pointer-events: auto;
 }
 

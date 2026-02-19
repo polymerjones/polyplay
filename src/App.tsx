@@ -726,12 +726,14 @@ export default function App() {
           isPlaying={isPlaying}
           currentTime={currentTime}
           duration={duration}
+          loopRegion={currentLoop}
           loopMode={currentLoopMode}
           onClose={() => setIsFullscreenPlayerOpen(false)}
           onPrev={playPrev}
           onPlayPause={togglePlayPause}
           onNext={playNext}
           onSeek={seekTo}
+          onSetLoopRange={setLoopRange}
           onSetLoop={setLoopFromCurrent}
           onToggleLoopMode={toggleLoopMode}
           onClearLoop={clearLoop}

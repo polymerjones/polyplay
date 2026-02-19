@@ -3,20 +3,23 @@ import type { CSSProperties } from "react";
 import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
 import { buildPeaksFromAudioBlob, fallbackPeaks } from "../lib/artwork/waveformArtwork";
 import { formatTime } from "../lib/time";
-import type { LoopMode, Track } from "../types";
+import type { LoopMode, LoopRegion, Track } from "../types";
 import { PlayerControls } from "./PlayerControls";
+import { WaveformLoop } from "./WaveformLoop";
 
 type Props = {
   track: Track;
   isPlaying: boolean;
   currentTime: number;
   duration: number;
+  loopRegion: LoopRegion;
   loopMode: LoopMode;
   onClose: () => void;
   onPrev: () => void;
   onPlayPause: () => void;
   onNext: () => void;
   onSeek: (seconds: number) => void;
+  onSetLoopRange: (start: number, end: number, active: boolean) => void;
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
   onClearLoop: () => void;
@@ -29,12 +32,14 @@ export function FullscreenPlayer({
   isPlaying,
   currentTime,
   duration,
+  loopRegion,
   loopMode,
   onClose,
   onPrev,
   onPlayPause,
   onNext,
   onSeek,
+  onSetLoopRange,
   onSetLoop,
   onToggleLoopMode,
   onClearLoop,
@@ -198,6 +203,16 @@ export function FullscreenPlayer({
             onAuraUp();
           }}
           onSkip={onSkip}
+        />
+
+        <WaveformLoop
+          track={track}
+          currentTime={currentTime}
+          duration={duration}
+          isPlaying={isPlaying}
+          loopRegion={loopRegion}
+          onSeek={onSeek}
+          onSetLoopRange={onSetLoopRange}
         />
       </div>
     </section>

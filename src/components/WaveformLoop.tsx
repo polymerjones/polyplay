@@ -46,6 +46,9 @@ export function WaveformLoop({
   const hasLoopRange = hasDuration && safeEnd > safeStart;
   const startPct = hasDuration ? (safeStart / duration) * 100 : 0;
   const endPct = hasDuration ? (safeEnd / duration) * 100 : 0;
+  const waveClasses = ["pc-wave"];
+  if (loopRegion.active && hasLoopRange) waveClasses.push("is-loop-active");
+  if (loopRegion.editing) waveClasses.push("is-loop-editing");
 
   const secondsFromClientX = (clientX: number): number => {
     if (!hasDuration || !waveRef.current) return 0;
@@ -168,7 +171,7 @@ export function WaveformLoop({
     <>
       <div
         ref={waveRef}
-        className="pc-wave"
+        className={waveClasses.join(" ")}
         onPointerDown={(event) => {
           if (!hasDuration || event.button !== 0) return;
           event.preventDefault();
