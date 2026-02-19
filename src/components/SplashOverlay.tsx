@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import logoVideo from "../../polyplaylogoanimate.mp4";
+import logoVideo from "../../polyplay_splashvideo_logo480.mp4";
 
 type Props = {
   mode: "intro" | "returning";

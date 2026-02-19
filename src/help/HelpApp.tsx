@@ -1,5 +1,5 @@
 import logo from "../../logo.png";
-import splashVideo from "../../polyplaylogoanimate.mp4";
+import splashVideo from "../../polyplay_splashvideo_logo480.mp4";
 
 const tips = [
   {
