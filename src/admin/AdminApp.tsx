@@ -749,75 +749,6 @@ export function AdminApp() {
       </header>
 
       <section className="admin-v1-section grid gap-3 lg:grid-cols-2">
-        <div className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3 lg:col-span-2">
-          <h2 className="mb-2 text-base font-semibold text-slate-100">Transfer Lanes</h2>
-          <div className="mb-2 grid gap-2 sm:grid-cols-2">
-            <label className="grid gap-1 text-sm text-slate-300">
-              Target Track
-              <select
-                value={selectedTransferTrackId}
-                onChange={(event) => setSelectedTransferTrackId(event.currentTarget.value)}
-                className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
-              >
-                <option value="">No track selected (create new on audio drop)</option>
-                {trackOptions.map((option) => (
-                  <option key={`lane-${option.value}`} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <fieldset className="grid gap-1 text-sm text-slate-300">
-              <legend className="text-sm text-slate-300">Audio drop behavior</legend>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={audioTransferMode === "create"}
-                  onChange={() => setAudioTransferMode("create")}
-                />
-                <span>Create new track</span>
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={audioTransferMode === "replace"}
-                  onChange={() => setAudioTransferMode("replace")}
-                  disabled={!selectedTransferTrackId}
-                />
-                <span>Replace selected track audio</span>
-              </label>
-            </fieldset>
-          </div>
-          <div className="grid gap-2 lg:grid-cols-2">
-            <TransferLaneDropZone
-              label="Audio Track"
-              tooltip="Drop audio files here to create a new track or replace the selected track’s audio."
-              accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,.wav,.mp3,.m4a,.aac,.mp4"
-              selectedFileName={audioTransferMode === "replace" ? selectedAudioFile?.name : uploadAudio?.name}
-              busy={isAudioLaneBusy}
-              onFileSelected={async (file) => {
-                if (!file) return;
-                if (audioTransferMode === "replace") setSelectedAudioFile(file);
-                else setUploadAudio(file);
-                await runAudioLaneTransfer(file);
-              }}
-            />
-            <TransferLaneDropZone
-              label="Artwork (Image or Video Artwork Loop)"
-              tooltip="Drop images or short video loops here to set artwork for the selected track."
-              hint="Video loops ≤20s • ≤60MB mobile"
-              accept="image/*,video/mp4,video/quicktime,.mov,.jpg,.jpeg,.png,.webp"
-              selectedFileName={selectedArtworkFile?.name || uploadArt?.name}
-              busy={isArtworkLaneBusy}
-              onFileSelected={async (file) => {
-                if (!file) return;
-                setSelectedArtworkFile(file);
-                await runArtworkLaneTransfer(file);
-              }}
-            />
-          </div>
-        </div>
-
         <form onSubmit={onUpload} className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
           <h2 className="mb-2 text-base font-semibold text-slate-100">Upload Track</h2>
           <div className="admin-v1-fields admin-upload-stack grid gap-2">
@@ -988,6 +919,75 @@ export function AdminApp() {
                 Remove Track
               </Button>
             </label>
+          </div>
+        </div>
+
+        <div className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3 lg:col-span-2">
+          <h2 className="mb-2 text-base font-semibold text-slate-100">Transfer Lanes</h2>
+          <div className="mb-2 grid gap-2 sm:grid-cols-2">
+            <label className="grid gap-1 text-sm text-slate-300">
+              Target Track
+              <select
+                value={selectedTransferTrackId}
+                onChange={(event) => setSelectedTransferTrackId(event.currentTarget.value)}
+                className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
+              >
+                <option value="">No track selected (create new on audio drop)</option>
+                {trackOptions.map((option) => (
+                  <option key={`lane-${option.value}`} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <fieldset className="grid gap-1 text-sm text-slate-300">
+              <legend className="text-sm text-slate-300">Audio drop behavior</legend>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  checked={audioTransferMode === "create"}
+                  onChange={() => setAudioTransferMode("create")}
+                />
+                <span>Create new track</span>
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  checked={audioTransferMode === "replace"}
+                  onChange={() => setAudioTransferMode("replace")}
+                  disabled={!selectedTransferTrackId}
+                />
+                <span>Replace selected track audio</span>
+              </label>
+            </fieldset>
+          </div>
+          <div className="grid gap-2 lg:grid-cols-2">
+            <TransferLaneDropZone
+              label="Audio Track"
+              tooltip="Drop audio files here to create a new track or replace the selected track’s audio."
+              accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,.wav,.mp3,.m4a,.aac,.mp4"
+              selectedFileName={audioTransferMode === "replace" ? selectedAudioFile?.name : uploadAudio?.name}
+              busy={isAudioLaneBusy}
+              onFileSelected={async (file) => {
+                if (!file) return;
+                if (audioTransferMode === "replace") setSelectedAudioFile(file);
+                else setUploadAudio(file);
+                await runAudioLaneTransfer(file);
+              }}
+            />
+            <TransferLaneDropZone
+              label="Artwork (Image or Video Artwork Loop)"
+              tooltip="Drop images or short video loops here to set artwork for the selected track."
+              hint="Video loops ≤20s • ≤60MB mobile"
+              accept="image/*,video/mp4,video/quicktime,.mov,.jpg,.jpeg,.png,.webp"
+              selectedFileName={selectedArtworkFile?.name || uploadArt?.name}
+              busy={isArtworkLaneBusy}
+              onFileSelected={async (file) => {
+                if (!file) return;
+                setSelectedArtworkFile(file);
+                await runArtworkLaneTransfer(file);
+              }}
+            />
           </div>
         </div>
       </section>

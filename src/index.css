@@ -761,6 +761,8 @@ body.perf-lite .track-art-badge {
 @media (max-width: 820px) {
   .admin-v1 {
     padding: 10px 10px 14px;
+    max-width: none;
+    overflow-x: hidden;
   }
 
   .admin-v1 .topbar {
@@ -795,6 +797,12 @@ body.perf-lite .track-art-badge {
   .admin-v1 .admin-actions,
   .admin-v1 .flex.flex-wrap.gap-2 {
     gap: 6px;
+  }
+
+  .admin-v1 select,
+  .admin-v1 input,
+  .admin-v1 button {
+    max-width: 100%;
   }
 }
 
@@ -946,10 +954,28 @@ body.perf-lite .track-art-badge {
 
 @media (max-width: 700px) {
   .app-overlay {
-    left: 10px;
-    right: 10px;
-    top: 84px;
-    bottom: 152px;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    border-radius: 0;
+    backdrop-filter: blur(4px);
+  }
+
+  .app-overlay-card {
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .app-overlay-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .app-overlay-frame {
+    height: calc(100% - 50px);
   }
 
   .controls {

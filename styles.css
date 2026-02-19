@@ -1865,6 +1865,36 @@ body.gratitude-reactive .track-backdrop {
   .gratitude-modal__continue {
     width: 100%;
   }
+
+  .transfer-lane__zone {
+    padding: 10px;
+  }
+
+  .transfer-lane__title {
+    font-size: 0.78rem;
+  }
+
+  .transfer-lane__file {
+    font-size: 0.72rem;
+  }
+
+  .transfer-lane__tooltip {
+    min-width: 180px;
+    max-width: min(240px, 72vw);
+    left: 0;
+    transform: translate(0, 4px) scale(0.96);
+  }
+
+  .transfer-lane__tooltip.is-open {
+    transform: translate(0, 0) scale(1);
+  }
+
+  .admin-lane-toast {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    font-size: 12px;
+  }
 }
 
 @media (min-width: 900px) {

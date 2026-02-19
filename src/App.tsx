@@ -896,6 +896,11 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  useEffect(() => {
+    if (!overlayPage) return;
+    setIsFullscreenPlayerOpen(false);
+  }, [overlayPage]);
+
   return (
     <>
       <div
@@ -1004,7 +1009,7 @@ export default function App() {
         )}
       </div>
 
-      {hasTracks && (
+      {hasTracks && !overlayPage && (
         <MiniPlayerBar
           track={currentTrack}
           isPlaying={isPlaying}
@@ -1036,7 +1041,7 @@ export default function App() {
         />
       )}
 
-      {currentTrack && isFullscreenPlayerOpen && (
+      {currentTrack && isFullscreenPlayerOpen && !overlayPage && (
         <FullscreenPlayer
           track={currentTrack}
           isPlaying={isPlaying}
