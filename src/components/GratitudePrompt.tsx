@@ -21,6 +21,8 @@ export function GratitudePrompt({
   const pulseTimeoutRef = useRef<number | null>(null);
   const [text, setText] = useState("");
   const [pulseMode, setPulseMode] = useState<"save" | "skip" | null>(null);
+  const [isTypingActive, setIsTypingActive] = useState(false);
+  const typingCooldownRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -36,6 +38,10 @@ export function GratitudePrompt({
       if (pulseTimeoutRef.current !== null) {
         window.clearTimeout(pulseTimeoutRef.current);
         pulseTimeoutRef.current = null;
+      }
+      if (typingCooldownRef.current !== null) {
+        window.clearTimeout(typingCooldownRef.current);
+        typingCooldownRef.current = null;
       }
     };
   }, []);
@@ -63,7 +69,12 @@ export function GratitudePrompt({
 
   return (
     <section className="gratitude-modal" role="dialog" aria-modal="true" aria-label="Gratitude prompt">
-      <div className={`gratitude-modal__card ${pulseMode ? `is-pulse-${pulseMode}` : ""}`.trim()}>
+      <div
+        className={`gratitude-modal__card ${pulseMode ? `is-pulse-${pulseMode}` : ""} ${
+          isTypingActive ? "is-typing" : ""
+        }`.trim()}
+      >
+        <div className="gratitude-modal__clouds" aria-hidden="true" />
         <h3 className="gratitude-modal__title">What are you grateful for right now?</h3>
         <textarea
           ref={textareaRef}
@@ -72,21 +83,29 @@ export function GratitudePrompt({
           value={text}
           onChange={(event) => {
             setText(event.currentTarget.value);
+            setIsTypingActive(true);
+            if (typingCooldownRef.current !== null) window.clearTimeout(typingCooldownRef.current);
+            typingCooldownRef.current = window.setTimeout(() => {
+              setIsTypingActive(false);
+              typingCooldownRef.current = null;
+            }, 1000);
             onTyping();
           }}
           rows={4}
         />
-        <label className="gratitude-modal__privacy">
-          <input
-            type="checkbox"
-            checked={doNotSaveText}
-            onChange={(event) => onDoNotSaveTextChange(event.currentTarget.checked)}
-          />
-          <span>Do not save my text</span>
-        </label>
-        <button type="button" className="gratitude-modal__continue" onClick={onContinue}>
-          Continue
-        </button>
+        <div className="gratitude-modal__footer">
+          <label className="gratitude-modal__privacy">
+            <input
+              type="checkbox"
+              checked={doNotSaveText}
+              onChange={(event) => onDoNotSaveTextChange(event.currentTarget.checked)}
+            />
+            <span>Do not save my text</span>
+          </label>
+          <button type="button" className="gratitude-modal__continue" onClick={onContinue}>
+            Continue
+          </button>
+        </div>
       </div>
     </section>
   );

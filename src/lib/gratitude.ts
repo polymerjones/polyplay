@@ -99,3 +99,48 @@ export function appendGratitudeEntry(text: string, nowIso: string): void {
     // Ignore storage failures.
   }
 }
+
+export function getGratitudeEntries(): GratitudeEntry[] {
+  try {
+    const raw = localStorage.getItem(GRATITUDE_ENTRIES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as GratitudeEntry[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (entry) =>
+          entry &&
+          typeof entry === "object" &&
+          typeof entry.text === "string" &&
+          typeof entry.createdAt === "string"
+      )
+      .slice()
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  } catch {
+    return [];
+  }
+}
+
+export function deleteGratitudeEntry(createdAt: string): void {
+  try {
+    const next = getGratitudeEntries().filter((entry) => entry.createdAt !== createdAt);
+    localStorage.setItem(GRATITUDE_ENTRIES_KEY, JSON.stringify(next));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+export function formatGratitudeExport(entries: GratitudeEntry[]): string {
+  if (!entries.length) return "No gratitude entries yet.";
+  const lines: string[] = ["Polyplay Gratitude Journal", ""];
+  for (const entry of entries) {
+    const localDate = new Date(entry.createdAt);
+    const heading = Number.isFinite(localDate.getTime())
+      ? localDate.toISOString().slice(0, 10)
+      : entry.createdAt;
+    lines.push(heading);
+    lines.push(`- What I'm grateful for: ${entry.text.trim()}`);
+    lines.push("");
+  }
+  return lines.join("\n").trimEnd();
+}

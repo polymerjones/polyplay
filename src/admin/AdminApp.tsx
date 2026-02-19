@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import logo from "../../logo.png";
+import { GratitudeEntriesModal } from "./GratitudeEntriesModal";
+import { GratitudeHubPanel } from "./GratitudeHubPanel";
 import {
   addTrackToDb,
   clearTracksInDb,
@@ -10,9 +12,14 @@ import {
   updateArtworkInDb,
   type DbTrackRecord
 } from "../lib/db";
+import { generateVideoPoster } from "../lib/artwork/videoPoster";
 import {
   DEFAULT_GRATITUDE_SETTINGS,
+  deleteGratitudeEntry,
+  formatGratitudeExport,
+  getGratitudeEntries,
   type GratitudeFrequency,
+  type GratitudeEntry,
   type GratitudeSettings,
   loadGratitudeSettings,
   saveGratitudeSettings
@@ -64,99 +71,7 @@ function getDefaultVideoFrameTime(duration: number): number {
 }
 
 async function capturePosterFrame(videoFile: File, timeSec: number): Promise<Blob> {
-  const objectUrl = URL.createObjectURL(videoFile);
-  try {
-    const video = document.createElement("video");
-    video.preload = "metadata";
-    video.muted = true;
-    video.playsInline = true;
-    video.src = objectUrl;
-
-    await new Promise<void>((resolve, reject) => {
-      const onLoadedMeta = () => {
-        video.removeEventListener("loadedmetadata", onLoadedMeta);
-        video.removeEventListener("error", onError);
-        resolve();
-      };
-      const onError = () => {
-        video.removeEventListener("loadedmetadata", onLoadedMeta);
-        video.removeEventListener("error", onError);
-        reject(new Error("Unable to load video metadata"));
-      };
-      video.addEventListener("loadedmetadata", onLoadedMeta);
-      video.addEventListener("error", onError);
-    });
-
-    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-      await new Promise<void>((resolve) => {
-        const onLoadedData = () => {
-          video.removeEventListener("loadeddata", onLoadedData);
-          resolve();
-        };
-        video.addEventListener("loadeddata", onLoadedData, { once: true });
-      });
-    }
-
-    const safeDuration = Number.isFinite(video.duration) ? Math.max(0, video.duration) : 0;
-    const desiredTime = Number.isFinite(timeSec) && timeSec > 0 ? timeSec : getDefaultVideoFrameTime(safeDuration);
-    const safeTime = Math.max(0, Math.min(Math.max(0, safeDuration - 0.05), desiredTime));
-    const needsSeek = Math.abs(video.currentTime - safeTime) > 0.02;
-    if (needsSeek) {
-      await new Promise<void>((resolve, reject) => {
-        let done = false;
-        const cleanup = () => {
-          video.removeEventListener("seeked", onSeeked);
-          video.removeEventListener("error", onError);
-          if (timer !== null) window.clearTimeout(timer);
-        };
-        const finish = () => {
-          if (done) return;
-          done = true;
-          cleanup();
-          resolve();
-        };
-        const fail = (message: string) => {
-          if (done) return;
-          done = true;
-          cleanup();
-          reject(new Error(message));
-        };
-        const onSeeked = () => finish();
-        const onError = () => fail("Unable to seek video frame");
-        const timer = window.setTimeout(() => finish(), 550);
-        video.addEventListener("seeked", onSeeked);
-        video.addEventListener("error", onError);
-        video.currentTime = safeTime;
-      });
-    }
-
-    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-      await new Promise<void>((resolve) => {
-        const onLoadedData = () => resolve();
-        video.addEventListener("loadeddata", onLoadedData, { once: true });
-      });
-    }
-
-    const sourceWidth = Math.max(1, video.videoWidth || 1);
-    const sourceHeight = Math.max(1, video.videoHeight || 1);
-    const maxEdge = 1280;
-    const scale = Math.min(1, maxEdge / Math.max(sourceWidth, sourceHeight));
-    const width = Math.max(1, Math.round(sourceWidth * scale));
-    const height = Math.max(1, Math.round(sourceHeight * scale));
-
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Unable to render poster frame");
-    ctx.drawImage(video, 0, 0, width, height);
-
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
-    if (!blob) throw new Error("Unable to export poster frame");
-    return blob;
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
+  return generateVideoPoster(videoFile, { timeSec });
 }
 
 export function AdminApp() {
@@ -182,6 +97,8 @@ export function AdminApp() {
 
   const [selectedRemoveTrackId, setSelectedRemoveTrackId] = useState<string>("");
   const [gratitudeSettings, setGratitudeSettings] = useState<GratitudeSettings>(DEFAULT_GRATITUDE_SETTINGS);
+  const [gratitudeEntries, setGratitudeEntries] = useState<GratitudeEntry[]>([]);
+  const [selectedGratitudeEntry, setSelectedGratitudeEntry] = useState<GratitudeEntry | null>(null);
   const [isNukePromptOpen, setIsNukePromptOpen] = useState(false);
   const [nukeCountdownMs, setNukeCountdownMs] = useState(2000);
   const [isNukeRunning, setIsNukeRunning] = useState(false);
@@ -220,6 +137,17 @@ export function AdminApp() {
 
   useEffect(() => {
     setGratitudeSettings(loadGratitudeSettings());
+    setGratitudeEntries(getGratitudeEntries());
+  }, []);
+
+  useEffect(() => {
+    const refreshEntries = () => setGratitudeEntries(getGratitudeEntries());
+    window.addEventListener("focus", refreshEntries);
+    window.addEventListener("storage", refreshEntries);
+    return () => {
+      window.removeEventListener("focus", refreshEntries);
+      window.removeEventListener("storage", refreshEntries);
+    };
   }, []);
 
   useEffect(() => {
@@ -276,9 +204,11 @@ export function AdminApp() {
   ): Promise<{ artPoster: Blob | null; artVideo: Blob | null; posterCaptureFailed: boolean }> => {
     if (!file) return { artPoster: null, artVideo: null, posterCaptureFailed: false };
     if (!isVideoArtwork(file)) return { artPoster: file, artVideo: null, posterCaptureFailed: false };
-    // Never auto-capture on upload path: Safari can stall extraction for some MP4 encodes.
-    // If user tapped "Use This Frame", we already have posterBlob. Otherwise continue with video only.
-    return { artPoster: posterBlob ?? null, artVideo: file, posterCaptureFailed: !posterBlob };
+    let effectivePoster = posterBlob;
+    if (!effectivePoster) {
+      effectivePoster = await capturePosterFrame(file, 0.45).catch(() => null);
+    }
+    return { artPoster: effectivePoster ?? null, artVideo: file, posterCaptureFailed: !effectivePoster };
   };
 
   const captureUploadFrame = async () => {
@@ -517,11 +447,44 @@ export function AdminApp() {
     }
   };
 
-  const onChangeGratitudeFrequency = (value: string) => {
+  const onChangeGratitudeFrequency = (value: GratitudeFrequency) => {
     const nextFrequency: GratitudeFrequency =
       value === "daily" || value === "weekly" || value === "launch" || value === "off" ? value : "daily";
     updateGratitudeSettings({ ...gratitudeSettings, frequency: nextFrequency });
     setStatus("Gratitude prompt frequency updated.");
+  };
+
+  const onDeleteGratitudeEntry = (entry: GratitudeEntry) => {
+    if (!window.confirm("Delete this gratitude entry?")) return;
+    deleteGratitudeEntry(entry.createdAt);
+    setGratitudeEntries(getGratitudeEntries());
+    if (selectedGratitudeEntry?.createdAt === entry.createdAt) setSelectedGratitudeEntry(null);
+    setStatus("Gratitude entry deleted.");
+  };
+
+  const onCopyAllGratitude = async () => {
+    const payload = formatGratitudeExport(gratitudeEntries);
+    try {
+      await navigator.clipboard.writeText(payload);
+      setStatus("Gratitude entries copied.");
+    } catch {
+      setStatus("Copy failed. Clipboard permissions blocked.");
+    }
+  };
+
+  const onExportGratitudeTxt = () => {
+    const payload = formatGratitudeExport(gratitudeEntries);
+    const blob = new Blob([payload], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0, 10);
+    anchor.href = url;
+    anchor.download = `polyplay-gratitude-${stamp}.txt`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setStatus("Gratitude .txt exported.");
   };
 
   return (
@@ -729,39 +692,19 @@ export function AdminApp() {
         </div>
       </section>
 
-      <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
-        <h2 className="mb-2 text-base font-semibold text-slate-100">Gratitude Prompt</h2>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <label className="grid gap-1 text-sm text-slate-300">
-            Enabled
-            <select
-              value={gratitudeSettings.enabled ? "enabled" : "disabled"}
-              onChange={(event) => {
-                const enabled = event.currentTarget.value === "enabled";
-                updateGratitudeSettings({ ...gratitudeSettings, enabled });
-                setStatus(`Gratitude prompt ${enabled ? "enabled" : "disabled"}.`);
-              }}
-              className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
-            >
-              <option value="enabled">Enabled</option>
-              <option value="disabled">Disabled</option>
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm text-slate-300">
-            Frequency
-            <select
-              value={gratitudeSettings.frequency}
-              onChange={(event) => onChangeGratitudeFrequency(event.currentTarget.value)}
-              className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
-            >
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="launch">Every App Launch</option>
-              <option value="off">Off</option>
-            </select>
-          </label>
-        </div>
-      </section>
+      <GratitudeHubPanel
+        settings={gratitudeSettings}
+        entries={gratitudeEntries}
+        onChangeEnabled={(enabled) => {
+          updateGratitudeSettings({ ...gratitudeSettings, enabled });
+          setStatus(`Gratitude prompt ${enabled ? "enabled" : "disabled"}.`);
+        }}
+        onChangeFrequency={onChangeGratitudeFrequency}
+        onOpenEntry={setSelectedGratitudeEntry}
+        onDeleteEntry={onDeleteGratitudeEntry}
+        onCopyAll={onCopyAllGratitude}
+        onExportTxt={onExportGratitudeTxt}
+      />
 
       <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
         <h2 className="mb-2 text-base font-semibold text-slate-100">Danger Zone</h2>
@@ -797,6 +740,11 @@ export function AdminApp() {
           </div>
         </section>
       )}
+      <GratitudeEntriesModal
+        open={Boolean(selectedGratitudeEntry)}
+        entry={selectedGratitudeEntry}
+        onClose={() => setSelectedGratitudeEntry(null)}
+      />
     </div>
   );
 }

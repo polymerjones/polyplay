@@ -1,5 +1,6 @@
 import type { Track } from "../types";
 import { generateWaveformArtwork } from "./artwork/waveformArtwork";
+import { generateVideoPoster } from "./artwork/videoPoster";
 import { getMediaUrl, revokeAllMediaUrls, revokeMediaUrl } from "./player/media";
 import { deleteBlob, getBlob, initDB, putBlob } from "./storage/db";
 import { loadLibrary, saveLibrary, type LibraryState, type TrackRecord } from "./storage/library";
@@ -253,11 +254,19 @@ export async function addTrackToDb(params: {
   let artKey: string | null = null;
   let artVideoKey: string | null = null;
   let artworkSource: "auto" | "user" = "user";
+  let artPoster = params.artPoster ?? null;
 
   await putBlob(audioKey, params.audio, { type: "audio", createdAt: ts });
-  if (params.artPoster) {
+  if (!artPoster && params.artVideo) {
+    artPoster = await generateVideoPoster(params.artVideo).catch(() => null);
+  }
+  if (!artPoster && params.artVideo) {
+    artPoster = await generateWaveformArtwork({ audioBlob: params.audio }).catch(() => null);
+    if (artPoster) artworkSource = "auto";
+  }
+  if (artPoster) {
     artKey = makeId();
-    await putBlob(artKey, params.artPoster, { type: "image", createdAt: ts });
+    await putBlob(artKey, artPoster, { type: "image", createdAt: ts });
   }
   if (params.artVideo) {
     artVideoKey = makeId();
@@ -325,9 +334,17 @@ export async function updateArtworkInDb(
 
   let nextArtKey: string | null = null;
   let nextArtVideoKey: string | null = null;
-  if (artwork.artPoster) {
+  let nextArtPoster = artwork.artPoster;
+  if (!nextArtPoster && artwork.artVideo) {
+    nextArtPoster = await generateVideoPoster(artwork.artVideo).catch(() => null);
+  }
+  if (!nextArtPoster && artwork.artVideo) {
+    const sourceAudio = track.audioKey ? await getBlob(track.audioKey) : null;
+    if (sourceAudio) nextArtPoster = await generateWaveformArtwork({ audioBlob: sourceAudio }).catch(() => null);
+  }
+  if (nextArtPoster) {
     nextArtKey = makeId();
-    await putBlob(nextArtKey, artwork.artPoster, { type: "image", createdAt: ts });
+    await putBlob(nextArtKey, nextArtPoster, { type: "image", createdAt: ts });
   }
   if (artwork.artVideo) {
     nextArtVideoKey = makeId();
