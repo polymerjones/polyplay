@@ -43,6 +43,11 @@ body::before {
   animation: vinyl-spin 24s linear infinite;
 }
 
+body.perf-lite::before {
+  animation: none;
+  opacity: 0.18;
+}
+
 @keyframes wave-sweep {
   0% { transform: translateX(-20%) translateY(0); }
   50% { transform: translateX(10%) translateY(6%); }

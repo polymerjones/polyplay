@@ -36,6 +36,19 @@
   background: rgba(8, 10, 16, 0.35);
 }
 
+body.perf-lite .track-backdrop {
+  filter: blur(16px) saturate(1.02);
+  transform: scale(1.03);
+}
+
+body.perf-lite .track-backdrop.is-visible {
+  opacity: 0.14;
+}
+
+body.perf-lite .track-art-badge {
+  backdrop-filter: none;
+}
+
 .track-grid {
   column-count: 3;
   column-gap: 12px;

@@ -197,6 +197,41 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const nav = navigator as Navigator & {
+      connection?: { saveData?: boolean; addEventListener?: (type: string, cb: () => void) => void; removeEventListener?: (type: string, cb: () => void) => void };
+    };
+    const mqSmall = window.matchMedia("(max-width: 900px)");
+    const mqReduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const connection = nav.connection;
+
+    const syncPerfMode = () => {
+      const useLite = mqSmall.matches || mqReduced.matches || Boolean(connection?.saveData);
+      document.body.classList.toggle("perf-lite", useLite);
+    };
+
+    const addMqlListener = (mq: MediaQueryList, fn: () => void) => {
+      if (typeof mq.addEventListener === "function") mq.addEventListener("change", fn);
+      else (mq as MediaQueryList & { addListener: (cb: () => void) => void }).addListener(fn);
+    };
+    const removeMqlListener = (mq: MediaQueryList, fn: () => void) => {
+      if (typeof mq.removeEventListener === "function") mq.removeEventListener("change", fn);
+      else (mq as MediaQueryList & { removeListener: (cb: () => void) => void }).removeListener(fn);
+    };
+
+    syncPerfMode();
+    addMqlListener(mqSmall, syncPerfMode);
+    addMqlListener(mqReduced, syncPerfMode);
+    connection?.addEventListener?.("change", syncPerfMode);
+
+    return () => {
+      removeMqlListener(mqSmall, syncPerfMode);
+      removeMqlListener(mqReduced, syncPerfMode);
+      connection?.removeEventListener?.("change", syncPerfMode);
+    };
+  }, []);
+
+  useEffect(() => {
     try {
       if (localStorage.getItem(SPLASH_SEEN_KEY) !== "true") setShowSplash(true);
     } catch {
