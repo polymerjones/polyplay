@@ -7,8 +7,11 @@ export type GratitudeSettings = {
 };
 
 export type GratitudeEntry = {
+  id: string;
   text: string;
   createdAt: string;
+  updatedAt?: string;
+  privateMode?: boolean;
 };
 
 export const GRATITUDE_SETTINGS_KEY = "gratitude_settings";
@@ -28,6 +31,40 @@ function parseFrequency(value: unknown): GratitudeFrequency {
 
 function getLocalDateStamp(timestampMs: number): string {
   return new Date(timestampMs).toLocaleDateString();
+}
+
+function makeEntryId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeEntries(entries: unknown): GratitudeEntry[] {
+  if (!Array.isArray(entries)) return [];
+  const mapped: Array<GratitudeEntry | null> = entries.map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const item = entry as Partial<GratitudeEntry> & { createdAt?: unknown; text?: unknown };
+      if (typeof item.text !== "string") return null;
+      const createdAt = typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString();
+      const id = typeof item.id === "string" && item.id ? item.id : `legacy-${createdAt}`;
+      const updatedAt = typeof item.updatedAt === "string" ? item.updatedAt : undefined;
+      const normalized: GratitudeEntry = {
+        id,
+        text: item.text,
+        createdAt,
+        privateMode: Boolean(item.privateMode)
+      };
+      if (updatedAt) normalized.updatedAt = updatedAt;
+      return normalized;
+    });
+  return mapped.filter((entry): entry is GratitudeEntry => entry !== null);
+}
+
+function writeEntries(entries: GratitudeEntry[]): void {
+  try {
+    localStorage.setItem(GRATITUDE_ENTRIES_KEY, JSON.stringify(entries));
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
 export function loadGratitudeSettings(): GratitudeSettings {
@@ -91,10 +128,13 @@ export function appendGratitudeEntry(text: string, nowIso: string): void {
   if (!trimmed) return;
   try {
     const raw = localStorage.getItem(GRATITUDE_ENTRIES_KEY);
-    const parsed = raw ? (JSON.parse(raw) as GratitudeEntry[]) : [];
-    const safeEntries = Array.isArray(parsed) ? parsed : [];
-    const next: GratitudeEntry[] = [{ text: trimmed, createdAt: nowIso }, ...safeEntries].slice(0, 50);
-    localStorage.setItem(GRATITUDE_ENTRIES_KEY, JSON.stringify(next));
+    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+    const safeEntries = normalizeEntries(parsed);
+    const next: GratitudeEntry[] = [
+      { id: makeEntryId(), text: trimmed, createdAt: nowIso, updatedAt: nowIso, privateMode: false },
+      ...safeEntries
+    ].slice(0, 50);
+    writeEntries(next);
   } catch {
     // Ignore storage failures.
   }
@@ -104,16 +144,9 @@ export function getGratitudeEntries(): GratitudeEntry[] {
   try {
     const raw = localStorage.getItem(GRATITUDE_ENTRIES_KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw) as GratitudeEntry[];
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter(
-        (entry) =>
-          entry &&
-          typeof entry === "object" &&
-          typeof entry.text === "string" &&
-          typeof entry.createdAt === "string"
-      )
+    const parsed = JSON.parse(raw) as unknown;
+    const normalized = normalizeEntries(parsed);
+    return normalized
       .slice()
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   } catch {
@@ -121,13 +154,23 @@ export function getGratitudeEntries(): GratitudeEntry[] {
   }
 }
 
-export function deleteGratitudeEntry(createdAt: string): void {
+export function deleteGratitudeEntry(entryId: string): void {
   try {
-    const next = getGratitudeEntries().filter((entry) => entry.createdAt !== createdAt);
-    localStorage.setItem(GRATITUDE_ENTRIES_KEY, JSON.stringify(next));
+    const next = getGratitudeEntries().filter((entry) => entry.id !== entryId);
+    writeEntries(next);
   } catch {
     // Ignore storage failures.
   }
+}
+
+export function updateGratitudeEntry(entryId: string, newText: string): void {
+  const trimmed = newText.trim();
+  if (!trimmed) return;
+  const nowIso = new Date().toISOString();
+  const next = getGratitudeEntries().map((entry) =>
+    entry.id === entryId ? { ...entry, text: trimmed, updatedAt: nowIso } : entry
+  );
+  writeEntries(next);
 }
 
 export function formatGratitudeExport(entries: GratitudeEntry[]): string {
@@ -143,4 +186,20 @@ export function formatGratitudeExport(entries: GratitudeEntry[]): string {
     lines.push("");
   }
   return lines.join("\n").trimEnd();
+}
+
+export function listEntries(): GratitudeEntry[] {
+  return getGratitudeEntries();
+}
+
+export function updateEntry(id: string, newText: string): void {
+  updateGratitudeEntry(id, newText);
+}
+
+export function deleteEntry(id: string): void {
+  deleteGratitudeEntry(id);
+}
+
+export function exportEntriesAsText(): string {
+  return formatGratitudeExport(getGratitudeEntries());
 }

@@ -37,6 +37,7 @@ import { titleFromFilename } from "../lib/title";
 import { Button } from "../components/button";
 
 const HAS_IMPORTED_KEY = "polyplay_hasImported";
+const THEME_MODE_KEY = "polyplay_themeMode";
 
 function formatTrackLabel(track: DbTrackRecord): string {
   const shortId = track.id.slice(0, 8);
@@ -187,6 +188,32 @@ export function AdminApp() {
   useEffect(() => {
     setGratitudeSettings(loadGratitudeSettings());
     setGratitudeEntries(getGratitudeEntries());
+  }, []);
+
+  useEffect(() => {
+    const applyTheme = (next: "light" | "dark") => {
+      document.body.classList.toggle("theme-dark", next === "dark");
+    };
+    const saved = localStorage.getItem(THEME_MODE_KEY);
+    applyTheme(saved === "dark" ? "dark" : "light");
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== THEME_MODE_KEY) return;
+      applyTheme(event.newValue === "dark" ? "dark" : "light");
+    };
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type !== "polyplay:theme-changed") return;
+      const next = event.data?.themeMode === "dark" ? "dark" : "light";
+      applyTheme(next);
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("message", onMessage);
+      document.body.classList.remove("theme-dark");
+    };
   }, []);
 
   useEffect(() => {
@@ -706,9 +733,9 @@ export function AdminApp() {
 
   const onDeleteGratitudeEntry = (entry: GratitudeEntry) => {
     if (!window.confirm("Delete this gratitude entry?")) return;
-    deleteGratitudeEntry(entry.createdAt);
+    deleteGratitudeEntry(entry.id);
     setGratitudeEntries(getGratitudeEntries());
-    if (selectedGratitudeEntry?.createdAt === entry.createdAt) setSelectedGratitudeEntry(null);
+    if (selectedGratitudeEntry?.id === entry.id) setSelectedGratitudeEntry(null);
     setStatus("Gratitude entry deleted.");
   };
 

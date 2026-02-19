@@ -5,6 +5,7 @@ import { APP_TITLE, APP_VERSION } from "./config/version";
 import { EmptyLibraryWelcome } from "./components/EmptyLibraryWelcome";
 import { FullscreenPlayer } from "./components/FullscreenPlayer";
 import { GratitudePrompt } from "./components/GratitudePrompt";
+import { JournalModal } from "./components/JournalModal";
 import { MiniPlayerBar } from "./components/MiniPlayerBar";
 import { QuickTipsModal } from "./components/QuickTipsModal";
 import { SplashOverlay } from "./components/SplashOverlay";
@@ -73,6 +74,8 @@ export default function App() {
   const [gratitudeSettings, setGratitudeSettings] = useState<GratitudeSettings>(() => loadGratitudeSettings());
   const [isGratitudeOpen, setIsGratitudeOpen] = useState(false);
   const [isGratitudeReactive, setIsGratitudeReactive] = useState(false);
+  const [isJournalOpen, setIsJournalOpen] = useState(false);
+  const [showJournalTapToast, setShowJournalTapToast] = useState(false);
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [themeToggleAnim, setThemeToggleAnim] = useState<"on" | "off" | null>(null);
   const [themeBloomActive, setThemeBloomActive] = useState(false);
@@ -98,6 +101,7 @@ export default function App() {
   const themeAnimTimeoutRef = useRef<number | null>(null);
   const themeBloomTimeoutRef = useRef<number | null>(null);
   const gratitudeTypingTimeoutRef = useRef<number | null>(null);
+  const journalToastTimeoutRef = useRef<number | null>(null);
   const gratitudeEvaluatedRef = useRef(false);
 
   const logAudioDebug = (event: string, details?: Record<string, unknown>) => {
@@ -224,6 +228,10 @@ export default function App() {
       if (gratitudeTypingTimeoutRef.current !== null) {
         window.clearTimeout(gratitudeTypingTimeoutRef.current);
         gratitudeTypingTimeoutRef.current = null;
+      }
+      if (journalToastTimeoutRef.current !== null) {
+        window.clearTimeout(journalToastTimeoutRef.current);
+        journalToastTimeoutRef.current = null;
       }
       revokeAllMediaUrls();
     };
@@ -826,6 +834,12 @@ export default function App() {
     } catch {
       // Ignore localStorage failures.
     }
+    try {
+      const overlayFrame = document.querySelector<HTMLIFrameElement>(".app-overlay-frame");
+      overlayFrame?.contentWindow?.postMessage({ type: "polyplay:theme-changed", themeMode: next }, window.location.origin);
+    } catch {
+      // Ignore cross-document messaging failures.
+    }
 
     const prefersReducedMotion =
       typeof window !== "undefined" &&
@@ -865,6 +879,37 @@ export default function App() {
     }
     button.appendChild(burst);
     burst.addEventListener("animationend", () => burst.remove(), { once: true });
+  };
+
+  const openJournal = (event: MouseEvent<HTMLButtonElement>) => {
+    setIsJournalOpen(true);
+
+    const button = event.currentTarget;
+    const burst = document.createElement("span");
+    burst.className = "pc-aura-burst";
+    for (let i = 0; i < 5; i += 1) {
+      const sparkle = document.createElement("span");
+      sparkle.className = "pc-aura-burst__spark";
+      const angle = (i / 5) * Math.PI * 2;
+      sparkle.style.setProperty("--tx", `${Math.cos(angle) * 12}px`);
+      sparkle.style.setProperty("--ty", `${Math.sin(angle) * 12}px`);
+      sparkle.style.setProperty("--delay", `${i * 20}ms`);
+      burst.appendChild(sparkle);
+    }
+    button.appendChild(burst);
+    burst.addEventListener("animationend", () => burst.remove(), { once: true });
+
+    const isCoarsePointer =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+    if (!isCoarsePointer) return;
+    setShowJournalTapToast(true);
+    if (journalToastTimeoutRef.current !== null) window.clearTimeout(journalToastTimeoutRef.current);
+    journalToastTimeoutRef.current = window.setTimeout(() => {
+      setShowJournalTapToast(false);
+      journalToastTimeoutRef.current = null;
+    }, 900);
   };
 
   const onGratitudeDoNotSaveChange = (next: boolean) => {
@@ -956,6 +1001,23 @@ export default function App() {
                   <rect x="3" y="7" width="18" height="10" rx="5" />
                   <circle className="theme-switch-knob" cx={themeMode === "dark" ? 16.5 : 7.5} cy="12" r="3.2" />
                 </svg>
+              </span>
+            </button>
+            <button
+              type="button"
+              className="journal-link nav-action-btn"
+              aria-label="Open Journal"
+              title="Journal"
+              onClick={openJournal}
+            >
+              <span className="journal-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="journal-icon-svg">
+                  <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21V5.5Z" />
+                  <path d="M8 7h8M8 10h8M8 13h6" />
+                </svg>
+              </span>
+              <span className="journal-tooltip" aria-hidden="true">
+                Journal
               </span>
             </button>
             <button
@@ -1109,6 +1171,7 @@ export default function App() {
 
       <QuickTipsModal open={isTipsOpen} onClose={() => setIsTipsOpen(false)} tips={quickTipsContent} />
       {showSplash && <SplashOverlay isDismissing={isSplashDismissing} onComplete={finishSplash} />}
+      <JournalModal open={isJournalOpen} onClose={() => setIsJournalOpen(false)} />
       <GratitudePrompt
         open={isGratitudeOpen}
         doNotSaveText={gratitudeSettings.doNotSaveText}
@@ -1120,6 +1183,7 @@ export default function App() {
           setIsGratitudeReactive(false);
         }}
       />
+      {showJournalTapToast && <div className="journal-tap-toast">Journal</div>}
     </>
   );
 }

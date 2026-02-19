@@ -85,7 +85,7 @@ export function GratitudeHubPanel({
         {visibleEntries.length ? (
           <ul className="gratitude-hub__list">
             {visibleEntries.map((entry) => (
-              <li key={entry.createdAt} className="gratitude-hub__item">
+              <li key={entry.id} className="gratitude-hub__item">
                 <button type="button" className="gratitude-hub__entry-hit" onClick={() => onOpenEntry(entry)}>
                   <span className="gratitude-hub__entry-date">
                     {new Date(entry.createdAt).toLocaleDateString()}
