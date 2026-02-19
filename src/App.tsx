@@ -473,6 +473,12 @@ export default function App() {
     }
   };
 
+  const triggerAuraPulseForTrack = (trackId: string) => {
+    if (!isPlaying) return;
+    if (!currentTrackId || currentTrackId !== trackId) return;
+    window.dispatchEvent(new CustomEvent("polyplay:aura-trigger"));
+  };
+
   const playTrack = (trackId: string, autoPlay = true) => {
     logAudioDebug("playTrack() called", { trackId, autoPlay });
     dismissOpenState();
@@ -723,6 +729,7 @@ export default function App() {
             layoutMode={layoutMode}
             onSelectTrack={(trackId) => playTrack(trackId, true)}
             onAuraUp={(trackId) => {
+              triggerAuraPulseForTrack(trackId);
               void updateAura(trackId, 1);
             }}
           />
@@ -746,7 +753,9 @@ export default function App() {
           onPlayPause={togglePlayPause}
           onNext={playNext}
           onAuraUp={() => {
-            if (currentTrackId) void updateAura(currentTrackId, 1);
+            if (!currentTrackId) return;
+            triggerAuraPulseForTrack(currentTrackId);
+            void updateAura(currentTrackId, 1);
           }}
           onSeek={seekTo}
           onSkip={skip}
@@ -778,7 +787,9 @@ export default function App() {
           onToggleLoopMode={toggleLoopMode}
           onClearLoop={clearLoop}
           onAuraUp={() => {
-            if (currentTrackId) void updateAura(currentTrackId, 1);
+            if (!currentTrackId) return;
+            triggerAuraPulseForTrack(currentTrackId);
+            void updateAura(currentTrackId, 1);
           }}
           onSkip={skip}
         />

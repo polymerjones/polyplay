@@ -57,7 +57,6 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
             button.classList.remove("track-row__aura-btn--burst");
             void button.offsetWidth;
             button.classList.add("track-row__aura-btn--burst");
-            window.dispatchEvent(new CustomEvent("polyplay:aura-trigger"));
             if (navigator.vibrate) navigator.vibrate(12);
             onAuraUp(track.id);
           }}

@@ -125,7 +125,6 @@ export function PlayerControls({
               button.appendChild(burst);
               burst.addEventListener("animationend", () => burst.remove(), { once: true });
               if (navigator.vibrate) navigator.vibrate(12);
-              window.dispatchEvent(new CustomEvent("polyplay:aura-trigger"));
               onAuraUp();
             }}
           >
