@@ -21,6 +21,10 @@ function clampAura(value: number): number {
   return Math.max(0, Math.min(5, Math.round(value)));
 }
 
+function getSafeDuration(value: number): number {
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
 function getAdjacentTrackId(
   tracks: Track[],
   currentTrackId: string | null,
@@ -492,7 +496,8 @@ export default function App() {
   const seekTo = (seconds: number) => {
     const audio = audioRef.current;
     if (!audio || !Number.isFinite(seconds)) return;
-    audio.currentTime = Math.max(0, Math.min(duration || 0, seconds));
+    const effectiveDuration = getSafeDuration(duration) || getSafeDuration(audio.duration);
+    audio.currentTime = Math.max(0, Math.min(effectiveDuration, seconds));
     setCurrentTime(audio.currentTime);
   };
 
@@ -500,10 +505,12 @@ export default function App() {
 
   const setLoopRange = (start: number, end: number, active: boolean) => {
     if (!currentTrackId) return;
-    const safeStart = Math.max(0, Math.min(duration || 0, start));
-    const safeEnd = Math.max(safeStart + 0.1, Math.min(duration || 0, end));
+    const audio = audioRef.current;
+    const effectiveDuration = getSafeDuration(duration) || getSafeDuration(audio?.duration || 0);
+    if (effectiveDuration <= 0) return;
+    const safeStart = Math.max(0, Math.min(effectiveDuration, start));
+    const safeEnd = Math.max(safeStart + 0.1, Math.min(effectiveDuration, end));
     if (active) {
-      const audio = audioRef.current;
       if (audio && (audio.currentTime < safeStart || audio.currentTime > safeEnd)) {
         audio.currentTime = safeStart;
         setCurrentTime(safeStart);
@@ -520,10 +527,21 @@ export default function App() {
   };
 
   const setLoopFromCurrent = () => {
-    if (!currentTrackId || duration <= 0) return;
+    if (!currentTrackId) return;
+    const audio = audioRef.current;
+    const effectiveDuration = getSafeDuration(duration) || getSafeDuration(audio?.duration || 0);
+    if (effectiveDuration <= 0) {
+      // iOS/Safari can briefly report unknown duration; fall back to full-track loop.
+      setLoopModeByTrack((prev) => ({ ...prev, [currentTrackId]: "track" }));
+      setLoopByTrack((prev) => {
+        const current = prev[currentTrackId] ?? EMPTY_LOOP;
+        return { ...prev, [currentTrackId]: { ...current, active: false, editing: false } };
+      });
+      return;
+    }
     const now = audioRef.current?.currentTime || 0;
-    const safeStart = Math.max(0, Math.min(duration, now));
-    const safeEnd = Math.max(safeStart + 0.1, Math.min(duration, safeStart + 5));
+    const safeStart = Math.max(0, Math.min(effectiveDuration, now));
+    const safeEnd = Math.max(safeStart + 0.1, Math.min(effectiveDuration, safeStart + 5));
     seekTo(safeStart);
     setLoopByTrack((prev) => ({
       ...prev,
