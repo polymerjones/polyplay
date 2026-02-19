@@ -9,6 +9,7 @@ import { QuickTipsModal } from "./components/QuickTipsModal";
 import { SplashOverlay } from "./components/SplashOverlay";
 import { TrackGrid } from "./components/TrackGrid";
 import { clearTracksInDb, getTracksFromDb, saveAuraToDb } from "./lib/db";
+import { pickAuraWeightedTrack } from "./lib/aura";
 import { revokeAllMediaUrls } from "./lib/player/media";
 import type { LoopMode, LoopRegion, Track } from "./types";
 
@@ -43,16 +44,6 @@ function getAdjacentTrackId(
   return tracks[safeIndex]?.id ?? null;
 }
 
-function getShuffledTrackId(tracks: Track[], currentTrackId: string | null): string | null {
-  const playable = tracks.filter((track) => Boolean(track.audioUrl) && !track.missingAudio);
-  if (!playable.length) return null;
-  if (playable.length === 1) return playable[0]?.id ?? null;
-  const pool = playable.filter((track) => track.id !== currentTrackId);
-  const nextPool = pool.length ? pool : playable;
-  const index = Math.floor(Math.random() * nextPool.length);
-  return nextPool[index]?.id ?? null;
-}
-
 export default function App() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [currentTrackId, setCurrentTrackId] = useState<string | null>(null);
@@ -80,6 +71,7 @@ export default function App() {
   const isNukingRef = useRef(false);
   const nukeFinalizeStartedRef = useRef(false);
   const teardownAudioListenersRef = useRef<(() => void) | null>(null);
+  const lastPlayedAtByTrackRef = useRef<Record<string, number>>({});
   const audioInstanceSeqRef = useRef(0);
   const audioInstanceIdRef = useRef(0);
 
@@ -428,7 +420,12 @@ export default function App() {
     };
     const onMeta = () => syncDuration();
     const onDurationChange = () => syncDuration();
-    const onPlay = () => setIsPlaying(true);
+    const onPlay = () => {
+      setIsPlaying(true);
+      if (currentTrackId) {
+        lastPlayedAtByTrackRef.current[currentTrackId] = Date.now();
+      }
+    };
     const onPause = () => setIsPlaying(false);
     const onError = () => setIsPlaying(false);
     const onEnded = () => {
@@ -446,7 +443,12 @@ export default function App() {
         return;
       }
       if (isShuffleEnabled) {
-        const nextId = getShuffledTrackId(tracks, currentTrackId);
+        const nextId = pickAuraWeightedTrack(
+          tracks,
+          currentTrackId,
+          lastPlayedAtByTrackRef.current,
+          Date.now()
+        );
         if (nextId) {
           playTrack(nextId, true);
           return;
@@ -553,7 +555,12 @@ export default function App() {
 
   const playNext = () => {
     const nextId = isShuffleEnabled
-      ? getShuffledTrackId(tracks, currentTrackId)
+      ? pickAuraWeightedTrack(
+          tracks,
+          currentTrackId,
+          lastPlayedAtByTrackRef.current,
+          Date.now()
+        )
       : getAdjacentTrackId(tracks, currentTrackId, 1, true);
     if (nextId) playTrack(nextId, true);
   };
