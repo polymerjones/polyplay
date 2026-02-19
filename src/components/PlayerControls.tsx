@@ -141,7 +141,7 @@ export function PlayerControls({
         )}
         <button
           type="button"
-          className={`pc-btn pc-btn--sm pc-btn--toggle ${shuffleEnabled ? "is-active" : ""}`.trim()}
+          className={`pc-btn pc-btn--sm pc-btn--toggle pc-btn--toggle-purple ${shuffleEnabled ? "is-active" : ""}`.trim()}
           onClick={onToggleShuffle}
           aria-pressed={shuffleEnabled}
           aria-label={shuffleEnabled ? "Disable shuffle" : "Enable shuffle"}
@@ -151,7 +151,7 @@ export function PlayerControls({
         </button>
         <button
           type="button"
-          className={`pc-btn pc-btn--sm pc-btn--toggle ${repeatTrackEnabled ? "is-active" : ""}`.trim()}
+          className={`pc-btn pc-btn--sm pc-btn--toggle pc-btn--toggle-purple ${repeatTrackEnabled ? "is-active" : ""}`.trim()}
           onClick={onToggleRepeatTrack}
           aria-pressed={repeatTrackEnabled}
           aria-label={repeatTrackEnabled ? "Disable repeat track" : "Enable repeat track"}

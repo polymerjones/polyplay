@@ -240,8 +240,22 @@
   color: rgba(230, 237, 250, 0.72);
 }
 
+.pc-btn--toggle-purple {
+  background: radial-gradient(circle at 30% 24%, #855de2 0%, var(--pc-color-primary) 56%, var(--pc-color-primary-strong) 100%);
+  border-color: rgba(255, 255, 255, 0.26);
+  color: #f8f2ff;
+  box-shadow: var(--pc-shadow-sm);
+}
+
+.pc-btn--toggle-purple:not(.is-active) {
+  opacity: 0.86;
+  filter: saturate(0.86) brightness(0.92);
+}
+
 .pc-btn--toggle.is-active {
   color: #f8f2ff;
+  opacity: 1;
+  filter: none;
 }
 
 .pc-btn--toggle.is-region {
