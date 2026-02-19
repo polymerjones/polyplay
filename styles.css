@@ -292,6 +292,10 @@ body.perf-lite::before {
     0 0 24px rgba(120, 220, 255, 0.35);
 }
 
+.tile.is-aura-hit {
+  animation: tile-aura-hit 360ms ease-out;
+}
+
 @keyframes neon-strobe {
   0%, 100% { opacity: 0.4; filter: saturate(1.1) brightness(1); }
   50% { opacity: 0.85; filter: saturate(1.6) brightness(1.2); }
@@ -455,6 +459,21 @@ body.perf-lite::before {
     box-shadow:
       0 0 28px rgba(196, 138, 255, 0.74),
       0 0 46px rgba(106, 62, 204, 0.52);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+
+@keyframes tile-aura-hit {
+  0% {
+    filter: brightness(1);
+  }
+  40% {
+    filter: brightness(1.18);
+    box-shadow:
+      0 0 0 2px rgba(234, 188, 255, 0.75),
+      0 0 26px rgba(174, 112, 255, 0.45);
   }
   100% {
     filter: brightness(1);

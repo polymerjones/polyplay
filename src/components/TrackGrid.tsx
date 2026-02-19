@@ -80,6 +80,11 @@ export function TrackGrid({ tracks, currentTrackId, isPlaying, layoutMode, onSel
                 const button = event.currentTarget;
                 const tile = button.closest(".tile");
                 const art = tile?.querySelector(".art");
+                if (tile instanceof HTMLElement) {
+                  tile.classList.remove("is-aura-hit");
+                  void tile.offsetWidth;
+                  tile.classList.add("is-aura-hit");
+                }
                 if (art instanceof HTMLElement) {
                   art.classList.remove("is-aura-flash");
                   void art.offsetWidth;

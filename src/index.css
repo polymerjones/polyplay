@@ -136,6 +136,10 @@ body.perf-lite .track-art-badge {
     0 0 18px rgba(171, 110, 255, 0.34);
 }
 
+.track-row.track-row--aura-hit {
+  animation: track-row-hit-flash 320ms ease-out;
+}
+
 .track-row__thumb-btn {
   border: 0;
   background: transparent;
@@ -246,6 +250,22 @@ body.perf-lite .track-art-badge {
   }
   100% {
     transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+@keyframes track-row-hit-flash {
+  0% {
+    filter: brightness(1);
+  }
+  40% {
+    filter: brightness(1.16);
+    box-shadow:
+      0 0 0 1px rgba(214, 166, 255, 0.75),
+      0 0 16px rgba(176, 114, 255, 0.42),
+      0 12px 22px rgba(7, 9, 14, 0.28);
+  }
+  100% {
     filter: brightness(1);
   }
 }

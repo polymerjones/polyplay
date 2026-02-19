@@ -54,6 +54,12 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
           onClick={(event) => {
             event.stopPropagation();
             const button = event.currentTarget;
+            const row = button.closest(".track-row");
+            if (row instanceof HTMLElement) {
+              row.classList.remove("track-row--aura-hit");
+              void row.offsetWidth;
+              row.classList.add("track-row--aura-hit");
+            }
             button.classList.remove("track-row__aura-btn--burst");
             void button.offsetWidth;
             button.classList.add("track-row__aura-btn--burst");
