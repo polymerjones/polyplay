@@ -15,12 +15,12 @@ import type { LoopMode, LoopRegion, Track } from "./types";
 
 const EMPTY_LOOP: LoopRegion = { start: 0, end: 0, active: false, editing: false };
 const SPLASH_SEEN_KEY = "polyplay_hasSeenSplash";
+const SPLASH_SESSION_KEY = "polyplay_hasSeenSplashSession";
 const OPEN_STATE_SEEN_KEY = "polyplay_open_state_seen_v102";
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
 const SPLASH_FADE_MS = 420;
-const RETURNING_SPLASH_HOLD_MS = 1000;
 
 function clampAura(value: number): number {
   return Math.max(0, Math.min(5, Math.round(value)));
@@ -60,7 +60,7 @@ export default function App() {
   const [isShuffleEnabled, setIsShuffleEnabled] = useState(false);
   const [isRepeatTrackEnabled, setIsRepeatTrackEnabled] = useState(false);
   const [showOpenState, setShowOpenState] = useState(false);
-  const [splashMode, setSplashMode] = useState<"intro" | "returning" | null>(null);
+  const [showSplash, setShowSplash] = useState(false);
   const [isSplashDismissing, setIsSplashDismissing] = useState(false);
   const [isNuking, setIsNuking] = useState(false);
 
@@ -240,9 +240,9 @@ export default function App() {
 
   useEffect(() => {
     try {
-      setSplashMode(localStorage.getItem(SPLASH_SEEN_KEY) === "true" ? "returning" : "intro");
+      if (sessionStorage.getItem(SPLASH_SESSION_KEY) !== "true") setShowSplash(true);
     } catch {
-      setSplashMode("intro");
+      setShowSplash(true);
     }
     return () => {
       if (splashTimeoutRef.current !== null) {
@@ -278,32 +278,20 @@ export default function App() {
   }, []);
 
   const finishSplash = () => {
-    if (!splashMode || isSplashDismissing) return;
+    if (!showSplash || isSplashDismissing) return;
     setIsSplashDismissing(true);
     try {
       localStorage.setItem(SPLASH_SEEN_KEY, "true");
+      sessionStorage.setItem(SPLASH_SESSION_KEY, "true");
     } catch {
-      // Ignore localStorage failures.
+      // Ignore storage failures.
     }
     splashTimeoutRef.current = window.setTimeout(() => {
-      setSplashMode(null);
+      setShowSplash(false);
       setIsSplashDismissing(false);
       splashTimeoutRef.current = null;
     }, SPLASH_FADE_MS);
   };
-
-  useEffect(() => {
-    if (splashMode !== "returning" || isSplashDismissing) return;
-    splashTimeoutRef.current = window.setTimeout(() => {
-      finishSplash();
-    }, RETURNING_SPLASH_HOLD_MS);
-    return () => {
-      if (splashTimeoutRef.current !== null) {
-        window.clearTimeout(splashTimeoutRef.current);
-        splashTimeoutRef.current = null;
-      }
-    };
-  }, [splashMode, isSplashDismissing]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -324,6 +312,10 @@ export default function App() {
       }
       if (type === "polyplay:nuke-request" || type === "polyplay:nuke-success") {
         beginNukeSequence();
+        return;
+      }
+      if (type === "polyplay:close-settings") {
+        setOverlayPage(null);
       }
     };
 
@@ -908,9 +900,7 @@ export default function App() {
       <audio ref={audioRef} preload="metadata" playsInline />
 
       <QuickTipsModal open={isTipsOpen} onClose={() => setIsTipsOpen(false)} tips={quickTipsContent} />
-      {splashMode && (
-        <SplashOverlay mode={splashMode} isDismissing={isSplashDismissing} onComplete={finishSplash} />
-      )}
+      {showSplash && <SplashOverlay isDismissing={isSplashDismissing} onComplete={finishSplash} />}
     </>
   );
 }

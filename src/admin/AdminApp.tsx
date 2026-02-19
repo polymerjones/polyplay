@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import logo from "../../logo.png";
 import {
   addTrackToDb,
@@ -453,6 +453,16 @@ export function AdminApp() {
     }
   };
 
+  const onBackToPlayer = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!(window.parent && window.parent !== window)) return;
+    event.preventDefault();
+    try {
+      window.parent.postMessage({ type: "polyplay:close-settings" }, window.location.origin);
+    } catch {
+      // If messaging fails, allow normal nav fallback next click.
+    }
+  };
+
   return (
     <div
       className={`admin-v1 touch-clean mx-auto min-h-screen w-full max-w-5xl px-3 pb-5 pt-3 sm:px-4 ${
@@ -476,6 +486,7 @@ export function AdminApp() {
           <a
             href="/index.html"
             className="rounded-xl border border-slate-300/20 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+            onClick={onBackToPlayer}
           >
             Back to Player
           </a>
