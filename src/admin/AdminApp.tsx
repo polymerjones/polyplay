@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import logo from "../../logo.png";
 import {
   addTrackToDb,
@@ -26,6 +26,14 @@ function isVideoArtwork(file: File | null): boolean {
   return Boolean(file?.type?.startsWith("video/"));
 }
 
+function getDefaultVideoFrameTime(duration: number): number {
+  if (!Number.isFinite(duration) || duration <= 0) return 0.2;
+  const candidate = duration * 0.28;
+  const min = Math.min(0.2, Math.max(0, duration - 0.08));
+  const max = Math.max(0, duration - 0.08);
+  return Math.max(min, Math.min(max, candidate));
+}
+
 async function capturePosterFrame(videoFile: File, timeSec: number): Promise<Blob> {
   const objectUrl = URL.createObjectURL(videoFile);
   try {
@@ -36,18 +44,69 @@ async function capturePosterFrame(videoFile: File, timeSec: number): Promise<Blo
     video.src = objectUrl;
 
     await new Promise<void>((resolve, reject) => {
-      video.onloadedmetadata = () => resolve();
-      video.onerror = () => reject(new Error("Unable to load video metadata"));
+      const onLoadedMeta = () => {
+        video.removeEventListener("loadedmetadata", onLoadedMeta);
+        video.removeEventListener("error", onError);
+        resolve();
+      };
+      const onError = () => {
+        video.removeEventListener("loadedmetadata", onLoadedMeta);
+        video.removeEventListener("error", onError);
+        reject(new Error("Unable to load video metadata"));
+      };
+      video.addEventListener("loadedmetadata", onLoadedMeta);
+      video.addEventListener("error", onError);
     });
+
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      await new Promise<void>((resolve) => {
+        const onLoadedData = () => {
+          video.removeEventListener("loadeddata", onLoadedData);
+          resolve();
+        };
+        video.addEventListener("loadeddata", onLoadedData, { once: true });
+      });
+    }
 
     const safeDuration = Number.isFinite(video.duration) ? Math.max(0, video.duration) : 0;
-    const safeTime = Math.max(0, Math.min(Math.max(0, safeDuration - 0.05), timeSec || 0));
+    const desiredTime = Number.isFinite(timeSec) && timeSec > 0 ? timeSec : getDefaultVideoFrameTime(safeDuration);
+    const safeTime = Math.max(0, Math.min(Math.max(0, safeDuration - 0.05), desiredTime));
+    const needsSeek = Math.abs(video.currentTime - safeTime) > 0.02;
+    if (needsSeek) {
+      await new Promise<void>((resolve, reject) => {
+        let done = false;
+        const cleanup = () => {
+          video.removeEventListener("seeked", onSeeked);
+          video.removeEventListener("error", onError);
+          if (timer !== null) window.clearTimeout(timer);
+        };
+        const finish = () => {
+          if (done) return;
+          done = true;
+          cleanup();
+          resolve();
+        };
+        const fail = (message: string) => {
+          if (done) return;
+          done = true;
+          cleanup();
+          reject(new Error(message));
+        };
+        const onSeeked = () => finish();
+        const onError = () => fail("Unable to seek video frame");
+        const timer = window.setTimeout(() => finish(), 550);
+        video.addEventListener("seeked", onSeeked);
+        video.addEventListener("error", onError);
+        video.currentTime = safeTime;
+      });
+    }
 
-    await new Promise<void>((resolve, reject) => {
-      video.currentTime = safeTime;
-      video.onseeked = () => resolve();
-      video.onerror = () => reject(new Error("Unable to seek video frame"));
-    });
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      await new Promise<void>((resolve) => {
+        const onLoadedData = () => resolve();
+        video.addEventListener("loadeddata", onLoadedData, { once: true });
+      });
+    }
 
     const sourceWidth = Math.max(1, video.videoWidth || 1);
     const sourceHeight = Math.max(1, video.videoHeight || 1);
@@ -93,6 +152,10 @@ export function AdminApp() {
   const [selectedAudioFile, setSelectedAudioFile] = useState<File | null>(null);
 
   const [selectedRemoveTrackId, setSelectedRemoveTrackId] = useState<string>("");
+  const [isNukePromptOpen, setIsNukePromptOpen] = useState(false);
+  const [nukeCountdownMs, setNukeCountdownMs] = useState(2000);
+  const [isNukeRunning, setIsNukeRunning] = useState(false);
+  const nukeTimerRef = useRef<number | null>(null);
 
   const hasTracks = tracks.length > 0;
 
@@ -129,6 +192,10 @@ export function AdminApp() {
     return () => {
       if (uploadArtPreviewUrl) URL.revokeObjectURL(uploadArtPreviewUrl);
       if (selectedArtPreviewUrl) URL.revokeObjectURL(selectedArtPreviewUrl);
+      if (nukeTimerRef.current !== null) {
+        window.clearInterval(nukeTimerRef.current);
+        nukeTimerRef.current = null;
+      }
     };
   }, [selectedArtPreviewUrl, uploadArtPreviewUrl]);
 
@@ -307,9 +374,9 @@ export function AdminApp() {
     }
   };
 
-  const onNuke = async () => {
-    if (!window.confirm("Delete all tracks from this device?")) return;
-
+  const runNuke = async () => {
+    if (isNukeRunning) return;
+    setIsNukeRunning(true);
     if (window.parent && window.parent !== window) {
       try {
         window.parent.postMessage({ type: "polyplay:nuke-request" }, window.location.origin);
@@ -320,6 +387,7 @@ export function AdminApp() {
       } catch {
         setStatus("Nuke request failed.");
       }
+      setIsNukeRunning(false);
       return;
     }
 
@@ -331,7 +399,48 @@ export function AdminApp() {
     } catch {
       setStatus("Nuke failed.");
     }
+    setIsNukeRunning(false);
   };
+
+  const onNuke = () => {
+    if (!hasTracks || isNukeRunning || isNukePromptOpen) return;
+    setNukeCountdownMs(2000);
+    setIsNukePromptOpen(true);
+    setStatus("Nuke armed. Abort within 2 seconds.");
+  };
+
+  const abortNuke = () => {
+    if (nukeTimerRef.current !== null) {
+      window.clearInterval(nukeTimerRef.current);
+      nukeTimerRef.current = null;
+    }
+    setIsNukePromptOpen(false);
+    setNukeCountdownMs(2000);
+    setStatus("Nuke aborted.");
+  };
+
+  useEffect(() => {
+    if (!isNukePromptOpen) return;
+    const startedAt = Date.now();
+    nukeTimerRef.current = window.setInterval(() => {
+      const remaining = Math.max(0, 2000 - (Date.now() - startedAt));
+      setNukeCountdownMs(remaining);
+      if (remaining <= 0) {
+        if (nukeTimerRef.current !== null) {
+          window.clearInterval(nukeTimerRef.current);
+          nukeTimerRef.current = null;
+        }
+        setIsNukePromptOpen(false);
+        void runNuke();
+      }
+    }, 50);
+    return () => {
+      if (nukeTimerRef.current !== null) {
+        window.clearInterval(nukeTimerRef.current);
+        nukeTimerRef.current = null;
+      }
+    };
+  }, [isNukePromptOpen]);
 
   const onResetOnboarding = () => {
     if (!window.confirm("Reset onboarding and splash for this browser?")) return;
@@ -345,7 +454,11 @@ export function AdminApp() {
   };
 
   return (
-    <div className="admin-v1 touch-clean mx-auto min-h-screen w-full max-w-5xl px-3 pb-5 pt-3 sm:px-4">
+    <div
+      className={`admin-v1 touch-clean mx-auto min-h-screen w-full max-w-5xl px-3 pb-5 pt-3 sm:px-4 ${
+        isNukePromptOpen ? "admin-v1--nuke-arming" : ""
+      }`.trim()}
+    >
       <header className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-300/20 bg-slate-900/85 p-3 shadow-glow backdrop-blur">
         <div className="flex min-w-0 items-center gap-2">
           <img
@@ -413,7 +526,7 @@ export function AdminApp() {
                   onLoadedMetadata={(event) => {
                     const duration = Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0;
                     setUploadArtDuration(duration);
-                    setUploadArtFrameTime(Math.min(1, duration || 0));
+                    setUploadArtFrameTime(getDefaultVideoFrameTime(duration));
                   }}
                 />
                 <input
@@ -474,7 +587,7 @@ export function AdminApp() {
                     onLoadedMetadata={(event) => {
                       const duration = Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0;
                       setSelectedArtDuration(duration);
-                      setSelectedArtFrameTime(Math.min(1, duration || 0));
+                      setSelectedArtFrameTime(getDefaultVideoFrameTime(duration));
                     }}
                   />
                   <input
@@ -565,6 +678,19 @@ export function AdminApp() {
       <p className="mt-3 rounded-xl border border-slate-300/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-200">
         {status || "Ready."}
       </p>
+
+      {isNukePromptOpen && (
+        <section className="admin-nuke-modal" role="dialog" aria-modal="true" aria-label="Nuke countdown">
+          <div className="admin-nuke-modal__card">
+            <h3 className="admin-nuke-modal__title">Nuke Playlist Armed</h3>
+            <p className="admin-nuke-modal__sub">Clearing all tracks in</p>
+            <div className="admin-nuke-modal__count">{(nukeCountdownMs / 1000).toFixed(1)}s</div>
+            <Button variant="secondary" onClick={abortNuke}>
+              Abort
+            </Button>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
