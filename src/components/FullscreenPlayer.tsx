@@ -53,6 +53,7 @@ export function FullscreenPlayer({
     : ({ backgroundImage: track.artGrad || `url('${DEFAULT_ARTWORK_URL}')` } as CSSProperties);
   const hasArtworkVideo = Boolean(track.artVideoUrl);
   const shouldAnimateGenerated = track.artworkSource === "auto" && !hasArtworkVideo;
+  const showLoopEditor = loopMode === "region" && loopRegion.active;
   const [peaks, setPeaks] = useState<number[]>(() => fallbackPeaks(120));
 
   useEffect(() => {
@@ -205,15 +206,17 @@ export function FullscreenPlayer({
           onSkip={onSkip}
         />
 
-        <WaveformLoop
-          track={track}
-          currentTime={currentTime}
-          duration={duration}
-          isPlaying={isPlaying}
-          loopRegion={loopRegion}
-          onSeek={onSeek}
-          onSetLoopRange={onSetLoopRange}
-        />
+        {showLoopEditor && (
+          <WaveformLoop
+            track={track}
+            currentTime={currentTime}
+            duration={duration}
+            isPlaying={isPlaying}
+            loopRegion={loopRegion}
+            onSeek={onSeek}
+            onSetLoopRange={onSetLoopRange}
+          />
+        )}
       </div>
     </section>
   );
