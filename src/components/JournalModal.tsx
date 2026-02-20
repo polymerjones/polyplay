@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { getGratitudeBackupFilename, serializeGratitudeJson } from "../lib/backup";
 import {
   createEntry,
@@ -19,6 +19,15 @@ type JournalBackground = {
   id: string;
   src: string;
   hasAudio: boolean;
+};
+type Sparkle = {
+  id: string;
+  left: number;
+  top: number;
+  size: number;
+  delay: number;
+  duration: number;
+  drift: number;
 };
 
 const JOURNAL_BG_MODE_KEY = "journalBgMode";
@@ -97,6 +106,26 @@ function downloadTextFile(content: string, filename: string, mime: string): void
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
+}
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+function createSparkles(count: number): Sparkle[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `sparkle-${index}-${Math.random().toString(36).slice(2, 7)}`,
+    left: Math.round(Math.random() * 100),
+    top: Math.round(Math.random() * 100),
+    size: Number((1.8 + Math.random() * 3.2).toFixed(2)),
+    delay: Number((Math.random() * 8).toFixed(2)),
+    duration: Number((8 + Math.random() * 8).toFixed(2)),
+    drift: Number((8 + Math.random() * 20).toFixed(2))
+  }));
 }
 
 export function JournalModal({ open, onClose }: Props) {
@@ -202,6 +231,8 @@ export function JournalModal({ open, onClose }: Props) {
 
   const canPlaySound = Boolean(selectedBackground?.hasAudio && soundEnabled && soundArmed);
   const isWritingActive = isComposerOpen || editingEntryId !== null;
+  const reducedMotion = useMemo(() => prefersReducedMotion(), []);
+  const sparkles = useMemo(() => (reducedMotion ? [] : createSparkles(14)), [reducedMotion, selectedBgId]);
 
   useEffect(() => {
     const video = backgroundVideoRef.current;
@@ -219,7 +250,7 @@ export function JournalModal({ open, onClose }: Props) {
 
   return (
     <section
-      className="journal-modal"
+      className="journal-modal journalScene"
       role="dialog"
       aria-modal="true"
       aria-label="Gratitude Journal"
@@ -227,21 +258,47 @@ export function JournalModal({ open, onClose }: Props) {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className={`journal-modal__card ${isWritingActive ? "is-writing" : ""}`.trim()} ref={cardRef}>
-        <div className="journal-heaven-bg" aria-hidden="true">
-          <video
-            key={selectedBackground.id}
-            ref={backgroundVideoRef}
-            className="journal-heaven-video"
-            src={selectedBackground.src}
-            autoPlay
-            loop
-            playsInline
-            muted
-          />
-          <div className="journal-heaven-overlay" />
+      <div className="journalVideoLayer" aria-hidden="true">
+        <video
+          key={selectedBackground.id}
+          ref={backgroundVideoRef}
+          className="journal-heaven-video"
+          src={selectedBackground.src}
+          autoPlay
+          loop
+          playsInline
+          muted
+        />
+      </div>
+      <div className="journalAmbientLayer" aria-hidden="true" />
+      {!reducedMotion && (
+        <div className="journalStreaksLayer" aria-hidden="true">
+          <span className="journalStreak journalStreak--one" />
+          <span className="journalStreak journalStreak--two" />
         </div>
-        <div className="journal-modal__clouds" aria-hidden="true" />
+      )}
+      {!reducedMotion && (
+        <div className="journalSparklesLayer" aria-hidden="true">
+          {sparkles.map((sparkle) => (
+            <span
+              key={sparkle.id}
+              className="journalSparkle"
+              style={
+                {
+                  "--left": `${sparkle.left}%`,
+                  "--top": `${sparkle.top}%`,
+                  "--size": `${sparkle.size}px`,
+                  "--delay": `${sparkle.delay}s`,
+                  "--duration": `${sparkle.duration}s`,
+                  "--drift": `${sparkle.drift}px`
+                } as CSSProperties
+              }
+            />
+          ))}
+        </div>
+      )}
+      <div className={`journal-modal__card journalGlassPanel ${isWritingActive ? "is-writing" : ""}`.trim()} ref={cardRef}>
+        <div className="journalRim" aria-hidden="true" />
         <div className="journal-modal__head">
           <h3>Gratitude Journal</h3>
           <div className="journal-modal__head-actions">
@@ -327,14 +384,26 @@ export function JournalModal({ open, onClose }: Props) {
             </button>
           </div>
         </div>
-
-        <input
-          className="journal-modal__search"
-          type="search"
-          placeholder="Search journal entries..."
-          value={query}
-          onChange={(event) => setQuery(event.currentTarget.value)}
-        />
+        <div className="journalSearchBarWrap">
+          <span className="journalSearchIcon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="6.5" />
+              <path d="M16 16 20 20" />
+            </svg>
+          </span>
+          <input
+            className="journalSearchInput"
+            type="search"
+            placeholder="Search journal entries..."
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+          />
+          {query.trim().length > 0 && (
+            <button type="button" className="journalSearchClear" aria-label="Clear search" onClick={() => setQuery("")}>
+              ×
+            </button>
+          )}
+        </div>
 
         {isComposerOpen && (
           <div className="journal-compose">
@@ -519,7 +588,9 @@ export function JournalModal({ open, onClose }: Props) {
               );
             })
           ) : (
-            <p className="journal-modal__empty">No entries yet. Your next session will create one ✨</p>
+            <div className="journal-modal__emptyHint">
+              <p className="journal-modal__empty">No entries yet. Tap New.</p>
+            </div>
           )}
         </div>
         {miniToast && <div className="journal-modal__toast">{miniToast}</div>}
