@@ -4,6 +4,7 @@ export type GratitudeSettings = {
   enabled: boolean;
   frequency: GratitudeFrequency;
   doNotSaveText: boolean;
+  doNotPromptAgain: boolean;
 };
 
 export type GratitudeEntry = {
@@ -21,7 +22,8 @@ export const GRATITUDE_ENTRIES_KEY = "gratitude_entries";
 export const DEFAULT_GRATITUDE_SETTINGS: GratitudeSettings = {
   enabled: true,
   frequency: "daily",
-  doNotSaveText: false
+  doNotSaveText: false,
+  doNotPromptAgain: false
 };
 
 function parseFrequency(value: unknown): GratitudeFrequency {
@@ -76,7 +78,8 @@ export function loadGratitudeSettings(): GratitudeSettings {
     return {
       enabled: parsed.enabled !== false,
       frequency: parseFrequency(parsed.frequency),
-      doNotSaveText: Boolean(parsed.doNotSaveText)
+      doNotSaveText: Boolean(parsed.doNotSaveText),
+      doNotPromptAgain: Boolean(parsed.doNotPromptAgain)
     };
   } catch {
     return DEFAULT_GRATITUDE_SETTINGS;
@@ -112,7 +115,7 @@ export function shouldShowGratitudePrompt(
   lastPromptAtIso: string | null,
   nowMs: number
 ): boolean {
-  if (!settings.enabled || settings.frequency === "off") return false;
+  if (!settings.enabled || settings.frequency === "off" || settings.doNotPromptAgain) return false;
   if (settings.frequency === "launch") return true;
   if (!lastPromptAtIso) return true;
   const lastMs = Date.parse(lastPromptAtIso);

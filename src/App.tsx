@@ -33,6 +33,8 @@ const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const THEME_MODE_KEY = "polyplay_themeMode";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
+const LOOP_REGION_KEY = "polyplay_loopByTrack";
+const LOOP_MODE_KEY = "polyplay_loopModeByTrack";
 const SPLASH_FADE_MS = 420;
 const HAS_IMPORTED_KEY = "polyplay_hasImported";
 
@@ -42,6 +44,44 @@ function clampAura(value: number): number {
 
 function getSafeDuration(value: number): number {
   return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function parseLoopByTrack(raw: string | null): Record<string, LoopRegion> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const next: Record<string, LoopRegion> = {};
+    for (const [trackId, value] of Object.entries(parsed || {})) {
+      if (!value || typeof value !== "object") continue;
+      const row = value as Partial<LoopRegion>;
+      const start = Number(row.start);
+      const end = Number(row.end);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+      next[trackId] = {
+        start: Math.max(0, start),
+        end: Math.max(start + 0.1, end),
+        active: Boolean(row.active),
+        editing: Boolean(row.editing)
+      };
+    }
+    return next;
+  } catch {
+    return {};
+  }
+}
+
+function parseLoopModeByTrack(raw: string | null): Record<string, LoopMode> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const next: Record<string, LoopMode> = {};
+    for (const [trackId, value] of Object.entries(parsed || {})) {
+      if (value === "off" || value === "track" || value === "region") next[trackId] = value;
+    }
+    return next;
+  } catch {
+    return {};
+  }
 }
 
 function getAdjacentTrackId(
@@ -308,6 +348,31 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    try {
+      setLoopByTrack(parseLoopByTrack(localStorage.getItem(LOOP_REGION_KEY)));
+      setLoopModeByTrack(parseLoopModeByTrack(localStorage.getItem(LOOP_MODE_KEY)));
+    } catch {
+      // Ignore localStorage failures.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOOP_REGION_KEY, JSON.stringify(loopByTrack));
+    } catch {
+      // Ignore localStorage failures.
+    }
+  }, [loopByTrack]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOOP_MODE_KEY, JSON.stringify(loopModeByTrack));
+    } catch {
+      // Ignore localStorage failures.
+    }
+  }, [loopModeByTrack]);
+
+  useEffect(() => {
     const reducedMotion =
       typeof window !== "undefined" &&
       typeof window.matchMedia === "function" &&
@@ -418,6 +483,23 @@ export default function App() {
       if (type === "polyplay:gratitude-settings-updated") {
         const next = loadGratitudeSettings();
         setGratitudeSettings(next);
+        return;
+      }
+      if (type === "polyplay:config-imported") {
+        try {
+          const savedLayout = localStorage.getItem(LAYOUT_MODE_KEY);
+          if (savedLayout === "grid" || savedLayout === "list") setLayoutMode(savedLayout);
+          const savedTheme = localStorage.getItem(THEME_MODE_KEY);
+          if (savedTheme === "light" || savedTheme === "dark") setThemeMode(savedTheme);
+          setIsShuffleEnabled(localStorage.getItem(SHUFFLE_ENABLED_KEY) === "true");
+          setIsRepeatTrackEnabled(localStorage.getItem(REPEAT_TRACK_KEY) === "true");
+          setLoopByTrack(parseLoopByTrack(localStorage.getItem(LOOP_REGION_KEY)));
+          setLoopModeByTrack(parseLoopModeByTrack(localStorage.getItem(LOOP_MODE_KEY)));
+          setGratitudeSettings(loadGratitudeSettings());
+        } catch {
+          // Ignore localStorage failures.
+        }
+        void refreshTracks();
       }
     };
 
@@ -920,6 +1002,14 @@ export default function App() {
     });
   };
 
+  const onGratitudeDoNotPromptAgainChange = (next: boolean) => {
+    setGratitudeSettings((prev) => {
+      const updated = { ...prev, doNotPromptAgain: next };
+      saveGratitudeSettings(updated);
+      return updated;
+    });
+  };
+
   const onGratitudeTyping = () => {
     const reducedMotion =
       typeof window !== "undefined" &&
@@ -934,11 +1024,19 @@ export default function App() {
     }, 1000);
   };
 
-  const onGratitudePersist = ({ text, doNotSaveText }: { text: string; doNotSaveText: boolean }) => {
+  const onGratitudePersist = ({
+    text,
+    doNotSaveText,
+    doNotPromptAgain
+  }: {
+    text: string;
+    doNotSaveText: boolean;
+    doNotPromptAgain: boolean;
+  }) => {
     const nowIso = new Date().toISOString();
     if (!doNotSaveText) appendGratitudeEntry(text, nowIso);
     setGratitudeSettings((prev) => {
-      const updated = { ...prev, doNotSaveText };
+      const updated = { ...prev, doNotSaveText, doNotPromptAgain };
       saveGratitudeSettings(updated);
       return updated;
     });
@@ -1177,7 +1275,9 @@ export default function App() {
       <GratitudePrompt
         open={isGratitudeOpen}
         doNotSaveText={gratitudeSettings.doNotSaveText}
+        doNotPromptAgain={gratitudeSettings.doNotPromptAgain}
         onDoNotSaveTextChange={onGratitudeDoNotSaveChange}
+        onDoNotPromptAgainChange={onGratitudeDoNotPromptAgainChange}
         onTyping={onGratitudeTyping}
         onPersist={onGratitudePersist}
         onComplete={() => {

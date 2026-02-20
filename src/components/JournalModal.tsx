@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getGratitudeBackupFilename, serializeGratitudeJson } from "../lib/backup";
 import {
   createEntry,
   deleteEntry,
@@ -18,6 +19,18 @@ function formatDateLabel(entry: GratitudeEntry): string {
   const date = new Date(base);
   if (!Number.isFinite(date.getTime())) return base;
   return date.toLocaleString();
+}
+
+function downloadTextFile(content: string, filename: string, mime: string): void {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 export function JournalModal({ open, onClose }: Props) {
@@ -133,6 +146,24 @@ export function JournalModal({ open, onClose }: Props) {
               }}
             >
               Export
+            </button>
+            <button
+              type="button"
+              className="journal-modal__export"
+              onClick={() => {
+                try {
+                  downloadTextFile(
+                    serializeGratitudeJson(),
+                    getGratitudeBackupFilename(),
+                    "application/json;charset=utf-8"
+                  );
+                  setMiniToast("Backup saved");
+                } catch {
+                  setMiniToast("Backup failed");
+                }
+              }}
+            >
+              Save Backup
             </button>
             <button type="button" className="journal-modal__close" aria-label="Close Journal" onClick={onClose}>
               ✕

@@ -33,6 +33,17 @@ import {
   loadGratitudeSettings,
   saveGratitudeSettings
 } from "../lib/gratitude";
+import {
+  BackupSizeError,
+  applyImportedConfig,
+  buildConfigSnapshot,
+  exportFullBackup,
+  getConfigExportFilename,
+  getFullBackupFilename,
+  importFullBackup,
+  parseConfigImportText,
+  serializeConfig
+} from "../lib/backup";
 import { titleFromFilename } from "../lib/title";
 import { Button } from "../components/button";
 
@@ -139,6 +150,10 @@ export function AdminApp() {
   const [isNukeRunning, setIsNukeRunning] = useState(false);
   const nukeTimerRef = useRef<number | null>(null);
   const manageStorageRef = useRef<HTMLElement | null>(null);
+  const importConfigInputRef = useRef<HTMLInputElement | null>(null);
+  const importBackupInputRef = useRef<HTMLInputElement | null>(null);
+  const [backupProgress, setBackupProgress] = useState("");
+  const [isBackupBusy, setIsBackupBusy] = useState(false);
 
   const hasTracks = tracks.length > 0;
 
@@ -764,6 +779,98 @@ export function AdminApp() {
     setStatus("Gratitude .txt exported.");
   };
 
+  const downloadBlobFile = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const onExportConfig = () => {
+    try {
+      const content = serializeConfig(buildConfigSnapshot());
+      const blob = new Blob([content], { type: "application/json;charset=utf-8" });
+      downloadBlobFile(blob, getConfigExportFilename());
+      setStatus("Config exported.");
+    } catch {
+      setStatus("Config export failed.");
+    }
+  };
+
+  const onImportConfigFile = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = parseConfigImportText(text);
+      const result = applyImportedConfig(parsed);
+      await refreshTracks();
+      setStatus(
+        result.skippedTrackCount > 0
+          ? `Config imported. ${result.appliedTrackCount} tracks updated, ${result.skippedTrackCount} skipped (not found).`
+          : `Config imported. ${result.appliedTrackCount} tracks updated.`
+      );
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:config-imported" }, window.location.origin);
+        window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
+      }
+    } catch (error) {
+      setStatus(`Config import failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  };
+
+  const onExportFullBackup = async () => {
+    if (isBackupBusy) return;
+    setIsBackupBusy(true);
+    setBackupProgress("Preparing backup…");
+    try {
+      const result = await exportFullBackup((progress) => {
+        setBackupProgress(progress.label);
+      });
+      downloadBlobFile(result.blob, getFullBackupFilename());
+      setStatus(`Full backup exported (${result.trackCount} tracks).`);
+      setBackupProgress("");
+    } catch (error) {
+      if (error instanceof BackupSizeError) {
+        setInfoModal({
+          title: "Backup Too Large",
+          message: `Backup estimate exceeds 250MB (${formatBytes(error.estimatedBytes)}). Remove tracks or use Export Config.`
+        });
+      } else {
+        setStatus(`Full backup export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
+      setBackupProgress("");
+    } finally {
+      setIsBackupBusy(false);
+    }
+  };
+
+  const onImportFullBackupFile = async (file: File | null) => {
+    if (!file || isBackupBusy) return;
+    setIsBackupBusy(true);
+    setBackupProgress("Importing backup…");
+    try {
+      const summary = await importFullBackup(file);
+      await refreshTracks();
+      await refreshStorage();
+      setStatus(
+        `Backup imported. Restored ${summary.restoredTracks} tracks and ${summary.restoredMediaFiles} media files.`
+      );
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:config-imported" }, window.location.origin);
+        window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
+      }
+    } catch (error) {
+      setStatus(`Full backup import failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      setBackupProgress("");
+      setIsBackupBusy(false);
+    }
+  };
+
   const onRemoveDemoTracks = async () => {
     if (!window.confirm("Remove all demo tracks?")) return;
     try {
@@ -1092,6 +1199,58 @@ export function AdminApp() {
         onCopyAll={onCopyAllGratitude}
         onExportTxt={onExportGratitudeTxt}
       />
+
+      <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
+        <h2 className="mb-2 text-base font-semibold text-slate-100">Backups</h2>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="primary" onClick={onExportConfig}>
+            Export Config
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              importConfigInputRef.current?.click();
+            }}
+          >
+            Import Config
+          </Button>
+          <Button variant="primary" onClick={() => void onExportFullBackup()} disabled={isBackupBusy}>
+            Export Full Backup (.zip)
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              importBackupInputRef.current?.click();
+            }}
+            disabled={isBackupBusy}
+          >
+            Import Full Backup (.zip)
+          </Button>
+        </div>
+        <input
+          ref={importConfigInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0] ?? null;
+            void onImportConfigFile(file);
+            event.currentTarget.value = "";
+          }}
+        />
+        <input
+          ref={importBackupInputRef}
+          type="file"
+          accept="application/zip,.zip"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0] ?? null;
+            void onImportFullBackupFile(file);
+            event.currentTarget.value = "";
+          }}
+        />
+        {backupProgress && <div className="mt-2 text-sm text-slate-300">{backupProgress}</div>}
+      </section>
 
       <section
         ref={manageStorageRef}

@@ -3,16 +3,20 @@ import { useEffect, useRef, useState } from "react";
 type Props = {
   open: boolean;
   doNotSaveText: boolean;
+  doNotPromptAgain: boolean;
   onDoNotSaveTextChange: (next: boolean) => void;
+  onDoNotPromptAgainChange: (next: boolean) => void;
   onTyping: () => void;
-  onPersist: (payload: { text: string; doNotSaveText: boolean }) => void;
+  onPersist: (payload: { text: string; doNotSaveText: boolean; doNotPromptAgain: boolean }) => void;
   onComplete: () => void;
 };
 
 export function GratitudePrompt({
   open,
   doNotSaveText,
+  doNotPromptAgain,
   onDoNotSaveTextChange,
+  onDoNotPromptAgainChange,
   onTyping,
   onPersist,
   onComplete
@@ -49,7 +53,7 @@ export function GratitudePrompt({
   if (!open) return null;
 
   const onContinue = () => {
-    onPersist({ text, doNotSaveText });
+    onPersist({ text, doNotSaveText, doNotPromptAgain });
     const prefersReducedMotion =
       typeof window !== "undefined" &&
       typeof window.matchMedia === "function" &&
@@ -94,14 +98,24 @@ export function GratitudePrompt({
           rows={4}
         />
         <div className="gratitude-modal__footer">
-          <label className="gratitude-modal__privacy">
-            <input
-              type="checkbox"
-              checked={doNotSaveText}
-              onChange={(event) => onDoNotSaveTextChange(event.currentTarget.checked)}
-            />
-            <span>Do not save my text</span>
-          </label>
+          <div className="gratitude-modal__choices">
+            <label className="gratitude-modal__privacy">
+              <input
+                type="checkbox"
+                checked={doNotSaveText}
+                onChange={(event) => onDoNotSaveTextChange(event.currentTarget.checked)}
+              />
+              <span>Do not save my text</span>
+            </label>
+            <label className="gratitude-modal__privacy">
+              <input
+                type="checkbox"
+                checked={doNotPromptAgain}
+                onChange={(event) => onDoNotPromptAgainChange(event.currentTarget.checked)}
+              />
+              <span>Do not prompt me again</span>
+            </label>
+          </div>
           <button type="button" className="gratitude-modal__continue" onClick={onContinue}>
             Continue
           </button>
