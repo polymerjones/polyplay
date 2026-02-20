@@ -10,6 +10,7 @@ import {
 import { deleteBlob, getBlob, listBlobStats, putBlob } from "./storage/db";
 import {
   createEmptyLibrary,
+  LIBRARY_STORAGE_KEY,
   loadLibrary,
   migrateLibraryIfNeeded,
   saveLibrary,
@@ -133,6 +134,18 @@ export type ApplyPolyplaylistConfigResult = {
   playlistName: string;
   updatedTrackCount: number;
   missingTrackIds: string[];
+  totalTrackOrderCount: number;
+  foundLocallyCount: number;
+  reorderedCount: number;
+  targetPlaylistId: string;
+  debug: {
+    importedTrackOrderCount: number;
+    localTracksByIdCount: number;
+    matchedCount: number;
+    missingCount: number;
+    importedIdSample: string[];
+    localIdSample: string[];
+  };
 };
 
 export type ImportFullBackupResult = {
@@ -570,13 +583,33 @@ function resolveImportPlaylistName(library: LibraryState, incomingName: string, 
   return `polyplaylist${nextPolyplaylistIndexFromNames(names)}`;
 }
 
+function resolveTrackKey(library: LibraryState, requestedId: string): string | null {
+  if (library.tracksById[requestedId]) return requestedId;
+  for (const [key, track] of Object.entries(library.tracksById)) {
+    if (track.id === requestedId) return key;
+  }
+  return null;
+}
+
+function loadLibrarySnapshotNow(): LibraryState {
+  try {
+    const raw = localStorage.getItem(LIBRARY_STORAGE_KEY);
+    if (!raw) return createEmptyLibrary();
+    return migrateLibraryIfNeeded(JSON.parse(raw) as unknown);
+  } catch {
+    return loadLibrary();
+  }
+}
+
 export function buildPolyplaylistConfig(playlistName: string): PolyplaylistConfigV1 {
-  const library = loadLibrary();
+  const library = loadLibrarySnapshotNow();
   const activePlaylist = library.activePlaylistId ? library.playlistsById[library.activePlaylistId] : undefined;
   if (!activePlaylist) throw new Error("No active playlist available.");
   const { loopByTrack, loopModeByTrack } = readLoopState();
   const safeName = playlistName.trim() || getNextDefaultPolyplaylistName();
-  const trackOrder = activePlaylist.trackIds.filter((trackId) => Boolean(library.tracksById[trackId]));
+  const trackOrder = activePlaylist.trackIds
+    .map((trackId) => resolveTrackKey(library, trackId))
+    .filter((trackId): trackId is string => Boolean(trackId));
   const tracks: Record<string, PolyplaylistTrackConfig> = {};
 
   for (const trackId of trackOrder) {
@@ -616,30 +649,52 @@ export function serializePolyplaylistConfig(playlistName: string): string {
   return JSON.stringify(buildPolyplaylistConfig(playlistName), null, 2);
 }
 
-export function applyImportedPolyplaylistConfig(content: string): ApplyPolyplaylistConfigResult {
+export function applyImportedPolyplaylistConfig(
+  content: string,
+  options?: { targetPlaylistId?: string | null }
+): ApplyPolyplaylistConfigResult {
   const payload = normalizePolyplaylistConfig(JSON.parse(content) as unknown);
-  const library = loadLibrary();
-  const activePlaylistId = library.activePlaylistId;
-  if (!activePlaylistId) throw new Error("No active playlist to apply import.");
-  const activePlaylist = library.playlistsById[activePlaylistId];
-  if (!activePlaylist) throw new Error("Active playlist not found.");
+  const library = loadLibrarySnapshotNow();
+  const targetPlaylistId =
+    options?.targetPlaylistId && library.playlistsById[options.targetPlaylistId]
+      ? options.targetPlaylistId
+      : library.activePlaylistId;
+  if (!targetPlaylistId) throw new Error("No target playlist to apply import.");
+  const targetPlaylist = library.playlistsById[targetPlaylistId];
+  if (!targetPlaylist) throw new Error("Target playlist not found.");
 
-  const resolvedPlaylistName = resolveImportPlaylistName(library, payload.playlistName, activePlaylistId);
-  activePlaylist.name = resolvedPlaylistName;
+  const resolvedPlaylistName = resolveImportPlaylistName(library, payload.playlistName, targetPlaylistId);
+  targetPlaylist.name = resolvedPlaylistName;
   localStorage.setItem(LAYOUT_MODE_KEY, payload.global.layoutMode);
   localStorage.setItem(THEME_MODE_KEY, payload.global.theme);
 
   const { loopByTrack, loopModeByTrack } = readLoopState();
   const missingTrackIds: string[] = [];
   let updatedTrackCount = 0;
+  let foundLocallyCount = 0;
+  const previousOrder = targetPlaylist.trackIds.filter((trackId) => Boolean(library.tracksById[trackId]));
+  const localTrackIds = Object.keys(library.tracksById);
+  const importedIdSample = payload.trackOrder.slice(0, 5);
+  const localIdSample = localTrackIds.slice(0, 5);
+
+  console.log("[polyplaylist-import:start]", {
+    targetPlaylistId,
+    playlistName: payload.playlistName,
+    importedTrackOrderCount: payload.trackOrder.length,
+    localTracksByIdCount: localTrackIds.length,
+    importedIdSample,
+    localIdSample
+  });
 
   for (const trackId of payload.trackOrder) {
-    const localTrack = library.tracksById[trackId];
-    const importedTrack = payload.tracks[trackId];
+    const localTrackKey = resolveTrackKey(library, trackId);
+    const localTrack = localTrackKey ? library.tracksById[localTrackKey] : undefined;
+    const importedTrack = payload.tracks[trackId] ?? (localTrackKey ? payload.tracks[localTrackKey] : undefined);
     if (!localTrack) {
       missingTrackIds.push(trackId);
       continue;
     }
+    foundLocallyCount += 1;
     if (!importedTrack) continue;
 
     localTrack.title = importedTrack.title.trim() || localTrack.title;
@@ -647,21 +702,21 @@ export function applyImportedPolyplaylistConfig(content: string): ApplyPolyplayl
     localTrack.artworkSource = importedTrack.artworkMode === "auto" ? "auto" : "user";
     localTrack.updatedAt = Date.now();
 
-    loopModeByTrack[trackId] = importedTrack.loop.mode;
+    loopModeByTrack[localTrack.id] = importedTrack.loop.mode;
     if (
       importedTrack.loop.mode === "region" &&
       Number.isFinite(importedTrack.loop.in) &&
       Number.isFinite(importedTrack.loop.out) &&
       Number(importedTrack.loop.out) > Number(importedTrack.loop.in)
     ) {
-      loopByTrack[trackId] = {
+      loopByTrack[localTrack.id] = {
         start: Math.max(0, Number(importedTrack.loop.in)),
         end: Number(importedTrack.loop.out),
         active: true,
         editing: false
       };
     } else {
-      delete loopByTrack[trackId];
+      delete loopByTrack[localTrack.id];
     }
     updatedTrackCount += 1;
   }
@@ -669,22 +724,50 @@ export function applyImportedPolyplaylistConfig(content: string): ApplyPolyplayl
   const seen = new Set<string>();
   const orderedByImport: string[] = [];
   for (const trackId of payload.trackOrder) {
-    if (!library.tracksById[trackId]) continue;
-    if (seen.has(trackId)) continue;
-    orderedByImport.push(trackId);
-    seen.add(trackId);
+    const localTrackKey = resolveTrackKey(library, trackId);
+    if (!localTrackKey) continue;
+    if (seen.has(localTrackKey)) continue;
+    orderedByImport.push(localTrackKey);
+    seen.add(localTrackKey);
   }
-  const remainder = activePlaylist.trackIds.filter((trackId) => library.tracksById[trackId] && !seen.has(trackId));
-  activePlaylist.trackIds = [...orderedByImport, ...remainder];
-  activePlaylist.updatedAt = Date.now();
+  if (orderedByImport.length > 0) {
+    targetPlaylist.trackIds = orderedByImport;
+  }
+  targetPlaylist.updatedAt = Date.now();
+
+  let reorderedCount = 0;
+  const maxLen = Math.max(previousOrder.length, orderedByImport.length);
+  for (let i = 0; i < maxLen; i += 1) {
+    if ((previousOrder[i] ?? null) !== (orderedByImport[i] ?? null)) reorderedCount += 1;
+  }
 
   saveLibrary(library);
   writeLoopState(loopByTrack, loopModeByTrack);
 
+  console.log("[polyplaylist-import:end]", {
+    targetPlaylistId,
+    playlistName: resolvedPlaylistName,
+    importedTrackOrderCount: payload.trackOrder.length,
+    matched: foundLocallyCount,
+    missing: missingTrackIds.length
+  });
+
   return {
     playlistName: resolvedPlaylistName,
     updatedTrackCount,
-    missingTrackIds
+    missingTrackIds,
+    totalTrackOrderCount: payload.trackOrder.length,
+    foundLocallyCount,
+    reorderedCount,
+    targetPlaylistId,
+    debug: {
+      importedTrackOrderCount: payload.trackOrder.length,
+      localTracksByIdCount: localTrackIds.length,
+      matchedCount: foundLocallyCount,
+      missingCount: missingTrackIds.length,
+      importedIdSample,
+      localIdSample
+    }
   };
 }
 

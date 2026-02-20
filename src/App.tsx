@@ -47,6 +47,7 @@ const LOOP_REGION_KEY = "polyplay_loopByTrack";
 const LOOP_MODE_KEY = "polyplay_loopModeByTrack";
 const SPLASH_FADE_MS = 420;
 const HAS_IMPORTED_KEY = "polyplay_hasImported";
+const HAS_ONBOARDED_KEY = "polyplay_hasOnboarded_v1";
 const ACTIVE_PLAYLIST_DIRTY_KEY = "polyplay_activePlaylistDirty_v1";
 const LAST_EXPORTED_PLAYLIST_ID_KEY = "polyplay_lastExportedPlaylistId";
 const LAST_EXPORTED_AT_KEY = "polyplay_lastExportedAt";
@@ -136,6 +137,13 @@ export default function App() {
   const [isRepeatTrackEnabled, setIsRepeatTrackEnabled] = useState(false);
   const [dimMode, setDimMode] = useState<DimMode>("normal");
   const [showOpenState, setShowOpenState] = useState(false);
+  const [hasOnboarded, setHasOnboarded] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(HAS_ONBOARDED_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
   const [showSplash, setShowSplash] = useState(false);
   const [isSplashDismissing, setIsSplashDismissing] = useState(false);
   const [isNuking, setIsNuking] = useState(false);
@@ -148,6 +156,24 @@ export default function App() {
   });
   const [showImportWarning, setShowImportWarning] = useState(false);
   const [vaultStatus, setVaultStatus] = useState("");
+  const [importSummary, setImportSummary] = useState<{
+    playlistName: string;
+    updatedTrackCount: number;
+    missingTrackIds: string[];
+    reorderedCount: number;
+    foundLocallyCount: number;
+    totalTrackOrderCount: number;
+    targetPlaylistId: string;
+    debug: {
+      importedTrackOrderCount: number;
+      localTracksByIdCount: number;
+      matchedCount: number;
+      missingCount: number;
+      importedIdSample: string[];
+      localIdSample: string[];
+    };
+  } | null>(null);
+  const [showMissingIds, setShowMissingIds] = useState(false);
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
   const [activePlaylistName, setActivePlaylistName] = useState("My Playlist");
   const [lastExportedAt, setLastExportedAt] = useState<string | null>(() => {
@@ -498,6 +524,10 @@ export default function App() {
 
   useEffect(() => {
     try {
+      if (localStorage.getItem(HAS_ONBOARDED_KEY) === "true") {
+        setShowOpenState(false);
+        return;
+      }
       const hasImported = localStorage.getItem(HAS_IMPORTED_KEY) === "true";
       if (!hasImported && localStorage.getItem(OPEN_STATE_SEEN_KEY) !== "1") setShowOpenState(true);
     } catch {
@@ -531,6 +561,7 @@ export default function App() {
         } catch {
           // Ignore localStorage failures.
         }
+        markHasOnboarded();
         dismissOpenState();
         setOverlayPage(null);
         markActivePlaylistDirty();
@@ -559,6 +590,7 @@ export default function App() {
         } catch {
           // Ignore localStorage failures.
         }
+        markHasOnboarded();
         dismissOpenState();
         markActivePlaylistDirty();
         return;
@@ -618,6 +650,16 @@ export default function App() {
     } catch {
       // Ignore localStorage failures.
     }
+  };
+
+  const markHasOnboarded = () => {
+    setHasOnboarded(true);
+    try {
+      localStorage.setItem(HAS_ONBOARDED_KEY, "true");
+    } catch {
+      // Ignore localStorage failures.
+    }
+    dismissOpenState();
   };
 
   useEffect(() => {
@@ -1204,18 +1246,40 @@ export default function App() {
     importPolyplaylistInputRef.current?.click();
   };
 
+  const openSettingsPanel = () => {
+    markHasOnboarded();
+    setOverlayPage("settings");
+  };
+
   const onImportPolyplaylistFile = async (file: File | null) => {
     if (!file) return;
     try {
+      setImportSummary(null);
+      setShowMissingIds(false);
       const content = await file.text();
-      const summary = applyImportedPolyplaylistConfig(content);
+      const targetPlaylistId = activePlaylistId || loadLibrary().activePlaylistId;
+      const summary = applyImportedPolyplaylistConfig(content, { targetPlaylistId });
       syncPlayerStateFromStorage();
       await refreshTracks();
       clearActivePlaylistDirty();
+      setImportSummary({
+        playlistName: summary.playlistName,
+        updatedTrackCount: summary.updatedTrackCount,
+        missingTrackIds: summary.missingTrackIds,
+        reorderedCount: summary.reorderedCount,
+        foundLocallyCount: summary.foundLocallyCount,
+        totalTrackOrderCount: summary.totalTrackOrderCount,
+        targetPlaylistId: summary.targetPlaylistId,
+        debug: summary.debug
+      });
+      setShowMissingIds(false);
       setVaultStatus(
-        `PolyPlaylist applied. Updated ${summary.updatedTrackCount} tracks. Missing ${summary.missingTrackIds.length} tracks.`
+        summary.updatedTrackCount === 0 && summary.reorderedCount === 0
+          ? "Imported file applied 0 changes. Likely reason: none of the track IDs in this file exist on this device."
+          : `PolyPlaylist applied. Updated ${summary.updatedTrackCount} tracks. Missing ${summary.missingTrackIds.length} tracks. Reordered ${summary.reorderedCount}.`
       );
     } catch (error) {
+      setImportSummary(null);
       setVaultStatus(`Import failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   };
@@ -1346,7 +1410,7 @@ export default function App() {
               type="button"
               className="gear-link nav-action-btn"
               aria-label="Open settings panel"
-              onClick={() => setOverlayPage("settings")}
+              onClick={openSettingsPanel}
             >
               <span className="gear-icon" aria-hidden="true">
                 ⚙
@@ -1381,10 +1445,12 @@ export default function App() {
             }}
           />
         ) : (
-          <EmptyLibraryWelcome
-            onUploadFirstTrack={() => setOverlayPage("settings")}
-            onOpenTips={() => setIsTipsOpen(true)}
-          />
+          !hasOnboarded && (
+            <EmptyLibraryWelcome
+              onUploadFirstTrack={openSettingsPanel}
+              onOpenTips={() => setIsTipsOpen(true)}
+            />
+          )
         )}
       </div>
 
@@ -1564,6 +1630,68 @@ export default function App() {
               )}
 
               {vaultStatus && <p className="vault-status">{vaultStatus}</p>}
+              {importSummary && (
+                <div className="vault-import-summary">
+                  <div>Updated tracks: {importSummary.updatedTrackCount}</div>
+                  <div>Missing track IDs: {importSummary.missingTrackIds.length}</div>
+                  <div>Reordered count: {importSummary.reorderedCount}</div>
+                  <div>Applied playlist ID: {importSummary.targetPlaylistId}</div>
+                  <div>
+                    Import/local/matched/missing: {importSummary.debug.importedTrackOrderCount}/
+                    {importSummary.debug.localTracksByIdCount}/{importSummary.debug.matchedCount}/
+                    {importSummary.debug.missingCount}
+                  </div>
+                  <div>Imported ID sample: {importSummary.debug.importedIdSample.join(", ") || "none"}</div>
+                  <div>Local ID sample: {importSummary.debug.localIdSample.join(", ") || "none"}</div>
+                  <button
+                    type="button"
+                    className="vault-btn vault-btn--ghost"
+                    onClick={async () => {
+                      const payload = {
+                        playlistId: importSummary.targetPlaylistId,
+                        importedTrackOrderCount: importSummary.debug.importedTrackOrderCount,
+                        localTracksByIdCount: importSummary.debug.localTracksByIdCount,
+                        matchedCount: importSummary.debug.matchedCount,
+                        missingCount: importSummary.debug.missingCount,
+                        importedIdSample: importSummary.debug.importedIdSample,
+                        localIdSample: importSummary.debug.localIdSample
+                      };
+                      try {
+                        await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+                        setVaultStatus("Import debug copied.");
+                      } catch {
+                        setVaultStatus("Copy debug failed.");
+                      }
+                    }}
+                  >
+                    Copy Debug
+                  </button>
+                  {importSummary.debug.matchedCount === 0 && (
+                    <p className="vault-import-summary__zero">
+                      0 matching IDs found — ID mismatch bug
+                    </p>
+                  )}
+                  {(importSummary.updatedTrackCount === 0 && importSummary.reorderedCount === 0) && (
+                    <p className="vault-import-summary__zero">
+                      Imported file applied 0 changes. Likely reason: none of the track IDs in this file exist on this device.
+                    </p>
+                  )}
+                  {importSummary.missingTrackIds.length > 0 && (
+                    <div className="vault-import-summary__missing">
+                      <button
+                        type="button"
+                        className="vault-btn vault-btn--ghost"
+                        onClick={() => setShowMissingIds((prev) => !prev)}
+                      >
+                        {showMissingIds ? "Hide missing IDs" : "View missing IDs"}
+                      </button>
+                      {showMissingIds && (
+                        <pre className="vault-import-summary__ids">{importSummary.missingTrackIds.join("\n")}</pre>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </section>
