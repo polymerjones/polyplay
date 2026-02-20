@@ -23,6 +23,7 @@ type Props = {
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
   onClearLoop: () => void;
+  onVinylScratch?: () => void;
   onAuraUp?: () => void;
   onSkip?: (delta: number) => void;
 };
@@ -50,6 +51,7 @@ export function PlayerControls({
   onSetLoop,
   onToggleLoopMode,
   onClearLoop,
+  onVinylScratch,
   onAuraUp,
   onSkip
 }: Props) {
@@ -228,6 +230,16 @@ export function PlayerControls({
         >
           {dimMode === "mute" ? "MUTE" : "DIM"}
         </button>
+        {onVinylScratch && (
+          <button
+            type="button"
+            className="pc-btn pc-btn--sm pc-vinyl-btn"
+            aria-label="Vinyl scratch"
+            onClick={onVinylScratch}
+          >
+            <span className="pc-vinyl-disc" aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       <div className="pc-extras" role="group" aria-label="Playback options">

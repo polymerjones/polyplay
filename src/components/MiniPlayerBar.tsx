@@ -25,6 +25,7 @@ type Props = {
   onToggleShuffle: () => void;
   onToggleRepeatTrack: () => void;
   onCycleDimMode: () => void;
+  onVinylScratch: () => void;
   onSetLoopRange: (start: number, end: number, active: boolean) => void;
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
@@ -51,6 +52,7 @@ export function MiniPlayerBar({
   onToggleShuffle,
   onToggleRepeatTrack,
   onCycleDimMode,
+  onVinylScratch,
   onSetLoopRange,
   onSetLoop,
   onToggleLoopMode,
@@ -120,6 +122,7 @@ export function MiniPlayerBar({
         onToggleShuffle={onToggleShuffle}
         onToggleRepeatTrack={onToggleRepeatTrack}
         onCycleDimMode={onCycleDimMode}
+        onVinylScratch={onVinylScratch}
         onSetLoop={onSetLoop}
         onToggleLoopMode={onToggleLoopMode}
         onClearLoop={onClearLoop}

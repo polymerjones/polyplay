@@ -14,11 +14,9 @@ type Props = {
   onClose: () => void;
 };
 
-type JournalBackgroundMode = "daily" | "random";
 type JournalBackground = {
-  id: string;
+  id: "1" | "2";
   src: string;
-  hasAudio: boolean;
 };
 type Sparkle = {
   id: string;
@@ -30,63 +28,32 @@ type Sparkle = {
   drift: number;
 };
 
-const JOURNAL_BG_MODE_KEY = "journalBgMode";
-const JOURNAL_BG_LAST_ID_KEY = "lastJournalBgId";
-const JOURNAL_BG_SOUND_ENABLED_KEY = "journalBgSoundEnabled";
+const JOURNAL_BG_TOGGLE_KEY = "polyplay_journalBgToggle_v1";
+const JOURNAL_VERSE_INDEX_KEY = "polyplay_journalVerseIndex_v1";
 
 const JOURNAL_BACKGROUNDS: JournalBackground[] = [
-  { id: "clouds1", src: "/clouds1.mov", hasAudio: false },
-  { id: "clouds2", src: "/clouds2waudio.mov", hasAudio: true }
+  { id: "1", src: "/journal/bg1.mp4" },
+  { id: "2", src: "/journal/bg2.mp4" }
 ];
 
-function localDateStamp(date = new Date()): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+const JOURNAL_VERSES = [
+  "Be still, and know that I am God. — Psalm 46:10",
+  "I can do all things through Christ who strengthens me. — Philippians 4:13",
+  "The Lord is my shepherd; I shall not want. — Psalm 23:1",
+  "Let all that you do be done in love. — 1 Corinthians 16:14",
+  "Rejoice in hope, be patient in tribulation, be constant in prayer. — Romans 12:12"
+];
 
-function hashString(input: string): number {
-  let hash = 0;
-  for (let i = 0; i < input.length; i += 1) {
-    hash = (hash << 5) - hash + input.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
-
-function readBgMode(): JournalBackgroundMode {
+function pickAlternatingBackground(): JournalBackground {
+  let nextId: "1" | "2" = "1";
   try {
-    const value = localStorage.getItem(JOURNAL_BG_MODE_KEY);
-    return value === "random" ? "random" : "daily";
+    const last = localStorage.getItem(JOURNAL_BG_TOGGLE_KEY);
+    nextId = last === "1" ? "2" : "1";
+    localStorage.setItem(JOURNAL_BG_TOGGLE_KEY, nextId);
   } catch {
-    return "daily";
+    nextId = "1";
   }
-}
-
-function readSoundEnabled(): boolean {
-  try {
-    return localStorage.getItem(JOURNAL_BG_SOUND_ENABLED_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-
-function pickBackground(mode: JournalBackgroundMode): JournalBackground {
-  if (JOURNAL_BACKGROUNDS.length <= 1) return JOURNAL_BACKGROUNDS[0];
-  if (mode === "daily") {
-    const idx = hashString(localDateStamp()) % JOURNAL_BACKGROUNDS.length;
-    return JOURNAL_BACKGROUNDS[idx];
-  }
-  let lastId = "";
-  try {
-    lastId = localStorage.getItem(JOURNAL_BG_LAST_ID_KEY) || "";
-  } catch {
-    lastId = "";
-  }
-  const pick = JOURNAL_BACKGROUNDS[Math.floor(Math.random() * JOURNAL_BACKGROUNDS.length)];
-  if (pick.id !== lastId) return pick;
-  return JOURNAL_BACKGROUNDS.find((bg) => bg.id !== lastId) || pick;
+  return JOURNAL_BACKGROUNDS.find((bg) => bg.id === nextId) || JOURNAL_BACKGROUNDS[0];
 }
 
 function formatDateLabel(entry: GratitudeEntry): string {
@@ -132,11 +99,18 @@ export function JournalModal({ open, onClose }: Props) {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const backgroundVideoRef = useRef<HTMLVideoElement | null>(null);
   const [entries, setEntries] = useState<GratitudeEntry[]>([]);
-  const [bgMode, setBgMode] = useState<JournalBackgroundMode>(() => readBgMode());
-  const [selectedBgId, setSelectedBgId] = useState<string>(JOURNAL_BACKGROUNDS[0]?.id || "");
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => readSoundEnabled());
-  const [soundArmed, setSoundArmed] = useState(false);
+  const [selectedBgId, setSelectedBgId] = useState<"1" | "2">(JOURNAL_BACKGROUNDS[0]?.id || "1");
   const [query, setQuery] = useState("");
+  const [verseIndex, setVerseIndex] = useState<number>(() => {
+    try {
+      const raw = localStorage.getItem(JOURNAL_VERSE_INDEX_KEY);
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed) && parsed >= 0) return parsed % JOURNAL_VERSES.length;
+    } catch {
+      // Ignore localStorage failures.
+    }
+    return 0;
+  });
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [newEntryText, setNewEntryText] = useState("");
@@ -154,20 +128,13 @@ export function JournalModal({ open, onClose }: Props) {
     setIsComposerOpen(false);
     setNewEntryText("");
     setDraftText("");
-    setSoundArmed(false);
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    const selected = pickBackground(bgMode);
+    const selected = pickAlternatingBackground();
     setSelectedBgId(selected.id);
-    try {
-      localStorage.setItem(JOURNAL_BG_LAST_ID_KEY, selected.id);
-      localStorage.setItem(JOURNAL_BG_MODE_KEY, bgMode);
-    } catch {
-      // Ignore storage errors.
-    }
-  }, [open, bgMode]);
+  }, [open]);
 
   useEffect(() => {
     if (!isComposerOpen) return;
@@ -211,6 +178,14 @@ export function JournalModal({ open, onClose }: Props) {
   }, [miniToast]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem(JOURNAL_VERSE_INDEX_KEY, String(verseIndex));
+    } catch {
+      // Ignore storage failures.
+    }
+  }, [verseIndex]);
+
+  useEffect(() => {
     return () => {
       if (deleteTimerRef.current !== null) {
         window.clearTimeout(deleteTimerRef.current);
@@ -229,22 +204,18 @@ export function JournalModal({ open, onClose }: Props) {
     [selectedBgId]
   );
 
-  const canPlaySound = Boolean(selectedBackground?.hasAudio && soundEnabled && soundArmed);
   const isWritingActive = isComposerOpen || editingEntryId !== null;
   const reducedMotion = useMemo(() => prefersReducedMotion(), []);
   const sparkles = useMemo(() => (reducedMotion ? [] : createSparkles(14)), [reducedMotion, selectedBgId]);
 
   useEffect(() => {
     const video = backgroundVideoRef.current;
-    if (!video) return;
-    video.muted = !canPlaySound;
-    video.volume = canPlaySound ? 0.35 : 0;
-    if (canPlaySound) {
-      void video.play().catch(() => {
-        video.muted = true;
-      });
-    }
-  }, [canPlaySound, selectedBgId, open]);
+    if (!video || !open) return;
+    video.muted = true;
+    video.volume = 0;
+    video.load();
+    void video.play().catch(() => undefined);
+  }, [selectedBgId, open]);
 
   if (!open) return null;
 
@@ -258,18 +229,17 @@ export function JournalModal({ open, onClose }: Props) {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="journalVideoLayer" aria-hidden="true">
-        <video
-          key={selectedBackground.id}
-          ref={backgroundVideoRef}
-          className="journal-heaven-video"
-          src={selectedBackground.src}
-          autoPlay
-          loop
-          playsInline
-          muted
-        />
-      </div>
+      <video
+        key={selectedBackground.id}
+        ref={backgroundVideoRef}
+        className="journalVideoLayer"
+        src={selectedBackground.src}
+        autoPlay
+        loop
+        playsInline
+        muted
+        aria-hidden="true"
+      />
       <div className="journalAmbientLayer" aria-hidden="true" />
       {!reducedMotion && (
         <div className="journalStreaksLayer" aria-hidden="true">
@@ -297,42 +267,17 @@ export function JournalModal({ open, onClose }: Props) {
           ))}
         </div>
       )}
-      <div className={`journal-modal__card journalGlassPanel ${isWritingActive ? "is-writing" : ""}`.trim()} ref={cardRef}>
+      <div
+        className="journalUI"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) onClose();
+        }}
+      >
+        <div className={`journal-modal__card journalGlassPanel ${isWritingActive ? "is-writing" : ""}`.trim()} ref={cardRef}>
         <div className="journalRim" aria-hidden="true" />
         <div className="journal-modal__head">
           <h3>Gratitude Journal</h3>
           <div className="journal-modal__head-actions">
-            {selectedBackground.hasAudio && (
-              <button
-                type="button"
-                className="journal-modal__sound"
-                aria-label={soundEnabled ? "Sound on" : "Sound off"}
-                onClick={() => {
-                  if (!soundArmed && soundEnabled) {
-                    setSoundArmed(true);
-                    return;
-                  }
-                  const next = !soundEnabled;
-                  setSoundArmed(true);
-                  setSoundEnabled(next);
-                  try {
-                    localStorage.setItem(JOURNAL_BG_SOUND_ENABLED_KEY, next ? "true" : "false");
-                  } catch {
-                    // Ignore storage errors.
-                  }
-                }}
-              >
-                Sound {soundEnabled ? "On" : "Off"}
-              </button>
-            )}
-            <button
-              type="button"
-              className="journal-modal__mode"
-              aria-label={`Background mode: ${bgMode}`}
-              onClick={() => setBgMode((prev) => (prev === "daily" ? "random" : "daily"))}
-            >
-              {bgMode === "daily" ? "Daily" : "Random"}
-            </button>
             <button
               type="button"
               className="journal-modal__new"
@@ -385,6 +330,17 @@ export function JournalModal({ open, onClose }: Props) {
           </div>
         </div>
         <div className="journalSearchBarWrap">
+          <div className="journalVerseCard">
+            <strong>Verse</strong>
+            <p>{JOURNAL_VERSES[verseIndex % JOURNAL_VERSES.length]}</p>
+            <button
+              type="button"
+              className="journalVerseBtn"
+              onClick={() => setVerseIndex((prev) => (prev + 1) % JOURNAL_VERSES.length)}
+            >
+              New Verse
+            </button>
+          </div>
           <span className="journalSearchIcon" aria-hidden="true">
             <svg viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="6.5" />
@@ -422,7 +378,7 @@ export function JournalModal({ open, onClose }: Props) {
                 onClick={() => {
                   const trimmed = newEntryText.trim();
                   if (!trimmed) return;
-                  createEntry(trimmed);
+                  createEntry(trimmed, JOURNAL_VERSES[verseIndex % JOURNAL_VERSES.length]);
                   setEntries(listEntries());
                   setNewEntryText("");
                   setIsComposerOpen(false);
@@ -594,6 +550,7 @@ export function JournalModal({ open, onClose }: Props) {
           )}
         </div>
         {miniToast && <div className="journal-modal__toast">{miniToast}</div>}
+      </div>
       </div>
     </section>
   );

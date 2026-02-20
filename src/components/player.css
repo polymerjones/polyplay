@@ -271,6 +271,25 @@
   color: #efe5ff;
 }
 
+.pc-vinyl-btn {
+  width: 40px;
+  min-width: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.pc-vinyl-disc {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 52% 48%, rgba(245, 230, 255, 0.95) 0 1px, rgba(245, 230, 255, 0) 2px),
+    radial-gradient(circle at 50% 50%, rgba(184, 132, 255, 0.8) 0 5px, rgba(36, 20, 68, 1) 6px),
+    radial-gradient(circle at 50% 50%, rgba(20, 14, 34, 1) 0 100%);
+  box-shadow: 0 0 12px rgba(160, 104, 255, 0.42);
+}
+
 .pc-loop-badge {
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.32);

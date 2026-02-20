@@ -10,6 +10,7 @@ export type GratitudeSettings = {
 export type GratitudeEntry = {
   id: string;
   text: string;
+  verse?: string;
   createdAt: string;
   updatedAt?: string;
   privateMode?: boolean;
@@ -52,6 +53,7 @@ function normalizeEntries(entries: unknown): GratitudeEntry[] {
       const normalized: GratitudeEntry = {
         id,
         text: item.text,
+        verse: typeof item.verse === "string" ? item.verse : undefined,
         createdAt,
         privateMode: Boolean(item.privateMode)
       };
@@ -126,7 +128,7 @@ export function shouldShowGratitudePrompt(
   return nowMs - lastMs >= 7 * 24 * 60 * 60 * 1000;
 }
 
-export function appendGratitudeEntry(text: string, nowIso: string): void {
+export function appendGratitudeEntry(text: string, nowIso: string, verse?: string): void {
   const trimmed = text.trim();
   if (!trimmed) return;
   try {
@@ -134,7 +136,7 @@ export function appendGratitudeEntry(text: string, nowIso: string): void {
     const parsed = raw ? (JSON.parse(raw) as unknown) : [];
     const safeEntries = normalizeEntries(parsed);
     const next: GratitudeEntry[] = [
-      { id: makeEntryId(), text: trimmed, createdAt: nowIso, updatedAt: nowIso, privateMode: false },
+      { id: makeEntryId(), text: trimmed, verse: verse?.trim() || undefined, createdAt: nowIso, updatedAt: nowIso, privateMode: false },
       ...safeEntries
     ].slice(0, 50);
     writeEntries(next);
@@ -143,8 +145,8 @@ export function appendGratitudeEntry(text: string, nowIso: string): void {
   }
 }
 
-export function createEntry(text: string): void {
-  appendGratitudeEntry(text, new Date().toISOString());
+export function createEntry(text: string, verse?: string): void {
+  appendGratitudeEntry(text, new Date().toISOString(), verse);
 }
 
 export function getGratitudeEntries(): GratitudeEntry[] {

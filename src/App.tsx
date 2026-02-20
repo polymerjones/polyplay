@@ -34,6 +34,8 @@ import { loadLibrary } from "./lib/storage/library";
 import type { LoopMode, LoopRegion, Track } from "./types";
 
 type DimMode = "normal" | "dim" | "mute";
+type ThemeMode = "light" | "dark" | "custom";
+type CustomThemeSlot = "crimson" | "teal" | "amber";
 type VaultPlaylistInfo = { id: string; name: string; trackCount: number };
 type VaultLibraryInspector = {
   libraryKey: string;
@@ -52,6 +54,7 @@ const SPLASH_SESSION_KEY = "polyplay_hasSeenSplashSession";
 const OPEN_STATE_SEEN_KEY = "polyplay_open_state_seen_v102";
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const THEME_MODE_KEY = "polyplay_themeMode";
+const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
 const DIM_MODE_KEY = "polyplay_dimMode_v1";
@@ -63,6 +66,7 @@ const HAS_ONBOARDED_KEY = "polyplay_hasOnboarded_v1";
 const ACTIVE_PLAYLIST_DIRTY_KEY = "polyplay_activePlaylistDirty_v1";
 const LAST_EXPORTED_PLAYLIST_ID_KEY = "polyplay_lastExportedPlaylistId";
 const LAST_EXPORTED_AT_KEY = "polyplay_lastExportedAt";
+const SCRATCH_SFX_PATHS = ["/hyper-notif.wav#s1", "/hyper-notif.wav#s2", "/hyper-notif.wav#s3"];
 
 function clampAura(value: number): number {
   return Math.max(0, Math.min(5, Math.round(value)));
@@ -142,7 +146,8 @@ export default function App() {
   const [isGratitudeReactive, setIsGratitudeReactive] = useState(false);
   const [isJournalOpen, setIsJournalOpen] = useState(false);
   const [showJournalTapToast, setShowJournalTapToast] = useState(false);
-  const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
+  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
+  const [customThemeSlot, setCustomThemeSlot] = useState<CustomThemeSlot>("crimson");
   const [themeToggleAnim, setThemeToggleAnim] = useState<"on" | "off" | null>(null);
   const [themeBloomActive, setThemeBloomActive] = useState(false);
   const [isShuffleEnabled, setIsShuffleEnabled] = useState(false);
@@ -199,6 +204,8 @@ export default function App() {
   });
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const scratchPlayersRef = useRef<HTMLAudioElement[]>([]);
+  const activeScratchRef = useRef<HTMLAudioElement | null>(null);
   const importPolyplaylistInputRef = useRef<HTMLInputElement | null>(null);
   const pendingAutoPlayRef = useRef(false);
   const audioSrcRef = useRef<string | null>(null);
@@ -216,6 +223,8 @@ export default function App() {
   const gratitudeTypingTimeoutRef = useRef<number | null>(null);
   const journalToastTimeoutRef = useRef<number | null>(null);
   const gratitudeEvaluatedRef = useRef(false);
+  const safeTapSeqRef = useRef(0);
+  const [safeTapBursts, setSafeTapBursts] = useState<Array<{ id: number; x: number; y: number }>>([]);
 
   const markActivePlaylistDirty = () => {
     setIsActivePlaylistDirty(true);
@@ -278,7 +287,13 @@ export default function App() {
       const savedLayout = localStorage.getItem(LAYOUT_MODE_KEY);
       if (savedLayout === "grid" || savedLayout === "list") setLayoutMode(savedLayout);
       const savedTheme = localStorage.getItem(THEME_MODE_KEY);
-      if (savedTheme === "light" || savedTheme === "dark") setThemeMode(savedTheme);
+      if (savedTheme === "light" || savedTheme === "dark" || savedTheme === "custom") {
+        setThemeMode(savedTheme);
+      }
+      const savedCustomThemeSlot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
+      if (savedCustomThemeSlot === "crimson" || savedCustomThemeSlot === "teal" || savedCustomThemeSlot === "amber") {
+        setCustomThemeSlot(savedCustomThemeSlot);
+      }
       setIsShuffleEnabled(localStorage.getItem(SHUFFLE_ENABLED_KEY) === "true");
       setIsRepeatTrackEnabled(localStorage.getItem(REPEAT_TRACK_KEY) === "true");
       setLoopByTrack(parseLoopByTrack(localStorage.getItem(LOOP_REGION_KEY)));
@@ -489,7 +504,9 @@ export default function App() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(THEME_MODE_KEY);
-      if (saved === "light" || saved === "dark") setThemeMode(saved);
+      if (saved === "light" || saved === "dark" || saved === "custom") setThemeMode(saved);
+      const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
+      if (slot === "crimson" || slot === "teal" || slot === "amber") setCustomThemeSlot(slot);
     } catch {
       // Ignore localStorage failures.
     }
@@ -550,8 +567,16 @@ export default function App() {
 
   useEffect(() => {
     document.body.classList.toggle("theme-dark", themeMode === "dark");
+    document.body.classList.toggle("theme-custom", themeMode === "custom");
+    document.body.classList.toggle("theme-custom-crimson", themeMode === "custom" && customThemeSlot === "crimson");
+    document.body.classList.toggle("theme-custom-teal", themeMode === "custom" && customThemeSlot === "teal");
+    document.body.classList.toggle("theme-custom-amber", themeMode === "custom" && customThemeSlot === "amber");
     return () => {
       document.body.classList.remove("theme-dark");
+      document.body.classList.remove("theme-custom");
+      document.body.classList.remove("theme-custom-crimson");
+      document.body.classList.remove("theme-custom-teal");
+      document.body.classList.remove("theme-custom-amber");
       if (themeAnimTimeoutRef.current !== null) {
         window.clearTimeout(themeAnimTimeoutRef.current);
         themeAnimTimeoutRef.current = null;
@@ -561,7 +586,15 @@ export default function App() {
         themeBloomTimeoutRef.current = null;
       }
     };
-  }, [themeMode]);
+  }, [themeMode, customThemeSlot]);
+
+  useEffect(() => {
+    const isDimVibe = dimMode === "dim";
+    document.body.classList.toggle("dim-vibe", isDimVibe);
+    return () => {
+      document.body.classList.remove("dim-vibe");
+    };
+  }, [dimMode]);
 
   useEffect(() => {
     try {
@@ -645,6 +678,18 @@ export default function App() {
       if (type === "polyplay:gratitude-settings-updated") {
         const next = loadGratitudeSettings();
         setGratitudeSettings(next);
+        return;
+      }
+      if (type === "polyplay:custom-theme-slot-updated") {
+        const slot = event.data?.slot;
+        if (slot === "crimson" || slot === "teal" || slot === "amber") {
+          setCustomThemeSlot(slot);
+          try {
+            localStorage.setItem(CUSTOM_THEME_SLOT_KEY, slot);
+          } catch {
+            // Ignore localStorage failures.
+          }
+        }
         return;
       }
       if (type === "polyplay:config-imported") {
@@ -766,6 +811,54 @@ export default function App() {
     }
     audio.muted = false;
     audio.volume = mode === "dim" ? 0.12 : 1;
+  };
+
+  const getDimAudioState = (mode: DimMode): { muted: boolean; volume: number } => {
+    if (mode === "mute") return { muted: true, volume: 0 };
+    if (mode === "dim") return { muted: false, volume: 0.12 };
+    return { muted: false, volume: 1 };
+  };
+
+  useEffect(() => {
+    const players = SCRATCH_SFX_PATHS.map((src) => {
+      const audio = new Audio(src);
+      audio.preload = "auto";
+      return audio;
+    });
+    scratchPlayersRef.current = players;
+    return () => {
+      for (const audio of players) {
+        audio.pause();
+        audio.src = "";
+      }
+      activeScratchRef.current = null;
+      scratchPlayersRef.current = [];
+    };
+  }, []);
+
+  const playVinylScratch = () => {
+    const players = scratchPlayersRef.current;
+    if (!players.length) return;
+    const next = players[Math.floor(Math.random() * players.length)];
+    const active = activeScratchRef.current;
+    if (active) {
+      active.pause();
+      try {
+        active.currentTime = 0;
+      } catch {
+        // Ignore scrub failures.
+      }
+    }
+    const audioState = getDimAudioState(dimMode);
+    next.muted = audioState.muted;
+    next.volume = audioState.volume;
+    try {
+      next.currentTime = 0;
+    } catch {
+      // Ignore scrub failures.
+    }
+    void next.play().catch(() => undefined);
+    activeScratchRef.current = next;
   };
 
   useEffect(() => {
@@ -1101,8 +1194,7 @@ export default function App() {
     });
   };
 
-  const toggleTheme = (event: MouseEvent<HTMLButtonElement>) => {
-    const next = themeMode === "light" ? "dark" : "light";
+  const setThemeModeExplicit = (next: ThemeMode, event?: MouseEvent<HTMLButtonElement>) => {
     setThemeMode(next);
     try {
       localStorage.setItem(THEME_MODE_KEY, next);
@@ -1122,7 +1214,7 @@ export default function App() {
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!prefersReducedMotion) {
-      setThemeToggleAnim(next === "dark" ? "on" : "off");
+      setThemeToggleAnim(next === "light" ? "off" : "on");
       if (themeAnimTimeoutRef.current !== null) window.clearTimeout(themeAnimTimeoutRef.current);
       themeAnimTimeoutRef.current = window.setTimeout(() => {
         setThemeToggleAnim(null);
@@ -1141,6 +1233,7 @@ export default function App() {
       themeBloomTimeoutRef.current = null;
     }, 320);
 
+    if (!event) return;
     const button = event.currentTarget;
     const burst = document.createElement("span");
     burst.className = "pc-aura-burst";
@@ -1155,6 +1248,13 @@ export default function App() {
     }
     button.appendChild(burst);
     burst.addEventListener("animationend", () => burst.remove(), { once: true });
+  };
+
+  const cycleTheme = (event: MouseEvent<HTMLButtonElement>) => {
+    const order: ThemeMode[] = ["light", "dark", "custom"];
+    const currentIndex = order.indexOf(themeMode);
+    const next = order[(currentIndex + 1) % order.length];
+    setThemeModeExplicit(next, event);
   };
 
   const openJournal = (event: MouseEvent<HTMLButtonElement>) => {
@@ -1186,6 +1286,28 @@ export default function App() {
       setShowJournalTapToast(false);
       journalToastTimeoutRef.current = null;
     }, 900);
+  };
+
+  const onSafeTap = (event: MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    if (
+      target.closest(
+        'button, input, textarea, select, a, [role="button"], .player-controls, .mini-player-bar, .topbar, .track-grid, .app-overlay, .journal-modal, .fullscreen-player-shell'
+      )
+    ) {
+      return;
+    }
+    const reducedMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) return;
+    const id = ++safeTapSeqRef.current;
+    setSafeTapBursts((prev) => [...prev, { id, x: event.clientX, y: event.clientY }]);
+    window.setTimeout(() => {
+      setSafeTapBursts((prev) => prev.filter((burst) => burst.id !== id));
+    }, 520);
   };
 
   const onGratitudeDoNotSaveChange = (next: boolean) => {
@@ -1377,6 +1499,7 @@ export default function App() {
       />
       <div
         className={`app touch-clean ${isNuking ? "is-nuking" : ""}`.trim()}
+        onClick={onSafeTap}
         onAnimationEnd={(event) => {
           if (!isNuking) return;
           if (event.target !== event.currentTarget) return;
@@ -1389,23 +1512,39 @@ export default function App() {
             <span>{APP_TITLE}</span>
           </div>
           <div className="top-actions">
-            <button
-              type="button"
-              className={`theme-link nav-action-btn header-icon-btn--hero ${
-                themeMode === "dark" ? "is-active" : ""
-              } ${themeToggleAnim ? `is-anim-${themeToggleAnim}` : ""} ${
+            <div
+              className={`theme-triad ${themeToggleAnim ? `is-anim-${themeToggleAnim}` : ""} ${
                 themeBloomActive ? "is-bloom" : ""
               }`.trim()}
-              aria-label={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              onClick={toggleTheme}
+              role="group"
+              aria-label="Theme mode"
             >
-              <span className="theme-switch-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" className="theme-switch-svg">
-                  <rect x="3" y="7" width="18" height="10" rx="5" />
-                  <circle className="theme-switch-knob" cx={themeMode === "dark" ? 16.5 : 7.5} cy="12" r="3.2" />
-                </svg>
-              </span>
-            </button>
+              <button
+                type="button"
+                className={`theme-triad__btn ${themeMode === "light" ? "is-active" : ""}`.trim()}
+                onClick={(event) => setThemeModeExplicit("light", event)}
+                aria-label="Theme light"
+              >
+                Light
+              </button>
+              <button
+                type="button"
+                className={`theme-triad__btn ${themeMode === "dark" ? "is-active" : ""}`.trim()}
+                onClick={(event) => setThemeModeExplicit("dark", event)}
+                aria-label="Theme dark"
+              >
+                Dark
+              </button>
+              <button
+                type="button"
+                className={`theme-triad__btn ${themeMode === "custom" ? "is-active" : ""}`.trim()}
+                onClick={(event) => setThemeModeExplicit("custom", event)}
+                onDoubleClick={cycleTheme}
+                aria-label="Theme custom"
+              >
+                Custom
+              </button>
+            </div>
             <button
               type="button"
               className={`journal-link nav-action-btn header-icon-btn--hero ${
@@ -1541,6 +1680,7 @@ export default function App() {
           onToggleShuffle={toggleShuffle}
           onToggleRepeatTrack={toggleRepeatTrack}
           onCycleDimMode={cycleDimMode}
+          onVinylScratch={playVinylScratch}
           onSetLoopRange={setLoopRange}
           onSetLoop={setLoopFromCurrent}
           onToggleLoopMode={toggleLoopMode}
@@ -1570,6 +1710,7 @@ export default function App() {
           onToggleShuffle={toggleShuffle}
           onToggleRepeatTrack={toggleRepeatTrack}
           onCycleDimMode={cycleDimMode}
+          onVinylScratch={playVinylScratch}
           onSetLoopRange={setLoopRange}
           onSetLoop={setLoopFromCurrent}
           onToggleLoopMode={toggleLoopMode}
@@ -1678,7 +1819,10 @@ export default function App() {
                 </div>
                 <div>
                   <span className="vault-summary__label">View</span>
-                  <strong>{layoutMode === "grid" ? "Tiles" : "Rows"} · {themeMode === "dark" ? "Dark" : "Light"}</strong>
+                  <strong>
+                    {layoutMode === "grid" ? "Tiles" : "Rows"} ·{" "}
+                    {themeMode === "dark" ? "Dark" : themeMode === "custom" ? `Custom (${customThemeSlot})` : "Light"}
+                  </strong>
                 </div>
                 <div>
                   <span className="vault-summary__label">Last Export</span>
@@ -1834,6 +1978,13 @@ export default function App() {
         }}
       />
       {showJournalTapToast && <div className="journal-tap-toast">Journal</div>}
+      {safeTapBursts.length > 0 && (
+        <div className="safe-tap-layer" aria-hidden="true">
+          {safeTapBursts.map((burst) => (
+            <span key={burst.id} className="safe-tap-burst" style={{ left: burst.x, top: burst.y }} />
+          ))}
+        </div>
+      )}
     </>
   );
 }

@@ -239,6 +239,39 @@ body.perf-lite::before {
   overflow: hidden;
 }
 
+.theme-triad {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(14, 20, 31, 0.7);
+  box-shadow: 0 0 12px rgba(123, 224, 255, 0.15);
+  position: relative;
+}
+
+.theme-triad__btn {
+  height: 28px;
+  min-width: 62px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #dce8f7;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.theme-triad__btn.is-active {
+  border-color: rgba(195, 151, 255, 0.42);
+  background: radial-gradient(circle at 30% 25%, #7a58d6 0%, #5a35b0 55%, #3a227f 100%);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 6px rgba(255, 255, 255, 0.18),
+    0 0 16px rgba(126, 88, 214, 0.4);
+}
+
 .theme-link.is-active {
   background: radial-gradient(circle at 30% 24%, #855de2 0%, #6f44d1 56%, #4b2d9a 100%);
   border-color: rgba(255, 255, 255, 0.26);
@@ -700,6 +733,41 @@ body.theme-dark {
 body.theme-dark::before {
   animation-duration: 36s;
   opacity: 0.28;
+}
+
+body.theme-custom.theme-custom-crimson {
+  background: #180f1d;
+}
+
+body.theme-custom.theme-custom-teal {
+  background: #0d1c1e;
+}
+
+body.theme-custom.theme-custom-amber {
+  background: #1d160d;
+}
+
+body.theme-custom::before {
+  opacity: 0.26;
+}
+
+body.dim-vibe::before {
+  animation-duration: 36s;
+}
+
+body.dim-vibe .track-backdrop {
+  transition-duration: 340ms;
+}
+
+body.dim-vibe::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(153, 91, 232, 0.16), rgba(153, 91, 232, 0) 62%),
+    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.06) 56%, rgba(0, 0, 0, 0.28) 100%);
 }
 
 body.gratitude-reactive::before {
@@ -1670,6 +1738,41 @@ body.gratitude-reactive .track-backdrop {
   font-size: 12px;
 }
 
+.safe-tap-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+}
+
+.safe-tap-burst {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  background: rgba(243, 227, 255, 0.9);
+  box-shadow:
+    0 0 12px rgba(197, 146, 255, 0.72),
+    0 0 26px rgba(141, 95, 235, 0.48);
+  animation: safe-tap-pop 520ms ease-out forwards;
+}
+
+@keyframes safe-tap-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  25% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2.9);
+  }
+}
+
 @media (max-width: 480px) {
   .now-playing {
     padding: 8px 10px;
@@ -2609,6 +2712,42 @@ body.gratitude-reactive .track-backdrop {
   padding: 0;
 }
 
+.journalVerseCard {
+  margin-bottom: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(14, 20, 30, 0.54);
+  padding: 8px 10px;
+  color: rgba(240, 247, 255, 0.92);
+  display: grid;
+  gap: 4px;
+}
+
+.journalVerseCard strong {
+  font-size: 11px;
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+  color: rgba(201, 227, 255, 0.82);
+}
+
+.journalVerseCard p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.journalVerseBtn {
+  justify-self: start;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(194, 162, 255, 0.4);
+  background: rgba(91, 55, 170, 0.48);
+  color: #f2eaff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 10px;
+}
+
 .journalSearchBarWrap {
   margin-top: 2px;
   position: relative;
@@ -3038,7 +3177,8 @@ body.gratitude-reactive .track-backdrop {
   .journal-heaven-bg::after,
   .journalAmbientLayer,
   .journalStreak,
-  .journalSparkle {
+  .journalSparkle,
+  .safe-tap-burst {
     animation: none;
   }
 

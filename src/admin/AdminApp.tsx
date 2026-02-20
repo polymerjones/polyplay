@@ -62,6 +62,7 @@ import { Button } from "../components/button";
 const HAS_IMPORTED_KEY = "polyplay_hasImported";
 const HAS_ONBOARDED_KEY = "polyplay_hasOnboarded_v1";
 const THEME_MODE_KEY = "polyplay_themeMode";
+const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
 
 function formatTrackLabel(track: DbTrackRecord): string {
   const shortId = track.id.slice(0, 8);
@@ -160,6 +161,14 @@ export function AdminApp() {
   const [editingPlaylistName, setEditingPlaylistName] = useState("");
   const [playlistBusyId, setPlaylistBusyId] = useState<string | null>(null);
   const [sortLargestFirst, setSortLargestFirst] = useState(true);
+  const [customThemeSlot, setCustomThemeSlot] = useState<"crimson" | "teal" | "amber">(() => {
+    try {
+      const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
+      return slot === "teal" || slot === "amber" ? slot : "crimson";
+    } catch {
+      return "crimson";
+    }
+  });
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
   const [editingTrackTitle, setEditingTrackTitle] = useState("");
   const [renamingTrackId, setRenamingTrackId] = useState<string | null>(null);
@@ -243,15 +252,27 @@ export function AdminApp() {
     };
     const saved = localStorage.getItem(THEME_MODE_KEY);
     applyTheme(saved === "dark" ? "dark" : "light");
+    try {
+      const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
+      if (slot === "crimson" || slot === "teal" || slot === "amber") setCustomThemeSlot(slot);
+    } catch {
+      // Ignore storage read failures.
+    }
 
     const onStorage = (event: StorageEvent) => {
-      if (event.key !== THEME_MODE_KEY) return;
-      applyTheme(event.newValue === "dark" ? "dark" : "light");
+      if (event.key === THEME_MODE_KEY) {
+        applyTheme(event.newValue === "dark" ? "dark" : "light");
+      }
+      if (event.key === CUSTOM_THEME_SLOT_KEY) {
+        const slot = event.newValue;
+        if (slot === "crimson" || slot === "teal" || slot === "amber") setCustomThemeSlot(slot);
+      }
     };
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type !== "polyplay:theme-changed") return;
-      const next = event.data?.themeMode === "dark" ? "dark" : "light";
+      const mode = event.data?.themeMode;
+      const next = mode === "dark" ? "dark" : "light";
       applyTheme(next);
     };
     window.addEventListener("storage", onStorage);
@@ -1497,6 +1518,42 @@ export function AdminApp() {
             );
           })}
           {!playlists.length && <div className="playlist-manager__empty">No playlists found.</div>}
+        </div>
+      </section>
+
+      <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
+        <h2 className="mb-2 text-base font-semibold text-slate-100">Theme Packs</h2>
+        <div className="grid gap-2 sm:grid-cols-[200px_1fr] sm:items-center">
+          <label className="text-sm text-slate-200" htmlFor="custom-theme-slot">
+            Custom theme slot
+          </label>
+          <select
+            id="custom-theme-slot"
+            className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+            value={customThemeSlot}
+            onChange={(event) => {
+              const slot = event.currentTarget.value;
+              if (slot !== "crimson" && slot !== "teal" && slot !== "amber") return;
+              setCustomThemeSlot(slot);
+              try {
+                localStorage.setItem(CUSTOM_THEME_SLOT_KEY, slot);
+              } catch {
+                // Ignore localStorage failures.
+              }
+              try {
+                if (window.parent && window.parent !== window) {
+                  window.parent.postMessage({ type: "polyplay:custom-theme-slot-updated", slot }, window.location.origin);
+                }
+              } catch {
+                // Ignore postMessage failures.
+              }
+              setStatus(`Custom theme slot set to ${slot}.`);
+            }}
+          >
+            <option value="crimson">Crimson</option>
+            <option value="teal">Teal</option>
+            <option value="amber">Amber</option>
+          </select>
         </div>
       </section>
 
