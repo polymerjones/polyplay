@@ -8,7 +8,14 @@ type Props = {
 
 export function SplashOverlay({ isDismissing, onComplete }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const completedRef = useRef(false);
   const [needsUserStart, setNeedsUserStart] = useState(false);
+
+  const completeOnce = () => {
+    if (completedRef.current) return;
+    completedRef.current = true;
+    onComplete();
+  };
 
   useEffect(() => {
     const video = videoRef.current;
@@ -51,9 +58,15 @@ export function SplashOverlay({ isDismissing, onComplete }: Props) {
         autoPlay
         playsInline
         preload="auto"
-        onEnded={onComplete}
+        onTimeUpdate={(event) => {
+          const video = event.currentTarget;
+          const safeDuration = Number.isFinite(video.duration) ? video.duration : 0;
+          if (safeDuration <= 1) return;
+          if (video.currentTime >= safeDuration - 1) completeOnce();
+        }}
+        onEnded={completeOnce}
       />
-      <button type="button" className="splash-overlay__skip" onClick={onComplete}>
+      <button type="button" className="splash-overlay__skip" onClick={completeOnce}>
         Skip
       </button>
       {needsUserStart && (
