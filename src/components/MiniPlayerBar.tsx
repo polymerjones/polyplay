@@ -13,6 +13,7 @@ type Props = {
   duration: number;
   loopRegion: LoopRegion;
   loopMode: LoopMode;
+  dimMode: "normal" | "dim" | "mute";
   onPrev: () => void;
   onPlayPause: () => void;
   onNext: () => void;
@@ -23,6 +24,7 @@ type Props = {
   repeatTrackEnabled: boolean;
   onToggleShuffle: () => void;
   onToggleRepeatTrack: () => void;
+  onCycleDimMode: () => void;
   onSetLoopRange: (start: number, end: number, active: boolean) => void;
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
@@ -37,6 +39,7 @@ export function MiniPlayerBar({
   duration,
   loopRegion,
   loopMode,
+  dimMode,
   onPrev,
   onPlayPause,
   onNext,
@@ -47,6 +50,7 @@ export function MiniPlayerBar({
   repeatTrackEnabled,
   onToggleShuffle,
   onToggleRepeatTrack,
+  onCycleDimMode,
   onSetLoopRange,
   onSetLoop,
   onToggleLoopMode,
@@ -106,6 +110,7 @@ export function MiniPlayerBar({
         currentTime={currentTime}
         duration={duration}
         loopMode={loopMode}
+        dimMode={dimMode}
         onPrev={onPrev}
         onPlayPause={onPlayPause}
         onNext={onNext}
@@ -114,6 +119,7 @@ export function MiniPlayerBar({
         repeatTrackEnabled={repeatTrackEnabled}
         onToggleShuffle={onToggleShuffle}
         onToggleRepeatTrack={onToggleRepeatTrack}
+        onCycleDimMode={onCycleDimMode}
         onSetLoop={onSetLoop}
         onToggleLoopMode={onToggleLoopMode}
         onClearLoop={onClearLoop}

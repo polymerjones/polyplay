@@ -32,6 +32,8 @@ import { revokeAllMediaUrls } from "./lib/player/media";
 import { loadLibrary } from "./lib/storage/library";
 import type { LoopMode, LoopRegion, Track } from "./types";
 
+type DimMode = "normal" | "dim" | "mute";
+
 const EMPTY_LOOP: LoopRegion = { start: 0, end: 0, active: false, editing: false };
 const SPLASH_SEEN_KEY = "polyplay_hasSeenSplash";
 const SPLASH_SESSION_KEY = "polyplay_hasSeenSplashSession";
@@ -40,6 +42,7 @@ const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const THEME_MODE_KEY = "polyplay_themeMode";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
+const DIM_MODE_KEY = "polyplay_dimMode_v1";
 const LOOP_REGION_KEY = "polyplay_loopByTrack";
 const LOOP_MODE_KEY = "polyplay_loopModeByTrack";
 const SPLASH_FADE_MS = 420;
@@ -131,6 +134,7 @@ export default function App() {
   const [themeBloomActive, setThemeBloomActive] = useState(false);
   const [isShuffleEnabled, setIsShuffleEnabled] = useState(false);
   const [isRepeatTrackEnabled, setIsRepeatTrackEnabled] = useState(false);
+  const [dimMode, setDimMode] = useState<DimMode>("normal");
   const [showOpenState, setShowOpenState] = useState(false);
   const [showSplash, setShowSplash] = useState(false);
   const [isSplashDismissing, setIsSplashDismissing] = useState(false);
@@ -468,6 +472,10 @@ export default function App() {
     try {
       setIsShuffleEnabled(localStorage.getItem(SHUFFLE_ENABLED_KEY) === "true");
       setIsRepeatTrackEnabled(localStorage.getItem(REPEAT_TRACK_KEY) === "true");
+      const savedDimMode = localStorage.getItem(DIM_MODE_KEY);
+      if (savedDimMode === "normal" || savedDimMode === "dim" || savedDimMode === "mute") {
+        setDimMode(savedDimMode);
+      }
     } catch {
       // Ignore localStorage failures.
     }
@@ -665,6 +673,20 @@ export default function App() {
     if (!audio) return;
     audio.loop = currentLoopMode === "track" || (isRepeatTrackEnabled && currentLoopMode !== "region");
   }, [currentLoopMode, isRepeatTrackEnabled]);
+
+  const applyDimMode = (audio: HTMLAudioElement | null, mode: DimMode) => {
+    if (!audio) return;
+    if (mode === "mute") {
+      audio.muted = true;
+      return;
+    }
+    audio.muted = false;
+    audio.volume = mode === "dim" ? 0.12 : 1;
+  };
+
+  useEffect(() => {
+    applyDimMode(audioRef.current, dimMode);
+  }, [dimMode, currentTrackId, currentAudioUrl]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -976,6 +998,18 @@ export default function App() {
       const next = !prev;
       try {
         localStorage.setItem(REPEAT_TRACK_KEY, next ? "true" : "false");
+      } catch {
+        // Ignore localStorage failures.
+      }
+      return next;
+    });
+  };
+
+  const cycleDimMode = () => {
+    setDimMode((prev) => {
+      const next: DimMode = prev === "normal" ? "dim" : prev === "dim" ? "mute" : "normal";
+      try {
+        localStorage.setItem(DIM_MODE_KEY, next);
       } catch {
         // Ignore localStorage failures.
       }
@@ -1374,8 +1408,10 @@ export default function App() {
           onSkip={skip}
           shuffleEnabled={isShuffleEnabled}
           repeatTrackEnabled={isRepeatTrackEnabled}
+          dimMode={dimMode}
           onToggleShuffle={toggleShuffle}
           onToggleRepeatTrack={toggleRepeatTrack}
+          onCycleDimMode={cycleDimMode}
           onSetLoopRange={setLoopRange}
           onSetLoop={setLoopFromCurrent}
           onToggleLoopMode={toggleLoopMode}
@@ -1401,8 +1437,10 @@ export default function App() {
           onSeek={seekTo}
           shuffleEnabled={isShuffleEnabled}
           repeatTrackEnabled={isRepeatTrackEnabled}
+          dimMode={dimMode}
           onToggleShuffle={toggleShuffle}
           onToggleRepeatTrack={toggleRepeatTrack}
+          onCycleDimMode={cycleDimMode}
           onSetLoopRange={setLoopRange}
           onSetLoop={setLoopFromCurrent}
           onToggleLoopMode={toggleLoopMode}

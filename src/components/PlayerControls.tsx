@@ -6,6 +6,7 @@ import type { MouseEvent } from "react";
 
 type Props = {
   variant: "mini" | "fullscreen";
+  dimMode: "normal" | "dim" | "mute";
   isPlaying: boolean;
   currentTime: number;
   duration: number;
@@ -18,6 +19,7 @@ type Props = {
   repeatTrackEnabled: boolean;
   onToggleShuffle: () => void;
   onToggleRepeatTrack: () => void;
+  onCycleDimMode: () => void;
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
   onClearLoop: () => void;
@@ -31,6 +33,7 @@ function clampTime(value: number, duration: number): number {
 
 export function PlayerControls({
   variant,
+  dimMode,
   isPlaying,
   currentTime,
   duration,
@@ -43,6 +46,7 @@ export function PlayerControls({
   repeatTrackEnabled,
   onToggleShuffle,
   onToggleRepeatTrack,
+  onCycleDimMode,
   onSetLoop,
   onToggleLoopMode,
   onClearLoop,
@@ -208,6 +212,22 @@ export function PlayerControls({
           ariaLabel={repeatTrackEnabled ? "Disable repeat track" : "Enable repeat track"}
           size="sm"
         />
+        <button
+          type="button"
+          className={`pc-btn pc-btn--sm pc-dim-btn ${dimMode === "normal" ? "" : "is-active"} ${
+            dimMode === "mute" ? "is-mute" : ""
+          }`.trim()}
+          onClick={onCycleDimMode}
+          aria-label={
+            dimMode === "normal"
+              ? "Dim controls: normal"
+              : dimMode === "dim"
+                ? "Dim controls: dimmed"
+                : "Dim controls: muted"
+          }
+        >
+          {dimMode === "mute" ? "MUTE" : "DIM"}
+        </button>
       </div>
 
       <div className="pc-extras" role="group" aria-label="Playback options">

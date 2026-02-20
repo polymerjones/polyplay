@@ -14,6 +14,7 @@ type Props = {
   duration: number;
   loopRegion: LoopRegion;
   loopMode: LoopMode;
+  dimMode: "normal" | "dim" | "mute";
   onClose: () => void;
   onPrev: () => void;
   onPlayPause: () => void;
@@ -23,6 +24,7 @@ type Props = {
   repeatTrackEnabled: boolean;
   onToggleShuffle: () => void;
   onToggleRepeatTrack: () => void;
+  onCycleDimMode: () => void;
   onSetLoopRange: (start: number, end: number, active: boolean) => void;
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
@@ -38,6 +40,7 @@ export function FullscreenPlayer({
   duration,
   loopRegion,
   loopMode,
+  dimMode,
   onClose,
   onPrev,
   onPlayPause,
@@ -47,6 +50,7 @@ export function FullscreenPlayer({
   repeatTrackEnabled,
   onToggleShuffle,
   onToggleRepeatTrack,
+  onCycleDimMode,
   onSetLoopRange,
   onSetLoop,
   onToggleLoopMode,
@@ -231,6 +235,7 @@ export function FullscreenPlayer({
           currentTime={currentTime}
           duration={duration}
           loopMode={loopMode}
+          dimMode={dimMode}
           onPrev={onPrev}
           onPlayPause={onPlayPause}
           onNext={onNext}
@@ -239,6 +244,7 @@ export function FullscreenPlayer({
           repeatTrackEnabled={repeatTrackEnabled}
           onToggleShuffle={onToggleShuffle}
           onToggleRepeatTrack={onToggleRepeatTrack}
+          onCycleDimMode={onCycleDimMode}
           onSetLoop={onSetLoop}
           onToggleLoopMode={onToggleLoopMode}
           onClearLoop={onClearLoop}

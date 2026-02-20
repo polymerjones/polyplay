@@ -254,6 +254,23 @@
   gap: 6px;
 }
 
+.pc-dim-btn {
+  min-width: 74px;
+  letter-spacing: 0.4px;
+}
+
+.pc-dim-btn.is-active {
+  border-color: rgba(166, 132, 255, 0.62);
+  background: rgba(101, 62, 196, 0.36);
+  color: #f9f2ff;
+}
+
+.pc-dim-btn.is-mute {
+  border-color: rgba(130, 96, 212, 0.72);
+  background: rgba(64, 35, 128, 0.78);
+  color: #efe5ff;
+}
+
 .pc-loop-badge {
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.32);
