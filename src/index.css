@@ -845,6 +845,22 @@ body.perf-lite .track-art-badge {
   animation: admin-nuke-strobe 220ms steps(2, end) infinite;
 }
 
+body.theme-dark .admin-v1 {
+  background: radial-gradient(circle at 18% 10%, rgba(56, 38, 92, 0.24), transparent 52%), #0f1220;
+}
+
+body.theme-dark .admin-v1-card,
+body.theme-dark .admin-v1 header {
+  border-color: rgba(196, 172, 255, 0.22) !important;
+  background-color: rgba(9, 13, 24, 0.84) !important;
+}
+
+body.theme-dark .admin-v1 select,
+body.theme-dark .admin-v1 input,
+body.theme-dark .admin-v1 textarea {
+  background-color: rgba(7, 10, 18, 0.84) !important;
+}
+
 @keyframes admin-nuke-strobe {
   0% {
     background: rgba(38, 10, 14, 0.22);

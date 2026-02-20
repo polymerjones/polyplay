@@ -140,6 +140,10 @@ export function appendGratitudeEntry(text: string, nowIso: string): void {
   }
 }
 
+export function createEntry(text: string): void {
+  appendGratitudeEntry(text, new Date().toISOString());
+}
+
 export function getGratitudeEntries(): GratitudeEntry[] {
   try {
     const raw = localStorage.getItem(GRATITUDE_ENTRIES_KEY);

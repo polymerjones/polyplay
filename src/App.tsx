@@ -988,7 +988,7 @@ export default function App() {
           <div className="top-actions">
             <button
               type="button"
-              className={`theme-link nav-action-btn ${
+              className={`theme-link nav-action-btn header-icon-btn--hero ${
                 themeMode === "dark" ? "is-active" : ""
               } ${themeToggleAnim ? `is-anim-${themeToggleAnim}` : ""} ${
                 themeBloomActive ? "is-bloom" : ""
@@ -1005,7 +1005,9 @@ export default function App() {
             </button>
             <button
               type="button"
-              className="journal-link nav-action-btn"
+              className={`journal-link nav-action-btn header-icon-btn--hero ${
+                isJournalOpen ? "is-active" : ""
+              }`.trim()}
               aria-label="Open Journal"
               title="Journal"
               onClick={openJournal}
