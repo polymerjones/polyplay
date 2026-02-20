@@ -10,7 +10,7 @@ import { MiniPlayerBar } from "./components/MiniPlayerBar";
 import { QuickTipsModal } from "./components/QuickTipsModal";
 import { SplashOverlay } from "./components/SplashOverlay";
 import { TrackGrid } from "./components/TrackGrid";
-import { clearTracksInDb, getTracksFromDb, saveAuraToDb } from "./lib/db";
+import { clearTracksInDb, getTracksFromDb, loadLibraryFromAppSourceOfTruth, saveAuraToDb } from "./lib/db";
 import {
   applyImportedPolyplaylistConfig,
   getNextDefaultPolyplaylistName,
@@ -1205,13 +1205,13 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const exportCurrentPolyplaylist = (): boolean => {
+  const exportCurrentPolyplaylist = async (): Promise<boolean> => {
     const suggestedName = getNextDefaultPolyplaylistName();
     const input = window.prompt("Name your PolyPlaylist", suggestedName);
     if (input === null) return false;
     const playlistName = input.trim() || suggestedName;
     try {
-      const content = serializePolyplaylistConfig(playlistName);
+      const content = await serializePolyplaylistConfig(playlistName);
       const blob = new Blob([content], { type: "application/json;charset=utf-8" });
       downloadBlobFile(blob, getPolyplaylistConfigFilename());
       const stamp = new Date().toISOString();
@@ -1256,9 +1256,18 @@ export default function App() {
     try {
       setImportSummary(null);
       setShowMissingIds(false);
+      const librarySnapshot = await loadLibraryFromAppSourceOfTruth();
+      if (tracks.length > 0 && Object.keys(librarySnapshot.tracksById).length === 0) {
+        console.warn("[polyplaylist] Import reading empty library — source mismatch bug", {
+          renderedTrackCount: tracks.length,
+          localTracksByIdCount: 0
+        });
+        setVaultStatus("Import blocked: library source mismatch (empty tracksById while UI has tracks).");
+        return;
+      }
       const content = await file.text();
-      const targetPlaylistId = activePlaylistId || loadLibrary().activePlaylistId;
-      const summary = applyImportedPolyplaylistConfig(content, { targetPlaylistId });
+      const targetPlaylistId = activePlaylistId || librarySnapshot.activePlaylistId;
+      const summary = await applyImportedPolyplaylistConfig(content, { targetPlaylistId });
       syncPlayerStateFromStorage();
       await refreshTracks();
       clearActivePlaylistDirty();
@@ -1599,8 +1608,8 @@ export default function App() {
                     <button
                       type="button"
                       className="vault-btn vault-btn--primary"
-                      onClick={() => {
-                        const didExport = exportCurrentPolyplaylist();
+                      onClick={async () => {
+                        const didExport = await exportCurrentPolyplaylist();
                         if (!didExport) return;
                         setShowImportWarning(false);
                         importPolyplaylistInputRef.current?.click();

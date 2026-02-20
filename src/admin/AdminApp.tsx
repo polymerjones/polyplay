@@ -13,6 +13,7 @@ import {
   getTrackStorageRows,
   getTrackRowsFromDb,
   isStorageCapError,
+  loadLibraryFromAppSourceOfTruth,
   removeDemoTracksInDb,
   removeTrackFromDb,
   renamePlaylistInDb,
@@ -909,7 +910,7 @@ export function AdminApp() {
     if (userInput === null) return;
     const playlistName = userInput.trim() || suggestedName;
     try {
-      const content = serializePolyplaylistConfig(playlistName);
+      const content = await serializePolyplaylistConfig(playlistName);
       const blob = new Blob([content], { type: "application/json;charset=utf-8" });
       downloadBlobFile(blob, getPolyplaylistConfigFilename());
       setStatus(`PolyPlaylist exported as "${playlistName}".`);
@@ -921,8 +922,19 @@ export function AdminApp() {
   const onImportPolyplaylistFile = async (file: File | null) => {
     if (!file) return;
     try {
+      const librarySnapshot = await loadLibraryFromAppSourceOfTruth();
+      if (tracks.length > 0 && Object.keys(librarySnapshot.tracksById).length === 0) {
+        console.warn("[polyplaylist] Import reading empty library — source mismatch bug", {
+          renderedTrackCount: tracks.length,
+          localTracksByIdCount: 0
+        });
+        setStatus("Import blocked: library source mismatch (empty tracksById while UI has tracks).");
+        return;
+      }
       const content = await file.text();
-      const summary = applyImportedPolyplaylistConfig(content);
+      const summary = await applyImportedPolyplaylistConfig(content, {
+        targetPlaylistId: librarySnapshot.activePlaylistId
+      });
       await refreshTracks();
       await refreshPlaylists();
       await refreshStorage();

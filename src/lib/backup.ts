@@ -8,9 +8,9 @@ import {
   saveGratitudeSettings
 } from "./gratitude";
 import { deleteBlob, getBlob, listBlobStats, putBlob } from "./storage/db";
+import { loadLibraryFromAppSourceOfTruth } from "./db";
 import {
   createEmptyLibrary,
-  LIBRARY_STORAGE_KEY,
   loadLibrary,
   migrateLibraryIfNeeded,
   saveLibrary,
@@ -591,18 +591,8 @@ function resolveTrackKey(library: LibraryState, requestedId: string): string | n
   return null;
 }
 
-function loadLibrarySnapshotNow(): LibraryState {
-  try {
-    const raw = localStorage.getItem(LIBRARY_STORAGE_KEY);
-    if (!raw) return createEmptyLibrary();
-    return migrateLibraryIfNeeded(JSON.parse(raw) as unknown);
-  } catch {
-    return loadLibrary();
-  }
-}
-
-export function buildPolyplaylistConfig(playlistName: string): PolyplaylistConfigV1 {
-  const library = loadLibrarySnapshotNow();
+export async function buildPolyplaylistConfig(playlistName: string): Promise<PolyplaylistConfigV1> {
+  const library = await loadLibraryFromAppSourceOfTruth();
   const activePlaylist = library.activePlaylistId ? library.playlistsById[library.activePlaylistId] : undefined;
   if (!activePlaylist) throw new Error("No active playlist available.");
   const { loopByTrack, loopModeByTrack } = readLoopState();
@@ -645,16 +635,16 @@ export function buildPolyplaylistConfig(playlistName: string): PolyplaylistConfi
   };
 }
 
-export function serializePolyplaylistConfig(playlistName: string): string {
-  return JSON.stringify(buildPolyplaylistConfig(playlistName), null, 2);
+export async function serializePolyplaylistConfig(playlistName: string): Promise<string> {
+  return JSON.stringify(await buildPolyplaylistConfig(playlistName), null, 2);
 }
 
-export function applyImportedPolyplaylistConfig(
+export async function applyImportedPolyplaylistConfig(
   content: string,
   options?: { targetPlaylistId?: string | null }
-): ApplyPolyplaylistConfigResult {
+): Promise<ApplyPolyplaylistConfigResult> {
   const payload = normalizePolyplaylistConfig(JSON.parse(content) as unknown);
-  const library = loadLibrarySnapshotNow();
+  const library = await loadLibraryFromAppSourceOfTruth();
   const targetPlaylistId =
     options?.targetPlaylistId && library.playlistsById[options.targetPlaylistId]
       ? options.targetPlaylistId

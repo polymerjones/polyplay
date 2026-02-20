@@ -249,6 +249,11 @@ export async function getTracksFromDb(): Promise<Track[]> {
   return tracks;
 }
 
+export async function loadLibraryFromAppSourceOfTruth(): Promise<LibraryState> {
+  await maybeMigrateLegacyTracks();
+  return loadLibrary();
+}
+
 export async function getTrackRowsFromDb(): Promise<DbTrackRecord[]> {
   await maybeMigrateLegacyTracks();
   const library = loadLibrary();
