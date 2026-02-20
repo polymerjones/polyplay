@@ -1,2 +1,2 @@
-export const APP_VERSION = (import.meta.env.VITE_APP_VERSION || "v108j").trim();
+export const APP_VERSION = (import.meta.env.VITE_APP_VERSION || "1.1").trim();
 export const APP_TITLE = `Polyplay Music App Beta ${APP_VERSION}`;
