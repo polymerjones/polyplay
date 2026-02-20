@@ -497,6 +497,36 @@ body.perf-lite::before {
   gap: 12px;
 }
 
+.vault-inspector {
+  border-radius: 12px;
+  border: 1px solid rgba(153, 191, 236, 0.24);
+  background: rgba(9, 16, 28, 0.72);
+  padding: 8px 10px;
+}
+
+.vault-inspector summary {
+  cursor: pointer;
+  color: #d8ecff;
+  font-size: 13px;
+  font-weight: 700;
+  user-select: none;
+}
+
+.vault-inspector__grid {
+  margin-top: 8px;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: rgba(214, 230, 255, 0.86);
+}
+
+.vault-inspector__actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .vault-summary {
   display: grid;
   gap: 8px;
@@ -519,6 +549,18 @@ body.perf-lite::before {
 .vault-summary strong {
   font-size: 13px;
   color: #eaf4ff;
+}
+
+.vault-summary__select {
+  width: 100%;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(184, 218, 255, 0.28);
+  background: rgba(10, 18, 30, 0.8);
+  color: #eaf4ff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0 10px;
 }
 
 .vault-actions {
@@ -2297,18 +2339,20 @@ body.gratitude-reactive .track-backdrop {
   position: fixed;
   inset: 0;
   z-index: 95;
-  display: grid;
-  place-items: center;
-  padding: 10px;
+  display: block;
+  padding: 0;
   background: rgba(5, 7, 12, 0.56);
-  backdrop-filter: blur(5px);
 }
 
 .journalScene {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
-.journalVideoLayer,
 .journalAmbientLayer,
 .journalStreaksLayer,
 .journalSparklesLayer {
@@ -2318,7 +2362,15 @@ body.gratitude-reactive .track-backdrop {
 }
 
 .journalVideoLayer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
   z-index: 0;
+  opacity: 0.86;
+  filter: saturate(1.06) contrast(1.03);
 }
 
 .journalAmbientLayer {
@@ -2365,6 +2417,18 @@ body.gratitude-reactive .track-backdrop {
   z-index: 2;
 }
 
+.journalUI {
+  position: relative;
+  z-index: 10;
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 10px;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+}
+
 .journalSparkle {
   position: absolute;
   left: var(--left);
@@ -2384,10 +2448,10 @@ body.gratitude-reactive .track-backdrop {
 
 .journal-modal__card {
   position: relative;
-  z-index: 3;
-  width: min(720px, 100%);
-  max-height: min(94vh, 920px);
-  min-height: min(86vh, 860px);
+  z-index: 11;
+  width: min(720px, calc(100vw - 20px));
+  max-height: min(94dvh, 920px);
+  min-height: min(86dvh, 860px);
   overflow: hidden;
   border-radius: 20px;
   display: grid;
@@ -2423,14 +2487,6 @@ body.gratitude-reactive .track-backdrop {
   inset: 0;
   overflow: hidden;
   pointer-events: none;
-}
-
-.journal-heaven-video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0.86;
-  filter: saturate(1.06) contrast(1.03);
 }
 
 .journal-heaven-overlay {
@@ -2902,12 +2958,16 @@ body.gratitude-reactive .track-backdrop {
   }
 
   .journal-modal {
+    padding: 0;
+  }
+
+  .journalUI {
     padding: 10px;
   }
 
   .journal-modal__card {
-    max-height: 94vh;
-    min-height: 86vh;
+    max-height: 94dvh;
+    min-height: 86dvh;
     padding: 10px;
   }
 

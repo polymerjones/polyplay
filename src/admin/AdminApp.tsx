@@ -338,6 +338,7 @@ export function AdminApp() {
     try {
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type: "polyplay:user-imported" }, window.location.origin);
+        window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
       }
     } catch {
       // Ignore postMessage failures.
@@ -935,6 +936,10 @@ export function AdminApp() {
       const summary = await applyImportedPolyplaylistConfig(content, {
         targetPlaylistId: librarySnapshot.activePlaylistId
       });
+      if (summary.sourceMismatch) {
+        setStatus("Vault cannot see local tracks. This is a library source mismatch. Press Refresh Library.");
+        return;
+      }
       await refreshTracks();
       await refreshPlaylists();
       await refreshStorage();

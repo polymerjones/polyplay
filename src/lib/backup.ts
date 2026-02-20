@@ -7,8 +7,8 @@ import {
   loadGratitudeSettings,
   saveGratitudeSettings
 } from "./gratitude";
+import { getLibrary } from "./library";
 import { deleteBlob, getBlob, listBlobStats, putBlob } from "./storage/db";
-import { loadLibraryFromAppSourceOfTruth } from "./db";
 import {
   createEmptyLibrary,
   loadLibrary,
@@ -146,6 +146,7 @@ export type ApplyPolyplaylistConfigResult = {
     importedIdSample: string[];
     localIdSample: string[];
   };
+  sourceMismatch: boolean;
 };
 
 export type ImportFullBackupResult = {
@@ -591,13 +592,18 @@ function resolveTrackKey(library: LibraryState, requestedId: string): string | n
   return null;
 }
 
-export async function buildPolyplaylistConfig(playlistName: string): Promise<PolyplaylistConfigV1> {
-  const library = await loadLibraryFromAppSourceOfTruth();
-  const activePlaylist = library.activePlaylistId ? library.playlistsById[library.activePlaylistId] : undefined;
-  if (!activePlaylist) throw new Error("No active playlist available.");
+export async function buildPolyplaylistConfig(
+  playlistName: string,
+  options?: { playlistId?: string | null }
+): Promise<PolyplaylistConfigV1> {
+  const library = await getLibrary();
+  const targetPlaylistId =
+    options?.playlistId && library.playlistsById[options.playlistId] ? options.playlistId : library.activePlaylistId;
+  const targetPlaylist = targetPlaylistId ? library.playlistsById[targetPlaylistId] : undefined;
+  if (!targetPlaylist) throw new Error("No active playlist available.");
   const { loopByTrack, loopModeByTrack } = readLoopState();
   const safeName = playlistName.trim() || getNextDefaultPolyplaylistName();
-  const trackOrder = activePlaylist.trackIds
+  const trackOrder = targetPlaylist.trackIds
     .map((trackId) => resolveTrackKey(library, trackId))
     .filter((trackId): trackId is string => Boolean(trackId));
   const tracks: Record<string, PolyplaylistTrackConfig> = {};
@@ -635,8 +641,11 @@ export async function buildPolyplaylistConfig(playlistName: string): Promise<Pol
   };
 }
 
-export async function serializePolyplaylistConfig(playlistName: string): Promise<string> {
-  return JSON.stringify(await buildPolyplaylistConfig(playlistName), null, 2);
+export async function serializePolyplaylistConfig(
+  playlistName: string,
+  options?: { playlistId?: string | null }
+): Promise<string> {
+  return JSON.stringify(await buildPolyplaylistConfig(playlistName, options), null, 2);
 }
 
 export async function applyImportedPolyplaylistConfig(
@@ -644,7 +653,7 @@ export async function applyImportedPolyplaylistConfig(
   options?: { targetPlaylistId?: string | null }
 ): Promise<ApplyPolyplaylistConfigResult> {
   const payload = normalizePolyplaylistConfig(JSON.parse(content) as unknown);
-  const library = await loadLibraryFromAppSourceOfTruth();
+  const library = await getLibrary();
   const targetPlaylistId =
     options?.targetPlaylistId && library.playlistsById[options.targetPlaylistId]
       ? options.targetPlaylistId
@@ -666,6 +675,26 @@ export async function applyImportedPolyplaylistConfig(
   const localTrackIds = Object.keys(library.tracksById);
   const importedIdSample = payload.trackOrder.slice(0, 5);
   const localIdSample = localTrackIds.slice(0, 5);
+  if (localTrackIds.length === 0) {
+    return {
+      playlistName: targetPlaylist.name,
+      updatedTrackCount: 0,
+      missingTrackIds: payload.trackOrder.slice(),
+      totalTrackOrderCount: payload.trackOrder.length,
+      foundLocallyCount: 0,
+      reorderedCount: 0,
+      targetPlaylistId,
+      debug: {
+        importedTrackOrderCount: payload.trackOrder.length,
+        localTracksByIdCount: 0,
+        matchedCount: 0,
+        missingCount: payload.trackOrder.length,
+        importedIdSample,
+        localIdSample
+      },
+      sourceMismatch: true
+    };
+  }
 
   console.log("[polyplaylist-import:start]", {
     targetPlaylistId,
@@ -757,7 +786,8 @@ export async function applyImportedPolyplaylistConfig(
       missingCount: missingTrackIds.length,
       importedIdSample,
       localIdSample
-    }
+    },
+    sourceMismatch: false
   };
 }
 

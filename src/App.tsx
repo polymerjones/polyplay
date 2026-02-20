@@ -10,7 +10,7 @@ import { MiniPlayerBar } from "./components/MiniPlayerBar";
 import { QuickTipsModal } from "./components/QuickTipsModal";
 import { SplashOverlay } from "./components/SplashOverlay";
 import { TrackGrid } from "./components/TrackGrid";
-import { clearTracksInDb, getTracksFromDb, loadLibraryFromAppSourceOfTruth, saveAuraToDb } from "./lib/db";
+import { clearTracksInDb, getTracksFromDb, saveAuraToDb } from "./lib/db";
 import {
   applyImportedPolyplaylistConfig,
   getNextDefaultPolyplaylistName,
@@ -28,11 +28,23 @@ import {
   type GratitudeSettings
 } from "./lib/gratitude";
 import { pickAuraWeightedTrack } from "./lib/aura";
+import { getLibrary, getLibraryKeyUsed } from "./lib/library";
 import { revokeAllMediaUrls } from "./lib/player/media";
 import { loadLibrary } from "./lib/storage/library";
 import type { LoopMode, LoopRegion, Track } from "./types";
 
 type DimMode = "normal" | "dim" | "mute";
+type VaultPlaylistInfo = { id: string; name: string; trackCount: number };
+type VaultLibraryInspector = {
+  libraryKey: string;
+  hasLibraryObject: boolean;
+  tracksByIdCount: number;
+  playlistsByIdCount: number;
+  activePlaylistId: string | null;
+  activePlaylistTrackCount: number;
+  localIdSample: string[];
+  playlists: VaultPlaylistInfo[];
+};
 
 const EMPTY_LOOP: LoopRegion = { start: 0, end: 0, active: false, editing: false };
 const SPLASH_SEEN_KEY = "polyplay_hasSeenSplash";
@@ -172,10 +184,12 @@ export default function App() {
       importedIdSample: string[];
       localIdSample: string[];
     };
+    sourceMismatch: boolean;
   } | null>(null);
   const [showMissingIds, setShowMissingIds] = useState(false);
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
-  const [activePlaylistName, setActivePlaylistName] = useState("My Playlist");
+  const [vaultSelectedPlaylistId, setVaultSelectedPlaylistId] = useState<string | null>(null);
+  const [vaultInspector, setVaultInspector] = useState<VaultLibraryInspector | null>(null);
   const [lastExportedAt, setLastExportedAt] = useState<string | null>(() => {
     try {
       return localStorage.getItem(LAST_EXPORTED_AT_KEY);
@@ -226,11 +240,37 @@ export default function App() {
       const library = loadLibrary();
       const activePlaylist = library.activePlaylistId ? library.playlistsById[library.activePlaylistId] : null;
       setActivePlaylistId(activePlaylist?.id || null);
-      setActivePlaylistName(activePlaylist?.name || "My Playlist");
     } catch {
       setActivePlaylistId(null);
-      setActivePlaylistName("My Playlist");
     }
+  };
+
+  const refreshVaultInspector = async () => {
+    const library = await getLibrary();
+    const playlists = Object.values(library.playlistsById).map((playlist) => ({
+      id: playlist.id,
+      name: playlist.name,
+      trackCount: playlist.trackIds.filter((trackId) => Boolean(library.tracksById[trackId])).length
+    }));
+    const activeId = library.activePlaylistId;
+    const activeTrackCount =
+      activeId && library.playlistsById[activeId]
+        ? library.playlistsById[activeId].trackIds.filter((trackId) => Boolean(library.tracksById[trackId])).length
+        : 0;
+    setVaultInspector({
+      libraryKey: getLibraryKeyUsed(),
+      hasLibraryObject: Boolean(library),
+      tracksByIdCount: Object.keys(library.tracksById || {}).length,
+      playlistsByIdCount: Object.keys(library.playlistsById || {}).length,
+      activePlaylistId: activeId,
+      activePlaylistTrackCount: activeTrackCount,
+      localIdSample: Object.keys(library.tracksById || {}).slice(0, 5),
+      playlists
+    });
+    setVaultSelectedPlaylistId((prev) => {
+      if (prev && library.playlistsById[prev]) return prev;
+      return activeId;
+    });
   };
 
   const syncPlayerStateFromStorage = () => {
@@ -268,6 +308,7 @@ export default function App() {
     const loaded = dbTracks;
     setTracks(loaded);
     refreshActivePlaylistInfo();
+    void refreshVaultInspector();
     setCurrentTrackId((prev) => {
       if (prev && loaded.some((track) => track.id === prev)) return prev;
       return loaded[0]?.id ?? null;
@@ -593,6 +634,7 @@ export default function App() {
         markHasOnboarded();
         dismissOpenState();
         markActivePlaylistDirty();
+        void refreshTracks();
         return;
       }
       if (type === "polyplay:library-updated") {
@@ -1211,14 +1253,15 @@ export default function App() {
     if (input === null) return false;
     const playlistName = input.trim() || suggestedName;
     try {
-      const content = await serializePolyplaylistConfig(playlistName);
+      const targetPlaylistId = vaultSelectedPlaylistId || activePlaylistId;
+      const content = await serializePolyplaylistConfig(playlistName, { playlistId: targetPlaylistId });
       const blob = new Blob([content], { type: "application/json;charset=utf-8" });
       downloadBlobFile(blob, getPolyplaylistConfigFilename());
       const stamp = new Date().toISOString();
       setLastExportedAt(stamp);
       try {
         localStorage.setItem(LAST_EXPORTED_AT_KEY, stamp);
-        if (activePlaylistId) localStorage.setItem(LAST_EXPORTED_PLAYLIST_ID_KEY, activePlaylistId);
+        if (targetPlaylistId) localStorage.setItem(LAST_EXPORTED_PLAYLIST_ID_KEY, targetPlaylistId);
       } catch {
         // Ignore localStorage failures.
       }
@@ -1256,7 +1299,7 @@ export default function App() {
     try {
       setImportSummary(null);
       setShowMissingIds(false);
-      const librarySnapshot = await loadLibraryFromAppSourceOfTruth();
+      const librarySnapshot = await getLibrary();
       if (tracks.length > 0 && Object.keys(librarySnapshot.tracksById).length === 0) {
         console.warn("[polyplaylist] Import reading empty library — source mismatch bug", {
           renderedTrackCount: tracks.length,
@@ -1266,10 +1309,11 @@ export default function App() {
         return;
       }
       const content = await file.text();
-      const targetPlaylistId = activePlaylistId || librarySnapshot.activePlaylistId;
+      const targetPlaylistId = vaultSelectedPlaylistId || activePlaylistId || librarySnapshot.activePlaylistId;
       const summary = await applyImportedPolyplaylistConfig(content, { targetPlaylistId });
       syncPlayerStateFromStorage();
       await refreshTracks();
+      await refreshVaultInspector();
       clearActivePlaylistDirty();
       setImportSummary({
         playlistName: summary.playlistName,
@@ -1279,9 +1323,14 @@ export default function App() {
         foundLocallyCount: summary.foundLocallyCount,
         totalTrackOrderCount: summary.totalTrackOrderCount,
         targetPlaylistId: summary.targetPlaylistId,
-        debug: summary.debug
+        debug: summary.debug,
+        sourceMismatch: summary.sourceMismatch
       });
       setShowMissingIds(false);
+      if (summary.sourceMismatch) {
+        setVaultStatus("Vault cannot see local tracks. This is a library source mismatch. Press Refresh Library.");
+        return;
+      }
       setVaultStatus(
         summary.updatedTrackCount === 0 && summary.reorderedCount === 0
           ? "Imported file applied 0 changes. Likely reason: none of the track IDs in this file exist on this device."
@@ -1308,6 +1357,11 @@ export default function App() {
   useEffect(() => {
     if (!overlayPage) return;
     setIsFullscreenPlayerOpen(false);
+  }, [overlayPage]);
+
+  useEffect(() => {
+    if (overlayPage !== "vault") return;
+    void refreshVaultInspector();
   }, [overlayPage]);
 
   return (
@@ -1566,10 +1620,61 @@ export default function App() {
               </button>
             </div>
             <div className="vault-body">
+              <details className="vault-inspector">
+                <summary>Library Inspector</summary>
+                <div className="vault-inspector__grid">
+                  <div>Library key in use: {vaultInspector?.libraryKey || getLibraryKeyUsed()}</div>
+                  <div>Has library object: {vaultInspector ? String(vaultInspector.hasLibraryObject) : "false"}</div>
+                  <div>tracksById count: {vaultInspector?.tracksByIdCount ?? 0}</div>
+                  <div>playlistsById count: {vaultInspector?.playlistsByIdCount ?? 0}</div>
+                  <div>activePlaylistId: {vaultInspector?.activePlaylistId || "none"}</div>
+                  <div>active playlist track count: {vaultInspector?.activePlaylistTrackCount ?? 0}</div>
+                  <div>Local ID sample: {vaultInspector?.localIdSample.join(", ") || "none"}</div>
+                </div>
+                <div className="vault-inspector__actions">
+                  <button type="button" className="vault-btn vault-btn--ghost" onClick={() => void refreshVaultInspector()}>
+                    Refresh Library
+                  </button>
+                  <button
+                    type="button"
+                    className="vault-btn vault-btn--ghost"
+                    onClick={async () => {
+                      const payload = {
+                        libraryKey: vaultInspector?.libraryKey || getLibraryKeyUsed(),
+                        hasLibraryObject: vaultInspector?.hasLibraryObject ?? false,
+                        tracksByIdCount: vaultInspector?.tracksByIdCount ?? 0,
+                        playlistsByIdCount: vaultInspector?.playlistsByIdCount ?? 0,
+                        activePlaylistId: vaultInspector?.activePlaylistId ?? null,
+                        activePlaylistTrackCount: vaultInspector?.activePlaylistTrackCount ?? 0,
+                        localIdSample: vaultInspector?.localIdSample ?? []
+                      };
+                      try {
+                        await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+                        setVaultStatus("Library debug copied.");
+                      } catch {
+                        setVaultStatus("Copy library debug failed.");
+                      }
+                    }}
+                  >
+                    Copy Library Debug
+                  </button>
+                </div>
+              </details>
+
               <div className="vault-summary">
                 <div>
-                  <span className="vault-summary__label">Active Playlist</span>
-                  <strong>{activePlaylistName}</strong>
+                  <span className="vault-summary__label">Apply Target Playlist</span>
+                  <select
+                    className="vault-summary__select"
+                    value={vaultSelectedPlaylistId || ""}
+                    onChange={(event) => setVaultSelectedPlaylistId(event.currentTarget.value || null)}
+                  >
+                    {(vaultInspector?.playlists || []).map((playlist) => (
+                      <option key={playlist.id} value={playlist.id}>
+                        {playlist.name} ({playlist.trackCount})
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <span className="vault-summary__label">View</span>
@@ -1677,14 +1782,18 @@ export default function App() {
                   </button>
                   {importSummary.debug.matchedCount === 0 && (
                     <p className="vault-import-summary__zero">
-                      0 matching IDs found — ID mismatch bug
+                      {importSummary.sourceMismatch
+                        ? "Vault cannot see local tracks. This is a library source mismatch. Press Refresh Library."
+                        : "0 matching IDs found — ID mismatch bug"}
                     </p>
                   )}
-                  {(importSummary.updatedTrackCount === 0 && importSummary.reorderedCount === 0) && (
+                  {!importSummary.sourceMismatch &&
+                    importSummary.updatedTrackCount === 0 &&
+                    importSummary.reorderedCount === 0 && (
                     <p className="vault-import-summary__zero">
                       Imported file applied 0 changes. Likely reason: none of the track IDs in this file exist on this device.
                     </p>
-                  )}
+                    )}
                   {importSummary.missingTrackIds.length > 0 && (
                     <div className="vault-import-summary__missing">
                       <button
