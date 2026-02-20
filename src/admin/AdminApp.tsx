@@ -16,6 +16,7 @@ import {
   removeDemoTracksInDb,
   removeTrackFromDb,
   renamePlaylistInDb,
+  renameTrackInDb,
   replaceAudioInDb,
   resetAuraInDb,
   setActivePlaylistInDb,
@@ -58,6 +59,7 @@ import { titleFromFilename } from "../lib/title";
 import { Button } from "../components/button";
 
 const HAS_IMPORTED_KEY = "polyplay_hasImported";
+const HAS_ONBOARDED_KEY = "polyplay_hasOnboarded_v1";
 const THEME_MODE_KEY = "polyplay_themeMode";
 
 function formatTrackLabel(track: DbTrackRecord): string {
@@ -157,6 +159,9 @@ export function AdminApp() {
   const [editingPlaylistName, setEditingPlaylistName] = useState("");
   const [playlistBusyId, setPlaylistBusyId] = useState<string | null>(null);
   const [sortLargestFirst, setSortLargestFirst] = useState(true);
+  const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
+  const [editingTrackTitle, setEditingTrackTitle] = useState("");
+  const [renamingTrackId, setRenamingTrackId] = useState<string | null>(null);
   const [infoModal, setInfoModal] = useState<{ title: string; message: string; openManageStorage?: boolean } | null>(
     null
   );
@@ -737,6 +742,7 @@ export function AdminApp() {
       localStorage.removeItem("polyplay_hasSeenSplash");
       localStorage.removeItem("polyplay_open_state_seen_v102");
       localStorage.removeItem(HAS_IMPORTED_KEY);
+      localStorage.removeItem(HAS_ONBOARDED_KEY);
       setStatus("Onboarding reset. Reload the player to see the splash again.");
     } catch {
       setStatus("Could not reset onboarding.");
@@ -1052,6 +1058,39 @@ export function AdminApp() {
       setStatus(`Playlist delete failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setPlaylistBusyId(null);
+    }
+  };
+
+  const onStartTrackRename = (trackId: string, title: string) => {
+    setEditingTrackId(trackId);
+    setEditingTrackTitle(title);
+  };
+
+  const onCancelTrackRename = () => {
+    setEditingTrackId(null);
+    setEditingTrackTitle("");
+  };
+
+  const onSaveTrackRename = async (trackId: string) => {
+    const trimmed = editingTrackTitle.trim();
+    if (!trimmed) {
+      setStatus("Title can't be empty.");
+      return;
+    }
+    setRenamingTrackId(trackId);
+    try {
+      await renameTrackInDb(trackId, trimmed);
+      setStatus("Track renamed.");
+      onCancelTrackRename();
+      await refreshTracks();
+      await refreshStorage();
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
+      }
+    } catch (error) {
+      setStatus(`Track rename failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      setRenamingTrackId(null);
     }
   };
 
@@ -1562,7 +1601,47 @@ export function AdminApp() {
               className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-300/15 bg-slate-900/55 px-3 py-2"
             >
               <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-slate-100">{row.title}</div>
+                {editingTrackId === row.id ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      className="min-w-[220px] rounded-lg border border-slate-300/25 bg-slate-950/85 px-2 py-1 text-sm font-semibold text-slate-100"
+                      value={editingTrackTitle}
+                      autoFocus
+                      onChange={(event) => setEditingTrackTitle(event.currentTarget.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void onSaveTrackRename(row.id);
+                        }
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          onCancelTrackRename();
+                        }
+                      }}
+                    />
+                    <Button variant="primary" onClick={() => void onSaveTrackRename(row.id)} disabled={renamingTrackId === row.id}>
+                      Save
+                    </Button>
+                    <Button variant="secondary" onClick={onCancelTrackRename} disabled={renamingTrackId === row.id}>
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <div className="truncate text-sm font-semibold text-slate-100">{row.title}</div>
+                    <button
+                      type="button"
+                      className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-300/20 bg-slate-800/70 px-2 text-xs font-semibold text-slate-100"
+                      title="Rename"
+                      aria-label={`Rename ${row.title}`}
+                      onClick={() => onStartTrackRename(row.id, row.title)}
+                    >
+                      <span aria-hidden="true">✎</span>
+                      Rename
+                    </button>
+                  </div>
+                )}
                 <div className="text-xs text-slate-400">
                   {formatBytes(row.totalBytes)} • updated {new Date(row.updatedAt).toLocaleDateString()}
                 </div>

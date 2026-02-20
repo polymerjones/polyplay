@@ -87,6 +87,7 @@ body.perf-lite .track-art-badge {
 
 .track-row {
   position: relative;
+  --row-aura-level: 0;
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr) 124px;
   align-items: center;
@@ -99,6 +100,53 @@ body.perf-lite .track-art-badge {
   box-shadow: 0 12px 22px rgba(7, 9, 14, 0.28);
   overflow: hidden;
   padding: 10px 12px;
+}
+
+.rowAuraGlow {
+  box-shadow:
+    0 12px 22px rgba(7, 9, 14, 0.28),
+    0 0 0 1px rgba(158, 112, 255, calc(var(--row-aura-level) * 0.4)),
+    0 0 calc(10px + (var(--row-aura-level) * 14px)) rgba(136, 92, 255, calc(var(--row-aura-level) * 0.3));
+}
+
+.rowAuraGlow[data-aura="1"] {
+  --row-aura-level: 0.2;
+}
+
+.rowAuraGlow[data-aura="2"] {
+  --row-aura-level: 0.4;
+}
+
+.rowAuraGlow[data-aura="3"] {
+  --row-aura-level: 0.6;
+}
+
+.rowAuraGlow[data-aura="4"] {
+  --row-aura-level: 0.8;
+}
+
+.rowAuraGlow[data-aura="5"] {
+  --row-aura-level: 1;
+}
+
+.rowAuraAccent {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(173, 130, 255, calc(0.28 + var(--row-aura-level) * 0.42)),
+    rgba(161, 104, 255, calc(0.18 + var(--row-aura-level) * 0.28)),
+    rgba(161, 104, 255, 0)
+  );
+}
+
+body.theme-dark .rowAuraGlow {
+  box-shadow:
+    0 12px 22px rgba(7, 9, 14, 0.28),
+    0 0 0 1px rgba(168, 126, 255, calc(var(--row-aura-level) * 0.5)),
+    0 0 calc(12px + (var(--row-aura-level) * 16px)) rgba(141, 102, 255, calc(var(--row-aura-level) * 0.34));
 }
 
 .track-art-badge {

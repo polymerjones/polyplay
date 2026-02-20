@@ -246,11 +246,7 @@ export async function getTracksFromDb(): Promise<Track[]> {
   const records = trackIds.map((id) => library.tracksById[id]).filter(Boolean);
 
   const tracks = await Promise.all(records.map((record) => toTrack(record)));
-  return tracks.slice().sort((a, b) => {
-    const aCreated = library.tracksById[a.id]?.createdAt ?? 0;
-    const bCreated = library.tracksById[b.id]?.createdAt ?? 0;
-    return bCreated - aCreated;
-  });
+  return tracks;
 }
 
 export async function getTrackRowsFromDb(): Promise<DbTrackRecord[]> {
@@ -661,6 +657,18 @@ export async function renamePlaylistInDb(playlistId: string, name: string): Prom
   if (!trimmed) throw new Error("Playlist name can't be empty.");
   playlist.name = trimmed;
   playlist.updatedAt = now();
+  saveLibrary(library);
+}
+
+export async function renameTrackInDb(trackId: string, newTitle: string): Promise<void> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const track = library.tracksById[trackId];
+  if (!track) throw new Error("Track not found");
+  const trimmed = newTitle.trim();
+  if (!trimmed) throw new Error("Title can't be empty.");
+  track.title = trimmed;
+  track.updatedAt = now();
   saveLibrary(library);
 }
 
