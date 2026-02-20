@@ -11,6 +11,12 @@ import { QuickTipsModal } from "./components/QuickTipsModal";
 import { SplashOverlay } from "./components/SplashOverlay";
 import { TrackGrid } from "./components/TrackGrid";
 import { clearTracksInDb, getTracksFromDb, saveAuraToDb } from "./lib/db";
+import {
+  applyImportedPolyplaylistConfig,
+  getNextDefaultPolyplaylistName,
+  getPolyplaylistConfigFilename,
+  serializePolyplaylistConfig
+} from "./lib/backup";
 import { installDemoPackIfNeeded } from "./lib/demoPack";
 import {
   appendGratitudeEntry,
@@ -23,6 +29,7 @@ import {
 } from "./lib/gratitude";
 import { pickAuraWeightedTrack } from "./lib/aura";
 import { revokeAllMediaUrls } from "./lib/player/media";
+import { loadLibrary } from "./lib/storage/library";
 import type { LoopMode, LoopRegion, Track } from "./types";
 
 const EMPTY_LOOP: LoopRegion = { start: 0, end: 0, active: false, editing: false };
@@ -37,6 +44,9 @@ const LOOP_REGION_KEY = "polyplay_loopByTrack";
 const LOOP_MODE_KEY = "polyplay_loopModeByTrack";
 const SPLASH_FADE_MS = 420;
 const HAS_IMPORTED_KEY = "polyplay_hasImported";
+const ACTIVE_PLAYLIST_DIRTY_KEY = "polyplay_activePlaylistDirty_v1";
+const LAST_EXPORTED_PLAYLIST_ID_KEY = "polyplay_lastExportedPlaylistId";
+const LAST_EXPORTED_AT_KEY = "polyplay_lastExportedAt";
 
 function clampAura(value: number): number {
   return Math.max(0, Math.min(5, Math.round(value)));
@@ -108,7 +118,7 @@ export default function App() {
   const [loopByTrack, setLoopByTrack] = useState<Record<string, LoopRegion>>({});
   const [loopModeByTrack, setLoopModeByTrack] = useState<Record<string, LoopMode>>({});
   const [isFullscreenPlayerOpen, setIsFullscreenPlayerOpen] = useState(false);
-  const [overlayPage, setOverlayPage] = useState<"settings" | null>(null);
+  const [overlayPage, setOverlayPage] = useState<"settings" | "vault" | null>(null);
   const [isTipsOpen, setIsTipsOpen] = useState(false);
   const [layoutMode, setLayoutMode] = useState<"grid" | "list">("grid");
   const [gratitudeSettings, setGratitudeSettings] = useState<GratitudeSettings>(() => loadGratitudeSettings());
@@ -125,8 +135,27 @@ export default function App() {
   const [showSplash, setShowSplash] = useState(false);
   const [isSplashDismissing, setIsSplashDismissing] = useState(false);
   const [isNuking, setIsNuking] = useState(false);
+  const [isActivePlaylistDirty, setIsActivePlaylistDirty] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(ACTIVE_PLAYLIST_DIRTY_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [showImportWarning, setShowImportWarning] = useState(false);
+  const [vaultStatus, setVaultStatus] = useState("");
+  const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
+  const [activePlaylistName, setActivePlaylistName] = useState("My Playlist");
+  const [lastExportedAt, setLastExportedAt] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(LAST_EXPORTED_AT_KEY);
+    } catch {
+      return null;
+    }
+  });
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const importPolyplaylistInputRef = useRef<HTMLInputElement | null>(null);
   const pendingAutoPlayRef = useRef(false);
   const audioSrcRef = useRef<string | null>(null);
   const splashTimeoutRef = useRef<number | null>(null);
@@ -143,6 +172,52 @@ export default function App() {
   const gratitudeTypingTimeoutRef = useRef<number | null>(null);
   const journalToastTimeoutRef = useRef<number | null>(null);
   const gratitudeEvaluatedRef = useRef(false);
+
+  const markActivePlaylistDirty = () => {
+    setIsActivePlaylistDirty(true);
+    try {
+      localStorage.setItem(ACTIVE_PLAYLIST_DIRTY_KEY, "true");
+    } catch {
+      // Ignore localStorage failures.
+    }
+  };
+
+  const clearActivePlaylistDirty = () => {
+    setIsActivePlaylistDirty(false);
+    try {
+      localStorage.setItem(ACTIVE_PLAYLIST_DIRTY_KEY, "false");
+    } catch {
+      // Ignore localStorage failures.
+    }
+  };
+
+  const refreshActivePlaylistInfo = () => {
+    try {
+      const library = loadLibrary();
+      const activePlaylist = library.activePlaylistId ? library.playlistsById[library.activePlaylistId] : null;
+      setActivePlaylistId(activePlaylist?.id || null);
+      setActivePlaylistName(activePlaylist?.name || "My Playlist");
+    } catch {
+      setActivePlaylistId(null);
+      setActivePlaylistName("My Playlist");
+    }
+  };
+
+  const syncPlayerStateFromStorage = () => {
+    try {
+      const savedLayout = localStorage.getItem(LAYOUT_MODE_KEY);
+      if (savedLayout === "grid" || savedLayout === "list") setLayoutMode(savedLayout);
+      const savedTheme = localStorage.getItem(THEME_MODE_KEY);
+      if (savedTheme === "light" || savedTheme === "dark") setThemeMode(savedTheme);
+      setIsShuffleEnabled(localStorage.getItem(SHUFFLE_ENABLED_KEY) === "true");
+      setIsRepeatTrackEnabled(localStorage.getItem(REPEAT_TRACK_KEY) === "true");
+      setLoopByTrack(parseLoopByTrack(localStorage.getItem(LOOP_REGION_KEY)));
+      setLoopModeByTrack(parseLoopModeByTrack(localStorage.getItem(LOOP_MODE_KEY)));
+      setGratitudeSettings(loadGratitudeSettings());
+    } catch {
+      // Ignore localStorage failures.
+    }
+  };
 
   const logAudioDebug = (event: string, details?: Record<string, unknown>) => {
     try {
@@ -162,6 +237,7 @@ export default function App() {
     const dbTracks = await getTracksFromDb();
     const loaded = dbTracks;
     setTracks(loaded);
+    refreshActivePlaylistInfo();
     setCurrentTrackId((prev) => {
       if (prev && loaded.some((track) => track.id === prev)) return prev;
       return loaded[0]?.id ?? null;
@@ -207,6 +283,7 @@ export default function App() {
     setOverlayPage(null);
     setIsTipsOpen(false);
     setShowOpenState(false);
+    clearActivePlaylistDirty();
     logAudioDebug("nukeAppData:end");
   };
 
@@ -448,6 +525,7 @@ export default function App() {
         }
         dismissOpenState();
         setOverlayPage(null);
+        markActivePlaylistDirty();
         void refreshTracks();
 
         try {
@@ -474,9 +552,11 @@ export default function App() {
           // Ignore localStorage failures.
         }
         dismissOpenState();
+        markActivePlaylistDirty();
         return;
       }
       if (type === "polyplay:library-updated") {
+        markActivePlaylistDirty();
         void refreshTracks();
         return;
       }
@@ -486,19 +566,7 @@ export default function App() {
         return;
       }
       if (type === "polyplay:config-imported") {
-        try {
-          const savedLayout = localStorage.getItem(LAYOUT_MODE_KEY);
-          if (savedLayout === "grid" || savedLayout === "list") setLayoutMode(savedLayout);
-          const savedTheme = localStorage.getItem(THEME_MODE_KEY);
-          if (savedTheme === "light" || savedTheme === "dark") setThemeMode(savedTheme);
-          setIsShuffleEnabled(localStorage.getItem(SHUFFLE_ENABLED_KEY) === "true");
-          setIsRepeatTrackEnabled(localStorage.getItem(REPEAT_TRACK_KEY) === "true");
-          setLoopByTrack(parseLoopByTrack(localStorage.getItem(LOOP_REGION_KEY)));
-          setLoopModeByTrack(parseLoopModeByTrack(localStorage.getItem(LOOP_MODE_KEY)));
-          setGratitudeSettings(loadGratitudeSettings());
-        } catch {
-          // Ignore localStorage failures.
-        }
+        syncPlayerStateFromStorage();
         void refreshTracks();
       }
     };
@@ -708,6 +776,7 @@ export default function App() {
     if (persistedId !== null && nextAuraForDb !== null) {
       try {
         await saveAuraToDb(persistedId, nextAuraForDb);
+        markActivePlaylistDirty();
       } catch {}
     }
   };
@@ -816,6 +885,7 @@ export default function App() {
       ...prev,
       [currentTrackId]: active ? "region" : "off"
     }));
+    markActivePlaylistDirty();
   };
 
   const setLoopFromCurrent = () => {
@@ -829,6 +899,7 @@ export default function App() {
         const current = prev[currentTrackId] ?? EMPTY_LOOP;
         return { ...prev, [currentTrackId]: { ...current, active: false, editing: false } };
       });
+      markActivePlaylistDirty();
       return;
     }
     const now = audioRef.current?.currentTime || 0;
@@ -840,6 +911,7 @@ export default function App() {
       [currentTrackId]: { start: safeStart, end: safeEnd, active: true, editing: false }
     }));
     setLoopModeByTrack((prev) => ({ ...prev, [currentTrackId]: "region" }));
+    markActivePlaylistDirty();
   };
 
   const toggleLoopMode = () => {
@@ -864,12 +936,14 @@ export default function App() {
         setCurrentTime(currentLoop.start);
       }
     }
+    markActivePlaylistDirty();
   };
 
   const clearLoop = () => {
     if (!currentTrackId) return;
     setLoopByTrack((prev) => ({ ...prev, [currentTrackId]: EMPTY_LOOP }));
     setLoopModeByTrack((prev) => ({ ...prev, [currentTrackId]: "off" }));
+    markActivePlaylistDirty();
   };
 
   const toggleLayoutMode = () => {
@@ -880,6 +954,7 @@ export default function App() {
       } catch {
         // Ignore localStorage failures.
       }
+      markActivePlaylistDirty();
       return next;
     });
   };
@@ -916,6 +991,7 @@ export default function App() {
     } catch {
       // Ignore localStorage failures.
     }
+    markActivePlaylistDirty();
     try {
       const overlayFrame = document.querySelector<HTMLIFrameElement>(".app-overlay-frame");
       overlayFrame?.contentWindow?.postMessage({ type: "polyplay:theme-changed", themeMode: next }, window.location.origin);
@@ -1042,6 +1118,74 @@ export default function App() {
     });
   };
 
+  const downloadBlobFile = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportCurrentPolyplaylist = (): boolean => {
+    const suggestedName = getNextDefaultPolyplaylistName();
+    const input = window.prompt("Name your PolyPlaylist", suggestedName);
+    if (input === null) return false;
+    const playlistName = input.trim() || suggestedName;
+    try {
+      const content = serializePolyplaylistConfig(playlistName);
+      const blob = new Blob([content], { type: "application/json;charset=utf-8" });
+      downloadBlobFile(blob, getPolyplaylistConfigFilename());
+      const stamp = new Date().toISOString();
+      setLastExportedAt(stamp);
+      try {
+        localStorage.setItem(LAST_EXPORTED_AT_KEY, stamp);
+        if (activePlaylistId) localStorage.setItem(LAST_EXPORTED_PLAYLIST_ID_KEY, activePlaylistId);
+      } catch {
+        // Ignore localStorage failures.
+      }
+      clearActivePlaylistDirty();
+      setVaultStatus(`Exported "${playlistName}".`);
+      return true;
+    } catch (error) {
+      setVaultStatus(`Export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      return false;
+    }
+  };
+
+  const onStartImportPolyplaylist = () => {
+    const dirty = (() => {
+      try {
+        return localStorage.getItem(ACTIVE_PLAYLIST_DIRTY_KEY) === "true";
+      } catch {
+        return isActivePlaylistDirty;
+      }
+    })();
+    if (dirty) {
+      setShowImportWarning(true);
+      return;
+    }
+    importPolyplaylistInputRef.current?.click();
+  };
+
+  const onImportPolyplaylistFile = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const content = await file.text();
+      const summary = applyImportedPolyplaylistConfig(content);
+      syncPlayerStateFromStorage();
+      await refreshTracks();
+      clearActivePlaylistDirty();
+      setVaultStatus(
+        `PolyPlaylist applied. Updated ${summary.updatedTrackCount} tracks. Missing ${summary.missingTrackIds.length} tracks.`
+      );
+    } catch (error) {
+      setVaultStatus(`Import failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -1118,6 +1262,30 @@ export default function App() {
               </span>
               <span className="journal-tooltip" aria-hidden="true">
                 Journal
+              </span>
+            </button>
+            <button
+              type="button"
+              className={`vault-link nav-action-btn header-icon-btn--hero ${
+                overlayPage === "vault" ? "is-active" : ""
+              }`.trim()}
+              aria-label="Open PolyPlaylist Vault"
+              title="Vault"
+              onClick={() => {
+                setVaultStatus("");
+                refreshActivePlaylistInfo();
+                setOverlayPage("vault");
+              }}
+            >
+              <span className="vault-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="vault-icon-svg">
+                  <path d="M4 4h16v16H4z" />
+                  <path d="M7 4h10v6H7z" />
+                  <path d="M8 14h8" />
+                </svg>
+              </span>
+              <span className="vault-tooltip" aria-hidden="true">
+                Vault
               </span>
             </button>
             <button
@@ -1248,7 +1416,7 @@ export default function App() {
         />
       )}
 
-      {overlayPage && (
+      {overlayPage === "settings" && (
         <section className="app-overlay" role="dialog" aria-modal="true" aria-label="settings panel">
           <div className="app-overlay-card">
             <div className="app-overlay-head">
@@ -1263,6 +1431,102 @@ export default function App() {
               </button>
             </div>
             <iframe title="Settings" src="/admin.html" className="app-overlay-frame" />
+          </div>
+        </section>
+      )}
+
+      {overlayPage === "vault" && (
+        <section className="app-overlay" role="dialog" aria-modal="true" aria-label="PolyPlaylist Vault">
+          <div className="app-overlay-card vault-card">
+            <div className="app-overlay-head">
+              <div className="app-overlay-title">PolyPlaylist Vault</div>
+              <button
+                type="button"
+                className="app-overlay-close"
+                aria-label="Close vault"
+                onClick={() => {
+                  setShowImportWarning(false);
+                  setOverlayPage(null);
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="vault-body">
+              <div className="vault-summary">
+                <div>
+                  <span className="vault-summary__label">Active Playlist</span>
+                  <strong>{activePlaylistName}</strong>
+                </div>
+                <div>
+                  <span className="vault-summary__label">View</span>
+                  <strong>{layoutMode === "grid" ? "Tiles" : "Rows"} · {themeMode === "dark" ? "Dark" : "Light"}</strong>
+                </div>
+                <div>
+                  <span className="vault-summary__label">Last Export</span>
+                  <strong>{lastExportedAt ? new Date(lastExportedAt).toLocaleString() : "Not exported yet"}</strong>
+                </div>
+              </div>
+
+              <div className="vault-actions">
+                <button type="button" className="vault-btn vault-btn--primary" onClick={() => void exportCurrentPolyplaylist()}>
+                  Export PolyPlaylist
+                </button>
+                <button type="button" className="vault-btn vault-btn--secondary" onClick={onStartImportPolyplaylist}>
+                  Import PolyPlaylist
+                </button>
+                <input
+                  ref={importPolyplaylistInputRef}
+                  type="file"
+                  accept=".polyplaylist.json,application/json,.json"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0] ?? null;
+                    void onImportPolyplaylistFile(file);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </div>
+
+              {showImportWarning && (
+                <div className="vault-warning" role="alertdialog" aria-modal="true">
+                  <p>Your current playlist has changes not saved to a PolyPlaylist file.</p>
+                  <div className="vault-warning__actions">
+                    <button
+                      type="button"
+                      className="vault-btn vault-btn--primary"
+                      onClick={() => {
+                        const didExport = exportCurrentPolyplaylist();
+                        if (!didExport) return;
+                        setShowImportWarning(false);
+                        importPolyplaylistInputRef.current?.click();
+                      }}
+                    >
+                      Export current first
+                    </button>
+                    <button
+                      type="button"
+                      className="vault-btn vault-btn--danger"
+                      onClick={() => {
+                        setShowImportWarning(false);
+                        importPolyplaylistInputRef.current?.click();
+                      }}
+                    >
+                      Continue without saving
+                    </button>
+                    <button
+                      type="button"
+                      className="vault-btn vault-btn--ghost"
+                      onClick={() => setShowImportWarning(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {vaultStatus && <p className="vault-status">{vaultStatus}</p>}
+            </div>
           </div>
         </section>
       )}
