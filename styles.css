@@ -1868,7 +1868,8 @@ body.gratitude-reactive .track-backdrop {
 
 .gratitude-modal__card {
   position: relative;
-  width: min(520px, 100%);
+  width: min(620px, 100%);
+  min-height: min(72vh, 640px);
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background:
@@ -1908,9 +1909,39 @@ body.gratitude-reactive .track-backdrop {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(118deg, rgba(238, 198, 255, 0) 10%, rgba(238, 198, 255, 0.16) 48%, rgba(238, 198, 255, 0) 84%);
+  background:
+    linear-gradient(116deg, rgba(255, 193, 88, 0) 8%, rgba(255, 193, 88, 0.38) 40%, rgba(255, 255, 255, 0.4) 52%, rgba(255, 193, 88, 0.3) 66%, rgba(255, 193, 88, 0) 88%),
+    radial-gradient(circle at 18% 28%, rgba(255, 255, 255, 0.56) 0 1.8px, rgba(255, 255, 255, 0) 3px),
+    radial-gradient(circle at 64% 46%, rgba(255, 255, 255, 0.44) 0 1.4px, rgba(255, 255, 255, 0) 2.8px),
+    radial-gradient(circle at 82% 24%, rgba(255, 255, 255, 0.48) 0 1.7px, rgba(255, 255, 255, 0) 3px),
+    linear-gradient(180deg, rgba(255, 250, 240, 0.3), rgba(255, 188, 102, 0.2));
   transform: translateX(-24%);
-  animation: gratitude-typing-shimmer 420ms ease-out;
+  animation: gratitude-typing-shimmer 800ms linear infinite;
+}
+
+.gratitude-modal__card.is-typing {
+  border-color: rgba(255, 214, 145, 0.74);
+  background:
+    radial-gradient(circle at 22% 14%, rgba(255, 232, 182, 0.5), transparent 56%),
+    rgba(255, 252, 247, 0.9);
+}
+
+.gratitude-modal__card.is-typing .gratitude-modal__title {
+  color: #5a3a11;
+  text-shadow: 0 0 12px rgba(255, 212, 135, 0.45);
+}
+
+.gratitude-modal__card.is-typing .gratitude-modal__privacy {
+  color: rgba(103, 73, 31, 0.92);
+}
+
+.gratitude-modal__card.is-typing .gratitude-modal__textarea {
+  background: rgba(255, 255, 255, 0.88);
+  color: #4b3212;
+  border-color: rgba(255, 196, 106, 0.76);
+  box-shadow:
+    0 0 0 1px rgba(255, 196, 106, 0.52),
+    0 0 24px rgba(255, 203, 129, 0.38);
 }
 
 .gratitude-modal__card.is-pulse-save::after {
@@ -1947,7 +1978,7 @@ body.gratitude-reactive .track-backdrop {
   margin-top: 12px;
   width: 100%;
   resize: vertical;
-  min-height: 108px;
+  min-height: 190px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(8, 12, 18, 0.72);
@@ -2197,7 +2228,8 @@ body.gratitude-reactive .track-backdrop {
 .journal-modal__card {
   position: relative;
   width: min(700px, 100%);
-  max-height: min(82vh, 760px);
+  max-height: min(92vh, 900px);
+  min-height: min(84vh, 820px);
   overflow: hidden;
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -2368,6 +2400,7 @@ body.gratitude-reactive .track-backdrop {
   padding-right: 4px;
   display: grid;
   gap: 10px;
+  min-height: 0;
 }
 
 .journal-modal__empty {
@@ -2474,6 +2507,39 @@ body.gratitude-reactive .track-backdrop {
   line-height: 1.4;
   padding: 8px 10px;
   resize: vertical;
+  min-height: 180px;
+}
+
+.journal-modal__card.is-writing::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(112deg, rgba(255, 179, 72, 0) 14%, rgba(255, 179, 72, 0.34) 38%, rgba(255, 255, 255, 0.38) 52%, rgba(255, 179, 72, 0.28) 66%, rgba(255, 179, 72, 0) 88%),
+    radial-gradient(circle at 16% 24%, rgba(255, 255, 255, 0.58) 0 1.8px, rgba(255, 255, 255, 0) 3px),
+    radial-gradient(circle at 54% 42%, rgba(255, 255, 255, 0.5) 0 1.5px, rgba(255, 255, 255, 0) 2.8px),
+    radial-gradient(circle at 82% 28%, rgba(255, 255, 255, 0.56) 0 1.8px, rgba(255, 255, 255, 0) 3px),
+    linear-gradient(180deg, rgba(255, 252, 245, 0.28), rgba(255, 183, 90, 0.2));
+  z-index: 0;
+  transform: translateX(-20%);
+  animation: journal-writing-streak 900ms linear infinite;
+}
+
+.journal-modal__card.is-writing .journal-heaven-overlay {
+  background:
+    radial-gradient(circle at 22% 30%, rgba(255, 244, 214, 0.38) 0%, transparent 55%),
+    radial-gradient(circle at 80% 60%, rgba(255, 255, 255, 0.24) 0%, transparent 58%),
+    linear-gradient(135deg, rgba(34, 23, 10, 0.24), rgba(56, 36, 14, 0.32));
+}
+
+.journal-modal__card.is-writing .journal-entry__editor {
+  background: rgba(255, 255, 255, 0.9);
+  color: #4e3514;
+  border-color: rgba(255, 194, 100, 0.78);
+  box-shadow:
+    0 0 0 1px rgba(255, 194, 100, 0.5),
+    0 0 26px rgba(255, 206, 130, 0.35);
 }
 
 .journal-entry__editor-actions {
@@ -2528,6 +2594,21 @@ body.gratitude-reactive .track-backdrop {
 @keyframes journal-cloud-drift {
   0%, 100% { transform: translate3d(-1%, 0, 0); opacity: 0.48; }
   50% { transform: translate3d(1%, -2%, 0); opacity: 0.62; }
+}
+
+@keyframes journal-writing-streak {
+  0% {
+    transform: translateX(-20%);
+    opacity: 0.58;
+  }
+  50% {
+    transform: translateX(0%);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateX(22%);
+    opacity: 0.52;
+  }
 }
 
 @keyframes journal-saved-pulse {
@@ -2590,7 +2671,8 @@ body.gratitude-reactive .track-backdrop {
   }
 
   .journal-modal__card {
-    max-height: 88vh;
+    max-height: 94vh;
+    min-height: 86vh;
     padding: 10px;
   }
 
@@ -2655,6 +2737,7 @@ body.gratitude-reactive .track-backdrop {
   .journal-entry.is-saved,
   .journal-entry.is-deleting,
   .journal-entry.is-deleting::after,
+  .journal-modal__card.is-writing::before,
   .header-icon-btn--hero::after,
   .journal-heaven-bg::before,
   .journal-heaven-bg::after {

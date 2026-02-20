@@ -201,6 +201,7 @@ export function JournalModal({ open, onClose }: Props) {
   );
 
   const canPlaySound = Boolean(selectedBackground?.hasAudio && soundEnabled && soundArmed);
+  const isWritingActive = isComposerOpen || editingEntryId !== null;
 
   useEffect(() => {
     const video = backgroundVideoRef.current;
@@ -226,7 +227,7 @@ export function JournalModal({ open, onClose }: Props) {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="journal-modal__card" ref={cardRef}>
+      <div className={`journal-modal__card ${isWritingActive ? "is-writing" : ""}`.trim()} ref={cardRef}>
         <div className="journal-heaven-bg" aria-hidden="true">
           <video
             key={selectedBackground.id}
