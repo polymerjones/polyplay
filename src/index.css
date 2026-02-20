@@ -98,15 +98,51 @@ body.perf-lite .track-art-badge {
     radial-gradient(circle at 18% 14%, rgba(154, 104, 255, 0.2), transparent 56%),
     rgba(10, 14, 22, 0.74);
   box-shadow: 0 12px 22px rgba(7, 9, 14, 0.28);
-  overflow: hidden;
+  overflow: visible;
   padding: 10px 12px;
+  isolation: isolate;
 }
 
 .rowAuraGlow {
+  border-color: rgba(186, 136, 255, calc(0.2 + var(--row-aura-level) * 0.4));
   box-shadow:
     0 12px 22px rgba(7, 9, 14, 0.28),
-    0 0 0 1px rgba(158, 112, 255, calc(var(--row-aura-level) * 0.4)),
-    0 0 calc(10px + (var(--row-aura-level) * 14px)) rgba(136, 92, 255, calc(var(--row-aura-level) * 0.3));
+    0 0 0 calc(1px + var(--row-aura-level) * 1px) rgba(174, 130, 255, calc(0.24 + var(--row-aura-level) * 0.42)),
+    0 0 calc(22px + (var(--row-aura-level) * 20px)) rgba(150, 102, 255, calc(0.22 + var(--row-aura-level) * 0.34)),
+    inset 0 0 calc(8px + var(--row-aura-level) * 14px) rgba(150, 104, 255, calc(0.06 + var(--row-aura-level) * 0.2));
+}
+
+.rowAuraGlow::before {
+  content: "";
+  position: absolute;
+  inset: -14px;
+  border-radius: 24px;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(78% 92% at 36% 50%, rgba(163, 112, 255, calc(0.16 + var(--row-aura-level) * 0.24)), rgba(163, 112, 255, 0) 70%),
+    radial-gradient(60% 72% at 64% 48%, rgba(118, 82, 240, calc(0.12 + var(--row-aura-level) * 0.2)), rgba(118, 82, 240, 0) 72%);
+  filter: blur(18px);
+}
+
+.rowAuraGlow::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: 13px;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(
+    110deg,
+    rgba(172, 122, 255, calc(0.06 + var(--row-aura-level) * 0.11)) 0%,
+    rgba(172, 122, 255, calc(0.02 + var(--row-aura-level) * 0.06)) 36%,
+    rgba(172, 122, 255, 0) 72%
+  );
+}
+
+.track-row.rowAuraGlow > * {
+  position: relative;
+  z-index: 2;
 }
 
 .rowAuraGlow[data-aura="1"] {
@@ -131,22 +167,36 @@ body.perf-lite .track-art-badge {
 
 .rowAuraAccent {
   position: absolute;
-  inset: 0 auto 0 0;
+  inset: 1px auto 1px 1px;
   width: 4px;
   pointer-events: none;
+  border-radius: 10px;
+  z-index: 2;
   background: linear-gradient(
     180deg,
-    rgba(173, 130, 255, calc(0.28 + var(--row-aura-level) * 0.42)),
-    rgba(161, 104, 255, calc(0.18 + var(--row-aura-level) * 0.28)),
-    rgba(161, 104, 255, 0)
+    rgba(188, 142, 255, calc(0.28 + var(--row-aura-level) * 0.42)),
+    rgba(163, 106, 255, calc(0.24 + var(--row-aura-level) * 0.32)),
+    rgba(163, 106, 255, 0)
   );
 }
 
 body.theme-dark .rowAuraGlow {
+  border-color: rgba(194, 150, 255, calc(0.24 + var(--row-aura-level) * 0.42));
   box-shadow:
     0 12px 22px rgba(7, 9, 14, 0.28),
-    0 0 0 1px rgba(168, 126, 255, calc(var(--row-aura-level) * 0.5)),
-    0 0 calc(12px + (var(--row-aura-level) * 16px)) rgba(141, 102, 255, calc(var(--row-aura-level) * 0.34));
+    0 0 0 calc(1px + var(--row-aura-level) * 1px) rgba(186, 140, 255, calc(0.28 + var(--row-aura-level) * 0.44)),
+    0 0 calc(24px + (var(--row-aura-level) * 22px)) rgba(151, 106, 255, calc(0.26 + var(--row-aura-level) * 0.36)),
+    inset 0 0 calc(10px + var(--row-aura-level) * 16px) rgba(158, 116, 255, calc(0.08 + var(--row-aura-level) * 0.23));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .rowAuraGlow:hover {
+    box-shadow:
+      0 12px 22px rgba(7, 9, 14, 0.28),
+      0 0 0 calc(1px + var(--row-aura-level) * 1px) rgba(174, 130, 255, calc(0.28 + var(--row-aura-level) * 0.46)),
+      0 0 calc(25px + (var(--row-aura-level) * 22px)) rgba(150, 102, 255, calc(0.24 + var(--row-aura-level) * 0.38)),
+      inset 0 0 calc(9px + var(--row-aura-level) * 16px) rgba(150, 104, 255, calc(0.08 + var(--row-aura-level) * 0.22));
+    }
 }
 
 .track-art-badge {
