@@ -56,6 +56,7 @@ export function SplashOverlay({ isDismissing, onComplete }: Props) {
         className="splash-overlay__video"
         src={logoVideo}
         autoPlay
+        muted
         playsInline
         preload="auto"
         onTimeUpdate={(event) => {

@@ -7,7 +7,7 @@ import {
   loadGratitudeSettings,
   saveGratitudeSettings
 } from "./gratitude";
-import { getLibrary } from "./library";
+import { getLibrary, setLibrary } from "./library";
 import { deleteBlob, getBlob, listBlobStats, putBlob } from "./storage/db";
 import {
   createEmptyLibrary,
@@ -594,9 +594,9 @@ function resolveTrackKey(library: LibraryState, requestedId: string): string | n
 
 export async function buildPolyplaylistConfig(
   playlistName: string,
-  options?: { playlistId?: string | null }
+  options?: { playlistId?: string | null; sourceLibrary?: LibraryState | null }
 ): Promise<PolyplaylistConfigV1> {
-  const library = await getLibrary();
+  const library = options?.sourceLibrary ? migrateLibraryIfNeeded(options.sourceLibrary) : await getLibrary();
   const targetPlaylistId =
     options?.playlistId && library.playlistsById[options.playlistId] ? options.playlistId : library.activePlaylistId;
   const targetPlaylist = targetPlaylistId ? library.playlistsById[targetPlaylistId] : undefined;
@@ -643,17 +643,17 @@ export async function buildPolyplaylistConfig(
 
 export async function serializePolyplaylistConfig(
   playlistName: string,
-  options?: { playlistId?: string | null }
+  options?: { playlistId?: string | null; sourceLibrary?: LibraryState | null }
 ): Promise<string> {
   return JSON.stringify(await buildPolyplaylistConfig(playlistName, options), null, 2);
 }
 
 export async function applyImportedPolyplaylistConfig(
   content: string,
-  options?: { targetPlaylistId?: string | null }
+  options?: { targetPlaylistId?: string | null; sourceLibrary?: LibraryState | null }
 ): Promise<ApplyPolyplaylistConfigResult> {
   const payload = normalizePolyplaylistConfig(JSON.parse(content) as unknown);
-  const library = await getLibrary();
+  const library = options?.sourceLibrary ? migrateLibraryIfNeeded(options.sourceLibrary) : await getLibrary();
   const targetPlaylistId =
     options?.targetPlaylistId && library.playlistsById[options.targetPlaylistId]
       ? options.targetPlaylistId
@@ -760,7 +760,7 @@ export async function applyImportedPolyplaylistConfig(
     if ((previousOrder[i] ?? null) !== (orderedByImport[i] ?? null)) reorderedCount += 1;
   }
 
-  saveLibrary(library);
+  setLibrary(library);
   writeLoopState(loopByTrack, loopModeByTrack);
 
   console.log("[polyplaylist-import:end]", {

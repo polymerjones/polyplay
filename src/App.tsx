@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import logo from "../logo.png";
 import { quickTipsContent } from "./content/quickTips";
 import { APP_TITLE, APP_VERSION } from "./config/version";
@@ -28,23 +28,48 @@ import {
   type GratitudeSettings
 } from "./lib/gratitude";
 import { pickAuraWeightedTrack } from "./lib/aura";
-import { getLibrary, getLibraryKeyUsed } from "./lib/library";
+import {
+  getLibrary,
+  getLibraryKeyUsed,
+  getLibraryStorageCandidates,
+  migrateLegacyLibraryKeys,
+  normalizeLibrary,
+  setLibrary
+} from "./lib/library";
 import { revokeAllMediaUrls } from "./lib/player/media";
-import { loadLibrary } from "./lib/storage/library";
+import type { LibraryState } from "./lib/storage/library";
 import type { LoopMode, LoopRegion, Track } from "./types";
 
 type DimMode = "normal" | "dim" | "mute";
 type ThemeMode = "light" | "dark" | "custom";
 type CustomThemeSlot = "crimson" | "teal" | "amber";
+type SafeTapVariant = "bubble" | "ring" | "blob" | "sparkle";
+type SafeTapBurst = {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+  variant: SafeTapVariant;
+  color: string;
+  durationMs: number;
+  opacity: number;
+  sparkleCount: number;
+};
 type VaultPlaylistInfo = { id: string; name: string; trackCount: number };
 type VaultLibraryInspector = {
   libraryKey: string;
-  hasLibraryObject: boolean;
-  tracksByIdCount: number;
-  playlistsByIdCount: number;
-  activePlaylistId: string | null;
-  activePlaylistTrackCount: number;
-  localIdSample: string[];
+  runtimeTracksByIdCount: number;
+  storageTracksByIdCount: number;
+  runtimePlaylistsByIdCount: number;
+  storagePlaylistsByIdCount: number;
+  runtimeActivePlaylistId: string | null;
+  storageActivePlaylistId: string | null;
+  runtimeActivePlaylistTrackCount: number;
+  storageActivePlaylistTrackCount: number;
+  runtimeIdSample: string[];
+  storageIdSample: string[];
+  candidateKeys: string[];
+  migratedFromKey: string | null;
   playlists: VaultPlaylistInfo[];
 };
 
@@ -67,6 +92,10 @@ const ACTIVE_PLAYLIST_DIRTY_KEY = "polyplay_activePlaylistDirty_v1";
 const LAST_EXPORTED_PLAYLIST_ID_KEY = "polyplay_lastExportedPlaylistId";
 const LAST_EXPORTED_AT_KEY = "polyplay_lastExportedAt";
 const SCRATCH_SFX_PATHS = ["/hyper-notif.wav#s1", "/hyper-notif.wav#s2", "/hyper-notif.wav#s3"];
+const SAFE_TAP_BASE_SIZE = 120;
+const SAFE_TAP_MAX_SIZE = 420;
+const SAFE_TAP_MAX_ACTIVE = 12;
+const SAFE_TAP_SPAWN_THROTTLE_MS = 40;
 
 function clampAura(value: number): number {
   return Math.max(0, Math.min(5, Math.round(value)));
@@ -74,6 +103,15 @@ function clampAura(value: number): number {
 
 function getSafeDuration(value: number): number {
   return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function easeOutQuad(value: number): number {
+  const clamped = clamp01(value);
+  return 1 - (1 - clamped) * (1 - clamped);
 }
 
 function parseLoopByTrack(raw: string | null): Record<string, LoopRegion> {
@@ -195,6 +233,7 @@ export default function App() {
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
   const [vaultSelectedPlaylistId, setVaultSelectedPlaylistId] = useState<string | null>(null);
   const [vaultInspector, setVaultInspector] = useState<VaultLibraryInspector | null>(null);
+  const [runtimeLibrary, setRuntimeLibrary] = useState<LibraryState | null>(null);
   const [lastExportedAt, setLastExportedAt] = useState<string | null>(() => {
     try {
       return localStorage.getItem(LAST_EXPORTED_AT_KEY);
@@ -224,7 +263,12 @@ export default function App() {
   const journalToastTimeoutRef = useRef<number | null>(null);
   const gratitudeEvaluatedRef = useRef(false);
   const safeTapSeqRef = useRef(0);
-  const [safeTapBursts, setSafeTapBursts] = useState<Array<{ id: number; x: number; y: number }>>([]);
+  const safeTapHeatRef = useRef(0);
+  const safeTapHeatLastUpdatedAtRef = useRef(
+    typeof performance !== "undefined" ? performance.now() : Date.now()
+  );
+  const safeTapLastSpawnAtRef = useRef(0);
+  const [safeTapBursts, setSafeTapBursts] = useState<SafeTapBurst[]>([]);
 
   const markActivePlaylistDirty = () => {
     setIsActivePlaylistDirty(true);
@@ -244,41 +288,77 @@ export default function App() {
     }
   };
 
-  const refreshActivePlaylistInfo = () => {
+  const readStorageLibrarySnapshot = (): LibraryState => {
     try {
-      const library = loadLibrary();
-      const activePlaylist = library.activePlaylistId ? library.playlistsById[library.activePlaylistId] : null;
-      setActivePlaylistId(activePlaylist?.id || null);
+      const raw = localStorage.getItem(getLibraryKeyUsed());
+      if (!raw) return normalizeLibrary(null);
+      return normalizeLibrary(JSON.parse(raw) as unknown);
     } catch {
-      setActivePlaylistId(null);
+      return normalizeLibrary(null);
     }
   };
 
-  const refreshVaultInspector = async () => {
-    const library = await getLibrary();
-    const playlists = Object.values(library.playlistsById).map((playlist) => ({
+  const refreshActivePlaylistInfo = () => {
+    const source = runtimeLibrary;
+    if (!source) {
+      setActivePlaylistId(null);
+      return;
+    }
+    const activePlaylist = source.activePlaylistId ? source.playlistsById[source.activePlaylistId] : null;
+    setActivePlaylistId(activePlaylist?.id || null);
+  };
+
+  const buildInspectorPayload = (runtimeSource: LibraryState, storageSource: LibraryState, migratedFromKey: string | null): VaultLibraryInspector => {
+    const playlists = Object.values(runtimeSource.playlistsById).map((playlist) => ({
       id: playlist.id,
       name: playlist.name,
-      trackCount: playlist.trackIds.filter((trackId) => Boolean(library.tracksById[trackId])).length
+      trackCount: playlist.trackIds.filter((trackId) => Boolean(runtimeSource.tracksById[trackId])).length
     }));
-    const activeId = library.activePlaylistId;
-    const activeTrackCount =
-      activeId && library.playlistsById[activeId]
-        ? library.playlistsById[activeId].trackIds.filter((trackId) => Boolean(library.tracksById[trackId])).length
+    const runtimeActiveId = runtimeSource.activePlaylistId;
+    const runtimeActiveTrackCount =
+      runtimeActiveId && runtimeSource.playlistsById[runtimeActiveId]
+        ? runtimeSource.playlistsById[runtimeActiveId].trackIds.filter((trackId) => Boolean(runtimeSource.tracksById[trackId])).length
         : 0;
-    setVaultInspector({
+    const storageActiveId = storageSource.activePlaylistId;
+    const storageActiveTrackCount =
+      storageActiveId && storageSource.playlistsById[storageActiveId]
+        ? storageSource.playlistsById[storageActiveId].trackIds.filter((trackId) => Boolean(storageSource.tracksById[trackId])).length
+        : 0;
+    return {
       libraryKey: getLibraryKeyUsed(),
-      hasLibraryObject: Boolean(library),
-      tracksByIdCount: Object.keys(library.tracksById || {}).length,
-      playlistsByIdCount: Object.keys(library.playlistsById || {}).length,
-      activePlaylistId: activeId,
-      activePlaylistTrackCount: activeTrackCount,
-      localIdSample: Object.keys(library.tracksById || {}).slice(0, 5),
+      runtimeTracksByIdCount: Object.keys(runtimeSource.tracksById || {}).length,
+      storageTracksByIdCount: Object.keys(storageSource.tracksById || {}).length,
+      runtimePlaylistsByIdCount: Object.keys(runtimeSource.playlistsById || {}).length,
+      storagePlaylistsByIdCount: Object.keys(storageSource.playlistsById || {}).length,
+      runtimeActivePlaylistId: runtimeActiveId,
+      storageActivePlaylistId: storageActiveId,
+      runtimeActivePlaylistTrackCount: runtimeActiveTrackCount,
+      storageActivePlaylistTrackCount: storageActiveTrackCount,
+      runtimeIdSample: Object.keys(runtimeSource.tracksById || {}).slice(0, 5),
+      storageIdSample: Object.keys(storageSource.tracksById || {}).slice(0, 5),
+      candidateKeys: getLibraryStorageCandidates().map((candidate) => candidate.key),
+      migratedFromKey,
       playlists
-    });
+    };
+  };
+
+  const refreshVaultInspector = async () => {
+    const storageLibrary = readStorageLibrarySnapshot();
+    const runtimeSource = runtimeLibrary ?? (await getLibrary());
+    let resolvedRuntime = runtimeSource;
+    let migratedFromKey: string | null = null;
+    if (Object.keys(runtimeSource.tracksById || {}).length > 0 && Object.keys(storageLibrary.tracksById || {}).length === 0) {
+      setVaultStatus("Tracks exist in memory but not persisted yet - persisting now...");
+      setLibrary(runtimeSource);
+      resolvedRuntime = runtimeSource;
+      migratedFromKey = "runtime-persist";
+    }
+    const refreshedStorage = readStorageLibrarySnapshot();
+    const payload = buildInspectorPayload(resolvedRuntime, refreshedStorage, migratedFromKey);
+    setVaultInspector(payload);
     setVaultSelectedPlaylistId((prev) => {
-      if (prev && library.playlistsById[prev]) return prev;
-      return activeId;
+      if (prev && resolvedRuntime.playlistsById[prev]) return prev;
+      return resolvedRuntime.activePlaylistId;
     });
   };
 
@@ -321,8 +401,11 @@ export default function App() {
   const refreshTracks = async () => {
     const dbTracks = await getTracksFromDb();
     const loaded = dbTracks;
+    const librarySnapshot = await getLibrary();
+    setRuntimeLibrary(librarySnapshot);
     setTracks(loaded);
-    refreshActivePlaylistInfo();
+    const activePlaylist = librarySnapshot.activePlaylistId ? librarySnapshot.playlistsById[librarySnapshot.activePlaylistId] : null;
+    setActivePlaylistId(activePlaylist?.id || null);
     void refreshVaultInspector();
     setCurrentTrackId((prev) => {
       if (prev && loaded.some((track) => track.id === prev)) return prev;
@@ -1250,7 +1333,7 @@ export default function App() {
     burst.addEventListener("animationend", () => burst.remove(), { once: true });
   };
 
-  const cycleTheme = (event: MouseEvent<HTMLButtonElement>) => {
+  const cycleTheme = (event?: MouseEvent<HTMLButtonElement>) => {
     const order: ThemeMode[] = ["light", "dark", "custom"];
     const currentIndex = order.indexOf(themeMode);
     const next = order[(currentIndex + 1) % order.length];
@@ -1288,6 +1371,30 @@ export default function App() {
     }, 900);
   };
 
+  const decaySafeTapHeat = (now: number) => {
+    const elapsed = Math.max(0, now - safeTapHeatLastUpdatedAtRef.current);
+    if (elapsed <= 0) return safeTapHeatRef.current;
+    const decayFactor = Math.pow(0.9, elapsed / 60);
+    safeTapHeatRef.current = clamp01(safeTapHeatRef.current * decayFactor);
+    safeTapHeatLastUpdatedAtRef.current = now;
+    return safeTapHeatRef.current;
+  };
+
+  const pickSafeTapVariant = (heat: number): SafeTapVariant => {
+    const roll = Math.random();
+    if (roll < 0.42) return "bubble";
+    if (roll < 0.68) return "ring";
+    if (roll < 0.9) return "blob";
+    return heat > 0.25 ? "sparkle" : "bubble";
+  };
+
+  const pickSafeTapColor = (heat: number): string => {
+    const coolPalette = ["#9f7cff", "#b38dff", "#adc8ff"];
+    const warmPalette = ["#b68bff", "#ce88ff", "#ef97ff", "#9fc7ff"];
+    const palette = heat >= 0.62 ? warmPalette : heat >= 0.34 ? [...warmPalette, ...coolPalette] : coolPalette;
+    return palette[Math.floor(Math.random() * palette.length)] ?? "#b38dff";
+  };
+
   const onSafeTap = (event: MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement | null;
     if (!target) return;
@@ -1303,11 +1410,32 @@ export default function App() {
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reducedMotion) return;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    decaySafeTapHeat(now);
+    safeTapHeatRef.current = clamp01(safeTapHeatRef.current + 0.18);
+    if (now - safeTapLastSpawnAtRef.current < SAFE_TAP_SPAWN_THROTTLE_MS) return;
+    safeTapLastSpawnAtRef.current = now;
+    const heat = safeTapHeatRef.current;
+    const easedHeat = easeOutQuad(heat);
+    const jitter = Math.round((Math.random() - 0.5) * 28);
+    const size = Math.max(SAFE_TAP_BASE_SIZE, Math.min(SAFE_TAP_MAX_SIZE, Math.round(SAFE_TAP_BASE_SIZE + (SAFE_TAP_MAX_SIZE - SAFE_TAP_BASE_SIZE) * easedHeat + jitter)));
+    const variant = pickSafeTapVariant(heat);
+    const durationMs = Math.max(460, Math.min(820, Math.round(560 + easedHeat * 200 + (Math.random() - 0.5) * 120)));
+    const opacity = Math.max(0.1, Math.min(0.35, 0.14 + easedHeat * 0.18 + (Math.random() - 0.5) * 0.03));
+    const sparkleCount = variant === "sparkle" ? Math.max(4, Math.min(10, 4 + Math.round(easedHeat * 4) + Math.round(Math.random() * 2))) : 0;
     const id = ++safeTapSeqRef.current;
-    setSafeTapBursts((prev) => [...prev, { id, x: event.clientX, y: event.clientY }]);
+    const color = pickSafeTapColor(heat);
+    setSafeTapBursts((prev) => {
+      const next = [
+        ...prev,
+        { id, x: event.clientX, y: event.clientY, size, variant, color, durationMs, opacity, sparkleCount }
+      ];
+      if (next.length <= SAFE_TAP_MAX_ACTIVE) return next;
+      return next.slice(next.length - SAFE_TAP_MAX_ACTIVE);
+    });
     window.setTimeout(() => {
       setSafeTapBursts((prev) => prev.filter((burst) => burst.id !== id));
-    }, 520);
+    }, durationMs + 80);
   };
 
   const onGratitudeDoNotSaveChange = (next: boolean) => {
@@ -1376,7 +1504,10 @@ export default function App() {
     const playlistName = input.trim() || suggestedName;
     try {
       const targetPlaylistId = vaultSelectedPlaylistId || activePlaylistId;
-      const content = await serializePolyplaylistConfig(playlistName, { playlistId: targetPlaylistId });
+      const content = await serializePolyplaylistConfig(playlistName, {
+        playlistId: targetPlaylistId,
+        sourceLibrary: runtimeLibrary
+      });
       const blob = new Blob([content], { type: "application/json;charset=utf-8" });
       downloadBlobFile(blob, getPolyplaylistConfigFilename());
       const stamp = new Date().toISOString();
@@ -1421,8 +1552,9 @@ export default function App() {
     try {
       setImportSummary(null);
       setShowMissingIds(false);
-      const librarySnapshot = await getLibrary();
-      if (tracks.length > 0 && Object.keys(librarySnapshot.tracksById).length === 0) {
+      const librarySnapshot = runtimeLibrary ?? (await getLibrary());
+      const storageSnapshot = readStorageLibrarySnapshot();
+      if (tracks.length > 0 && Object.keys(librarySnapshot.tracksById).length === 0 && Object.keys(storageSnapshot.tracksById).length === 0) {
         console.warn("[polyplaylist] Import reading empty library — source mismatch bug", {
           renderedTrackCount: tracks.length,
           localTracksByIdCount: 0
@@ -1430,9 +1562,16 @@ export default function App() {
         setVaultStatus("Import blocked: library source mismatch (empty tracksById while UI has tracks).");
         return;
       }
+      if (Object.keys(librarySnapshot.tracksById).length > 0 && Object.keys(storageSnapshot.tracksById).length === 0) {
+        setVaultStatus("Tracks exist in memory but not persisted yet - persisting now...");
+        setLibrary(librarySnapshot);
+      }
       const content = await file.text();
       const targetPlaylistId = vaultSelectedPlaylistId || activePlaylistId || librarySnapshot.activePlaylistId;
-      const summary = await applyImportedPolyplaylistConfig(content, { targetPlaylistId });
+      const summary = await applyImportedPolyplaylistConfig(content, {
+        targetPlaylistId,
+        sourceLibrary: librarySnapshot
+      });
       syncPlayerStateFromStorage();
       await refreshTracks();
       await refreshVaultInspector();
@@ -1484,7 +1623,7 @@ export default function App() {
   useEffect(() => {
     if (overlayPage !== "vault") return;
     void refreshVaultInspector();
-  }, [overlayPage]);
+  }, [overlayPage, runtimeLibrary]);
 
   return (
     <>
@@ -1513,36 +1652,42 @@ export default function App() {
           </div>
           <div className="top-actions">
             <div
-              className={`theme-triad ${themeToggleAnim ? `is-anim-${themeToggleAnim}` : ""} ${
+              className={`theme-switch3 ${themeToggleAnim ? `is-anim-${themeToggleAnim}` : ""} ${
                 themeBloomActive ? "is-bloom" : ""
               }`.trim()}
               role="group"
               aria-label="Theme mode"
+              onClick={(event) => {
+                if (event.target === event.currentTarget) cycleTheme();
+              }}
             >
+              <span className={`theme-switch3__thumb theme-switch3__thumb--${themeMode}`} aria-hidden="true" />
               <button
                 type="button"
-                className={`theme-triad__btn ${themeMode === "light" ? "is-active" : ""}`.trim()}
+                className={`theme-switch3__slot ${themeMode === "light" ? "is-active" : ""}`.trim()}
                 onClick={(event) => setThemeModeExplicit("light", event)}
                 aria-label="Theme light"
+                title="Light"
               >
-                Light
+                <span aria-hidden="true">☼</span>
               </button>
               <button
                 type="button"
-                className={`theme-triad__btn ${themeMode === "dark" ? "is-active" : ""}`.trim()}
+                className={`theme-switch3__slot ${themeMode === "dark" ? "is-active" : ""}`.trim()}
                 onClick={(event) => setThemeModeExplicit("dark", event)}
                 aria-label="Theme dark"
+                title="Dark"
               >
-                Dark
+                <span aria-hidden="true">◐</span>
               </button>
               <button
                 type="button"
-                className={`theme-triad__btn ${themeMode === "custom" ? "is-active" : ""}`.trim()}
+                className={`theme-switch3__slot ${themeMode === "custom" ? "is-active" : ""}`.trim()}
                 onClick={(event) => setThemeModeExplicit("custom", event)}
-                onDoubleClick={cycleTheme}
                 aria-label="Theme custom"
+                title={`Custom (${customThemeSlot})`}
               >
-                Custom
+                <span aria-hidden="true">✦</span>
               </button>
             </div>
             <button
@@ -1765,12 +1910,18 @@ export default function App() {
                 <summary>Library Inspector</summary>
                 <div className="vault-inspector__grid">
                   <div>Library key in use: {vaultInspector?.libraryKey || getLibraryKeyUsed()}</div>
-                  <div>Has library object: {vaultInspector ? String(vaultInspector.hasLibraryObject) : "false"}</div>
-                  <div>tracksById count: {vaultInspector?.tracksByIdCount ?? 0}</div>
-                  <div>playlistsById count: {vaultInspector?.playlistsByIdCount ?? 0}</div>
-                  <div>activePlaylistId: {vaultInspector?.activePlaylistId || "none"}</div>
-                  <div>active playlist track count: {vaultInspector?.activePlaylistTrackCount ?? 0}</div>
-                  <div>Local ID sample: {vaultInspector?.localIdSample.join(", ") || "none"}</div>
+                  <div>Runtime tracksById count: {vaultInspector?.runtimeTracksByIdCount ?? 0}</div>
+                  <div>Storage tracksById count: {vaultInspector?.storageTracksByIdCount ?? 0}</div>
+                  <div>Runtime playlistsById count: {vaultInspector?.runtimePlaylistsByIdCount ?? 0}</div>
+                  <div>Storage playlistsById count: {vaultInspector?.storagePlaylistsByIdCount ?? 0}</div>
+                  <div>Runtime activePlaylistId: {vaultInspector?.runtimeActivePlaylistId || "none"}</div>
+                  <div>Storage activePlaylistId: {vaultInspector?.storageActivePlaylistId || "none"}</div>
+                  <div>Runtime active track count: {vaultInspector?.runtimeActivePlaylistTrackCount ?? 0}</div>
+                  <div>Storage active track count: {vaultInspector?.storageActivePlaylistTrackCount ?? 0}</div>
+                  <div>Runtime ID sample: {vaultInspector?.runtimeIdSample.join(", ") || "none"}</div>
+                  <div>Storage ID sample: {vaultInspector?.storageIdSample.join(", ") || "none"}</div>
+                  <div>Candidate keys: {vaultInspector?.candidateKeys.join(", ") || "none"}</div>
+                  <div>Migrated from: {vaultInspector?.migratedFromKey || "none"}</div>
                 </div>
                 <div className="vault-inspector__actions">
                   <button type="button" className="vault-btn vault-btn--ghost" onClick={() => void refreshVaultInspector()}>
@@ -1780,14 +1931,47 @@ export default function App() {
                     type="button"
                     className="vault-btn vault-btn--ghost"
                     onClick={async () => {
+                      const source = runtimeLibrary ?? (await getLibrary());
+                      setLibrary(source);
+                      setVaultStatus("Library persisted to canonical storage key.");
+                      await refreshVaultInspector();
+                    }}
+                  >
+                    Persist Now
+                  </button>
+                  <button
+                    type="button"
+                    className="vault-btn vault-btn--ghost"
+                    onClick={async () => {
+                      const migration = migrateLegacyLibraryKeys();
+                      setVaultStatus(
+                        migration.migrated && migration.fromKey
+                          ? `Migrated legacy key "${migration.fromKey}" into ${getLibraryKeyUsed()}.`
+                          : "No legacy migration needed."
+                      );
+                      const latest = await getLibrary();
+                      setRuntimeLibrary(latest);
+                      await refreshVaultInspector();
+                    }}
+                  >
+                    Migrate Legacy Keys
+                  </button>
+                  <button
+                    type="button"
+                    className="vault-btn vault-btn--ghost"
+                    onClick={async () => {
                       const payload = {
                         libraryKey: vaultInspector?.libraryKey || getLibraryKeyUsed(),
-                        hasLibraryObject: vaultInspector?.hasLibraryObject ?? false,
-                        tracksByIdCount: vaultInspector?.tracksByIdCount ?? 0,
-                        playlistsByIdCount: vaultInspector?.playlistsByIdCount ?? 0,
-                        activePlaylistId: vaultInspector?.activePlaylistId ?? null,
-                        activePlaylistTrackCount: vaultInspector?.activePlaylistTrackCount ?? 0,
-                        localIdSample: vaultInspector?.localIdSample ?? []
+                        runtimeTracksByIdCount: vaultInspector?.runtimeTracksByIdCount ?? 0,
+                        storageTracksByIdCount: vaultInspector?.storageTracksByIdCount ?? 0,
+                        runtimePlaylistsByIdCount: vaultInspector?.runtimePlaylistsByIdCount ?? 0,
+                        storagePlaylistsByIdCount: vaultInspector?.storagePlaylistsByIdCount ?? 0,
+                        runtimeActivePlaylistId: vaultInspector?.runtimeActivePlaylistId ?? null,
+                        storageActivePlaylistId: vaultInspector?.storageActivePlaylistId ?? null,
+                        runtimeIdSample: vaultInspector?.runtimeIdSample ?? [],
+                        storageIdSample: vaultInspector?.storageIdSample ?? [],
+                        candidateKeys: vaultInspector?.candidateKeys ?? [],
+                        migratedFromKey: vaultInspector?.migratedFromKey ?? null
                       };
                       try {
                         await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
@@ -1981,7 +2165,40 @@ export default function App() {
       {safeTapBursts.length > 0 && (
         <div className="safe-tap-layer" aria-hidden="true">
           {safeTapBursts.map((burst) => (
-            <span key={burst.id} className="safe-tap-burst" style={{ left: burst.x, top: burst.y }} />
+            <span
+              key={burst.id}
+              className={`safe-tap-burst safe-tap-burst--${burst.variant}`.trim()}
+              style={
+                {
+                  left: burst.x,
+                  top: burst.y,
+                  "--tap-size": `${burst.size}px`,
+                  "--tap-color": burst.color,
+                  "--tap-duration": `${burst.durationMs}ms`,
+                  "--tap-opacity": String(burst.opacity)
+                } as CSSProperties
+              }
+            >
+              {burst.sparkleCount > 0 &&
+                Array.from({ length: burst.sparkleCount }).map((_, index) => {
+                  const angle = (index / burst.sparkleCount) * Math.PI * 2;
+                  const drift = Math.round(18 + (burst.size / 420) * 28);
+                  return (
+                    <span
+                      // eslint-disable-next-line react/no-array-index-key
+                      key={`${burst.id}-spark-${index}`}
+                      className="safe-tap-burst__spark"
+                      style={
+                        {
+                          "--spark-delay": `${index * 22}ms`,
+                          "--spark-x": `${Math.cos(angle) * drift}px`,
+                          "--spark-y": `${Math.sin(angle) * drift}px`
+                        } as CSSProperties
+                      }
+                    />
+                  );
+                })}
+            </span>
           ))}
         </div>
       )}

@@ -92,6 +92,7 @@ body.perf-lite .track-art-badge {
   grid-template-columns: 72px minmax(0, 1fr) 124px;
   align-items: center;
   gap: 12px;
+  min-height: 92px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background:
@@ -100,6 +101,7 @@ body.perf-lite .track-art-badge {
   box-shadow: 0 12px 22px rgba(7, 9, 14, 0.28);
   overflow: visible;
   padding: 10px 12px;
+  box-sizing: border-box;
   isolation: isolate;
 }
 
@@ -244,10 +246,6 @@ body.theme-dark .rowAuraGlow {
     0 0 18px rgba(171, 110, 255, 0.34);
 }
 
-.track-row.track-row--aura-hit {
-  animation: track-row-hit-flash 320ms ease-out;
-}
-
 .track-row__thumb-btn {
   border: 0;
   background: transparent;
@@ -362,19 +360,104 @@ body.theme-dark .rowAuraGlow {
   }
 }
 
-@keyframes track-row-hit-flash {
+.safe-tap-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 35;
+  overflow: hidden;
+}
+
+.safe-tap-burst {
+  --tap-size: 120px;
+  --tap-color: #b38dff;
+  --tap-duration: 560ms;
+  --tap-opacity: 0.2;
+  position: absolute;
+  width: var(--tap-size);
+  height: var(--tap-size);
+  border-radius: 999px;
+  transform: translate(-50%, -50%) scale(0.42);
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: safe-tap-burst var(--tap-duration) ease-out forwards;
+}
+
+.safe-tap-burst--bubble {
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--tap-color) 72%, white 28%) 0%, color-mix(in srgb, var(--tap-color) 54%, transparent 46%) 38%, transparent 72%);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--tap-color) 40%, transparent 60%);
+}
+
+.safe-tap-burst--ring {
+  border: 2px solid color-mix(in srgb, var(--tap-color) 66%, white 34%);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--tap-color) 20%, transparent 80%) inset,
+    0 0 28px color-mix(in srgb, var(--tap-color) 42%, transparent 58%);
+}
+
+.safe-tap-burst--blob {
+  border-radius: 54% 46% 62% 38% / 42% 58% 40% 60%;
+  background:
+    radial-gradient(circle at 38% 36%, color-mix(in srgb, var(--tap-color) 70%, white 30%) 0%, color-mix(in srgb, var(--tap-color) 58%, transparent 42%) 44%, transparent 74%);
+  box-shadow: 0 0 26px color-mix(in srgb, var(--tap-color) 36%, transparent 64%);
+}
+
+.safe-tap-burst--sparkle {
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--tap-color) 46%, transparent 54%) 0%, transparent 65%);
+}
+
+.safe-tap-burst__spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tap-color) 72%, white 28%);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.4);
+  animation: safe-tap-spark calc(var(--tap-duration) * 0.9) ease-out forwards;
+  animation-delay: var(--spark-delay, 0ms);
+}
+
+@keyframes safe-tap-burst {
   0% {
-    filter: brightness(1);
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.42);
   }
-  40% {
-    filter: brightness(1.16);
-    box-shadow:
-      0 0 0 1px rgba(214, 166, 255, 0.75),
-      0 0 16px rgba(176, 114, 255, 0.42),
-      0 12px 22px rgba(7, 9, 14, 0.28);
+  20% {
+    opacity: var(--tap-opacity);
   }
   100% {
-    filter: brightness(1);
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes safe-tap-spark {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+  24% {
+    opacity: calc(var(--tap-opacity) + 0.12);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(
+        calc(-50% + var(--spark-x, 0px)),
+        calc(-50% + var(--spark-y, 0px))
+      )
+      scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .safe-tap-burst,
+  .safe-tap-burst__spark {
+    animation: none;
   }
 }
 
@@ -384,9 +467,21 @@ body.theme-dark .rowAuraGlow {
   z-index: 120;
   display: grid;
   place-items: center;
-  background: radial-gradient(circle at 50% 42%, rgba(52, 30, 94, 0.62), rgba(5, 7, 12, 0.96));
+  background: #000;
   opacity: 1;
   transition: opacity 420ms ease;
+  overflow: hidden;
+}
+
+.splash-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(52, 30, 94, 0.34), rgba(5, 7, 12, 0.78)),
+    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 52%, rgba(0, 0, 0, 0.28) 100%);
 }
 
 .splash-overlay.is-dismissing {
@@ -395,13 +490,20 @@ body.theme-dark .rowAuraGlow {
 }
 
 .splash-overlay__video {
-  width: min(690px, 75vw);
-  max-height: 75vh;
-  object-fit: cover;
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  display: block;
+  object-fit: contain;
+  object-position: center;
+  position: relative;
+  z-index: 1;
 }
 
 .splash-overlay__skip {
   position: absolute;
+  z-index: 2;
   right: 18px;
   top: calc(18px + env(safe-area-inset-top, 0px));
   border: 1px solid rgba(255, 255, 255, 0.26);
@@ -417,6 +519,7 @@ body.theme-dark .rowAuraGlow {
 .splash-overlay__tap-wrap {
   position: absolute;
   inset: 0;
+  z-index: 3;
   display: grid;
   place-items: center;
   background: rgba(5, 7, 12, 0.4);

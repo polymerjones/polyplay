@@ -15,16 +15,14 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
     : ({ backgroundImage: track.artGrad || `url('${DEFAULT_ARTWORK_URL}')` } as CSSProperties);
   const auraLevel = Math.max(0, Math.min(1, track.aura / 5));
-  const hasAura = track.aura > 0;
 
   return (
     <div
-      className={`track-row ${active && isPlaying ? "is-playing" : ""} ${hasAura ? "rowAuraGlow" : ""}`.trim()}
+      className={`track-row ${active && isPlaying ? "is-playing" : ""}`.trim()}
       data-track-id={track.id}
       data-aura={String(track.aura)}
       style={{ "--row-aura-level": auraLevel.toFixed(2) } as CSSProperties}
     >
-      {hasAura && <div className="rowAuraAccent" aria-hidden="true" />}
       <div className="track-badges">
         {track.isDemo && <div className="track-art-badge track-art-badge--row track-art-badge--demo">DEMO</div>}
         {track.artworkSource === "auto" && <div className="track-art-badge track-art-badge--row">AUTO ART</div>}
@@ -65,12 +63,6 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
           onClick={(event) => {
             event.stopPropagation();
             const button = event.currentTarget;
-            const row = button.closest(".track-row");
-            if (row instanceof HTMLElement) {
-              row.classList.remove("track-row--aura-hit");
-              void row.offsetWidth;
-              row.classList.add("track-row--aura-hit");
-            }
             button.classList.remove("track-row__aura-btn--burst");
             void button.offsetWidth;
             button.classList.add("track-row__aura-btn--burst");

@@ -34,7 +34,8 @@ export type LibraryState = {
   activePlaylistId: string | null;
 };
 
-export const LIBRARY_STORAGE_KEY = "showoff_library_v1";
+export const LIBRARY_KEY = "showoff_library_v1";
+export const LIBRARY_STORAGE_KEY = LIBRARY_KEY;
 const LIBRARY_VERSION = 1;
 const DEFAULT_PLAYLIST_ID = "default";
 
@@ -126,12 +127,96 @@ export function migrateLibraryIfNeeded(input: unknown): LibraryState {
   };
 }
 
+function parseLibraryJson(raw: string | null): unknown {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function getLibraryLastUpdatedAt(library: LibraryState): number {
+  let latest = 0;
+  for (const track of Object.values(library.tracksById || {})) {
+    const value = Number(track.updatedAt ?? track.createdAt ?? 0);
+    if (Number.isFinite(value) && value > latest) latest = value;
+  }
+  for (const playlist of Object.values(library.playlistsById || {})) {
+    const value = Number(playlist.updatedAt ?? playlist.createdAt ?? 0);
+    if (Number.isFinite(value) && value > latest) latest = value;
+  }
+  return latest;
+}
+
+export type LibraryCandidateSummary = {
+  key: string;
+  tracksByIdCount: number;
+  playlistsByIdCount: number;
+  lastUpdatedAt: number;
+};
+
+export function getLibraryCandidates(): LibraryCandidateSummary[] {
+  const summaries: LibraryCandidateSummary[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      const parsed = parseLibraryJson(localStorage.getItem(key));
+      if (!parsed || typeof parsed !== "object") continue;
+      const maybeLibrary = parsed as { tracksById?: unknown; playlistsById?: unknown };
+      if (!maybeLibrary.tracksById || !maybeLibrary.playlistsById) continue;
+      const normalized = migrateLibraryIfNeeded(parsed);
+      summaries.push({
+        key,
+        tracksByIdCount: Object.keys(normalized.tracksById || {}).length,
+        playlistsByIdCount: Object.keys(normalized.playlistsById || {}).length,
+        lastUpdatedAt: getLibraryLastUpdatedAt(normalized)
+      });
+    }
+  } catch {
+    return [];
+  }
+  return summaries.sort((a, b) => {
+    if (b.tracksByIdCount !== a.tracksByIdCount) return b.tracksByIdCount - a.tracksByIdCount;
+    return b.lastUpdatedAt - a.lastUpdatedAt;
+  });
+}
+
+export function migrateBestLibraryCandidateToPrimary(): {
+  migrated: boolean;
+  fromKey: string | null;
+  library: LibraryState;
+  candidateKeys: string[];
+} {
+  const primaryParsed = parseLibraryJson(localStorage.getItem(LIBRARY_STORAGE_KEY));
+  const primaryLibrary = migrateLibraryIfNeeded(primaryParsed);
+  const primaryTrackCount = Object.keys(primaryLibrary.tracksById || {}).length;
+  const candidates = getLibraryCandidates();
+  const candidateKeys = candidates.map((candidate) => candidate.key);
+  const best = candidates.find((candidate) => candidate.key !== LIBRARY_STORAGE_KEY);
+  if (!best) {
+    return { migrated: false, fromKey: null, library: primaryLibrary, candidateKeys };
+  }
+  if (best.tracksByIdCount <= primaryTrackCount) {
+    return { migrated: false, fromKey: null, library: primaryLibrary, candidateKeys };
+  }
+  const bestParsed = parseLibraryJson(localStorage.getItem(best.key));
+  const bestLibrary = migrateLibraryIfNeeded(bestParsed);
+  localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(bestLibrary));
+  return { migrated: true, fromKey: best.key, library: bestLibrary, candidateKeys };
+}
+
 export function loadLibrary(): LibraryState {
   try {
-    const raw = localStorage.getItem(LIBRARY_STORAGE_KEY);
-    if (!raw) return createEmptyLibrary();
-    const parsed = JSON.parse(raw) as unknown;
-    return migrateLibraryIfNeeded(parsed);
+    const primaryRaw = localStorage.getItem(LIBRARY_STORAGE_KEY);
+    const primaryLibrary = migrateLibraryIfNeeded(parseLibraryJson(primaryRaw));
+    const primaryTrackCount = Object.keys(primaryLibrary.tracksById || {}).length;
+    if (!primaryRaw || primaryTrackCount === 0) {
+      const migrated = migrateBestLibraryCandidateToPrimary();
+      if (migrated.migrated) return migrated.library;
+    }
+    return primaryLibrary;
   } catch {
     return createEmptyLibrary();
   }
