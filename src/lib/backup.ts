@@ -28,6 +28,8 @@ const LOOP_MODE_KEY = "polyplay_loopModeByTrack";
 const BACKUP_ROOT = "polyplay-backup";
 const BACKUP_CAP_BYTES = 250 * 1024 * 1024;
 const FULL_BACKUP_VERSION = 1;
+const POLYPLAYLIST_ROOT = "polyplaylist";
+const POLYPLAYLIST_VERSION = 1;
 
 export type LoopRegion = {
   start: number;
@@ -94,10 +96,69 @@ export type ExportFullBackupResult = {
   trackCount: number;
 };
 
+export type ExportPolyplaylistResult = {
+  blob: Blob;
+  estimatedBytes: number;
+  trackCount: number;
+  playlistName: string;
+};
+
+export type PolyplaylistTrackConfig = {
+  title: string;
+  aura: number;
+  loop: {
+    mode: LoopMode;
+    in: number | null;
+    out: number | null;
+  };
+  artworkMode: "auto" | "user";
+};
+
+export type PolyplaylistConfigV1 = {
+  format: "polyplaylist";
+  level: 1;
+  version: "1.0";
+  playlistName: string;
+  exportedAt: string;
+  appVersion: string;
+  trackOrder: string[];
+  tracks: Record<string, PolyplaylistTrackConfig>;
+  global: {
+    layoutMode: "grid" | "list";
+    theme: "light" | "dark";
+  };
+};
+
+export type ApplyPolyplaylistConfigResult = {
+  playlistName: string;
+  updatedTrackCount: number;
+  missingTrackIds: string[];
+};
+
 export type ImportFullBackupResult = {
   restoredTracks: number;
   restoredMediaFiles: number;
   skippedTrackCount: number;
+};
+
+export type ImportPolyplaylistResult = {
+  playlistId: string;
+  playlistName: string;
+  importedTracks: number;
+  importedMediaFiles: number;
+};
+
+export type PolyplaylistManifest = {
+  kind: "polyplaylist";
+  version: number;
+  appVersion: string;
+  createdAt: string;
+  playlist: {
+    id: string;
+    name: string;
+    trackIds: string[];
+  };
+  tracksById: Record<string, TrackRecord>;
 };
 
 export class BackupSizeError extends Error {
@@ -218,6 +279,26 @@ function formatStamp(date = new Date()): string {
   return date.toISOString().slice(0, 10);
 }
 
+function formatStampWithTime(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}-${hh}${mm}`;
+}
+
+function nextPolyplaylistIndexFromNames(names: string[]): number {
+  const used = names
+    .map((name) => {
+      const match = name.trim().match(/^polyplaylist(\d+)$/i);
+      return match ? Number(match[1]) : NaN;
+    })
+    .filter((value) => Number.isFinite(value));
+  if (!used.length) return 1;
+  return Math.max(...used) + 1;
+}
+
 export function buildConfigSnapshot(): PolyplayConfig {
   const library = loadLibrary();
   const { loopByTrack, loopModeByTrack } = readLoopState();
@@ -263,6 +344,29 @@ export function getGratitudeBackupFilename(): string {
 
 export function getFullBackupFilename(): string {
   return `polyplay-backup-${formatStamp()}.zip`;
+}
+
+export function getNextDefaultPolyplaylistName(): string {
+  const library = loadLibrary();
+  const names = Object.values(library.playlistsById).map((playlist) => playlist.name || "");
+  return `polyplaylist${nextPolyplaylistIndexFromNames(names)}`;
+}
+
+export function getPolyplaylistConfigFilename(): string {
+  return `polyplaylist-${formatStampWithTime()}.polyplaylist.json`;
+}
+
+function slugifyName(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 36);
+}
+
+export function getPolyplaylistFilename(playlistName = "playlist"): string {
+  const slug = slugifyName(playlistName) || "playlist";
+  return `polyplaylist-${slug}-${formatStamp()}.polyplaylist`;
 }
 
 export function serializeConfig(config = buildConfigSnapshot()): string {
@@ -396,6 +500,191 @@ export function applyImportedConfig(config: PolyplayConfig): ImportConfigSummary
     appliedTrackCount,
     skippedTrackCount: skippedTrackIds.length,
     skippedTrackIds
+  };
+}
+
+function normalizePolyplaylistTrackConfig(input: unknown): PolyplaylistTrackConfig | null {
+  if (!input || typeof input !== "object") return null;
+  const row = input as Partial<PolyplaylistTrackConfig>;
+  const loop: Partial<PolyplaylistTrackConfig["loop"]> =
+    row.loop && typeof row.loop === "object" ? row.loop : {};
+  const loopMode: LoopMode =
+    loop.mode === "off" || loop.mode === "track" || loop.mode === "region" ? loop.mode : "off";
+  const loopIn = Number(loop.in);
+  const loopOut = Number(loop.out);
+  return {
+    title: typeof row.title === "string" ? row.title : "Untitled",
+    aura: clampAura(Number(row.aura ?? 0)),
+    loop: {
+      mode: loopMode,
+      in: Number.isFinite(loopIn) ? loopIn : null,
+      out: Number.isFinite(loopOut) ? loopOut : null
+    },
+    artworkMode: row.artworkMode === "auto" ? "auto" : "user"
+  };
+}
+
+function normalizePolyplaylistConfig(input: unknown): PolyplaylistConfigV1 {
+  if (!input || typeof input !== "object") throw new Error("Invalid PolyPlaylist file.");
+  const value = input as Partial<PolyplaylistConfigV1>;
+  if (value.format !== "polyplaylist") throw new Error("Unsupported PolyPlaylist format.");
+  if (value.level !== 1) throw new Error("Unsupported PolyPlaylist level.");
+  if (value.version !== "1.0") throw new Error("Unsupported PolyPlaylist version.");
+
+  const trackOrder = Array.isArray(value.trackOrder)
+    ? value.trackOrder.filter((trackId): trackId is string => typeof trackId === "string")
+    : [];
+  const tracks: Record<string, PolyplaylistTrackConfig> = {};
+  if (value.tracks && typeof value.tracks === "object") {
+    for (const [trackId, raw] of Object.entries(value.tracks)) {
+      const parsed = normalizePolyplaylistTrackConfig(raw);
+      if (!parsed) continue;
+      tracks[trackId] = parsed;
+    }
+  }
+
+  return {
+    format: "polyplaylist",
+    level: 1,
+    version: "1.0",
+    playlistName: (value.playlistName || "").trim() || "My PolyPlaylist",
+    exportedAt: typeof value.exportedAt === "string" ? value.exportedAt : nowIso(),
+    appVersion: typeof value.appVersion === "string" ? value.appVersion : APP_VERSION,
+    trackOrder,
+    tracks,
+    global: {
+      layoutMode: asLayout(value.global?.layoutMode),
+      theme: asTheme(value.global?.theme)
+    }
+  };
+}
+
+function resolveImportPlaylistName(library: LibraryState, incomingName: string, activePlaylistId: string): string {
+  const normalizedIncoming = (incomingName || "").trim() || getNextDefaultPolyplaylistName();
+  const lowerIncoming = normalizedIncoming.toLowerCase();
+  const conflict = Object.values(library.playlistsById).some(
+    (playlist) => playlist.id !== activePlaylistId && playlist.name.trim().toLowerCase() === lowerIncoming
+  );
+  if (!conflict) return normalizedIncoming;
+  const names = Object.values(library.playlistsById).map((playlist) => playlist.name || "");
+  return `polyplaylist${nextPolyplaylistIndexFromNames(names)}`;
+}
+
+export function buildPolyplaylistConfig(playlistName: string): PolyplaylistConfigV1 {
+  const library = loadLibrary();
+  const activePlaylist = library.activePlaylistId ? library.playlistsById[library.activePlaylistId] : undefined;
+  if (!activePlaylist) throw new Error("No active playlist available.");
+  const { loopByTrack, loopModeByTrack } = readLoopState();
+  const safeName = playlistName.trim() || getNextDefaultPolyplaylistName();
+  const trackOrder = activePlaylist.trackIds.filter((trackId) => Boolean(library.tracksById[trackId]));
+  const tracks: Record<string, PolyplaylistTrackConfig> = {};
+
+  for (const trackId of trackOrder) {
+    const row = library.tracksById[trackId];
+    if (!row) continue;
+    const loopMode = loopModeByTrack[trackId] ?? "off";
+    const loopRegion = loopByTrack[trackId];
+    tracks[trackId] = {
+      title: row.title || "Untitled",
+      aura: clampAura(row.aura),
+      loop: {
+        mode: loopMode,
+        in: loopRegion ? loopRegion.start : null,
+        out: loopRegion ? loopRegion.end : null
+      },
+      artworkMode: row.artworkSource === "auto" ? "auto" : "user"
+    };
+  }
+
+  return {
+    format: "polyplaylist",
+    level: 1,
+    version: "1.0",
+    playlistName: safeName,
+    exportedAt: nowIso(),
+    appVersion: APP_VERSION,
+    trackOrder,
+    tracks,
+    global: {
+      layoutMode: asLayout(localStorage.getItem(LAYOUT_MODE_KEY)),
+      theme: asTheme(localStorage.getItem(THEME_MODE_KEY))
+    }
+  };
+}
+
+export function serializePolyplaylistConfig(playlistName: string): string {
+  return JSON.stringify(buildPolyplaylistConfig(playlistName), null, 2);
+}
+
+export function applyImportedPolyplaylistConfig(content: string): ApplyPolyplaylistConfigResult {
+  const payload = normalizePolyplaylistConfig(JSON.parse(content) as unknown);
+  const library = loadLibrary();
+  const activePlaylistId = library.activePlaylistId;
+  if (!activePlaylistId) throw new Error("No active playlist to apply import.");
+  const activePlaylist = library.playlistsById[activePlaylistId];
+  if (!activePlaylist) throw new Error("Active playlist not found.");
+
+  const resolvedPlaylistName = resolveImportPlaylistName(library, payload.playlistName, activePlaylistId);
+  activePlaylist.name = resolvedPlaylistName;
+  localStorage.setItem(LAYOUT_MODE_KEY, payload.global.layoutMode);
+  localStorage.setItem(THEME_MODE_KEY, payload.global.theme);
+
+  const { loopByTrack, loopModeByTrack } = readLoopState();
+  const missingTrackIds: string[] = [];
+  let updatedTrackCount = 0;
+
+  for (const trackId of payload.trackOrder) {
+    const localTrack = library.tracksById[trackId];
+    const importedTrack = payload.tracks[trackId];
+    if (!localTrack) {
+      missingTrackIds.push(trackId);
+      continue;
+    }
+    if (!importedTrack) continue;
+
+    localTrack.title = importedTrack.title.trim() || localTrack.title;
+    localTrack.aura = clampAura(importedTrack.aura);
+    localTrack.artworkSource = importedTrack.artworkMode === "auto" ? "auto" : "user";
+    localTrack.updatedAt = Date.now();
+
+    loopModeByTrack[trackId] = importedTrack.loop.mode;
+    if (
+      importedTrack.loop.mode === "region" &&
+      Number.isFinite(importedTrack.loop.in) &&
+      Number.isFinite(importedTrack.loop.out) &&
+      Number(importedTrack.loop.out) > Number(importedTrack.loop.in)
+    ) {
+      loopByTrack[trackId] = {
+        start: Math.max(0, Number(importedTrack.loop.in)),
+        end: Number(importedTrack.loop.out),
+        active: true,
+        editing: false
+      };
+    } else {
+      delete loopByTrack[trackId];
+    }
+    updatedTrackCount += 1;
+  }
+
+  const seen = new Set<string>();
+  const orderedByImport: string[] = [];
+  for (const trackId of payload.trackOrder) {
+    if (!library.tracksById[trackId]) continue;
+    if (seen.has(trackId)) continue;
+    orderedByImport.push(trackId);
+    seen.add(trackId);
+  }
+  const remainder = activePlaylist.trackIds.filter((trackId) => library.tracksById[trackId] && !seen.has(trackId));
+  activePlaylist.trackIds = [...orderedByImport, ...remainder];
+  activePlaylist.updatedAt = Date.now();
+
+  saveLibrary(library);
+  writeLoopState(loopByTrack, loopModeByTrack);
+
+  return {
+    playlistName: resolvedPlaylistName,
+    updatedTrackCount,
+    missingTrackIds
   };
 }
 
@@ -595,18 +884,23 @@ function uint8ToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return copy.buffer;
 }
 
-async function buildMediaEntries(
-  library: LibraryState,
+async function buildTrackMediaEntries(
+  tracks: TrackRecord[],
+  rootPath: string,
+  progressLabelPrefix: string,
   onProgress?: (progress: BackupProgress) => void
 ): Promise<{ entries: ZipEntryInput[]; mediaBytes: number; mediaCount: number }> {
   const entries: ZipEntryInput[] = [];
-  const tracks = Object.values(library.tracksById);
   let mediaBytes = 0;
   let mediaCount = 0;
 
   for (let index = 0; index < tracks.length; index += 1) {
     const track = tracks[index];
-    onProgress?.({ done: index, total: tracks.length, label: `Preparing backup… (${index}/${tracks.length} tracks)` });
+    onProgress?.({
+      done: index,
+      total: tracks.length,
+      label: `${progressLabelPrefix} (${index}/${tracks.length} tracks)`
+    });
 
     const collect = async (key: string | null | undefined, kind: "audio" | "artwork" | "video", fallbackExt: string) => {
       if (!key) return;
@@ -621,7 +915,7 @@ async function buildMediaEntries(
             ? `artwork-video.${ext}`
             : `artwork.${ext}`;
       entries.push({
-        path: `${BACKUP_ROOT}/media/${track.id}/${filename}`,
+        path: `${rootPath}/media/${track.id}/${filename}`,
         bytes
       });
       mediaBytes += bytes.length;
@@ -636,7 +930,7 @@ async function buildMediaEntries(
   onProgress?.({
     done: tracks.length,
     total: tracks.length,
-    label: `Preparing backup… (${tracks.length}/${tracks.length} tracks)`
+    label: `${progressLabelPrefix} (${tracks.length}/${tracks.length} tracks)`
   });
 
   return { entries, mediaBytes, mediaCount };
@@ -648,8 +942,14 @@ export async function exportFullBackup(
   const library = loadLibrary();
   const config = buildConfigSnapshot();
   const gratitudeEntries = safeJsonParse<GratitudeEntry[]>(localStorage.getItem(GRATITUDE_ENTRIES_KEY), []);
+  const allTracks = Object.values(library.tracksById);
 
-  const { entries: mediaEntries, mediaBytes } = await buildMediaEntries(library, onProgress);
+  const { entries: mediaEntries, mediaBytes } = await buildTrackMediaEntries(
+    allTracks,
+    BACKUP_ROOT,
+    "Preparing backup…",
+    onProgress
+  );
   const jsonEntries: ZipEntryInput[] = [
     {
       path: `${BACKUP_ROOT}/config.json`,
@@ -697,6 +997,209 @@ export async function exportFullBackup(
     blob,
     estimatedBytes,
     trackCount: Object.keys(library.tracksById).length
+  };
+}
+
+function makeRecordId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function toUniquePlaylistName(library: LibraryState, desiredName: string): string {
+  const base = desiredName.trim() || "Imported Polyplaylist";
+  const taken = new Set(Object.values(library.playlistsById).map((playlist) => playlist.name));
+  if (!taken.has(base)) return base;
+  let index = 2;
+  let candidate = `${base} (${index})`;
+  while (taken.has(candidate)) {
+    index += 1;
+    candidate = `${base} (${index})`;
+  }
+  return candidate;
+}
+
+function normalizeImportedPolyplaylist(input: unknown): PolyplaylistManifest {
+  if (!input || typeof input !== "object") throw new Error("Invalid polyplaylist manifest.");
+  const value = input as Partial<PolyplaylistManifest>;
+  if (value.kind !== "polyplaylist") throw new Error("Unsupported playlist package.");
+  const playlistName = (value.playlist?.name || "").trim() || "Imported Polyplaylist";
+  const playlistTrackIds = Array.isArray(value.playlist?.trackIds)
+    ? value.playlist.trackIds.filter((trackId): trackId is string => typeof trackId === "string")
+    : [];
+
+  const normalizedLibrary = migrateLibraryIfNeeded({
+    version: 1,
+    tracksById: value.tracksById ?? {},
+    playlistsById: {
+      imported: {
+        id: "imported",
+        name: playlistName,
+        trackIds: playlistTrackIds,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }
+    },
+    activePlaylistId: "imported"
+  });
+
+  const normalizedTrackIds = normalizedLibrary.playlistsById.imported.trackIds.filter(
+    (trackId) => Boolean(normalizedLibrary.tracksById[trackId])
+  );
+
+  return {
+    kind: "polyplaylist",
+    version: Number.isFinite(value.version) ? Number(value.version) : POLYPLAYLIST_VERSION,
+    appVersion: typeof value.appVersion === "string" ? value.appVersion : APP_VERSION,
+    createdAt: typeof value.createdAt === "string" ? value.createdAt : nowIso(),
+    playlist: {
+      id: typeof value.playlist?.id === "string" ? value.playlist.id : "imported",
+      name: playlistName,
+      trackIds: normalizedTrackIds
+    },
+    tracksById: normalizedLibrary.tracksById
+  };
+}
+
+export async function exportPolyplaylist(
+  onProgress?: (progress: BackupProgress) => void
+): Promise<ExportPolyplaylistResult> {
+  const library = loadLibrary();
+  const activePlaylist = library.activePlaylistId ? library.playlistsById[library.activePlaylistId] : undefined;
+  if (!activePlaylist) throw new Error("No active playlist to export.");
+
+  const trackIds = activePlaylist.trackIds.filter((trackId) => Boolean(library.tracksById[trackId]));
+  if (!trackIds.length) throw new Error("Active playlist has no tracks.");
+
+  const tracks = trackIds.map((trackId) => library.tracksById[trackId]).filter(Boolean);
+  const tracksById = Object.fromEntries(tracks.map((track) => [track.id, track]));
+
+  const { entries: mediaEntries, mediaBytes } = await buildTrackMediaEntries(
+    tracks,
+    POLYPLAYLIST_ROOT,
+    "Preparing polyplaylist…",
+    onProgress
+  );
+
+  const manifest: PolyplaylistManifest = {
+    kind: "polyplaylist",
+    version: POLYPLAYLIST_VERSION,
+    appVersion: APP_VERSION,
+    createdAt: nowIso(),
+    playlist: {
+      id: activePlaylist.id,
+      name: activePlaylist.name || "My Playlist",
+      trackIds
+    },
+    tracksById
+  };
+
+  const manifestEntry: ZipEntryInput = {
+    path: `${POLYPLAYLIST_ROOT}/manifest.json`,
+    bytes: new TextEncoder().encode(JSON.stringify(manifest, null, 2))
+  };
+
+  const estimatedBytes = mediaBytes + manifestEntry.bytes.length + 1024 * Math.max(1, mediaEntries.length);
+  if (estimatedBytes > BACKUP_CAP_BYTES) {
+    throw new BackupSizeError(estimatedBytes, BACKUP_CAP_BYTES);
+  }
+
+  onProgress?.({ done: 0, total: 1, label: "Building polyplaylist archive…" });
+  const blob = await buildZip([manifestEntry, ...mediaEntries]);
+  onProgress?.({ done: 1, total: 1, label: "Polyplaylist ready." });
+
+  return {
+    blob,
+    estimatedBytes,
+    trackCount: trackIds.length,
+    playlistName: manifest.playlist.name
+  };
+}
+
+export async function importPolyplaylist(file: File): Promise<ImportPolyplaylistResult> {
+  const raw = await file.arrayBuffer();
+  const zipEntries = parseZipEntries(raw);
+  const manifestEntry = zipEntries.get(`${POLYPLAYLIST_ROOT}/manifest.json`);
+  if (!manifestEntry) throw new Error("Polyplaylist package is missing manifest.json.");
+
+  const manifest = normalizeImportedPolyplaylist(JSON.parse(new TextDecoder().decode(manifestEntry)) as unknown);
+  if (!manifest.playlist.trackIds.length) throw new Error("Polyplaylist has no tracks.");
+
+  const library = loadLibrary();
+  const nowMs = Date.now();
+  const playlistId = makeRecordId();
+  const playlistName = toUniquePlaylistName(library, manifest.playlist.name);
+  const importedTrackIds: string[] = [];
+  let importedMediaFiles = 0;
+
+  for (let index = 0; index < manifest.playlist.trackIds.length; index += 1) {
+    const sourceTrackId = manifest.playlist.trackIds[index];
+    const sourceTrack = manifest.tracksById[sourceTrackId];
+    if (!sourceTrack) continue;
+
+    const nextTrackId = makeRecordId();
+    const nextTrack = sanitizeTrackForRestore({
+      ...sourceTrack,
+      id: nextTrackId,
+      createdAt: nowMs + index,
+      updatedAt: nowMs + index
+    });
+
+    const audioEntry = findEntryByPrefix(zipEntries, `${POLYPLAYLIST_ROOT}/media/${sourceTrackId}/audio.`);
+    if (audioEntry) {
+      const blob = new Blob([uint8ToArrayBuffer(audioEntry.data)], { type: getMimeFromPath(audioEntry.path) });
+      const key = makeBlobKey();
+      await putBlob(key, blob, { type: "audio" });
+      nextTrack.audioKey = key;
+      nextTrack.audioBytes = blob.size;
+      importedMediaFiles += 1;
+    }
+
+    const artEntry = findEntryByPrefix(zipEntries, `${POLYPLAYLIST_ROOT}/media/${sourceTrackId}/artwork.`);
+    if (artEntry) {
+      const blob = new Blob([uint8ToArrayBuffer(artEntry.data)], { type: getMimeFromPath(artEntry.path) });
+      const key = makeBlobKey();
+      await putBlob(key, blob, { type: "image" });
+      nextTrack.artKey = key;
+      nextTrack.posterBytes = blob.size;
+      nextTrack.artworkBytes = (nextTrack.artworkBytes ?? 0) + blob.size;
+      importedMediaFiles += 1;
+    }
+
+    const artVideoEntry = findEntryByPrefix(zipEntries, `${POLYPLAYLIST_ROOT}/media/${sourceTrackId}/artwork-video.`);
+    if (artVideoEntry) {
+      const blob = new Blob([uint8ToArrayBuffer(artVideoEntry.data)], { type: getMimeFromPath(artVideoEntry.path) });
+      const key = makeBlobKey();
+      await putBlob(key, blob, { type: "video" });
+      nextTrack.artVideoKey = key;
+      nextTrack.artworkBytes = (nextTrack.artworkBytes ?? 0) + blob.size;
+      importedMediaFiles += 1;
+    }
+
+    library.tracksById[nextTrackId] = nextTrack;
+    importedTrackIds.push(nextTrackId);
+  }
+
+  if (!importedTrackIds.length) {
+    throw new Error("Polyplaylist import failed: no tracks could be restored.");
+  }
+
+  library.playlistsById[playlistId] = {
+    id: playlistId,
+    name: playlistName,
+    trackIds: importedTrackIds,
+    createdAt: nowMs,
+    updatedAt: nowMs
+  };
+  library.activePlaylistId = playlistId;
+  saveLibrary(library);
+
+  return {
+    playlistId,
+    playlistName,
+    importedTracks: importedTrackIds.length,
+    importedMediaFiles
   };
 }
 

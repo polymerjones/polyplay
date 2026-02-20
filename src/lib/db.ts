@@ -4,7 +4,7 @@ import { generateVideoPoster } from "./artwork/videoPoster";
 import { getMediaUrl, revokeAllMediaUrls, revokeMediaUrl } from "./player/media";
 import { isConstrainedMobileDevice } from "./platform";
 import { deleteBlob, getBlob, initDB, listBlobStats, putBlob } from "./storage/db";
-import { loadLibrary, saveLibrary, type LibraryState, type TrackRecord } from "./storage/library";
+import { createEmptyLibrary, loadLibrary, saveLibrary, type LibraryState, type TrackRecord } from "./storage/library";
 import { titleFromFilename } from "./title";
 
 export type DbTrackRecord = {
@@ -578,6 +578,131 @@ export type TrackStorageRow = {
   posterBytes: number;
   updatedAt: number;
 };
+
+export type PlaylistRow = {
+  id: string;
+  name: string;
+  trackCount: number;
+  isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type DeletePlaylistResult = {
+  nextActivePlaylistId: string | null;
+  deletedTracks: number;
+};
+
+function ensureAtLeastOnePlaylist(library: LibraryState): void {
+  if (Object.keys(library.playlistsById).length > 0) return;
+  const fallback = createEmptyLibrary();
+  library.playlistsById = fallback.playlistsById;
+  library.activePlaylistId = fallback.activePlaylistId;
+}
+
+function countTrackReferences(playlistsById: LibraryState["playlistsById"]): Map<string, number> {
+  const refs = new Map<string, number>();
+  for (const playlist of Object.values(playlistsById)) {
+    for (const trackId of playlist.trackIds) {
+      refs.set(trackId, (refs.get(trackId) ?? 0) + 1);
+    }
+  }
+  return refs;
+}
+
+export async function getPlaylistsFromDb(): Promise<PlaylistRow[]> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  return Object.values(library.playlistsById)
+    .map((playlist) => ({
+      id: playlist.id,
+      name: playlist.name,
+      trackCount: playlist.trackIds.filter((trackId) => Boolean(library.tracksById[trackId])).length,
+      isActive: library.activePlaylistId === playlist.id,
+      createdAt: playlist.createdAt,
+      updatedAt: playlist.updatedAt
+    }))
+    .sort((a, b) => Number(b.isActive) - Number(a.isActive) || b.updatedAt - a.updatedAt);
+}
+
+export async function createPlaylistInDb(name: string): Promise<string> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const playlistId = makeId();
+  const ts = now();
+  const nextName = name.trim() || `Playlist ${Object.keys(library.playlistsById).length + 1}`;
+  library.playlistsById[playlistId] = {
+    id: playlistId,
+    name: nextName,
+    trackIds: [],
+    createdAt: ts,
+    updatedAt: ts
+  };
+  library.activePlaylistId = playlistId;
+  saveLibrary(library);
+  return playlistId;
+}
+
+export async function setActivePlaylistInDb(playlistId: string): Promise<void> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  if (!library.playlistsById[playlistId]) throw new Error("Playlist not found");
+  library.activePlaylistId = playlistId;
+  library.playlistsById[playlistId].updatedAt = now();
+  saveLibrary(library);
+}
+
+export async function renamePlaylistInDb(playlistId: string, name: string): Promise<void> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const playlist = library.playlistsById[playlistId];
+  if (!playlist) throw new Error("Playlist not found");
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Playlist name can't be empty.");
+  playlist.name = trimmed;
+  playlist.updatedAt = now();
+  saveLibrary(library);
+}
+
+export async function deletePlaylistInDb(playlistId: string): Promise<DeletePlaylistResult> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const playlist = library.playlistsById[playlistId];
+  if (!playlist) throw new Error("Playlist not found");
+
+  const uniqueTrackIds = playlist.trackIds.filter((trackId) => Boolean(library.tracksById[trackId]));
+  delete library.playlistsById[playlistId];
+  ensureAtLeastOnePlaylist(library);
+
+  const refs = countTrackReferences(library.playlistsById);
+  let deletedTracks = 0;
+  for (const trackId of uniqueTrackIds) {
+    if (refs.has(trackId)) continue;
+    const track = library.tracksById[trackId];
+    if (!track) continue;
+    const keys = [track.audioKey, track.artKey, track.artVideoKey].filter(Boolean) as string[];
+    for (const key of keys) {
+      await deleteBlob(key);
+      revokeMediaUrl(key);
+    }
+    delete library.tracksById[trackId];
+    deletedTracks += 1;
+  }
+
+  for (const entry of Object.values(library.playlistsById)) {
+    entry.trackIds = entry.trackIds.filter((trackId) => Boolean(library.tracksById[trackId]));
+    entry.updatedAt = now();
+  }
+
+  if (!library.activePlaylistId || !library.playlistsById[library.activePlaylistId]) {
+    library.activePlaylistId = Object.keys(library.playlistsById)[0] ?? null;
+  }
+  saveLibrary(library);
+  return {
+    nextActivePlaylistId: library.activePlaylistId,
+    deletedTracks
+  };
+}
 
 export async function getStorageUsageSummary(): Promise<StorageUsageSummary> {
   await maybeMigrateLegacyTracks();

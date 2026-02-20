@@ -2047,11 +2047,25 @@ body.gratitude-reactive .track-backdrop {
 .journal-heaven-bg {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(circle at 20% 30%, rgba(255, 244, 214, 0.22) 0%, transparent 55%),
-    radial-gradient(circle at 80% 60%, rgba(255, 255, 255, 0.16) 0%, transparent 58%),
-    linear-gradient(135deg, rgba(18, 18, 22, 0.65), rgba(18, 18, 22, 0.75));
+  overflow: hidden;
   pointer-events: none;
+}
+
+.journal-heaven-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.78;
+  filter: saturate(1.08) contrast(1.04);
+}
+
+.journal-heaven-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255, 244, 214, 0.2) 0%, transparent 55%),
+    radial-gradient(circle at 80% 60%, rgba(255, 255, 255, 0.16) 0%, transparent 58%),
+    linear-gradient(135deg, rgba(10, 12, 19, 0.58), rgba(10, 12, 19, 0.72));
 }
 
 .journal-heaven-bg::before,
@@ -2135,6 +2149,8 @@ body.gratitude-reactive .track-backdrop {
 }
 
 .journal-modal__export,
+.journal-modal__sound,
+.journal-modal__mode,
 .journal-modal__close {
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 10px;
@@ -2144,6 +2160,18 @@ body.gratitude-reactive .track-backdrop {
   font-weight: 700;
   height: 32px;
   padding: 0 10px;
+}
+
+.journal-modal__sound {
+  border-color: rgba(149, 233, 255, 0.46);
+  color: #dff8ff;
+  background: rgba(9, 42, 59, 0.42);
+}
+
+.journal-modal__mode {
+  border-color: rgba(197, 174, 255, 0.44);
+  color: #efe5ff;
+  background: rgba(50, 25, 81, 0.4);
 }
 
 .journal-modal__close {
@@ -2182,6 +2210,8 @@ body.gratitude-reactive .track-backdrop {
 }
 
 .journal-entry {
+  position: relative;
+  overflow: hidden;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(8, 11, 18, 0.74);
@@ -2190,6 +2220,20 @@ body.gratitude-reactive .track-backdrop {
 
 .journal-entry.is-saved {
   animation: journal-saved-pulse 420ms ease-out;
+}
+
+.journal-entry.is-deleting {
+  pointer-events: none;
+  animation: journal-delete-fade 240ms ease forwards;
+}
+
+.journal-entry.is-deleting::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(92deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0));
+  transform: translateX(-120%);
+  animation: journal-delete-wipe 220ms ease-out forwards;
 }
 
 .journal-entry__meta {
@@ -2290,6 +2334,28 @@ body.gratitude-reactive .track-backdrop {
   font-weight: 700;
   padding: 6px 10px;
   z-index: 130;
+}
+
+@keyframes journal-delete-wipe {
+  from {
+    transform: translateX(-120%);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
+@keyframes journal-delete-fade {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.985);
+  }
 }
 
 @keyframes journal-cloud-drift {
@@ -2419,6 +2485,8 @@ body.gratitude-reactive .track-backdrop {
   .transfer-lane__tip-btn.is-tip-pulse,
   .journal-modal__clouds,
   .journal-entry.is-saved,
+  .journal-entry.is-deleting,
+  .journal-entry.is-deleting::after,
   .header-icon-btn--hero::after,
   .journal-heaven-bg::before,
   .journal-heaven-bg::after {
@@ -2451,6 +2519,111 @@ body.gratitude-reactive .track-backdrop {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.playlist-manager {
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(118, 196, 255, 0.12), rgba(118, 196, 255, 0)),
+    radial-gradient(120% 120% at 100% 0%, rgba(255, 124, 194, 0.12), rgba(255, 124, 194, 0)),
+    rgba(9, 14, 24, 0.76);
+}
+
+.playlist-manager__head {
+  display: grid;
+  gap: 2px;
+}
+
+.playlist-manager__sub {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(205, 223, 255, 0.78);
+}
+
+.playlist-manager__create {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.playlist-manager__input,
+.playlist-row__rename {
+  border-radius: 10px;
+  border: 1px solid rgba(176, 207, 255, 0.26);
+  background: rgba(7, 12, 20, 0.8);
+  color: #f4f7ff;
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.playlist-manager__list {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.playlist-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(176, 207, 255, 0.2);
+  background: rgba(5, 9, 17, 0.72);
+  border-radius: 12px;
+  padding: 10px;
+  transition: border-color 140ms ease, transform 140ms ease, background 140ms ease;
+}
+
+.playlist-row.is-active {
+  border-color: rgba(129, 228, 242, 0.58);
+  background: linear-gradient(100deg, rgba(17, 51, 60, 0.82), rgba(11, 18, 29, 0.82));
+}
+
+.playlist-row.is-busy {
+  opacity: 0.66;
+}
+
+.playlist-row:hover {
+  transform: translateY(-1px);
+}
+
+.playlist-row__main h3 {
+  margin: 0;
+  font-size: 14px;
+  color: #eef5ff;
+}
+
+.playlist-row__main p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: rgba(209, 224, 255, 0.78);
+}
+
+.playlist-row__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.playlist-manager__empty {
+  font-size: 13px;
+  color: rgba(208, 220, 245, 0.8);
+  padding: 8px 2px 2px;
+}
+
+@media (max-width: 700px) {
+  .playlist-manager__create {
+    grid-template-columns: 1fr;
+  }
+
+  .playlist-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .playlist-row__actions {
+    flex-wrap: wrap;
+  }
 }
 
 .transfer-lane__label {

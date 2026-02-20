@@ -6,14 +6,20 @@ import { GratitudeHubPanel } from "./GratitudeHubPanel";
 import {
   addTrackToDb,
   clearTracksInDb,
+  createPlaylistInDb,
+  deletePlaylistInDb,
   getStorageUsageSummary,
+  getPlaylistsFromDb,
   getTrackStorageRows,
   getTrackRowsFromDb,
   isStorageCapError,
   removeDemoTracksInDb,
   removeTrackFromDb,
+  renamePlaylistInDb,
   replaceAudioInDb,
   resetAuraInDb,
+  setActivePlaylistInDb,
+  type PlaylistRow,
   type StorageUsageSummary,
   type TrackStorageRow,
   updateArtworkInDb,
@@ -34,14 +40,18 @@ import {
   saveGratitudeSettings
 } from "../lib/gratitude";
 import {
+  applyImportedPolyplaylistConfig,
   BackupSizeError,
   applyImportedConfig,
   buildConfigSnapshot,
   exportFullBackup,
   getConfigExportFilename,
   getFullBackupFilename,
+  getNextDefaultPolyplaylistName,
+  getPolyplaylistConfigFilename,
   importFullBackup,
   parseConfigImportText,
+  serializePolyplaylistConfig,
   serializeConfig
 } from "../lib/backup";
 import { titleFromFilename } from "../lib/title";
@@ -141,6 +151,11 @@ export function AdminApp() {
   const [selectedGratitudeEntry, setSelectedGratitudeEntry] = useState<GratitudeEntry | null>(null);
   const [storageUsage, setStorageUsage] = useState<StorageUsageSummary | null>(null);
   const [trackStorageRows, setTrackStorageRows] = useState<TrackStorageRow[]>([]);
+  const [playlists, setPlaylists] = useState<PlaylistRow[]>([]);
+  const [newPlaylistName, setNewPlaylistName] = useState("");
+  const [editingPlaylistId, setEditingPlaylistId] = useState<string | null>(null);
+  const [editingPlaylistName, setEditingPlaylistName] = useState("");
+  const [playlistBusyId, setPlaylistBusyId] = useState<string | null>(null);
   const [sortLargestFirst, setSortLargestFirst] = useState(true);
   const [infoModal, setInfoModal] = useState<{ title: string; message: string; openManageStorage?: boolean } | null>(
     null
@@ -152,6 +167,7 @@ export function AdminApp() {
   const manageStorageRef = useRef<HTMLElement | null>(null);
   const importConfigInputRef = useRef<HTMLInputElement | null>(null);
   const importBackupInputRef = useRef<HTMLInputElement | null>(null);
+  const importPolyplaylistInputRef = useRef<HTMLInputElement | null>(null);
   const [backupProgress, setBackupProgress] = useState("");
   const [isBackupBusy, setIsBackupBusy] = useState(false);
 
@@ -195,9 +211,19 @@ export function AdminApp() {
     }
   };
 
+  const refreshPlaylists = async () => {
+    try {
+      const rows = await getPlaylistsFromDb();
+      setPlaylists(rows);
+    } catch {
+      setPlaylists([]);
+    }
+  };
+
   useEffect(() => {
     void refreshTracks();
     void refreshStorage();
+    void refreshPlaylists();
   }, []);
 
   useEffect(() => {
@@ -871,6 +897,47 @@ export function AdminApp() {
     }
   };
 
+  const onExportPolyplaylist = async () => {
+    const suggestedName = getNextDefaultPolyplaylistName();
+    const userInput = window.prompt("Name your PolyPlaylist", suggestedName);
+    if (userInput === null) return;
+    const playlistName = userInput.trim() || suggestedName;
+    try {
+      const content = serializePolyplaylistConfig(playlistName);
+      const blob = new Blob([content], { type: "application/json;charset=utf-8" });
+      downloadBlobFile(blob, getPolyplaylistConfigFilename());
+      setStatus(`PolyPlaylist exported as "${playlistName}".`);
+    } catch (error) {
+      setStatus(`PolyPlaylist export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  };
+
+  const onImportPolyplaylistFile = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const content = await file.text();
+      const summary = applyImportedPolyplaylistConfig(content);
+      await refreshTracks();
+      await refreshPlaylists();
+      await refreshStorage();
+      const missingPreview =
+        summary.missingTrackIds.length > 0
+          ? ` Missing IDs: ${summary.missingTrackIds.slice(0, 5).join(", ")}${
+              summary.missingTrackIds.length > 5 ? "…" : ""
+            }.`
+          : "";
+      setStatus(
+        `PolyPlaylist applied. Updated ${summary.updatedTrackCount} tracks. Missing ${summary.missingTrackIds.length} tracks.${missingPreview}`
+      );
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:config-imported" }, window.location.origin);
+        window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
+      }
+    } catch (error) {
+      setStatus(`PolyPlaylist import failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  };
+
   const onRemoveDemoTracks = async () => {
     if (!window.confirm("Remove all demo tracks?")) return;
     try {
@@ -903,6 +970,88 @@ export function AdminApp() {
       }
     } catch {
       setStatus("Failed to restore demo tracks.");
+    }
+  };
+
+  const onCreatePlaylist = async () => {
+    const proposed = newPlaylistName.trim();
+    setPlaylistBusyId("create");
+    try {
+      await createPlaylistInDb(proposed || `Playlist ${playlists.length + 1}`);
+      setNewPlaylistName("");
+      setStatus("Playlist created.");
+      await refreshPlaylists();
+      await refreshTracks();
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
+      }
+    } catch (error) {
+      setStatus(`Playlist create failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      setPlaylistBusyId(null);
+    }
+  };
+
+  const onActivatePlaylist = async (playlistId: string) => {
+    setPlaylistBusyId(playlistId);
+    try {
+      await setActivePlaylistInDb(playlistId);
+      setStatus("Active playlist changed.");
+      await refreshPlaylists();
+      await refreshTracks();
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
+      }
+    } catch (error) {
+      setStatus(`Playlist switch failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      setPlaylistBusyId(null);
+    }
+  };
+
+  const onSavePlaylistRename = async (playlistId: string) => {
+    const trimmed = editingPlaylistName.trim();
+    if (!trimmed) {
+      setStatus("Playlist name can't be empty.");
+      return;
+    }
+    setPlaylistBusyId(playlistId);
+    try {
+      await renamePlaylistInDb(playlistId, trimmed);
+      setEditingPlaylistId(null);
+      setEditingPlaylistName("");
+      setStatus("Playlist renamed.");
+      await refreshPlaylists();
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
+      }
+    } catch (error) {
+      setStatus(`Playlist rename failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      setPlaylistBusyId(null);
+    }
+  };
+
+  const onDeletePlaylist = async (playlist: PlaylistRow) => {
+    if (!window.confirm(`Delete "${playlist.name}"? Tracks only in this playlist will also be removed.`)) return;
+    setPlaylistBusyId(playlist.id);
+    try {
+      const result = await deletePlaylistInDb(playlist.id);
+      setStatus(
+        result.deletedTracks > 0
+          ? `Playlist deleted. Removed ${result.deletedTracks} unreferenced track${result.deletedTracks === 1 ? "" : "s"}.`
+          : "Playlist deleted."
+      );
+      await refreshPlaylists();
+      await refreshTracks();
+      await refreshStorage();
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
+      }
+    } catch (error) {
+      setStatus(`Playlist delete failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      setPlaylistBusyId(null);
     }
   };
 
@@ -1200,9 +1349,116 @@ export function AdminApp() {
         onExportTxt={onExportGratitudeTxt}
       />
 
+      <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3 playlist-manager">
+        <div className="playlist-manager__head">
+          <h2 className="text-base font-semibold text-slate-100">Polyplaylist Manager</h2>
+          <p className="playlist-manager__sub">Switch galleries fast, rename cleanly, and keep imported packs organized.</p>
+        </div>
+        <div className="playlist-manager__create">
+          <input
+            type="text"
+            value={newPlaylistName}
+            onChange={(event) => setNewPlaylistName(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void onCreatePlaylist();
+            }}
+            className="playlist-manager__input"
+            placeholder="New playlist name"
+          />
+          <Button variant="primary" onClick={() => void onCreatePlaylist()} disabled={playlistBusyId === "create"}>
+            New Playlist
+          </Button>
+        </div>
+        <div className="playlist-manager__list">
+          {playlists.map((playlist) => {
+            const isEditing = editingPlaylistId === playlist.id;
+            const isBusy = playlistBusyId === playlist.id;
+            return (
+              <article
+                key={playlist.id}
+                className={`playlist-row ${playlist.isActive ? "is-active" : ""} ${isBusy ? "is-busy" : ""}`.trim()}
+              >
+                <div className="playlist-row__main">
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editingPlaylistName}
+                      onChange={(event) => setEditingPlaylistName(event.currentTarget.value)}
+                      className="playlist-row__rename"
+                      autoFocus
+                    />
+                  ) : (
+                    <h3>{playlist.name}</h3>
+                  )}
+                  <p>
+                    {playlist.trackCount} track{playlist.trackCount === 1 ? "" : "s"}
+                    {playlist.isActive ? " • Active" : ""}
+                  </p>
+                </div>
+                <div className="playlist-row__actions">
+                  {!playlist.isActive && (
+                    <Button variant="secondary" onClick={() => void onActivatePlaylist(playlist.id)} disabled={Boolean(playlistBusyId)}>
+                      Activate
+                    </Button>
+                  )}
+                  {isEditing ? (
+                    <>
+                      <Button variant="primary" onClick={() => void onSavePlaylistRename(playlist.id)} disabled={isBusy}>
+                        Save
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          setEditingPlaylistId(null);
+                          setEditingPlaylistName("");
+                        }}
+                        disabled={isBusy}
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setEditingPlaylistId(playlist.id);
+                        setEditingPlaylistName(playlist.name);
+                      }}
+                      disabled={Boolean(playlistBusyId)}
+                    >
+                      Rename
+                    </Button>
+                  )}
+                  <Button
+                    variant="danger"
+                    onClick={() => void onDeletePlaylist(playlist)}
+                    disabled={playlists.length <= 1 || Boolean(playlistBusyId)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
+          {!playlists.length && <div className="playlist-manager__empty">No playlists found.</div>}
+        </div>
+      </section>
+
       <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
         <h2 className="mb-2 text-base font-semibold text-slate-100">Backups</h2>
         <div className="flex flex-wrap gap-2">
+          <Button variant="primary" onClick={() => void onExportPolyplaylist()} disabled={isBackupBusy}>
+            Export PolyPlaylist
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              importPolyplaylistInputRef.current?.click();
+            }}
+            disabled={isBackupBusy}
+          >
+            Import PolyPlaylist
+          </Button>
           <Button variant="primary" onClick={onExportConfig}>
             Export Config
           </Button>
@@ -1227,6 +1483,17 @@ export function AdminApp() {
             Import Full Backup (.zip)
           </Button>
         </div>
+        <input
+          ref={importPolyplaylistInputRef}
+          type="file"
+          accept=".polyplaylist.json,application/json,.json"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0] ?? null;
+            void onImportPolyplaylistFile(file);
+            event.currentTarget.value = "";
+          }}
+        />
         <input
           ref={importConfigInputRef}
           type="file"
