@@ -147,6 +147,12 @@ export function JournalModal({ open, onClose }: Props) {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (isComposerOpen) {
+          event.preventDefault();
+          setNewEntryText("");
+          setIsComposerOpen(false);
+          return;
+        }
         onClose();
         return;
       }
@@ -171,7 +177,7 @@ export function JournalModal({ open, onClose }: Props) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+  }, [open, onClose, isComposerOpen]);
 
   useEffect(() => {
     if (!miniToast) return;
@@ -286,21 +292,6 @@ export function JournalModal({ open, onClose }: Props) {
             <div className="journal-modal__head-actions">
               <button
                 type="button"
-                className="journal-modal__new"
-                aria-label="New Journal Entry"
-                onClick={() => {
-                  setIsComposerOpen(true);
-                  setEditingEntryId(null);
-                }}
-              >
-                <svg viewBox="0 0 24 24" className="journal-modal__icon-svg">
-                  <path d="M4 20l4-1 9-9-3-3-9 9-1 4Z" />
-                  <path d="M13 6l3 3M3 21h18" />
-                </svg>
-                <span>New</span>
-              </button>
-              <button
-                type="button"
                 className="journal-modal__export"
                 onClick={async () => {
                   try {
@@ -348,25 +339,22 @@ export function JournalModal({ open, onClose }: Props) {
                 New Verse
               </button>
             </div>
-            <div className="journalSearchBarWrap">
-              <span className="journalSearchIcon" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                  <circle cx="11" cy="11" r="6.5" />
-                  <path d="M16 16 20 20" />
+            <div className="journalPrimaryActionWrap">
+              <button
+                type="button"
+                className="journal-modal__new journal-modal__new--primary"
+                aria-label="New Journal Entry"
+                onClick={() => {
+                  setIsComposerOpen(true);
+                  setEditingEntryId(null);
+                }}
+              >
+                <svg viewBox="0 0 24 24" className="journal-modal__icon-svg">
+                  <path d="M4 20l4-1 9-9-3-3-9 9-1 4Z" />
+                  <path d="M13 6l3 3M3 21h18" />
                 </svg>
-              </span>
-              <input
-                className="journalSearchInput"
-                type="search"
-                placeholder="Search journal entries..."
-                value={query}
-                onChange={(event) => setQuery(event.currentTarget.value)}
-              />
-              {query.trim().length > 0 && (
-                <button type="button" className="journalSearchClear" aria-label="Clear search" onClick={() => setQuery("")}>
-                  ×
-                </button>
-              )}
+                <span>New</span>
+              </button>
             </div>
           </div>
 
@@ -415,6 +403,27 @@ export function JournalModal({ open, onClose }: Props) {
             </div>
           </div>
         )}
+
+        <div className="journalSearchBarWrap journalSearchBarWrap--list">
+          <span className="journalSearchIcon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="6.5" />
+              <path d="M16 16 20 20" />
+            </svg>
+          </span>
+          <input
+            className="journalSearchInput"
+            type="search"
+            placeholder="Search journal entries..."
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+          />
+          {query.trim().length > 0 && (
+            <button type="button" className="journalSearchClear" aria-label="Clear search" onClick={() => setQuery("")}>
+              ×
+            </button>
+          )}
+        </div>
 
         <div className="journal-modal__list">
           {filteredEntries.length ? (

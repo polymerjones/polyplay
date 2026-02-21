@@ -2928,6 +2928,17 @@ body.mute-freeze .track-backdrop {
   padding: 0 10px;
 }
 
+.journal-modal__new--primary {
+  height: 42px;
+  min-width: 108px;
+  border-radius: 14px;
+  border-color: rgba(216, 176, 255, 0.56);
+  background: linear-gradient(135deg, rgba(142, 92, 232, 0.92), rgba(92, 55, 185, 0.92));
+  box-shadow:
+    0 0 0 1px rgba(216, 176, 255, 0.28),
+    0 0 22px rgba(150, 94, 245, 0.32);
+}
+
 .journal-modal__icon-svg {
   width: 14px;
   height: 14px;
@@ -2980,6 +2991,12 @@ body.mute-freeze .track-backdrop {
   align-items: stretch;
 }
 
+.journalPrimaryActionWrap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .journalVerseCard {
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -3022,6 +3039,10 @@ body.mute-freeze .track-backdrop {
   min-width: 0;
 }
 
+.journalSearchBarWrap--list {
+  margin-top: 4px;
+}
+
 .journalSearchIcon {
   position: absolute;
   left: 12px;
@@ -3047,8 +3068,8 @@ body.mute-freeze .track-backdrop {
 
 .journalSearchInput {
   width: 100%;
-  height: 42px;
-  line-height: 42px;
+  height: 38px;
+  line-height: 38px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.09);
@@ -3387,6 +3408,10 @@ body.mute-freeze .track-backdrop {
 
   .journalControlRow {
     grid-template-columns: 1fr;
+  }
+
+  .journalPrimaryActionWrap {
+    justify-content: flex-start;
   }
 }
 
