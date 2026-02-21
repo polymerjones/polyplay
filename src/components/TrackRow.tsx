@@ -18,8 +18,8 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
   const hasAura = track.aura > 0;
 
   return (
-    <div
-      className={`track-row ${active && isPlaying ? "is-playing" : ""} ${hasAura ? "rowAuraGlow" : ""}`.trim()}
+    <article
+      className={`trackRow ${active && isPlaying ? "is-playing" : ""} ${hasAura ? "rowAuraGlow" : ""}`.trim()}
       data-track-id={track.id}
       data-aura={String(track.aura)}
       style={{ "--row-aura-level": auraLevel.toFixed(2) } as CSSProperties}
@@ -27,47 +27,47 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
       <div className="rowAuraAccent" aria-hidden="true" />
       <button
         type="button"
-        className="track-row__thumb-btn"
+        className="trackRow__art"
         onClick={() => onSelectTrack(track.id)}
         aria-label={`Play ${track.title}`}
       >
-        <div className="track-row__thumb" style={artStyle} />
-        <div className="track-row__thumb-badges" aria-hidden="true">
+        <div className="trackRow__thumb" style={artStyle} />
+        <div className="trackRow__artBadges" aria-hidden="true">
           {track.isDemo && <div className="track-art-badge track-art-badge--row track-art-badge--demo">DEMO</div>}
           {track.artworkSource === "auto" && <div className="track-art-badge track-art-badge--row">AUTO ART</div>}
         </div>
       </button>
       <button
         type="button"
-        className="track-row__meta-hit"
+        className="trackRow__metaHit"
         onClick={() => onSelectTrack(track.id)}
         aria-label={`Play ${track.title}`}
       >
-        <div className="track-row__meta">
-          <div className="track-row__title">{track.title}</div>
-          <div className="track-row__sub">{track.sub || "Uploaded"}</div>
-          <div className="track-row__aura">Aura {track.aura}/5</div>
+        <div className="trackRow__meta">
+          <div className="trackRow__title">{track.title}</div>
+          <div className="trackRow__sub">{track.sub || "Uploaded"}</div>
+          <div className="trackRow__aura">Aura {track.aura}/5</div>
         </div>
       </button>
-      <div className="track-row__actions">
+      <div className="trackRow__controls">
         <button
           type="button"
-          className="track-row__play-indicator"
+          className="trackRow__playButton"
           onClick={() => onSelectTrack(track.id)}
           aria-label={`Play ${track.title}`}
         >
           {active && isPlaying ? "Playing" : "Play"}
         </button>
         <button
-          className="track-row__aura-btn"
+          className="trackRow__auraButton"
           type="button"
           aria-label="Give aura"
           onClick={(event) => {
             event.stopPropagation();
             const button = event.currentTarget;
-            button.classList.remove("track-row__aura-btn--burst");
+            button.classList.remove("trackRow__auraButton--burst");
             void button.offsetWidth;
-            button.classList.add("track-row__aura-btn--burst");
+            button.classList.add("trackRow__auraButton--burst");
             if (navigator.vibrate) navigator.vibrate(12);
             onAuraUp(track.id);
           }}
@@ -75,6 +75,6 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
           Aura +
         </button>
       </div>
-    </div>
+    </article>
   );
 }

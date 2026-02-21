@@ -109,7 +109,7 @@ const SAFE_TAP_BLOCK_SELECTORS = [
   "[role='menuitem']",
   "[contenteditable='true']",
   ".topbar",
-  ".track-row",
+  ".trackRow",
   ".tile-hit",
   ".now-playing",
   ".controls",

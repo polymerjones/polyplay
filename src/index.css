@@ -85,13 +85,16 @@ body.perf-lite .track-art-badge {
   line-height: 1;
 }
 
-.track-row {
+.trackRow {
   position: relative;
   --row-aura-level: 0;
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) 124px;
+  grid-template-columns: var(--row-art-size, 72px) minmax(0, 1fr) auto;
+  grid-template-areas: "art meta controls";
   align-items: center;
-  gap: 12px;
+  column-gap: 18px;
+  row-gap: 0;
+  width: 100%;
   height: 92px;
   min-height: 92px;
   max-height: 92px;
@@ -144,7 +147,7 @@ body.perf-lite .track-art-badge {
   );
 }
 
-.track-row.rowAuraGlow > * {
+.trackRow.rowAuraGlow > * {
   position: relative;
   z-index: 2;
 }
@@ -242,14 +245,15 @@ body.theme-dark .rowAuraGlow {
   border-color: rgba(174, 214, 255, 0.46);
 }
 
-.track-row.is-playing {
+.trackRow.is-playing {
   border-color: rgba(192, 148, 255, 0.64);
   box-shadow:
     0 0 0 1px rgba(174, 132, 255, 0.28),
     0 0 18px rgba(171, 110, 255, 0.34);
 }
 
-.track-row__thumb-btn {
+.trackRow__art {
+  grid-area: art;
   position: relative;
   border: 0;
   background: transparent;
@@ -262,7 +266,7 @@ body.theme-dark .rowAuraGlow {
   cursor: pointer;
 }
 
-.track-row__thumb-badges {
+.trackRow__artBadges {
   position: absolute;
   left: 8px;
   top: 8px;
@@ -272,7 +276,7 @@ body.theme-dark .rowAuraGlow {
   pointer-events: none;
 }
 
-.track-row__thumb-badges .track-art-badge--row {
+.trackRow__artBadges .track-art-badge--row {
   display: inline-flex;
   align-items: center;
   max-width: clamp(110px, 14vw, 140px);
@@ -284,7 +288,7 @@ body.theme-dark .rowAuraGlow {
   text-overflow: ellipsis;
 }
 
-.track-row__thumb {
+.trackRow__thumb {
   width: 72px;
   height: 72px;
   min-width: 72px;
@@ -295,7 +299,8 @@ body.theme-dark .rowAuraGlow {
   overflow: hidden;
 }
 
-.track-row__meta-hit {
+.trackRow__metaHit {
+  grid-area: meta;
   border: 0;
   background: transparent;
   width: 100%;
@@ -303,15 +308,16 @@ body.theme-dark .rowAuraGlow {
   padding: 0;
   text-align: left;
   cursor: pointer;
+  min-width: 0;
 }
 
-.track-row__meta {
+.trackRow__meta {
   min-width: 0;
   display: grid;
   gap: 2px;
 }
 
-.track-row__title {
+.trackRow__title {
   color: #f4ecff;
   font-size: 15px;
   font-weight: 800;
@@ -321,8 +327,8 @@ body.theme-dark .rowAuraGlow {
   text-overflow: ellipsis;
 }
 
-.track-row__sub,
-.track-row__aura {
+.trackRow__sub,
+.trackRow__aura {
   color: rgba(237, 228, 255, 0.84);
   font-size: 12px;
   line-height: 1.3;
@@ -332,16 +338,19 @@ body.theme-dark .rowAuraGlow {
   text-overflow: ellipsis;
 }
 
-.track-row__actions {
+.trackRow__controls {
+  grid-area: controls;
+  justify-self: end;
   min-width: 118px;
-  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 9px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
-.track-row__play-indicator {
+.trackRow__playButton {
   color: #efe2ff;
   font-size: 12px;
   font-weight: 700;
@@ -354,7 +363,7 @@ body.theme-dark .rowAuraGlow {
   cursor: pointer;
 }
 
-.track-row__aura-btn {
+.trackRow__auraButton {
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 9px;
   background: rgba(18, 24, 36, 0.76);
@@ -367,7 +376,7 @@ body.theme-dark .rowAuraGlow {
   cursor: pointer;
 }
 
-.track-row__aura-btn--burst {
+.trackRow__auraButton--burst {
   animation: track-row-aura-flash 360ms ease-out;
 }
 
