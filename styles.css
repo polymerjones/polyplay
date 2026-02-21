@@ -3186,8 +3186,8 @@ body.mute-freeze .track-backdrop {
     radial-gradient(circle at 82% 28%, rgba(255, 255, 255, 0.56) 0 1.8px, rgba(255, 255, 255, 0) 3px),
     linear-gradient(180deg, rgba(255, 252, 245, 0.28), rgba(255, 183, 90, 0.2));
   z-index: 0;
-  transform: translateX(-20%);
-  animation: journal-writing-streak 900ms linear infinite;
+  transform: none;
+  animation: journal-writing-ambient 6.8s ease-in-out infinite alternate;
 }
 
 .journal-modal__card.is-writing .journal-heaven-overlay {
@@ -3260,18 +3260,18 @@ body.mute-freeze .track-backdrop {
   50% { transform: translate3d(1%, -2%, 0); opacity: 0.62; }
 }
 
-@keyframes journal-writing-streak {
+@keyframes journal-writing-ambient {
   0% {
-    transform: translateX(-20%);
-    opacity: 0.58;
+    opacity: 0.52;
+    filter: brightness(0.96) saturate(0.98);
   }
   50% {
-    transform: translateX(0%);
-    opacity: 0.9;
+    opacity: 0.74;
+    filter: brightness(1.04) saturate(1.04);
   }
   100% {
-    transform: translateX(22%);
-    opacity: 0.52;
+    opacity: 0.6;
+    filter: brightness(1.01) saturate(1.02);
   }
 }
 
