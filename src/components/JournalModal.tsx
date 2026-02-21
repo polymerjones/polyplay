@@ -32,8 +32,8 @@ const JOURNAL_BG_TOGGLE_KEY = "polyplay_journalBgToggle_v1";
 const JOURNAL_VERSE_INDEX_KEY = "polyplay_journalVerseIndex_v1";
 
 const JOURNAL_BACKGROUNDS: JournalBackground[] = [
-  { id: "1", src: "/journal/bg1.mp4" },
-  { id: "2", src: "/journal/bg2.mp4" }
+  { id: "1", src: "/clouds1.mov" },
+  { id: "2", src: "/clouds2waudio.mov" }
 ];
 
 const JOURNAL_VERSES = [
@@ -100,6 +100,7 @@ export function JournalModal({ open, onClose }: Props) {
   const backgroundVideoRef = useRef<HTMLVideoElement | null>(null);
   const [entries, setEntries] = useState<GratitudeEntry[]>([]);
   const [selectedBgId, setSelectedBgId] = useState<"1" | "2">(JOURNAL_BACKGROUNDS[0]?.id || "1");
+  const [videoFailed, setVideoFailed] = useState(false);
   const [query, setQuery] = useState("");
   const [verseIndex, setVerseIndex] = useState<number>(() => {
     try {
@@ -134,6 +135,7 @@ export function JournalModal({ open, onClose }: Props) {
     if (!open) return;
     const selected = pickAlternatingBackground();
     setSelectedBgId(selected.id);
+    setVideoFailed(false);
   }, [open]);
 
   useEffect(() => {
@@ -239,7 +241,11 @@ export function JournalModal({ open, onClose }: Props) {
         playsInline
         muted
         aria-hidden="true"
+        onError={() => setVideoFailed(true)}
+        onCanPlay={() => setVideoFailed(false)}
       />
+      {videoFailed && <div className="journalVideoFallback" aria-hidden="true" />}
+      <div className="journalScrimLayer" aria-hidden="true" />
       <div className="journalAmbientLayer" aria-hidden="true" />
       {!reducedMotion && (
         <div className="journalStreaksLayer" aria-hidden="true">
@@ -274,92 +280,95 @@ export function JournalModal({ open, onClose }: Props) {
         }}
       >
         <div className={`journal-modal__card journalGlassPanel ${isWritingActive ? "is-writing" : ""}`.trim()} ref={cardRef}>
-        <div className="journalRim" aria-hidden="true" />
-        <div className="journal-modal__head">
-          <h3>Gratitude Journal</h3>
-          <div className="journal-modal__head-actions">
-            <button
-              type="button"
-              className="journal-modal__new"
-              aria-label="New Journal Entry"
-              onClick={() => {
-                setIsComposerOpen(true);
-                setEditingEntryId(null);
-              }}
-            >
-              <svg viewBox="0 0 24 24" className="journal-modal__icon-svg">
-                <path d="M4 20l4-1 9-9-3-3-9 9-1 4Z" />
-                <path d="M13 6l3 3M3 21h18" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              className="journal-modal__export"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(exportEntriesAsText());
-                  setMiniToast("Copied");
-                } catch {
-                  setMiniToast("Export coming soon");
-                }
-              }}
-            >
-              Export
-            </button>
-            <button
-              type="button"
-              className="journal-modal__export"
-              onClick={() => {
-                try {
-                  downloadTextFile(
-                    serializeGratitudeJson(),
-                    getGratitudeBackupFilename(),
-                    "application/json;charset=utf-8"
-                  );
-                  setMiniToast("Backup saved");
-                } catch {
-                  setMiniToast("Backup failed");
-                }
-              }}
-            >
-              Save Backup
-            </button>
-            <button type="button" className="journal-modal__close" aria-label="Close Journal" onClick={onClose}>
-              ✕
-            </button>
+          <div className="journalRim" aria-hidden="true" />
+          <div className="journal-modal__head">
+            <h3>Gratitude Journal</h3>
+            <div className="journal-modal__head-actions">
+              <button
+                type="button"
+                className="journal-modal__new"
+                aria-label="New Journal Entry"
+                onClick={() => {
+                  setIsComposerOpen(true);
+                  setEditingEntryId(null);
+                }}
+              >
+                <svg viewBox="0 0 24 24" className="journal-modal__icon-svg">
+                  <path d="M4 20l4-1 9-9-3-3-9 9-1 4Z" />
+                  <path d="M13 6l3 3M3 21h18" />
+                </svg>
+                <span>New</span>
+              </button>
+              <button
+                type="button"
+                className="journal-modal__export"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(exportEntriesAsText());
+                    setMiniToast("Copied");
+                  } catch {
+                    setMiniToast("Export coming soon");
+                  }
+                }}
+              >
+                Export
+              </button>
+              <button
+                type="button"
+                className="journal-modal__export"
+                onClick={() => {
+                  try {
+                    downloadTextFile(
+                      serializeGratitudeJson(),
+                      getGratitudeBackupFilename(),
+                      "application/json;charset=utf-8"
+                    );
+                    setMiniToast("Backup saved");
+                  } catch {
+                    setMiniToast("Backup failed");
+                  }
+                }}
+              >
+                Save Backup
+              </button>
+              <button type="button" className="journal-modal__close" aria-label="Close Journal" onClick={onClose}>
+                ✕
+              </button>
+            </div>
           </div>
-        </div>
-        <div className="journalSearchBarWrap">
-          <div className="journalVerseCard">
-            <strong>Verse</strong>
-            <p>{JOURNAL_VERSES[verseIndex % JOURNAL_VERSES.length]}</p>
-            <button
-              type="button"
-              className="journalVerseBtn"
-              onClick={() => setVerseIndex((prev) => (prev + 1) % JOURNAL_VERSES.length)}
-            >
-              New Verse
-            </button>
+          <div className="journalControlRow">
+            <div className="journalVerseCard">
+              <strong>Verse</strong>
+              <p>{JOURNAL_VERSES[verseIndex % JOURNAL_VERSES.length]}</p>
+              <button
+                type="button"
+                className="journalVerseBtn"
+                onClick={() => setVerseIndex((prev) => (prev + 1) % JOURNAL_VERSES.length)}
+              >
+                New Verse
+              </button>
+            </div>
+            <div className="journalSearchBarWrap">
+              <span className="journalSearchIcon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <circle cx="11" cy="11" r="6.5" />
+                  <path d="M16 16 20 20" />
+                </svg>
+              </span>
+              <input
+                className="journalSearchInput"
+                type="search"
+                placeholder="Search journal entries..."
+                value={query}
+                onChange={(event) => setQuery(event.currentTarget.value)}
+              />
+              {query.trim().length > 0 && (
+                <button type="button" className="journalSearchClear" aria-label="Clear search" onClick={() => setQuery("")}>
+                  ×
+                </button>
+              )}
+            </div>
           </div>
-          <span className="journalSearchIcon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="6.5" />
-              <path d="M16 16 20 20" />
-            </svg>
-          </span>
-          <input
-            className="journalSearchInput"
-            type="search"
-            placeholder="Search journal entries..."
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-          />
-          {query.trim().length > 0 && (
-            <button type="button" className="journalSearchClear" aria-label="Clear search" onClick={() => setQuery("")}>
-              ×
-            </button>
-          )}
-        </div>
 
         {isComposerOpen && (
           <div className="journal-compose">
@@ -473,6 +482,7 @@ export function JournalModal({ open, onClose }: Props) {
                         disabled={isDeleting}
                         onClick={() => {
                           if (isDeleting) return;
+                          const previousEntries = entries.slice();
                           setDeletingEntryId(entry.id);
                           if (editingEntryId === entry.id) {
                             setEditingEntryId(null);
@@ -480,10 +490,16 @@ export function JournalModal({ open, onClose }: Props) {
                           }
                           if (deleteTimerRef.current !== null) window.clearTimeout(deleteTimerRef.current);
                           deleteTimerRef.current = window.setTimeout(() => {
-                            deleteEntry(entry.id);
-                            setEntries(listEntries());
-                            setDeletingEntryId((prev) => (prev === entry.id ? null : prev));
-                            setMiniToast("Deleted");
+                            try {
+                              deleteEntry(entry.id);
+                              setEntries(listEntries());
+                              setMiniToast("Deleted");
+                            } catch {
+                              setEntries(previousEntries);
+                              setMiniToast("Delete failed");
+                            } finally {
+                              setDeletingEntryId((prev) => (prev === entry.id ? null : prev));
+                            }
                             deleteTimerRef.current = null;
                           }, 220);
                         }}
@@ -549,8 +565,8 @@ export function JournalModal({ open, onClose }: Props) {
             </div>
           )}
         </div>
-        {miniToast && <div className="journal-modal__toast">{miniToast}</div>}
-      </div>
+          {miniToast && <div className="journal-modal__toast">{miniToast}</div>}
+        </div>
       </div>
     </section>
   );

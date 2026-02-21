@@ -141,10 +141,13 @@ export type ApplyPolyplaylistConfigResult = {
   debug: {
     importedTrackOrderCount: number;
     localTracksByIdCount: number;
+    localPlaylistsByIdCount: number;
     matchedCount: number;
     missingCount: number;
     importedIdSample: string[];
     localIdSample: string[];
+    resultingOrderSample: string[];
+    activePlaylistId: string | null;
   };
   sourceMismatch: boolean;
 };
@@ -687,10 +690,13 @@ export async function applyImportedPolyplaylistConfig(
       debug: {
         importedTrackOrderCount: payload.trackOrder.length,
         localTracksByIdCount: 0,
+        localPlaylistsByIdCount: Object.keys(library.playlistsById || {}).length,
         matchedCount: 0,
         missingCount: payload.trackOrder.length,
         importedIdSample,
-        localIdSample
+        localIdSample,
+        resultingOrderSample: [],
+        activePlaylistId: library.activePlaylistId
       },
       sourceMismatch: true
     };
@@ -749,15 +755,17 @@ export async function applyImportedPolyplaylistConfig(
     orderedByImport.push(localTrackKey);
     seen.add(localTrackKey);
   }
-  if (orderedByImport.length > 0) {
-    targetPlaylist.trackIds = orderedByImport;
-  }
+  const previousOrderSet = new Set(orderedByImport);
+  const remainingLocalIds = previousOrder.filter((trackId) => !previousOrderSet.has(trackId));
+  const nextOrder = orderedByImport.length > 0 ? [...orderedByImport, ...remainingLocalIds] : previousOrder;
+  targetPlaylist.trackIds = nextOrder;
+  library.activePlaylistId = targetPlaylistId;
   targetPlaylist.updatedAt = Date.now();
 
   let reorderedCount = 0;
-  const maxLen = Math.max(previousOrder.length, orderedByImport.length);
+  const maxLen = Math.max(previousOrder.length, nextOrder.length);
   for (let i = 0; i < maxLen; i += 1) {
-    if ((previousOrder[i] ?? null) !== (orderedByImport[i] ?? null)) reorderedCount += 1;
+    if ((previousOrder[i] ?? null) !== (nextOrder[i] ?? null)) reorderedCount += 1;
   }
 
   setLibrary(library);
@@ -782,10 +790,13 @@ export async function applyImportedPolyplaylistConfig(
     debug: {
       importedTrackOrderCount: payload.trackOrder.length,
       localTracksByIdCount: localTrackIds.length,
+      localPlaylistsByIdCount: Object.keys(library.playlistsById || {}).length,
       matchedCount: foundLocallyCount,
       missingCount: missingTrackIds.length,
       importedIdSample,
-      localIdSample
+      localIdSample,
+      resultingOrderSample: nextOrder.slice(0, 10),
+      activePlaylistId: library.activePlaylistId
     },
     sourceMismatch: false
   };

@@ -172,6 +172,7 @@ export function AdminApp() {
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
   const [editingTrackTitle, setEditingTrackTitle] = useState("");
   const [renamingTrackId, setRenamingTrackId] = useState<string | null>(null);
+  const [removingTrackIds, setRemovingTrackIds] = useState<string[]>([]);
   const [infoModal, setInfoModal] = useState<{ title: string; message: string; openManageStorage?: boolean } | null>(
     null
   );
@@ -187,6 +188,13 @@ export function AdminApp() {
   const [isBackupBusy, setIsBackupBusy] = useState(false);
 
   const hasTracks = tracks.length > 0;
+
+  const emitLibraryUpdated = () => {
+    window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
+    }
+  };
 
   const trackOptions = useMemo(
     () => tracks.map((track) => ({ value: String(track.id), label: formatTrackLabel(track) })),
@@ -668,12 +676,17 @@ export function AdminApp() {
     if (!window.confirm("Remove this track?")) return;
     setStatus("Removing track...");
     try {
+      setRemovingTrackIds((prev) => (prev.includes(selectedRemoveTrackId) ? prev : [...prev, selectedRemoveTrackId]));
+      await new Promise((resolve) => window.setTimeout(resolve, 170));
       await removeTrackFromDb(selectedRemoveTrackId);
       setStatus("Track removed.");
       await refreshTracks();
       await refreshStorage();
+      emitLibraryUpdated();
     } catch {
       setStatus("Track remove failed.");
+    } finally {
+      setRemovingTrackIds((prev) => prev.filter((id) => id !== selectedRemoveTrackId));
     }
   };
 
@@ -990,9 +1003,7 @@ export function AdminApp() {
       setStatus(`Removed ${removed} demo track${removed === 1 ? "" : "s"}.`);
       await refreshTracks();
       await refreshStorage();
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
-      }
+      emitLibraryUpdated();
     } catch {
       setStatus("Failed to remove demo tracks.");
     }
@@ -1672,7 +1683,9 @@ export function AdminApp() {
           {visibleTrackStorageRows.slice(0, 20).map((row) => (
             <div
               key={`storage-${row.id}`}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-300/15 bg-slate-900/55 px-3 py-2"
+              className={`admin-track-row flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-300/15 bg-slate-900/55 px-3 py-2 ${
+                removingTrackIds.includes(row.id) ? "is-removing" : ""
+              }`.trim()}
             >
               <div className="min-w-0">
                 {editingTrackId === row.id ? (
@@ -1724,10 +1737,19 @@ export function AdminApp() {
                 variant="danger"
                 onClick={async () => {
                   if (!window.confirm(`Remove "${row.title}" to free storage?`)) return;
-                  await removeTrackFromDb(row.id);
-                  await refreshTracks();
-                  await refreshStorage();
-                  setStatus("Track removed.");
+                  setRemovingTrackIds((prev) => (prev.includes(row.id) ? prev : [...prev, row.id]));
+                  try {
+                    await new Promise((resolve) => window.setTimeout(resolve, 170));
+                    await removeTrackFromDb(row.id);
+                    await refreshTracks();
+                    await refreshStorage();
+                    emitLibraryUpdated();
+                    setStatus("Track removed.");
+                  } catch {
+                    setStatus("Track remove failed.");
+                  } finally {
+                    setRemovingTrackIds((prev) => prev.filter((id) => id !== row.id));
+                  }
                 }}
               >
                 Remove

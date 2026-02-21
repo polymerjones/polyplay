@@ -3,6 +3,7 @@ import logo from "../logo.png";
 import { quickTipsContent } from "./content/quickTips";
 import { APP_TITLE, APP_VERSION } from "./config/version";
 import { EmptyLibraryWelcome } from "./components/EmptyLibraryWelcome";
+import { BubbleLayer } from "./components/BubbleLayer";
 import { FullscreenPlayer } from "./components/FullscreenPlayer";
 import { GratitudePrompt } from "./components/GratitudePrompt";
 import { JournalModal } from "./components/JournalModal";
@@ -222,10 +223,13 @@ export default function App() {
     debug: {
       importedTrackOrderCount: number;
       localTracksByIdCount: number;
+      localPlaylistsByIdCount: number;
       matchedCount: number;
       missingCount: number;
       importedIdSample: string[];
       localIdSample: string[];
+      resultingOrderSample: string[];
+      activePlaylistId: string | null;
     };
     sourceMismatch: boolean;
   } | null>(null);
@@ -409,6 +413,9 @@ export default function App() {
     void refreshVaultInspector();
     setCurrentTrackId((prev) => {
       if (prev && loaded.some((track) => track.id === prev)) return prev;
+      if (prev && !loaded.some((track) => track.id === prev)) {
+        teardownCurrentAudio();
+      }
       return loaded[0]?.id ?? null;
     });
   };
@@ -673,9 +680,12 @@ export default function App() {
 
   useEffect(() => {
     const isDimVibe = dimMode === "dim";
+    const isMuted = dimMode === "mute";
     document.body.classList.toggle("dim-vibe", isDimVibe);
+    document.body.classList.toggle("mute-freeze", isMuted);
     return () => {
       document.body.classList.remove("dim-vibe");
+      document.body.classList.remove("mute-freeze");
     };
   }, [dimMode]);
 
@@ -783,6 +793,15 @@ export default function App() {
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  useEffect(() => {
+    const onLibraryUpdated = () => {
+      syncPlayerStateFromStorage();
+      void refreshTracks();
+    };
+    window.addEventListener("polyplay:library-updated", onLibraryUpdated as EventListener);
+    return () => window.removeEventListener("polyplay:library-updated", onLibraryUpdated as EventListener);
   }, []);
 
   useEffect(() => {
@@ -1395,16 +1414,7 @@ export default function App() {
     return palette[Math.floor(Math.random() * palette.length)] ?? "#b38dff";
   };
 
-  const onSafeTap = (event: MouseEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLElement | null;
-    if (!target) return;
-    if (
-      target.closest(
-        'button, input, textarea, select, a, [role="button"], .player-controls, .mini-player-bar, .topbar, .track-grid, .app-overlay, .journal-modal, .fullscreen-player-shell'
-      )
-    ) {
-      return;
-    }
+  const spawnSafeTapBurstAt = (clientX: number, clientY: number) => {
     const reducedMotion =
       typeof window !== "undefined" &&
       typeof window.matchMedia === "function" &&
@@ -1427,8 +1437,8 @@ export default function App() {
     const color = pickSafeTapColor(heat);
     setSafeTapBursts((prev) => {
       const next = [
-        ...prev,
-        { id, x: event.clientX, y: event.clientY, size, variant, color, durationMs, opacity, sparkleCount }
+        ...prev.slice(-14),
+        { id, x: clientX, y: clientY, size, variant, color, durationMs, opacity, sparkleCount }
       ];
       if (next.length <= SAFE_TAP_MAX_ACTIVE) return next;
       return next.slice(next.length - SAFE_TAP_MAX_ACTIVE);
@@ -1572,6 +1582,7 @@ export default function App() {
         targetPlaylistId,
         sourceLibrary: librarySnapshot
       });
+      window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
       syncPlayerStateFromStorage();
       await refreshTracks();
       await refreshVaultInspector();
@@ -1589,7 +1600,9 @@ export default function App() {
       });
       setShowMissingIds(false);
       if (summary.sourceMismatch) {
-        setVaultStatus("Vault cannot see local tracks. This is a library source mismatch. Press Refresh Library.");
+        setVaultStatus(
+          `Vault cannot see local tracks. Source mismatch on key "${getLibraryKeyUsed()}". Press Hard Refresh Library.`
+        );
         return;
       }
       setVaultStatus(
@@ -1625,8 +1638,14 @@ export default function App() {
     void refreshVaultInspector();
   }, [overlayPage, runtimeLibrary]);
 
+  const isAnyModalOpen = Boolean(
+    overlayPage || isTipsOpen || isJournalOpen || isGratitudeOpen || showSplash || isFullscreenPlayerOpen
+  );
+  const bubblesEnabled = !isAnyModalOpen && !isNuking;
+
   return (
     <>
+      <BubbleLayer enabled={bubblesEnabled} paused={!bubblesEnabled} onSpark={spawnSafeTapBurstAt} />
       <div
         className={`track-backdrop ${currentTrack?.artUrl || currentTrack?.artGrad ? "is-visible" : ""}`.trim()}
         style={{
@@ -1638,7 +1657,6 @@ export default function App() {
       />
       <div
         className={`app touch-clean ${isNuking ? "is-nuking" : ""}`.trim()}
-        onClick={onSafeTap}
         onAnimationEnd={(event) => {
           if (!isNuking) return;
           if (event.target !== event.currentTarget) return;
@@ -1651,45 +1669,20 @@ export default function App() {
             <span>{APP_TITLE}</span>
           </div>
           <div className="top-actions">
-            <div
-              className={`theme-switch3 ${themeToggleAnim ? `is-anim-${themeToggleAnim}` : ""} ${
+            <button
+              type="button"
+              className={`theme-switch3 theme-switch3--single ${themeToggleAnim ? `is-anim-${themeToggleAnim}` : ""} ${
                 themeBloomActive ? "is-bloom" : ""
               }`.trim()}
-              role="group"
-              aria-label="Theme mode"
-              onClick={(event) => {
-                if (event.target === event.currentTarget) cycleTheme();
-              }}
+              aria-label={`Theme: ${themeMode}`}
+              title={`Theme: ${themeMode === "custom" ? `Custom (${customThemeSlot})` : themeMode}`}
+              onClick={(event) => cycleTheme(event)}
             >
               <span className={`theme-switch3__thumb theme-switch3__thumb--${themeMode}`} aria-hidden="true" />
-              <button
-                type="button"
-                className={`theme-switch3__slot ${themeMode === "light" ? "is-active" : ""}`.trim()}
-                onClick={(event) => setThemeModeExplicit("light", event)}
-                aria-label="Theme light"
-                title="Light"
-              >
-                <span aria-hidden="true">☼</span>
-              </button>
-              <button
-                type="button"
-                className={`theme-switch3__slot ${themeMode === "dark" ? "is-active" : ""}`.trim()}
-                onClick={(event) => setThemeModeExplicit("dark", event)}
-                aria-label="Theme dark"
-                title="Dark"
-              >
-                <span aria-hidden="true">◐</span>
-              </button>
-              <button
-                type="button"
-                className={`theme-switch3__slot ${themeMode === "custom" ? "is-active" : ""}`.trim()}
-                onClick={(event) => setThemeModeExplicit("custom", event)}
-                aria-label="Theme custom"
-                title={`Custom (${customThemeSlot})`}
-              >
-                <span aria-hidden="true">✦</span>
-              </button>
-            </div>
+              <span className="theme-switch3__glyph" aria-hidden="true">
+                {themeMode === "light" ? "☼" : themeMode === "dark" ? "◐" : "✦"}
+              </span>
+            </button>
             <button
               type="button"
               className={`journal-link nav-action-btn header-icon-btn--hero ${
@@ -1960,6 +1953,30 @@ export default function App() {
                     type="button"
                     className="vault-btn vault-btn--ghost"
                     onClick={async () => {
+                      await refreshTracks();
+                      await refreshVaultInspector();
+                      setVaultStatus("Library hard refresh complete.");
+                    }}
+                  >
+                    Hard Refresh Library
+                  </button>
+                  <button
+                    type="button"
+                    className="vault-btn vault-btn--ghost"
+                    onClick={async () => {
+                      const shouldReload = window.confirm(
+                        "Hard refresh did not reconcile state. Reload the app now as fallback?"
+                      );
+                      if (!shouldReload) return;
+                      window.location.reload();
+                    }}
+                  >
+                    Reload Fallback
+                  </button>
+                  <button
+                    type="button"
+                    className="vault-btn vault-btn--ghost"
+                    onClick={async () => {
                       const payload = {
                         libraryKey: vaultInspector?.libraryKey || getLibraryKeyUsed(),
                         runtimeTracksByIdCount: vaultInspector?.runtimeTracksByIdCount ?? 0,
@@ -2000,6 +2017,10 @@ export default function App() {
                       </option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <span className="vault-summary__label">Active vs Selected</span>
+                  <strong>{activePlaylistId || "none"} → {vaultSelectedPlaylistId || "none"}</strong>
                 </div>
                 <div>
                   <span className="vault-summary__label">View</span>
@@ -2083,8 +2104,11 @@ export default function App() {
                     {importSummary.debug.localTracksByIdCount}/{importSummary.debug.matchedCount}/
                     {importSummary.debug.missingCount}
                   </div>
+                  <div>Local playlists count: {importSummary.debug.localPlaylistsByIdCount}</div>
+                  <div>Active playlist ID: {importSummary.debug.activePlaylistId || "none"}</div>
                   <div>Imported ID sample: {importSummary.debug.importedIdSample.join(", ") || "none"}</div>
                   <div>Local ID sample: {importSummary.debug.localIdSample.join(", ") || "none"}</div>
+                  <div>Resulting order sample: {importSummary.debug.resultingOrderSample.join(", ") || "none"}</div>
                   <button
                     type="button"
                     className="vault-btn vault-btn--ghost"
@@ -2093,10 +2117,13 @@ export default function App() {
                         playlistId: importSummary.targetPlaylistId,
                         importedTrackOrderCount: importSummary.debug.importedTrackOrderCount,
                         localTracksByIdCount: importSummary.debug.localTracksByIdCount,
+                        localPlaylistsByIdCount: importSummary.debug.localPlaylistsByIdCount,
                         matchedCount: importSummary.debug.matchedCount,
                         missingCount: importSummary.debug.missingCount,
                         importedIdSample: importSummary.debug.importedIdSample,
-                        localIdSample: importSummary.debug.localIdSample
+                        localIdSample: importSummary.debug.localIdSample,
+                        resultingOrderSample: importSummary.debug.resultingOrderSample,
+                        activePlaylistId: importSummary.debug.activePlaylistId
                       };
                       try {
                         await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));

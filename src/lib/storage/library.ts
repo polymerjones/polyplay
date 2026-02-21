@@ -98,13 +98,24 @@ export function migrateLibraryIfNeeded(input: unknown): LibraryState {
   const playlistsById: Record<string, PlaylistRecord> = {};
   for (const [id, playlist] of Object.entries(data.playlistsById || {})) {
     if (!playlist || typeof playlist !== "object") continue;
-    const p = playlist as Partial<PlaylistRecord>;
+    const p = playlist as Partial<PlaylistRecord> & {
+      trackOrder?: unknown;
+      tracks?: unknown;
+    };
     const createdAt = Number.isFinite(p.createdAt) ? Number(p.createdAt) : now();
     const updatedAt = Number.isFinite(p.updatedAt) ? Number(p.updatedAt) : createdAt;
+    const fromTrackIds = (p.trackIds || []).filter((trackId): trackId is string => typeof trackId === "string");
+    const fromTrackOrder = Array.isArray(p.trackOrder)
+      ? p.trackOrder.filter((trackId): trackId is string => typeof trackId === "string")
+      : [];
+    const fromTracks = Array.isArray(p.tracks)
+      ? p.tracks.filter((trackId): trackId is string => typeof trackId === "string")
+      : [];
+    const normalizedTrackIds = fromTrackIds.length ? fromTrackIds : fromTrackOrder.length ? fromTrackOrder : fromTracks;
     playlistsById[id] = {
       id,
       name: (p.name || "").trim() || "Playlist",
-      trackIds: (p.trackIds || []).filter((trackId): trackId is string => typeof trackId === "string"),
+      trackIds: normalizedTrackIds,
       createdAt,
       updatedAt
     };
