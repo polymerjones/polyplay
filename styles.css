@@ -1899,11 +1899,11 @@ body.mute-freeze .track-backdrop {
 }
 
 .bubble-layer.is-enabled {
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .bubble-layer.is-enabled .bubble-v3 {
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .bubble-layer.is-disabled {

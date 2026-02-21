@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
 import logo from "../logo.png";
 import { quickTipsContent } from "./content/quickTips";
 import { APP_TITLE, APP_VERSION } from "./config/version";
@@ -97,6 +97,35 @@ const SAFE_TAP_BASE_SIZE = 120;
 const SAFE_TAP_MAX_SIZE = 420;
 const SAFE_TAP_MAX_ACTIVE = 12;
 const SAFE_TAP_SPAWN_THROTTLE_MS = 40;
+const BUBBLE_SPAWN_EVENT = "polyplay:bubble-spawn";
+const SAFE_TAP_BLOCK_SELECTORS = [
+  "button",
+  "a",
+  "input",
+  "textarea",
+  "select",
+  "label",
+  "[role='button']",
+  "[role='menuitem']",
+  "[contenteditable='true']",
+  ".topbar",
+  ".track-grid",
+  ".track-row",
+  ".tile",
+  ".now-playing",
+  ".controls",
+  ".aux",
+  ".app-overlay",
+  ".app-overlay-card",
+  ".fullscreen-player",
+  ".quick-tips-modal",
+  ".journal-shell",
+  ".journal-modal-shell",
+  ".vault-card",
+  ".safe-tap-layer",
+  ".bubble-layer",
+  "[data-bubble-safe='off']"
+].join(", ");
 
 function clampAura(value: number): number {
   return Math.max(0, Math.min(5, Math.round(value)));
@@ -1642,6 +1671,17 @@ export default function App() {
     overlayPage || isTipsOpen || isJournalOpen || isGratitudeOpen || showSplash || isFullscreenPlayerOpen
   );
   const bubblesEnabled = !isAnyModalOpen && !isNuking;
+  const onAppPointerDownCapture = (event: PointerEvent<HTMLDivElement>) => {
+    if (!bubblesEnabled) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (!(event.target instanceof Element)) return;
+    if (event.target.closest(SAFE_TAP_BLOCK_SELECTORS)) return;
+    window.dispatchEvent(
+      new CustomEvent(BUBBLE_SPAWN_EVENT, {
+        detail: { x: event.clientX, y: event.clientY }
+      })
+    );
+  };
 
   return (
     <>
@@ -1656,6 +1696,7 @@ export default function App() {
       />
       <div
         className={`app touch-clean ${isNuking ? "is-nuking" : ""}`.trim()}
+        onPointerDownCapture={onAppPointerDownCapture}
         onAnimationEnd={(event) => {
           if (!isNuking) return;
           if (event.target !== event.currentTarget) return;
