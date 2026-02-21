@@ -250,6 +250,7 @@ body.theme-dark .rowAuraGlow {
 }
 
 .track-row__thumb-btn {
+  position: relative;
   border: 0;
   background: transparent;
   width: 72px;
@@ -259,6 +260,28 @@ body.theme-dark .rowAuraGlow {
   border-radius: 12px;
   text-align: left;
   cursor: pointer;
+}
+
+.track-row__thumb-badges {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  display: grid;
+  gap: 5px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.track-row__thumb-badges .track-art-badge--row {
+  display: inline-flex;
+  align-items: center;
+  max-width: clamp(110px, 14vw, 140px);
+  padding: 6px 10px;
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .track-row__thumb {

@@ -25,10 +25,6 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
       style={{ "--row-aura-level": auraLevel.toFixed(2) } as CSSProperties}
     >
       <div className="rowAuraAccent" aria-hidden="true" />
-      <div className="track-badges">
-        {track.isDemo && <div className="track-art-badge track-art-badge--row track-art-badge--demo">DEMO</div>}
-        {track.artworkSource === "auto" && <div className="track-art-badge track-art-badge--row">AUTO ART</div>}
-      </div>
       <button
         type="button"
         className="track-row__thumb-btn"
@@ -36,6 +32,10 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
         aria-label={`Play ${track.title}`}
       >
         <div className="track-row__thumb" style={artStyle} />
+        <div className="track-row__thumb-badges" aria-hidden="true">
+          {track.isDemo && <div className="track-art-badge track-art-badge--row track-art-badge--demo">DEMO</div>}
+          {track.artworkSource === "auto" && <div className="track-art-badge track-art-badge--row">AUTO ART</div>}
+        </div>
       </button>
       <button
         type="button"
