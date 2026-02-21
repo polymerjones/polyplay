@@ -64,6 +64,11 @@ body.perf-lite::before {
   padding: 18px 18px 24px;
 }
 
+.app > * {
+  position: relative;
+  z-index: 6;
+}
+
 .app.is-nuking {
   pointer-events: none;
   will-change: transform, opacity;
@@ -1888,7 +1893,7 @@ body.mute-freeze .track-backdrop {
 .bubble-layer {
   position: fixed;
   inset: 0;
-  z-index: 4;
+  z-index: 2;
   overflow: hidden;
   pointer-events: none;
 }
