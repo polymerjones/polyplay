@@ -122,8 +122,9 @@ export function applyMagnet(current: Bubble[], x: number, y: number, now: number
     const force = Math.min(0.55, 95 / distance);
     return {
       ...bubble,
-      vx: bubble.vx + (dx / distance) * force * 0.06,
-      vy: bubble.vy + (dy / distance) * force * 0.06,
+      // Prime a tiny initial nudge; most pull is ramped in stepBubbles.
+      vx: bubble.vx + (dx / distance) * force * 0.018,
+      vy: bubble.vy + (dy / distance) * force * 0.018,
       magnetUntil: now + 900,
       magnetTx: x,
       magnetTy: y
@@ -140,10 +141,14 @@ export function stepBubbles(current: Bubble[], dtMs: number, now: number): Bubbl
     let vx = bubble.vx;
     let vy = bubble.vy;
     if (magnetActive) {
+      const remaining = Math.max(0, bubble.magnetUntil - now);
+      const progress = 1 - remaining / 900;
+      // Slow-start accelerator: gentle at first, stronger late.
+      const ramp = progress * progress;
       const dx = bubble.magnetTx - bubble.x;
       const dy = bubble.magnetTy - bubble.y;
       const distance = Math.max(20, Math.hypot(dx, dy));
-      const force = Math.min(0.22, 70 / distance) * mult;
+      const force = Math.min(0.14, 46 / distance) * mult * ramp;
       vx += (dx / distance) * force;
       vy += (dy / distance) * force;
     }
