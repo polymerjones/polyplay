@@ -272,22 +272,24 @@
 }
 
 .pc-vinyl-btn {
-  width: 40px;
-  min-width: 40px;
+  width: 58px;
+  min-width: 58px;
+  min-height: 58px;
+  border-radius: 999px;
   padding: 0;
   display: grid;
   place-items: center;
 }
 
 .pc-vinyl-disc {
-  width: 18px;
-  height: 18px;
+  width: 42px;
+  height: 42px;
   border-radius: 999px;
   background:
-    radial-gradient(circle at 52% 48%, rgba(245, 230, 255, 0.95) 0 1px, rgba(245, 230, 255, 0) 2px),
-    radial-gradient(circle at 50% 50%, rgba(184, 132, 255, 0.8) 0 5px, rgba(36, 20, 68, 1) 6px),
+    radial-gradient(circle at 52% 48%, rgba(245, 230, 255, 0.95) 0 2px, rgba(245, 230, 255, 0) 3px),
+    radial-gradient(circle at 50% 50%, rgba(184, 132, 255, 0.82) 0 11px, rgba(36, 20, 68, 1) 12px),
     radial-gradient(circle at 50% 50%, rgba(20, 14, 34, 1) 0 100%);
-  box-shadow: 0 0 12px rgba(160, 104, 255, 0.42);
+  box-shadow: 0 0 16px rgba(160, 104, 255, 0.48);
 }
 
 .pc-loop-badge {
@@ -304,14 +306,16 @@
 
 .mini-player-bar {
   position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: calc(var(--pc-space-2) + env(safe-area-inset-bottom, 0px));
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: 100vw;
+  bottom: 0;
   z-index: 30;
   display: grid;
   gap: var(--pc-space-2);
-  padding: var(--pc-space-2);
-  border-radius: var(--pc-radius-lg);
+  padding: var(--pc-space-2) var(--pc-space-2) calc(var(--pc-space-2) + env(safe-area-inset-bottom, 0px));
+  border-radius: var(--pc-radius-lg) var(--pc-radius-lg) 0 0;
   border: 1px solid var(--pc-color-border);
   background: var(--pc-color-surface);
   box-shadow: var(--pc-shadow-lg);

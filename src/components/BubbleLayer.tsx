@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   applyMagnet,
   capBubbles,
-  popBubble,
   pruneExpired,
   spawnBubblesAt,
   stepBubbles,
@@ -16,6 +15,12 @@ type Props = {
 };
 
 const SPAWN_WINDOW_MS = 1200;
+const BUBBLE_SPAWN_EVENT = "polyplay:bubble-spawn";
+
+type BubbleSpawnEventDetail = {
+  x: number;
+  y: number;
+};
 
 export function BubbleLayer({ enabled, paused, onSpark }: Props) {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
@@ -74,38 +79,33 @@ export function BubbleLayer({ enabled, paused, onSpark }: Props) {
     return Math.min(1, tapTimesRef.current.length / 7);
   };
 
-  const onLayerPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (!enabled) return;
-    if (event.target !== event.currentTarget) return;
-    const now = Date.now();
-    const intensity = computeIntensity(now);
-    const xPercent = (event.clientX / Math.max(window.innerWidth, 1)) * 100;
-    const yPercent = (event.clientY / Math.max(window.innerHeight, 1)) * 100;
-    onSpark(event.clientX, event.clientY);
-    setBubbles((prev) => {
-      const withMagnet = reducedMotion ? prev : applyMagnet(prev, xPercent, yPercent, now);
-      const withSpawn = spawnBubblesAt(withMagnet, xPercent, yPercent, intensity, now + seqRef.current);
-      seqRef.current += 3;
-      return capBubbles(withSpawn);
-    });
-  };
-
-  const onBubblePop = (id: number, x: number, y: number) => {
-    if (!enabled) return;
-    onSpark((x / 100) * window.innerWidth, (y / 100) * window.innerHeight);
-    setBubbles((prev) => popBubble(prev, id));
-  };
+  useEffect(() => {
+    const onSpawn = (event: Event) => {
+      if (!enabled) return;
+      const custom = event as CustomEvent<BubbleSpawnEventDetail>;
+      const detail = custom.detail;
+      if (!detail) return;
+      const now = Date.now();
+      const intensity = computeIntensity(now);
+      const xPercent = (detail.x / Math.max(window.innerWidth, 1)) * 100;
+      const yPercent = (detail.y / Math.max(window.innerHeight, 1)) * 100;
+      onSpark(detail.x, detail.y);
+      setBubbles((prev) => {
+        const withMagnet = reducedMotion ? prev : applyMagnet(prev, xPercent, yPercent, now);
+        const withSpawn = spawnBubblesAt(withMagnet, xPercent, yPercent, intensity, now + seqRef.current);
+        seqRef.current += 3;
+        return capBubbles(withSpawn);
+      });
+    };
+    window.addEventListener(BUBBLE_SPAWN_EVENT, onSpawn as EventListener);
+    return () => window.removeEventListener(BUBBLE_SPAWN_EVENT, onSpawn as EventListener);
+  }, [enabled, reducedMotion, onSpark]);
 
   return (
-    <div
-      className={`bubble-layer ${enabled ? "is-enabled" : "is-disabled"} ${paused ? "bubblesPaused" : ""}`.trim()}
-      onPointerDown={onLayerPointerDown}
-      aria-hidden="true"
-    >
+    <div className={`bubble-layer ${enabled ? "is-enabled" : "is-disabled"} ${paused ? "bubblesPaused" : ""}`.trim()} aria-hidden="true">
       {bubbles.map((bubble) => (
-        <button
+        <span
           key={bubble.id}
-          type="button"
           className={`bubble-v3 bubble-v3--${bubble.kind}`.trim()}
           style={
             {
@@ -118,15 +118,6 @@ export function BubbleLayer({ enabled, paused, onSpark }: Props) {
               "--bubble-shimmer": `${bubble.shimmer}s`
             } as CSSProperties
           }
-          onPointerDown={(event) => {
-            event.stopPropagation();
-            if (!enabled) return;
-            const button = event.currentTarget;
-            button.classList.remove("is-popping");
-            void button.offsetWidth;
-            button.classList.add("is-popping");
-            window.setTimeout(() => onBubblePop(bubble.id, bubble.x, bubble.y), 160);
-          }}
         />
       ))}
     </div>

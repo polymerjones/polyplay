@@ -9,6 +9,7 @@ type Props = {
 export function SplashOverlay({ isDismissing, onComplete }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const completedRef = useRef(false);
+  const lastTapAtRef = useRef(0);
   const [needsUserStart, setNeedsUserStart] = useState(false);
 
   const completeOnce = () => {
@@ -50,6 +51,18 @@ export function SplashOverlay({ isDismissing, onComplete }: Props) {
       role="dialog"
       aria-modal="true"
       aria-label="Polyplay splash"
+      onPointerDown={(event) => {
+        const target = event.target as HTMLElement | null;
+        if (!target) return;
+        if (target.closest("button, input, textarea, select, a, [role='button']")) return;
+        const now = Date.now();
+        if (now - lastTapAtRef.current <= 360) {
+          lastTapAtRef.current = 0;
+          completeOnce();
+          return;
+        }
+        lastTapAtRef.current = now;
+      }}
     >
       <video
         ref={videoRef}

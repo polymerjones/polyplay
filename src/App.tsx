@@ -109,9 +109,8 @@ const SAFE_TAP_BLOCK_SELECTORS = [
   "[role='menuitem']",
   "[contenteditable='true']",
   ".topbar",
-  ".track-grid",
   ".track-row",
-  ".tile",
+  ".tile-hit",
   ".now-playing",
   ".controls",
   ".aux",
@@ -685,6 +684,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-theme", themeMode);
+    root.setAttribute("data-theme-slot", customThemeSlot);
     document.body.classList.toggle("theme-dark", themeMode === "dark");
     document.body.classList.toggle("theme-custom", themeMode === "custom");
     document.body.classList.toggle("theme-custom-crimson", themeMode === "custom" && customThemeSlot === "crimson");
@@ -696,6 +698,8 @@ export default function App() {
       document.body.classList.remove("theme-custom-crimson");
       document.body.classList.remove("theme-custom-teal");
       document.body.classList.remove("theme-custom-amber");
+      root.removeAttribute("data-theme");
+      root.removeAttribute("data-theme-slot");
       if (themeAnimTimeoutRef.current !== null) {
         window.clearTimeout(themeAnimTimeoutRef.current);
         themeAnimTimeoutRef.current = null;
@@ -1685,25 +1689,70 @@ export default function App() {
 
   return (
     <>
-      <div
-        className={`track-backdrop ${currentTrack?.artUrl || currentTrack?.artGrad ? "is-visible" : ""}`.trim()}
-        style={{
-          backgroundImage: currentTrack?.artUrl
-            ? `url('${currentTrack.artUrl}')`
-            : currentTrack?.artGrad || "none"
-        }}
-        aria-hidden="true"
-      />
-      <div
-        className={`app touch-clean ${isNuking ? "is-nuking" : ""}`.trim()}
-        onPointerDownCapture={onAppPointerDownCapture}
-        onAnimationEnd={(event) => {
-          if (!isNuking) return;
-          if (event.target !== event.currentTarget) return;
-          void completeNukeSequence("animationend");
-        }}
-      >
-        <BubbleLayer enabled={bubblesEnabled} paused={!bubblesEnabled} onSpark={spawnSafeTapBurstAt} />
+      <div className="app-shell">
+        <div className="effects-layer" aria-hidden="true">
+          <div
+            className={`track-backdrop ${currentTrack?.artUrl || currentTrack?.artGrad ? "is-visible" : ""}`.trim()}
+            style={{
+              backgroundImage: currentTrack?.artUrl
+                ? `url('${currentTrack.artUrl}')`
+                : currentTrack?.artGrad || "none"
+            }}
+          />
+          <BubbleLayer enabled={bubblesEnabled} paused={!bubblesEnabled} onSpark={spawnSafeTapBurstAt} />
+          {safeTapBursts.length > 0 && (
+            <div className="safe-tap-layer">
+              {safeTapBursts.map((burst) => (
+                <span
+                  key={burst.id}
+                  className={`safe-tap-burst safe-tap-burst--${burst.variant}`.trim()}
+                  style={
+                    {
+                      left: burst.x,
+                      top: burst.y,
+                      "--tap-size": `${burst.size}px`,
+                      "--tap-color": burst.color,
+                      "--tap-duration": `${burst.durationMs}ms`,
+                      "--tap-opacity": String(burst.opacity)
+                    } as CSSProperties
+                  }
+                >
+                  {burst.sparkleCount > 0 &&
+                    Array.from({ length: burst.sparkleCount }).map((_, index) => {
+                      const angle = (index / burst.sparkleCount) * Math.PI * 2;
+                      const drift = Math.round(18 + (burst.size / 420) * 28);
+                      return (
+                        <span
+                          // eslint-disable-next-line react/no-array-index-key
+                          key={`${burst.id}-spark-${index}`}
+                          className="safe-tap-burst__spark"
+                          style={
+                            {
+                              "--spark-delay": `${index * 22}ms`,
+                              "--spark-x": `${Math.cos(angle) * drift}px`,
+                              "--spark-y": `${Math.sin(angle) * drift}px`
+                            } as CSSProperties
+                          }
+                        />
+                      );
+                    })}
+                </span>
+              ))}
+            </div>
+          )}
+          {dimMode === "dim" && <div className="effects-dim-overlay" />}
+          {dimMode === "mute" && <div className="effects-mute-overlay" />}
+        </div>
+        <div className="main-ui-layer">
+          <div
+            className={`app touch-clean ${isNuking ? "is-nuking" : ""}`.trim()}
+            onPointerDownCapture={onAppPointerDownCapture}
+            onAnimationEnd={(event) => {
+              if (!isNuking) return;
+              if (event.target !== event.currentTarget) return;
+              void completeNukeSequence("animationend");
+            }}
+          >
         <header className="topbar">
           <div className="brand">
             <img className="brand-logo" src={logo} alt="Polyplay logo" />
@@ -1712,16 +1761,15 @@ export default function App() {
           <div className="top-actions">
             <button
               type="button"
-              className={`theme-switch3 theme-switch3--single ${themeToggleAnim ? `is-anim-${themeToggleAnim}` : ""} ${
+              className={`theme-switch ${themeToggleAnim ? `is-anim-${themeToggleAnim}` : ""} ${
                 themeBloomActive ? "is-bloom" : ""
               }`.trim()}
               aria-label={`Theme: ${themeMode}`}
               title={`Theme: ${themeMode === "custom" ? `Custom (${customThemeSlot})` : themeMode}`}
               onClick={(event) => cycleTheme(event)}
             >
-              <span className={`theme-switch3__thumb theme-switch3__thumb--${themeMode}`} aria-hidden="true" />
-              <span className="theme-switch3__glyph" aria-hidden="true">
-                {themeMode === "light" ? "☼" : themeMode === "dark" ? "◐" : "✦"}
+              <span className="theme-switch__icon" aria-hidden="true">
+                {themeMode === "light" ? "☀" : themeMode === "dark" ? "◑" : "✦"}
               </span>
             </button>
             <button
@@ -2230,46 +2278,8 @@ export default function App() {
         }}
       />
       {showJournalTapToast && <div className="journal-tap-toast">Journal</div>}
-      {safeTapBursts.length > 0 && (
-        <div className="safe-tap-layer" aria-hidden="true">
-          {safeTapBursts.map((burst) => (
-            <span
-              key={burst.id}
-              className={`safe-tap-burst safe-tap-burst--${burst.variant}`.trim()}
-              style={
-                {
-                  left: burst.x,
-                  top: burst.y,
-                  "--tap-size": `${burst.size}px`,
-                  "--tap-color": burst.color,
-                  "--tap-duration": `${burst.durationMs}ms`,
-                  "--tap-opacity": String(burst.opacity)
-                } as CSSProperties
-              }
-            >
-              {burst.sparkleCount > 0 &&
-                Array.from({ length: burst.sparkleCount }).map((_, index) => {
-                  const angle = (index / burst.sparkleCount) * Math.PI * 2;
-                  const drift = Math.round(18 + (burst.size / 420) * 28);
-                  return (
-                    <span
-                      // eslint-disable-next-line react/no-array-index-key
-                      key={`${burst.id}-spark-${index}`}
-                      className="safe-tap-burst__spark"
-                      style={
-                        {
-                          "--spark-delay": `${index * 22}ms`,
-                          "--spark-x": `${Math.cos(angle) * drift}px`,
-                          "--spark-y": `${Math.sin(angle) * drift}px`
-                        } as CSSProperties
-                      }
-                    />
-                  );
-                })}
-            </span>
-          ))}
         </div>
-      )}
+      </div>
     </>
   );
 }
