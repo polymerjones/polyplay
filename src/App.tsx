@@ -1645,7 +1645,6 @@ export default function App() {
 
   return (
     <>
-      <BubbleLayer enabled={bubblesEnabled} paused={!bubblesEnabled} onSpark={spawnSafeTapBurstAt} />
       <div
         className={`track-backdrop ${currentTrack?.artUrl || currentTrack?.artGrad ? "is-visible" : ""}`.trim()}
         style={{
@@ -1663,6 +1662,7 @@ export default function App() {
           void completeNukeSequence("animationend");
         }}
       >
+        <BubbleLayer enabled={bubblesEnabled} paused={!bubblesEnabled} onSpark={spawnSafeTapBurstAt} />
         <header className="topbar">
           <div className="brand">
             <img className="brand-logo" src={logo} alt="Polyplay logo" />
