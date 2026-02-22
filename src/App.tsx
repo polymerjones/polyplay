@@ -267,6 +267,10 @@ export default function App() {
     return "auto";
   });
   const [fxToast, setFxToast] = useState<string | null>(null);
+  const [isPlayerCompact, setIsPlayerCompact] = useState<boolean>(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+    return window.matchMedia("(min-width: 900px)").matches;
+  });
   const [isShuffleEnabled, setIsShuffleEnabled] = useState(false);
   const [isRepeatTrackEnabled, setIsRepeatTrackEnabled] = useState(false);
   const [dimMode, setDimMode] = useState<DimMode>("normal");
@@ -531,7 +535,10 @@ export default function App() {
   const setActivePlaylist = async (playlistId: string) => {
     const source = await getLibrary();
     const applied = setActivePlaylistInLibrary(source, playlistId);
+    if (!applied.library.playlistsById[playlistId]) return;
     setLibrary(applied.library);
+    setRuntimeLibrary(applied.library);
+    setVaultSelectedPlaylistId(playlistId);
     window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
     await refreshTracks();
   };
@@ -541,6 +548,8 @@ export default function App() {
     const source = await getLibrary();
     const created = createPlaylistInLibrary(source, nextName);
     setLibrary(created.library);
+    setRuntimeLibrary(created.library);
+    setVaultSelectedPlaylistId(created.createdPlaylistId);
     setIsCreatePlaylistModalOpen(false);
     setIsPlaylistRequired(false);
     setNewPlaylistName(getNextDefaultPolyplaylistName());
@@ -769,6 +778,38 @@ export default function App() {
     if (!runtimeLibrary) return;
     persistAppStateSnapshot(runtimeLibrary);
   }, [runtimeLibrary, layoutMode, dimMode, themeMode, fxMode]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const syncPlayerHeightVar = () => {
+      const player = document.getElementById("polyPlayer");
+      if (!player) return;
+      const height = Math.ceil(player.getBoundingClientRect().height);
+      root.style.setProperty("--playerH", `${height}px`);
+    };
+
+    const syncCompactDefault = () => {
+      if (typeof window.matchMedia !== "function") return;
+      const isDesktop = window.matchMedia("(min-width: 900px)").matches;
+      setIsPlayerCompact((prev) => (prev === isDesktop ? prev : isDesktop));
+    };
+
+    syncCompactDefault();
+    window.requestAnimationFrame(syncPlayerHeightVar);
+    window.addEventListener("load", syncPlayerHeightVar);
+    window.addEventListener("resize", syncPlayerHeightVar);
+
+    const playerEl = document.getElementById("polyPlayer");
+    const observer =
+      playerEl && "ResizeObserver" in window ? new ResizeObserver(() => syncPlayerHeightVar()) : null;
+    observer?.observe(playerEl as Element);
+
+    return () => {
+      window.removeEventListener("load", syncPlayerHeightVar);
+      window.removeEventListener("resize", syncPlayerHeightVar);
+      observer?.disconnect();
+    };
+  }, [tracks.length, isPlayerCompact, overlayPage]);
 
   useEffect(() => {
     if (!fxToast) return;
@@ -1913,6 +1954,7 @@ export default function App() {
         </div>
         <div className="main-ui-layer">
           <div
+            id="appScroll"
             className={`app touch-clean ${isNuking ? "is-nuking" : ""}`.trim()}
             onAnimationEnd={(event) => {
               if (!isNuking) return;
@@ -2104,6 +2146,8 @@ export default function App() {
           onOpenFullscreen={() => {
             if (currentTrack) setIsFullscreenPlayerOpen(true);
           }}
+          isCompact={isPlayerCompact}
+          onToggleCompact={() => setIsPlayerCompact((prev) => !prev)}
         />
       )}
 

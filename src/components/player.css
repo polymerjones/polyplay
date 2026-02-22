@@ -389,6 +389,24 @@
   font-size: 12px;
 }
 
+.mini-player-bar__compact-toggle {
+  min-width: 34px;
+  min-height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(17, 22, 35, 0.74);
+  color: #eef4ff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.mini-player-bar.is-compact .playerExpanded {
+  display: none;
+}
+
 .player-controls {
   display: grid;
   gap: var(--pc-space-2);
@@ -1009,5 +1027,30 @@ body.perf-lite .fullscreen-player-shell__art.is-aura-flash::after {
 
   .fullscreen-player-shell__art {
     width: min(360px, 56vw);
+  }
+}
+
+@media (min-width: 900px) {
+  .mini-player-bar.is-compact {
+    gap: 8px;
+    padding-top: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mini-player-bar.is-compact .mini-player-bar__header {
+    grid-template-columns: 64px 1fr auto;
+  }
+
+  .mini-player-bar.is-compact .mini-player-bar__art {
+    width: 64px;
+    height: 64px;
+  }
+
+  .mini-player-bar.is-compact .player-controls {
+    gap: 8px;
+  }
+
+  .mini-player-bar.is-compact .pc-extras {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

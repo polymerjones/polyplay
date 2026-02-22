@@ -31,6 +31,8 @@ type Props = {
   onToggleLoopMode: () => void;
   onClearLoop: () => void;
   onOpenFullscreen: () => void;
+  isCompact: boolean;
+  onToggleCompact: () => void;
 };
 
 export function MiniPlayerBar({
@@ -57,7 +59,9 @@ export function MiniPlayerBar({
   onSetLoop,
   onToggleLoopMode,
   onClearLoop,
-  onOpenFullscreen
+  onOpenFullscreen,
+  isCompact,
+  onToggleCompact
 }: Props) {
   const artRef = useRef<HTMLButtonElement | null>(null);
   const artStyle = track?.artUrl
@@ -66,6 +70,7 @@ export function MiniPlayerBar({
   const classes = ["mini-player-bar"];
   if (loopRegion.active) classes.push("is-loop-active");
   if (loopRegion.editing) classes.push("is-loop-editing");
+  if (isCompact) classes.push("is-compact");
 
   const triggerArtworkFlash = () => {
     const art = artRef.current;
@@ -77,6 +82,7 @@ export function MiniPlayerBar({
 
   return (
     <section
+      id="polyPlayer"
       className={classes.join(" ")}
       style={
         {
@@ -104,6 +110,14 @@ export function MiniPlayerBar({
           {track?.missingAudio && <div className="mini-player-bar__sub">Missing audio</div>}
           {track?.missingArt && <div className="mini-player-bar__sub">Missing artwork</div>}
         </div>
+        <button
+          type="button"
+          className="mini-player-bar__compact-toggle"
+          aria-label={isCompact ? "Expand player" : "Collapse player"}
+          onClick={onToggleCompact}
+        >
+          <span aria-hidden="true">{isCompact ? "▴" : "▾"}</span>
+        </button>
       </div>
 
       <PlayerControls
@@ -137,15 +151,17 @@ export function MiniPlayerBar({
         onSkip={onSkip}
       />
 
-      <WaveformLoop
-        track={track}
-        currentTime={currentTime}
-        duration={duration}
-        isPlaying={isPlaying}
-        loopRegion={loopRegion}
-        onSeek={onSeek}
-        onSetLoopRange={onSetLoopRange}
-      />
+      <div className="playerExpanded">
+        <WaveformLoop
+          track={track}
+          currentTime={currentTime}
+          duration={duration}
+          isPlaying={isPlaying}
+          loopRegion={loopRegion}
+          onSeek={onSeek}
+          onSetLoopRange={onSetLoopRange}
+        />
+      </div>
     </section>
   );
 }
