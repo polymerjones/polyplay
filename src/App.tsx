@@ -17,6 +17,7 @@ import {
   applyImportedPolyplaylistConfig,
   getNextDefaultPolyplaylistName,
   getPolyplaylistConfigFilename,
+  importPolyplaylist,
   serializePolyplaylistConfig
 } from "./lib/backup";
 import { installDemoPackIfNeeded } from "./lib/demoPack";
@@ -163,6 +164,13 @@ function isCoarsePointer(): boolean {
   );
 }
 
+function makeLocalId(prefix: string): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}_${crypto.randomUUID()}`;
+  }
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function parseLoopByTrack(raw: string | null): Record<string, LoopRegion> {
   if (!raw) return {};
   try {
@@ -225,7 +233,7 @@ export default function App() {
   const [loopByTrack, setLoopByTrack] = useState<Record<string, LoopRegion>>({});
   const [loopModeByTrack, setLoopModeByTrack] = useState<Record<string, LoopMode>>({});
   const [isFullscreenPlayerOpen, setIsFullscreenPlayerOpen] = useState(false);
-  const [overlayPage, setOverlayPage] = useState<"settings" | "vault" | null>(null);
+  const [overlayPage, setOverlayPage] = useState<"settings" | "vault" | "playlists" | null>(null);
   const [isTipsOpen, setIsTipsOpen] = useState(false);
   const [layoutMode, setLayoutMode] = useState<"grid" | "list">("grid");
   const [gratitudeSettings, setGratitudeSettings] = useState<GratitudeSettings>(() => loadGratitudeSettings());
@@ -480,9 +488,36 @@ export default function App() {
   };
 
   const refreshTracks = async () => {
-    const dbTracks = await getTracksFromDb();
-    const loaded = dbTracks;
-    const librarySnapshot = await getLibrary();
+    let librarySnapshot = await getLibrary();
+    const playlistIds = Object.keys(librarySnapshot.playlistsById || {});
+    let libraryChanged = false;
+    if (!playlistIds.length) {
+      const createdAt = Date.now();
+      const playlistId = makeLocalId("playlist");
+      librarySnapshot = {
+        ...librarySnapshot,
+        playlistsById: {
+          ...librarySnapshot.playlistsById,
+          [playlistId]: {
+            id: playlistId,
+            name: "polyplaylist1",
+            trackIds: [],
+            createdAt,
+            updatedAt: createdAt
+          }
+        },
+        activePlaylistId: playlistId
+      };
+      libraryChanged = true;
+    } else if (!librarySnapshot.activePlaylistId || !librarySnapshot.playlistsById[librarySnapshot.activePlaylistId]) {
+      librarySnapshot = {
+        ...librarySnapshot,
+        activePlaylistId: playlistIds[0] ?? null
+      };
+      libraryChanged = true;
+    }
+    if (libraryChanged) setLibrary(librarySnapshot);
+    const loaded = await getTracksFromDb();
     setRuntimeLibrary(librarySnapshot);
     setTracks(loaded);
     const activePlaylist = librarySnapshot.activePlaylistId ? librarySnapshot.playlistsById[librarySnapshot.activePlaylistId] : null;
@@ -495,6 +530,9 @@ export default function App() {
       }
       return loaded[0]?.id ?? null;
     });
+    if (!librarySnapshot.activePlaylistId || !librarySnapshot.playlistsById[librarySnapshot.activePlaylistId]) {
+      setOverlayPage("playlists");
+    }
   };
 
   const teardownCurrentAudio = () => {
@@ -1669,6 +1707,25 @@ export default function App() {
     try {
       setImportSummary(null);
       setShowMissingIds(false);
+      const lowerName = file.name.toLowerCase();
+      const isPlaylistBackup =
+        lowerName.endsWith(".zip") ||
+        lowerName.endsWith(".polyplaylist") ||
+        file.type === "application/zip" ||
+        file.type === "application/x-zip-compressed";
+      if (isPlaylistBackup) {
+        const restored = await importPolyplaylist(file);
+        window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
+        syncPlayerStateFromStorage();
+        await refreshTracks();
+        await refreshVaultInspector();
+        clearActivePlaylistDirty();
+        setVaultSelectedPlaylistId(restored.playlistId);
+        setVaultStatus(
+          `Imported backup playlist "${restored.playlistName}". Restored ${restored.importedTracks} tracks and ${restored.importedMediaFiles} media files.`
+        );
+        return;
+      }
       const librarySnapshot = runtimeLibrary ?? (await getLibrary());
       const storageSnapshot = readStorageLibrarySnapshot();
       if (tracks.length > 0 && Object.keys(librarySnapshot.tracksById).length === 0 && Object.keys(storageSnapshot.tracksById).length === 0) {
@@ -2254,7 +2311,7 @@ export default function App() {
                 <input
                   ref={importPolyplaylistInputRef}
                   type="file"
-                  accept=".polyplaylist.json,application/json,.json"
+                  accept=".polyplaylist,.zip,application/zip,.polyplaylist.json,application/json,.json"
                   className="hidden"
                   onChange={(event) => {
                     const file = event.currentTarget.files?.[0] ?? null;

@@ -988,6 +988,17 @@ function findEntryByPrefix(entries: Map<string, Uint8Array>, prefix: string): { 
   return null;
 }
 
+function findEntryByPrefixes(
+  entries: Map<string, Uint8Array>,
+  prefixes: string[]
+): { path: string; data: Uint8Array } | null {
+  for (const prefix of prefixes) {
+    const found = findEntryByPrefix(entries, prefix);
+    if (found) return found;
+  }
+  return null;
+}
+
 async function blobToBytes(blob: Blob): Promise<Uint8Array> {
   return new Uint8Array(await blob.arrayBuffer());
 }
@@ -1251,6 +1262,7 @@ export async function importPolyplaylist(file: File): Promise<ImportPolyplaylist
     const sourceTrackId = manifest.playlist.trackIds[index];
     const sourceTrack = manifest.tracksById[sourceTrackId];
     if (!sourceTrack) continue;
+    const legacyTrackId = typeof sourceTrack.id === "string" && sourceTrack.id ? sourceTrack.id : sourceTrackId;
 
     const nextTrackId = makeRecordId();
     const nextTrack = sanitizeTrackForRestore({
@@ -1260,7 +1272,12 @@ export async function importPolyplaylist(file: File): Promise<ImportPolyplaylist
       updatedAt: nowMs + index
     });
 
-    const audioEntry = findEntryByPrefix(zipEntries, `${POLYPLAYLIST_ROOT}/media/${sourceTrackId}/audio.`);
+    const audioEntry = findEntryByPrefixes(zipEntries, [
+      `${POLYPLAYLIST_ROOT}/media/${sourceTrackId}/audio.`,
+      `${POLYPLAYLIST_ROOT}/media/${legacyTrackId}/audio.`,
+      `media/${sourceTrackId}/audio.`,
+      `media/${legacyTrackId}/audio.`
+    ]);
     if (audioEntry) {
       const blob = new Blob([uint8ToArrayBuffer(audioEntry.data)], { type: getMimeFromPath(audioEntry.path) });
       const key = makeBlobKey();
@@ -1270,7 +1287,12 @@ export async function importPolyplaylist(file: File): Promise<ImportPolyplaylist
       importedMediaFiles += 1;
     }
 
-    const artEntry = findEntryByPrefix(zipEntries, `${POLYPLAYLIST_ROOT}/media/${sourceTrackId}/artwork.`);
+    const artEntry = findEntryByPrefixes(zipEntries, [
+      `${POLYPLAYLIST_ROOT}/media/${sourceTrackId}/artwork.`,
+      `${POLYPLAYLIST_ROOT}/media/${legacyTrackId}/artwork.`,
+      `media/${sourceTrackId}/artwork.`,
+      `media/${legacyTrackId}/artwork.`
+    ]);
     if (artEntry) {
       const blob = new Blob([uint8ToArrayBuffer(artEntry.data)], { type: getMimeFromPath(artEntry.path) });
       const key = makeBlobKey();
@@ -1281,7 +1303,12 @@ export async function importPolyplaylist(file: File): Promise<ImportPolyplaylist
       importedMediaFiles += 1;
     }
 
-    const artVideoEntry = findEntryByPrefix(zipEntries, `${POLYPLAYLIST_ROOT}/media/${sourceTrackId}/artwork-video.`);
+    const artVideoEntry = findEntryByPrefixes(zipEntries, [
+      `${POLYPLAYLIST_ROOT}/media/${sourceTrackId}/artwork-video.`,
+      `${POLYPLAYLIST_ROOT}/media/${legacyTrackId}/artwork-video.`,
+      `media/${sourceTrackId}/artwork-video.`,
+      `media/${legacyTrackId}/artwork-video.`
+    ]);
     if (artVideoEntry) {
       const blob = new Blob([uint8ToArrayBuffer(artVideoEntry.data)], { type: getMimeFromPath(artVideoEntry.path) });
       const key = makeBlobKey();
