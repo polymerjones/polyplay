@@ -11,6 +11,7 @@ export function SplashOverlay({ isDismissing, onComplete }: Props) {
   const completedRef = useRef(false);
   const lastTapAtRef = useRef(0);
   const [needsUserStart, setNeedsUserStart] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(false);
 
   const completeOnce = () => {
     if (completedRef.current) return;
@@ -42,6 +43,21 @@ export function SplashOverlay({ isDismissing, onComplete }: Props) {
       setNeedsUserStart(false);
     } catch {
       setNeedsUserStart(true);
+    }
+  };
+
+  const enableSound = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      video.muted = false;
+      video.volume = 1;
+      await video.play();
+      setSoundEnabled(true);
+      setNeedsUserStart(false);
+    } catch {
+      video.muted = true;
+      setSoundEnabled(false);
     }
   };
 
@@ -83,6 +99,11 @@ export function SplashOverlay({ isDismissing, onComplete }: Props) {
       <button type="button" className="splash-overlay__skip" onClick={completeOnce}>
         Skip
       </button>
+      {!soundEnabled && (
+        <button type="button" className="splash-overlay__sound" onClick={() => void enableSound()}>
+          Tap for sound
+        </button>
+      )}
       {needsUserStart && (
         <div className="splash-overlay__tap-wrap">
           <button type="button" className="splash-overlay__tap" onClick={() => void startFromTap()}>

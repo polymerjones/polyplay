@@ -567,6 +567,21 @@ body.theme-dark .rowAuraGlow {
   backdrop-filter: blur(10px);
 }
 
+.splash-overlay__sound {
+  position: absolute;
+  z-index: 2;
+  left: 18px;
+  top: calc(18px + env(safe-area-inset-top, 0px));
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 10px;
+  background: rgba(10, 14, 22, 0.62);
+  color: #f7f2ff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 12px;
+  backdrop-filter: blur(10px);
+}
+
 .splash-overlay__tap-wrap {
   position: absolute;
   inset: 0;
