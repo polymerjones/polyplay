@@ -109,7 +109,6 @@ async function fetchBlobBounded(url: string, maxBytes: number): Promise<Blob> {
 export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reason: string }> {
   let library = await getLibrary();
   const trackValues = Object.values(library.tracksById || {});
-  const hasAnyTracks = trackValues.length > 0;
   const hasAnyDemo = trackValues.some((track) => Boolean(track.isDemo));
   const activePlaylist =
     library.activePlaylistId && library.playlistsById[library.activePlaylistId]
@@ -134,7 +133,9 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
     return { seeded: false, reason: "demo-already-present" };
   }
 
-  if (hasAnyTracks || activeTrackCount > 0) {
+  // Seed demos whenever the active playlist is empty and no demo tracks exist yet.
+  // This keeps first-run experience consistent on iOS even if other playlists contain tracks.
+  if (activeTrackCount > 0) {
     markSeedDone();
     return { seeded: false, reason: "existing-user-library" };
   }
@@ -161,18 +162,22 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
 
   let installed = 0;
   for (const demo of DEMO_TRACKS) {
-    const mediaBlob = await fetchBlobBounded(demo.mediaUrl, MAX_DEMO_ASSET_BYTES);
-    const posterBlob = (await generateVideoPoster(mediaBlob).catch(() => null)) ?? makeFallbackPoster(demo.title);
-    await addTrackToDb({
-      demoId: demo.demoId,
-      isDemo: true,
-      title: demo.title,
-      sub: "Demo",
-      audio: mediaBlob,
-      artPoster: posterBlob,
-      artVideo: mediaBlob
-    });
-    installed += 1;
+    try {
+      const mediaBlob = await fetchBlobBounded(demo.mediaUrl, MAX_DEMO_ASSET_BYTES);
+      const posterBlob = (await generateVideoPoster(mediaBlob).catch(() => null)) ?? makeFallbackPoster(demo.title);
+      await addTrackToDb({
+        demoId: demo.demoId,
+        isDemo: true,
+        title: demo.title,
+        sub: "Demo",
+        audio: mediaBlob,
+        artPoster: posterBlob,
+        artVideo: mediaBlob
+      });
+      installed += 1;
+    } catch {
+      // Continue seeding remaining demo tracks if one fails.
+    }
   }
 
   markSeedDone();
