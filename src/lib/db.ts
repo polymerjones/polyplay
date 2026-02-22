@@ -210,13 +210,15 @@ function readLegacyTracks(): Promise<LegacyDbTrackRecord[]> {
 }
 
 async function toTrack(record: TrackRecord): Promise<Track> {
+  // Self-heal older demo rows that may have lost audioKey but still have a playable demo video blob.
+  const effectiveAudioKey = record.audioKey || (record.isDemo ? record.artVideoKey || null : null);
   const [audioBlob, artBlob, artVideoBlob] = await Promise.all([
-    record.audioKey ? getBlob(record.audioKey) : Promise.resolve(null),
+    effectiveAudioKey ? getBlob(effectiveAudioKey) : Promise.resolve(null),
     record.artKey ? getBlob(record.artKey) : Promise.resolve(null),
     record.artVideoKey ? getBlob(record.artVideoKey) : Promise.resolve(null)
   ]);
 
-  const audioUrl = await getMediaUrl(record.audioKey);
+  const audioUrl = await getMediaUrl(effectiveAudioKey);
   const artUrl = await getMediaUrl(record.artKey);
   const artVideoUrl = await getMediaUrl(record.artVideoKey);
 
@@ -233,7 +235,7 @@ async function toTrack(record: TrackRecord): Promise<Track> {
     audioBlob: audioBlob ?? undefined,
     artBlob: artBlob ?? undefined,
     persistedId: record.id,
-    missingAudio: Boolean(record.audioKey) && !audioBlob,
+    missingAudio: Boolean(effectiveAudioKey) && !audioBlob,
     missingArt: (Boolean(record.artKey) && !artBlob) || (Boolean(record.artVideoKey) && !artVideoBlob),
     artworkSource: record.artworkSource === "auto" ? "auto" : "user"
   } satisfies Track;

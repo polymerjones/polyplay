@@ -1039,7 +1039,6 @@ body.perf-lite .fullscreen-player-shell__art.is-aura-flash::after {
     gap: 8px;
     padding-top: 10px;
     padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-    max-height: 178px;
   }
 
   .mini-player-bar.is-compact .mini-player-bar__header {
