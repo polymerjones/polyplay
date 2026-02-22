@@ -364,6 +364,7 @@ export default function App() {
   const [safeTapBursts, setSafeTapBursts] = useState<SafeTapBurst[]>([]);
   const ambientFxRef = useRef<AmbientFxCanvasHandle | null>(null);
   const fxToastTimeoutRef = useRef<number | null>(null);
+  const returnToCompactAfterClearRef = useRef(false);
   const activePlaylistId = runtimeLibrary?.activePlaylistId ?? null;
 
   const markActivePlaylistDirty = () => {
@@ -1322,6 +1323,11 @@ export default function App() {
     if (trackId === currentTrackId) {
       if (autoPlay && canPlay) {
         if (audio && audio.paused) {
+          const effectiveDuration = getSafeDuration(duration) || getSafeDuration(audio.duration);
+          if (effectiveDuration > 0 && audio.currentTime >= Math.max(0, effectiveDuration - 0.05)) {
+            audio.currentTime = 0;
+            setCurrentTime(0);
+          }
           logAudioDebug("play() called", { reason: "same-track" });
           void audio
             .play()
@@ -1367,6 +1373,11 @@ export default function App() {
 
     if (audio.paused) {
       try {
+        const effectiveDuration = getSafeDuration(duration) || getSafeDuration(audio.duration);
+        if (effectiveDuration > 0 && audio.currentTime >= Math.max(0, effectiveDuration - 0.05)) {
+          audio.currentTime = 0;
+          setCurrentTime(0);
+        }
         logAudioDebug("play() called", { reason: "toggle-play" });
         await audio.play();
         logAudioDebug("play() resolved", { reason: "toggle-play" });
@@ -1469,6 +1480,24 @@ export default function App() {
     setLoopByTrack((prev) => ({ ...prev, [currentTrackId]: EMPTY_LOOP }));
     setLoopModeByTrack((prev) => ({ ...prev, [currentTrackId]: "off" }));
     markActivePlaylistDirty();
+  };
+
+  const setLoopFromCurrentWithExpand = () => {
+    if (isPlayerCompact) {
+      returnToCompactAfterClearRef.current = true;
+      setIsPlayerCompact(false);
+    } else {
+      returnToCompactAfterClearRef.current = false;
+    }
+    setLoopFromCurrent();
+  };
+
+  const clearLoopWithCompactRestore = () => {
+    clearLoop();
+    if (returnToCompactAfterClearRef.current) {
+      setIsPlayerCompact(true);
+      returnToCompactAfterClearRef.current = false;
+    }
   };
 
   const toggleLayoutMode = () => {
@@ -2180,9 +2209,9 @@ export default function App() {
           onCycleDimMode={cycleDimMode}
           onVinylScratch={playVinylScratch}
           onSetLoopRange={setLoopRange}
-          onSetLoop={setLoopFromCurrent}
+          onSetLoop={setLoopFromCurrentWithExpand}
           onToggleLoopMode={toggleLoopMode}
-          onClearLoop={clearLoop}
+          onClearLoop={clearLoopWithCompactRestore}
           onOpenFullscreen={() => {
             if (currentTrack) setIsFullscreenPlayerOpen(true);
           }}

@@ -30,6 +30,8 @@ type Sparkle = {
 
 const JOURNAL_BG_TOGGLE_KEY = "polyplay_journalBgToggle_v1";
 const JOURNAL_VERSE_INDEX_KEY = "polyplay_journalVerseIndex_v1";
+const JOURNAL_LOOP_START_SEC = 0.08;
+const JOURNAL_LOOP_END_GUARD_SEC = 0.06;
 
 const JOURNAL_BACKGROUNDS: JournalBackground[] = [
   { id: "1", src: "/clouds1.mov" },
@@ -254,7 +256,35 @@ export function JournalModal({ open, onClose }: Props) {
     video.muted = true;
     video.volume = 0;
     video.load();
+    const jumpToSafeStart = () => {
+      const duration = Number.isFinite(video.duration) ? video.duration : 0;
+      if (duration <= 0) return;
+      const safeStart = Math.min(JOURNAL_LOOP_START_SEC, Math.max(0, duration - 0.12));
+      if (video.currentTime < safeStart) {
+        video.currentTime = safeStart;
+      }
+    };
+    const onTimeUpdate = () => {
+      const duration = Number.isFinite(video.duration) ? video.duration : 0;
+      if (duration <= 0) return;
+      if (video.currentTime >= duration - JOURNAL_LOOP_END_GUARD_SEC) {
+        const safeStart = Math.min(JOURNAL_LOOP_START_SEC, Math.max(0, duration - 0.12));
+        video.currentTime = safeStart;
+      }
+    };
+    const onEnded = () => {
+      jumpToSafeStart();
+      void video.play().catch(() => undefined);
+    };
+    video.addEventListener("loadedmetadata", jumpToSafeStart);
+    video.addEventListener("timeupdate", onTimeUpdate);
+    video.addEventListener("ended", onEnded);
     void video.play().catch(() => undefined);
+    return () => {
+      video.removeEventListener("loadedmetadata", jumpToSafeStart);
+      video.removeEventListener("timeupdate", onTimeUpdate);
+      video.removeEventListener("ended", onEnded);
+    };
   }, [selectedBgId, open]);
 
   if (!open) return null;
@@ -274,6 +304,7 @@ export function JournalModal({ open, onClose }: Props) {
         ref={backgroundVideoRef}
         className="journalVideoLayer"
         src={selectedBackground.src}
+        preload="auto"
         autoPlay
         loop
         playsInline
