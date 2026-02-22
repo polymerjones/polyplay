@@ -95,15 +95,37 @@ function wasSeedDone(): boolean {
 }
 
 async function fetchBlobBounded(url: string, maxBytes: number): Promise<Blob> {
-  const response = await fetch(url, { cache: "force-cache" });
-  if (!response.ok) throw new Error(`Failed to fetch ${url}`);
-  const contentLength = Number(response.headers.get("content-length") || "0");
-  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    throw new Error(`Asset too large: ${url}`);
+  const candidates = new Set<string>();
+  candidates.add(url);
+  if (url.startsWith("/")) candidates.add(url.slice(1));
+  if (typeof window !== "undefined") {
+    try {
+      candidates.add(new URL(url, window.location.origin).toString());
+    } catch {
+      // Ignore URL construction failures.
+    }
   }
-  const blob = await response.blob();
-  if (blob.size > maxBytes) throw new Error(`Asset too large: ${url}`);
-  return blob;
+
+  let lastError = "unknown";
+  for (const candidate of candidates) {
+    try {
+      const response = await fetch(candidate, { cache: "no-store" });
+      if (!response.ok) {
+        lastError = `${candidate} -> HTTP ${response.status}`;
+        continue;
+      }
+      const contentLength = Number(response.headers.get("content-length") || "0");
+      if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+        throw new Error(`Asset too large: ${candidate}`);
+      }
+      const blob = await response.blob();
+      if (blob.size > maxBytes) throw new Error(`Asset too large: ${candidate}`);
+      return blob;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+  }
+  throw new Error(`Failed to fetch ${url} (${lastError})`);
 }
 
 export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reason: string }> {
