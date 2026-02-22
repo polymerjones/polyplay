@@ -13,7 +13,7 @@ import { PolyOracleOrb } from "./components/PolyOracleOrb";
 import { QuickTipsModal } from "./components/QuickTipsModal";
 import { SplashOverlay } from "./components/SplashOverlay";
 import { TrackGrid } from "./components/TrackGrid";
-import { clearTracksInDb, getTracksFromDb, saveAuraToDb } from "./lib/db";
+import { clearTracksInDb, deletePlaylistInDb, getAllTracksFromDb, saveAuraToDb } from "./lib/db";
 import {
   exportFullBackup,
   getNextDefaultPolyplaylistName,
@@ -40,7 +40,12 @@ import {
   setLibrary
 } from "./lib/library";
 import { revokeAllMediaUrls } from "./lib/player/media";
-import { createPlaylistInLibrary, ensureActivePlaylist, setActivePlaylistInLibrary } from "./lib/playlistState";
+import {
+  createPlaylistInLibrary,
+  ensureActivePlaylist,
+  getVisibleTracksFromLibrary,
+  setActivePlaylistInLibrary
+} from "./lib/playlistState";
 import type { LibraryState } from "./lib/storage/library";
 import type { LoopMode, LoopRegion, Track } from "./types";
 import type { AmbientFxMode, AmbientFxQuality } from "./fx/ambientFxEngine";
@@ -514,7 +519,12 @@ export default function App() {
     librarySnapshot = ensured.library;
     if (ensured.changed) setLibrary(librarySnapshot);
     const playlistIds = Object.keys(librarySnapshot.playlistsById || {});
-    const loaded = librarySnapshot.activePlaylistId ? await getTracksFromDb() : [];
+    const allTracks = await getAllTracksFromDb();
+    const allTracksById = allTracks.reduce<Record<string, Track>>((acc, track) => {
+      acc[track.id] = track;
+      return acc;
+    }, {});
+    const loaded = getVisibleTracksFromLibrary(librarySnapshot, allTracksById);
     setRuntimeLibrary(librarySnapshot);
     setTracks(loaded);
     setIsPlaylistRequired(playlistIds.length === 0);
@@ -553,6 +563,24 @@ export default function App() {
     setIsCreatePlaylistModalOpen(false);
     setIsPlaylistRequired(false);
     setNewPlaylistName(getNextDefaultPolyplaylistName());
+    window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
+    await refreshTracks();
+  };
+
+  const deleteActivePlaylist = async () => {
+    const currentLibrary = await getLibrary();
+    const activeId = currentLibrary.activePlaylistId;
+    if (!activeId) return;
+    const playlist = currentLibrary.playlistsById[activeId];
+    if (!playlist) return;
+    const playlistCount = Object.keys(currentLibrary.playlistsById || {}).length;
+    if (playlistCount <= 1) {
+      setVaultStatus("At least one playlist is required.");
+      return;
+    }
+    const confirmed = window.confirm(`Delete "${playlist.name}" playlist?`);
+    if (!confirmed) return;
+    await deletePlaylistInDb(activeId);
     window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
     await refreshTracks();
   };
@@ -787,14 +815,6 @@ export default function App() {
       const height = Math.ceil(player.getBoundingClientRect().height);
       root.style.setProperty("--playerH", `${height}px`);
     };
-
-    const syncCompactDefault = () => {
-      if (typeof window.matchMedia !== "function") return;
-      const isDesktop = window.matchMedia("(min-width: 900px)").matches;
-      setIsPlayerCompact((prev) => (prev === isDesktop ? prev : isDesktop));
-    };
-
-    syncCompactDefault();
     window.requestAnimationFrame(syncPlayerHeightVar);
     window.addEventListener("load", syncPlayerHeightVar);
     window.addEventListener("resize", syncPlayerHeightVar);
@@ -2059,26 +2079,46 @@ export default function App() {
         {runtimeLibrary && Object.keys(runtimeLibrary.playlistsById || {}).length > 0 && (
           <section className="playlist-selector" data-ui="true">
             <label htmlFor="current-playlist-select">Current Playlist</label>
-            <select
-              id="current-playlist-select"
-              value={activePlaylistId || ""}
-              onChange={(event) => {
-                const value = event.currentTarget.value;
-                if (value === "__create__") {
+            <div className="playlist-selector__controls">
+              <select
+                id="current-playlist-select"
+                value={activePlaylistId || ""}
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  if (value === "__create__") {
+                    setNewPlaylistName(getNextDefaultPolyplaylistName());
+                    setIsCreatePlaylistModalOpen(true);
+                    return;
+                  }
+                  void setActivePlaylist(value);
+                }}
+              >
+                {Object.values(runtimeLibrary.playlistsById).map((playlist) => (
+                  <option key={playlist.id} value={playlist.id}>
+                    {playlist.name}
+                  </option>
+                ))}
+                <option value="__create__">Create new playlist…</option>
+              </select>
+              <button
+                type="button"
+                className="playlist-selector__action"
+                onClick={() => {
                   setNewPlaylistName(getNextDefaultPolyplaylistName());
                   setIsCreatePlaylistModalOpen(true);
-                  return;
-                }
-                void setActivePlaylist(value);
-              }}
-            >
-              {Object.values(runtimeLibrary.playlistsById).map((playlist) => (
-                <option key={playlist.id} value={playlist.id}>
-                  {playlist.name}
-                </option>
-              ))}
-              <option value="__create__">Create new playlist…</option>
-            </select>
+                }}
+              >
+                New
+              </button>
+              <button
+                type="button"
+                className="playlist-selector__action playlist-selector__action--danger"
+                onClick={() => void deleteActivePlaylist()}
+                disabled={Object.keys(runtimeLibrary.playlistsById || {}).length <= 1}
+              >
+                Delete
+              </button>
+            </div>
           </section>
         )}
 

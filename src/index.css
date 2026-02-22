@@ -243,6 +243,9 @@ body.theme-dark .rowAuraGlow {
 .track-art-badge--demo {
   background: rgba(42, 92, 168, 0.5);
   border-color: rgba(174, 214, 255, 0.46);
+  font-size: 9px;
+  letter-spacing: 0.3px;
+  padding: 3px 6px;
 }
 
 .trackRow.is-playing {
@@ -286,6 +289,13 @@ body.theme-dark .rowAuraGlow {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.trackRow__artBadges .track-art-badge--demo,
+.track-badges .track-art-badge--demo {
+  justify-self: start;
+  align-self: start;
+  margin: 0;
 }
 
 .trackRow__thumb {

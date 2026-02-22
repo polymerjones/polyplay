@@ -4142,6 +4142,32 @@ body.nuke-flash::after {
   font-size: 13px;
 }
 
+.playlist-selector__controls {
+  display: grid;
+  grid-template-columns: minmax(200px, 340px) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.playlist-selector__action {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(24, 33, 54, 0.84);
+  color: #f7fbff;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.playlist-selector__action:disabled {
+  opacity: 0.45;
+}
+
+.playlist-selector__action--danger {
+  background: rgba(60, 26, 40, 0.86);
+  border-color: rgba(255, 145, 178, 0.32);
+}
+
 .playlist-create-card {
   width: min(460px, 92vw);
 }
@@ -4186,6 +4212,10 @@ body.nuke-flash::after {
   .playlist-selector {
     grid-template-columns: 1fr;
     gap: 6px;
+  }
+
+  .playlist-selector__controls {
+    grid-template-columns: 1fr auto auto;
   }
 
   .topbar-tier--controls {

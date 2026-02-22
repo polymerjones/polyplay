@@ -1,4 +1,5 @@
 import type { LibraryState } from "./storage/library";
+import type { Track as UiTrack } from "../types";
 
 export type Playlist = {
   id: string;
@@ -226,4 +227,15 @@ export function createPlaylistInLibrary(
     activePlaylistId: id
   };
   return { library: next, createdPlaylistId: id };
+}
+
+export function getVisibleTrackIdsFromLibrary(library: LibraryState): string[] {
+  if (!library.activePlaylistId) return [];
+  const playlist = library.playlistsById[library.activePlaylistId];
+  if (!playlist) return [];
+  return (playlist.trackIds || []).filter((trackId) => Boolean(library.tracksById[trackId]));
+}
+
+export function getVisibleTracksFromLibrary(library: LibraryState, tracksById: Record<string, UiTrack>): UiTrack[] {
+  return getVisibleTrackIdsFromLibrary(library).map((trackId) => tracksById[trackId]).filter(Boolean);
 }

@@ -242,11 +242,17 @@ async function toTrack(record: TrackRecord): Promise<Track> {
 export async function getTracksFromDb(): Promise<Track[]> {
   await maybeMigrateLegacyTracks();
   const library = loadLibrary();
+  const allTracks = await getAllTracksFromDb();
+  const byId = new Map(allTracks.map((track) => [track.id, track] as const));
   const trackIds = getTrackOrder(library);
-  const records = trackIds.map((id) => library.tracksById[id]).filter(Boolean);
+  return trackIds.map((id) => byId.get(id)).filter(Boolean) as Track[];
+}
 
-  const tracks = await Promise.all(records.map((record) => toTrack(record)));
-  return tracks;
+export async function getAllTracksFromDb(): Promise<Track[]> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const records = Object.values(library.tracksById).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+  return Promise.all(records.map((record) => toTrack(record)));
 }
 
 export async function loadLibraryFromAppSourceOfTruth(): Promise<LibraryState> {
