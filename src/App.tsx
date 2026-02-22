@@ -13,7 +13,7 @@ import { PolyOracleOrb } from "./components/PolyOracleOrb";
 import { QuickTipsModal } from "./components/QuickTipsModal";
 import { SplashOverlay } from "./components/SplashOverlay";
 import { TrackGrid } from "./components/TrackGrid";
-import { clearTracksInDb, deletePlaylistInDb, getAllTracksFromDb, saveAuraToDb } from "./lib/db";
+import { getAllTracksFromDb, hardResetLibraryInDb, saveAuraToDb } from "./lib/db";
 import {
   exportFullBackup,
   getNextDefaultPolyplaylistName,
@@ -321,7 +321,6 @@ export default function App() {
     sourceMismatch: boolean;
   } | null>(null);
   const [showMissingIds, setShowMissingIds] = useState(false);
-  const [vaultSelectedPlaylistId, setVaultSelectedPlaylistId] = useState<string | null>(null);
   const [vaultInspector, setVaultInspector] = useState<VaultLibraryInspector | null>(null);
   const [runtimeLibrary, setRuntimeLibrary] = useState<LibraryState | null>(null);
   const [lastExportedAt, setLastExportedAt] = useState<string | null>(() => {
@@ -366,6 +365,8 @@ export default function App() {
   const fxToastTimeoutRef = useRef<number | null>(null);
   const returnToCompactAfterClearRef = useRef(false);
   const activePlaylistId = runtimeLibrary?.activePlaylistId ?? null;
+  const activePlaylistName =
+    (activePlaylistId && runtimeLibrary?.playlistsById?.[activePlaylistId]?.name) || "None";
 
   const markActivePlaylistDirty = () => {
     setIsActivePlaylistDirty(true);
@@ -472,10 +473,6 @@ export default function App() {
     const refreshedStorage = readStorageLibrarySnapshot();
     const payload = buildInspectorPayload(resolvedRuntime, refreshedStorage, migratedFromKey);
     setVaultInspector(payload);
-    setVaultSelectedPlaylistId((prev) => {
-      if (prev && resolvedRuntime.playlistsById[prev]) return prev;
-      return resolvedRuntime.activePlaylistId;
-    });
   };
 
   const syncPlayerStateFromStorage = () => {
@@ -549,7 +546,6 @@ export default function App() {
     if (!applied.library.playlistsById[playlistId]) return;
     setLibrary(applied.library);
     setRuntimeLibrary(applied.library);
-    setVaultSelectedPlaylistId(playlistId);
     window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
     await refreshTracks();
   };
@@ -560,28 +556,9 @@ export default function App() {
     const created = createPlaylistInLibrary(source, nextName);
     setLibrary(created.library);
     setRuntimeLibrary(created.library);
-    setVaultSelectedPlaylistId(created.createdPlaylistId);
     setIsCreatePlaylistModalOpen(false);
     setIsPlaylistRequired(false);
     setNewPlaylistName(getNextDefaultPolyplaylistName());
-    window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
-    await refreshTracks();
-  };
-
-  const deleteActivePlaylist = async () => {
-    const currentLibrary = await getLibrary();
-    const activeId = currentLibrary.activePlaylistId;
-    if (!activeId) return;
-    const playlist = currentLibrary.playlistsById[activeId];
-    if (!playlist) return;
-    const playlistCount = Object.keys(currentLibrary.playlistsById || {}).length;
-    if (playlistCount <= 1) {
-      setVaultStatus("At least one playlist is required.");
-      return;
-    }
-    const confirmed = window.confirm(`Delete "${playlist.name}" playlist?`);
-    if (!confirmed) return;
-    await deletePlaylistInDb(activeId);
     window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
     await refreshTracks();
   };
@@ -612,7 +589,7 @@ export default function App() {
   const nukeAppData = async () => {
     logAudioDebug("nukeAppData:start");
     try {
-      await clearTracksInDb();
+      await hardResetLibraryInDb();
       logAudioDebug("nukeAppData:storage-cleared");
     } catch (error) {
       logAudioDebug("nukeAppData:storage-clear-failed", { error: String(error) });
@@ -836,6 +813,31 @@ export default function App() {
       observer?.disconnect();
     };
   }, [tracks.length, isPlayerCompact, overlayPage]);
+
+  useEffect(() => {
+    if (!isFullscreenPlayerOpen) return;
+    const scrollY = window.scrollY || window.pageYOffset || 0;
+    const prev = {
+      position: document.body.style.position,
+      top: document.body.style.top,
+      width: document.body.style.width,
+      overflowY: document.body.style.overflowY,
+      overscrollBehavior: document.body.style.overscrollBehavior
+    };
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    document.body.style.overflowY = "hidden";
+    document.body.style.overscrollBehavior = "none";
+    return () => {
+      document.body.style.position = prev.position;
+      document.body.style.top = prev.top;
+      document.body.style.width = prev.width;
+      document.body.style.overflowY = prev.overflowY;
+      document.body.style.overscrollBehavior = prev.overscrollBehavior;
+      window.scrollTo(0, scrollY);
+    };
+  }, [isFullscreenPlayerOpen]);
 
   useEffect(() => {
     if (!fxToast) return;
@@ -1833,8 +1835,8 @@ export default function App() {
       clearActivePlaylistDirty();
       setVaultStatus(
         saveMode === "save-dialog"
-          ? `Universe saved as ${filename}.`
-          : `Universe saved as ${filename}. Check your browser Downloads folder (or chosen download location).`
+          ? `Saved to selected location: ${filename}.`
+          : `Download started for ${filename}. If you canceled the dialog, nothing was saved.`
       );
       return true;
     } catch (error) {
@@ -2076,8 +2078,9 @@ export default function App() {
             >
               <span className="journal-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" className="journal-icon-svg">
-                  <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21V5.5Z" />
-                  <path d="M8 7h8M8 10h8M8 13h6" />
+                  <path d="M4 4h12a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2V4Z" />
+                  <path d="M8 8h6M8 11h6M8 14h5" />
+                  <path d="m14.5 16.5 4.2-4.2 1.5 1.5-4.2 4.2-2.2.7z" />
                 </svg>
               </span>
             </button>
@@ -2151,14 +2154,6 @@ export default function App() {
                 }}
               >
                 New
-              </button>
-              <button
-                type="button"
-                className="playlist-selector__action playlist-selector__action--danger"
-                onClick={() => void deleteActivePlaylist()}
-                disabled={Object.keys(runtimeLibrary.playlistsById || {}).length <= 1}
-              >
-                Delete
               </button>
             </div>
           </section>
@@ -2339,10 +2334,10 @@ export default function App() {
       )}
 
       {overlayPage === "vault" && (
-        <section className="app-overlay" role="dialog" aria-modal="true" aria-label="PolyPlaylist Vault">
+        <section className="app-overlay" role="dialog" aria-modal="true" aria-label="Vault — Full Backup">
           <div className="app-overlay-card vault-card">
             <div className="app-overlay-head">
-              <div className="app-overlay-title">PolyPlaylist Vault</div>
+              <div className="app-overlay-title">Vault — Full Backup</div>
               <button
                 type="button"
                 className="app-overlay-close"
@@ -2462,22 +2457,8 @@ export default function App() {
 
               <div className="vault-summary">
                 <div>
-                  <span className="vault-summary__label">Apply Target Playlist</span>
-                  <select
-                    className="vault-summary__select"
-                    value={vaultSelectedPlaylistId || ""}
-                    onChange={(event) => setVaultSelectedPlaylistId(event.currentTarget.value || null)}
-                  >
-                    {(vaultInspector?.playlists || []).map((playlist) => (
-                      <option key={playlist.id} value={playlist.id}>
-                        {playlist.name} ({playlist.trackCount})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <span className="vault-summary__label">Active vs Selected</span>
-                  <strong>{activePlaylistId || "none"} → {vaultSelectedPlaylistId || "none"}</strong>
+                  <span className="vault-summary__label">Active Playlist</span>
+                  <strong>{activePlaylistName}</strong>
                 </div>
                 <div>
                   <span className="vault-summary__label">View</span>
@@ -2494,10 +2475,10 @@ export default function App() {
 
               <div className="vault-actions">
                 <button type="button" className="vault-btn vault-btn--primary" onClick={() => void saveUniverseBackup()}>
-                  Save Universe
+                  Export Full Backup
                 </button>
                 <button type="button" className="vault-btn vault-btn--secondary" onClick={onStartImportPolyplaylist}>
-                  Load Universe
+                  Import Full Backup
                 </button>
                 <input
                   ref={importUniverseInputRef}
@@ -2550,6 +2531,7 @@ export default function App() {
               )}
 
               {vaultStatus && <p className="vault-status">{vaultStatus}</p>}
+              <p className="vault-status">Full backup includes library metadata and bundled media available in this browser.</p>
               {importSummary && (
                 <div className="vault-import-summary">
                   <div>Updated tracks: {importSummary.updatedTrackCount}</div>
