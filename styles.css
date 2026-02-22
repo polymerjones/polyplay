@@ -922,8 +922,9 @@ body.gratitude-reactive .track-backdrop {
 }
 
 .track-grid {
-  column-gap: 14px;
-  column-count: 2;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
   padding-bottom: 160px;
   max-width: 980px;
   margin: 0 auto;
@@ -939,9 +940,9 @@ body.gratitude-reactive .track-backdrop {
   position: relative;
   cursor: pointer;
   touch-action: pan-y;
-  display: inline-block;
+  display: block;
   width: 100%;
-  margin: 0 0 14px;
+  margin: 0;
   transition: transform 120ms ease;
   isolation: isolate;
   --glow-hue: 60;
@@ -2144,7 +2145,7 @@ body.mute-freeze .track-backdrop {
     border-radius: 10px;
   }
   .track-grid {
-    column-count: 1;
+    grid-template-columns: 1fr;
     padding-bottom: calc(320px + env(safe-area-inset-bottom));
     gap: 16px;
   }
@@ -3498,7 +3499,7 @@ body.mute-freeze .track-backdrop {
     bottom: 18px;
   }
   .track-grid {
-    column-count: 3;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .tile {
     margin-bottom: 16px;
