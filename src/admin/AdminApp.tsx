@@ -29,7 +29,7 @@ import {
 } from "../lib/db";
 import { generateVideoPoster } from "../lib/artwork/videoPoster";
 import { validateVideoArtworkFile } from "../lib/artwork/videoValidation";
-import { DEMO_PACK_VERSION_KEY, installDemoPackIfNeeded } from "../lib/demoPack";
+import { restoreDemoTracks } from "../lib/demoSeed";
 import {
   DEFAULT_GRATITUDE_SETTINGS,
   deleteGratitudeEntry,
@@ -999,7 +999,6 @@ export function AdminApp() {
     if (!window.confirm("Remove all demo tracks?")) return;
     try {
       const removed = await removeDemoTracksInDb();
-      localStorage.removeItem(DEMO_PACK_VERSION_KEY);
       setStatus(`Removed ${removed} demo track${removed === 1 ? "" : "s"}.`);
       await refreshTracks();
       await refreshStorage();
@@ -1011,12 +1010,15 @@ export function AdminApp() {
 
   const onRestoreDemoTracks = async () => {
     try {
-      localStorage.removeItem(DEMO_PACK_VERSION_KEY);
-      const seeded = await installDemoPackIfNeeded();
+      const result = await restoreDemoTracks();
       setStatus(
-        seeded.installed > 0
-          ? `Restored ${seeded.installed} demo track${seeded.installed === 1 ? "" : "s"}.`
-          : "Demo tracks are already restored."
+        result.restored > 0
+          ? `Restored ${result.restored} demo track${result.restored === 1 ? "" : "s"}.${
+              result.repaired > 0 ? ` Repaired ${result.repaired} poster${result.repaired === 1 ? "" : "s"}.` : ""
+            }`
+          : result.repaired > 0
+            ? `Demo tracks already existed. Repaired ${result.repaired} poster${result.repaired === 1 ? "" : "s"}.`
+            : "Demo tracks are already restored."
       );
       await refreshTracks();
       await refreshStorage();

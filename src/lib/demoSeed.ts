@@ -178,3 +178,54 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
   markSeedDone();
   return installed > 0 ? { seeded: true, reason: "seeded-first-run" } : { seeded: false, reason: "no-demo-installed" };
 }
+
+export async function restoreDemoTracks(): Promise<{ restored: number; skipped: number; repaired: number }> {
+  let library = await getLibrary();
+  if (!library.activePlaylistId || !library.playlistsById[library.activePlaylistId]) {
+    const now = Date.now();
+    const playlistId = makeId("playlist");
+    library = {
+      ...library,
+      playlistsById: {
+        ...library.playlistsById,
+        [playlistId]: {
+          id: playlistId,
+          name: "polyplaylist1",
+          trackIds: [],
+          createdAt: now,
+          updatedAt: now
+        }
+      },
+      activePlaylistId: playlistId
+    };
+    setLibrary(library);
+  }
+
+  let restored = 0;
+  let skipped = 0;
+  for (const demo of DEMO_TRACKS) {
+    const latest = await getLibrary();
+    const exists = Object.values(latest.tracksById || {}).some((track) => track.demoId === demo.demoId);
+    if (exists) {
+      skipped += 1;
+      continue;
+    }
+    const mediaBlob = await fetchBlobBounded(demo.mediaUrl, MAX_DEMO_ASSET_BYTES);
+    const posterBlob = (await generateVideoPoster(mediaBlob).catch(() => null)) ?? makeFallbackPoster(demo.title);
+    await addTrackToDb({
+      demoId: demo.demoId,
+      isDemo: true,
+      title: demo.title,
+      sub: "Demo",
+      audio: mediaBlob,
+      artPoster: posterBlob,
+      artVideo: mediaBlob
+    });
+    restored += 1;
+  }
+
+  const postLibrary = await getLibrary();
+  const repaired = await ensureDemoPostersIfMissing(postLibrary);
+  markSeedDone();
+  return { restored, skipped, repaired };
+}
