@@ -1652,6 +1652,46 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  const saveBlobWithBestEffort = async (
+    blob: Blob,
+    filename: string
+  ): Promise<"save-dialog" | "downloaded"> => {
+    const pickerHost = window as typeof window & {
+      showSaveFilePicker?: (options: {
+        suggestedName?: string;
+        types?: Array<{ description?: string; accept: Record<string, string[]> }>;
+      }) => Promise<{
+        createWritable: () => Promise<{
+          write: (data: Blob) => Promise<void>;
+          close: () => Promise<void>;
+        }>;
+      }>;
+    };
+
+    if (typeof pickerHost.showSaveFilePicker === "function") {
+      try {
+        const handle = await pickerHost.showSaveFilePicker({
+          suggestedName: filename,
+          types: [
+            {
+              description: "PolyPlaylist Config",
+              accept: { "application/json": [".polyplaylist.json", ".json"] }
+            }
+          ]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return "save-dialog";
+      } catch {
+        // User cancelled or picker unsupported in this context; use browser download fallback.
+      }
+    }
+
+    downloadBlobFile(blob, filename);
+    return "downloaded";
+  };
+
   const exportCurrentPolyplaylist = async (): Promise<boolean> => {
     const suggestedName = getNextDefaultPolyplaylistName();
     const input = window.prompt("Name your PolyPlaylist", suggestedName);
@@ -1664,7 +1704,8 @@ export default function App() {
         sourceLibrary: runtimeLibrary
       });
       const blob = new Blob([content], { type: "application/json;charset=utf-8" });
-      downloadBlobFile(blob, getPolyplaylistConfigFilename());
+      const filename = getPolyplaylistConfigFilename();
+      const saveMode = await saveBlobWithBestEffort(blob, filename);
       const stamp = new Date().toISOString();
       setLastExportedAt(stamp);
       try {
@@ -1674,7 +1715,11 @@ export default function App() {
         // Ignore localStorage failures.
       }
       clearActivePlaylistDirty();
-      setVaultStatus(`Exported "${playlistName}".`);
+      setVaultStatus(
+        saveMode === "save-dialog"
+          ? `Exported "${playlistName}" as ${filename}.`
+          : `Exported "${playlistName}" as ${filename}. Check your browser Downloads folder (or chosen download location).`
+      );
       return true;
     } catch (error) {
       setVaultStatus(`Export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
