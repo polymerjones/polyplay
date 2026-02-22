@@ -5,6 +5,8 @@ import { getBlob, putBlob } from "./storage/db";
 
 const DEMO_SEED_DONE_KEY = "polyplay_demo_seed_done_v1";
 const MAX_DEMO_ASSET_BYTES = 30 * 1024 * 1024;
+const DEMO_PLAYLIST_ID = "polyplaylist-demo";
+const DEMO_PLAYLIST_NAME = "Demo Playlist";
 
 const DEMO_TRACKS = [
   {
@@ -22,6 +24,36 @@ const DEMO_TRACKS = [
 function makeId(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function ensureDemoPlaylist(library: Awaited<ReturnType<typeof getLibrary>>, makeActive: boolean) {
+  const now = Date.now();
+  const existingById = library.playlistsById[DEMO_PLAYLIST_ID];
+  if (existingById) {
+    if (existingById.name !== DEMO_PLAYLIST_NAME) existingById.name = DEMO_PLAYLIST_NAME;
+    existingById.updatedAt = now;
+    if (makeActive) library.activePlaylistId = DEMO_PLAYLIST_ID;
+    return library;
+  }
+
+  const existingByName = Object.values(library.playlistsById).find(
+    (playlist) => playlist.name.trim().toLowerCase() === DEMO_PLAYLIST_NAME.toLowerCase()
+  );
+  if (existingByName) {
+    existingByName.updatedAt = now;
+    if (makeActive) library.activePlaylistId = existingByName.id;
+    return library;
+  }
+
+  library.playlistsById[DEMO_PLAYLIST_ID] = {
+    id: DEMO_PLAYLIST_ID,
+    name: DEMO_PLAYLIST_NAME,
+    trackIds: [],
+    createdAt: now,
+    updatedAt: now
+  };
+  if (makeActive) library.activePlaylistId = DEMO_PLAYLIST_ID;
+  return library;
 }
 
 function makeFallbackPoster(title: string): Blob | null {
@@ -162,25 +194,8 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
     return { seeded: false, reason: "existing-user-library" };
   }
 
-  if (!library.activePlaylistId || !library.playlistsById[library.activePlaylistId]) {
-    const now = Date.now();
-    const playlistId = makeId("playlist");
-    library = {
-      ...library,
-      playlistsById: {
-        ...library.playlistsById,
-        [playlistId]: {
-          id: playlistId,
-          name: "polyplaylist1",
-          trackIds: [],
-          createdAt: now,
-          updatedAt: now
-        }
-      },
-      activePlaylistId: playlistId
-    };
-    setLibrary(library);
-  }
+  library = ensureDemoPlaylist(library, true);
+  setLibrary(library);
 
   let installed = 0;
   for (const demo of DEMO_TRACKS) {
@@ -208,25 +223,8 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
 
 export async function restoreDemoTracks(): Promise<{ restored: number; skipped: number; repaired: number; failed: number }> {
   let library = await getLibrary();
-  if (!library.activePlaylistId || !library.playlistsById[library.activePlaylistId]) {
-    const now = Date.now();
-    const playlistId = makeId("playlist");
-    library = {
-      ...library,
-      playlistsById: {
-        ...library.playlistsById,
-        [playlistId]: {
-          id: playlistId,
-          name: "polyplaylist1",
-          trackIds: [],
-          createdAt: now,
-          updatedAt: now
-        }
-      },
-      activePlaylistId: playlistId
-    };
-    setLibrary(library);
-  }
+  library = ensureDemoPlaylist(library, true);
+  setLibrary(library);
 
   let restored = 0;
   let skipped = 0;
