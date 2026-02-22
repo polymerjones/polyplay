@@ -1,5 +1,5 @@
 import { addTrackToDb } from "./db";
-import { getLibrary } from "./library";
+import { getLibrary, setLibrary } from "./library";
 
 const DEMO_SEED_DONE_KEY = "polyplay_demo_seed_done_v1";
 const MAX_DEMO_ASSET_BYTES = 30 * 1024 * 1024;
@@ -16,6 +16,11 @@ const DEMO_TRACKS = [
     mediaUrl: "/demo/demo2.mp4"
   }
 ] as const;
+
+function makeId(prefix: string): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+}
 
 function markSeedDone(): void {
   try {
@@ -46,9 +51,7 @@ async function fetchBlobBounded(url: string, maxBytes: number): Promise<Blob> {
 }
 
 export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reason: string }> {
-  if (wasSeedDone()) return { seeded: false, reason: "already-seeded" };
-
-  const library = await getLibrary();
+  let library = await getLibrary();
   const trackValues = Object.values(library.tracksById || {});
   const hasAnyTracks = trackValues.length > 0;
   const hasAnyDemo = trackValues.some((track) => Boolean(track.isDemo));
@@ -58,6 +61,10 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
       : null;
   const activeTrackCount = activePlaylist?.trackIds?.length ?? 0;
 
+  if (wasSeedDone() && hasAnyDemo) {
+    return { seeded: false, reason: "already-seeded" };
+  }
+
   if (hasAnyDemo) {
     markSeedDone();
     return { seeded: false, reason: "demo-already-present" };
@@ -66,6 +73,26 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
   if (hasAnyTracks || activeTrackCount > 0) {
     markSeedDone();
     return { seeded: false, reason: "existing-user-library" };
+  }
+
+  if (!library.activePlaylistId || !library.playlistsById[library.activePlaylistId]) {
+    const now = Date.now();
+    const playlistId = makeId("playlist");
+    library = {
+      ...library,
+      playlistsById: {
+        ...library.playlistsById,
+        [playlistId]: {
+          id: playlistId,
+          name: "polyplaylist1",
+          trackIds: [],
+          createdAt: now,
+          updatedAt: now
+        }
+      },
+      activePlaylistId: playlistId
+    };
+    setLibrary(library);
   }
 
   let installed = 0;

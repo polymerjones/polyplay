@@ -36,6 +36,23 @@ export function ensureActivePlaylist(
 
   const playlistIds = Object.keys(next.playlistsById);
   if (!playlistIds.length) {
+    const orphanTrackIds = Object.values(next.tracksById)
+      .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+      .map((track) => track.id);
+    if (orphanTrackIds.length > 0) {
+      const now = Date.now();
+      const recoveredId = "default";
+      next.playlistsById[recoveredId] = {
+        id: recoveredId,
+        name: "Recovered Playlist",
+        trackIds: orphanTrackIds,
+        createdAt: now,
+        updatedAt: now
+      };
+      next.activePlaylistId = recoveredId;
+      changed = true;
+      return { library: next, changed };
+    }
     if (next.activePlaylistId !== null) changed = true;
     next.activePlaylistId = null;
     return { library: next, changed };
