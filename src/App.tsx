@@ -1551,6 +1551,14 @@ export default function App() {
 
   const setThemeModeExplicit = (next: ThemeMode, event?: MouseEvent<HTMLButtonElement>) => {
     setThemeMode(next);
+    if (next === "custom") {
+      setCustomThemeSlot("crimson");
+      try {
+        localStorage.setItem(CUSTOM_THEME_SLOT_KEY, "crimson");
+      } catch {
+        // Ignore localStorage failures.
+      }
+    }
     try {
       localStorage.setItem(THEME_MODE_KEY, next);
     } catch {

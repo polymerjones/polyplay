@@ -42,12 +42,12 @@ html[data-theme="dark"] {
 }
 
 html[data-theme="custom"] {
-  --color-bg-primary: #0f0a16;
-  --color-bg-secondary: #1a1026;
-  --color-text-primary: #f8f2ff;
-  --color-accent: #dd5f7e;
-  --aura-rgb: 221, 95, 126;
-  --glow-intensity: 1.16;
+  --color-bg-primary: #151013;
+  --color-bg-secondary: #24171d;
+  --color-text-primary: #f9f0f2;
+  --color-accent: #cf6f82;
+  --aura-rgb: 207, 111, 130;
+  --glow-intensity: 1.08;
 }
 
 * {
@@ -853,7 +853,7 @@ body.theme-dark::before {
 }
 
 body.theme-custom.theme-custom-crimson {
-  background: #180f1d;
+  background: #181115;
 }
 
 body.theme-custom.theme-custom-teal {
