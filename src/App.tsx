@@ -15,11 +15,10 @@ import { SplashOverlay } from "./components/SplashOverlay";
 import { TrackGrid } from "./components/TrackGrid";
 import { clearTracksInDb, getTracksFromDb, saveAuraToDb } from "./lib/db";
 import {
-  applyImportedPolyplaylistConfig,
+  exportFullBackup,
   getNextDefaultPolyplaylistName,
-  getPolyplaylistConfigFilename,
-  importPolyplaylist,
-  serializePolyplaylistConfig
+  getFullBackupFilename,
+  importFullBackup
 } from "./lib/backup";
 import { seedDemoTracksIfNeeded } from "./lib/demoSeed";
 import {
@@ -41,6 +40,7 @@ import {
   setLibrary
 } from "./lib/library";
 import { revokeAllMediaUrls } from "./lib/player/media";
+import { ensureActivePlaylist } from "./lib/playlistState";
 import type { LibraryState } from "./lib/storage/library";
 import type { LoopMode, LoopRegion, Track } from "./types";
 import type { AmbientFxMode, AmbientFxQuality } from "./fx/ambientFxEngine";
@@ -96,6 +96,7 @@ const HAS_ONBOARDED_KEY = "polyplay_hasOnboarded_v1";
 const ACTIVE_PLAYLIST_DIRTY_KEY = "polyplay_activePlaylistDirty_v1";
 const LAST_EXPORTED_PLAYLIST_ID_KEY = "polyplay_lastExportedPlaylistId";
 const LAST_EXPORTED_AT_KEY = "polyplay_lastExportedAt";
+const APP_STATE_KEY = "polyplay_app_state_v1";
 const SCRATCH_SFX_PATHS = ["/hyper-notif.wav#s1", "/hyper-notif.wav#s2", "/hyper-notif.wav#s3"];
 const SAFE_TAP_BASE_SIZE = 120;
 const SAFE_TAP_MAX_SIZE = 420;
@@ -329,11 +330,14 @@ export default function App() {
       return null;
     }
   });
+  const [isCreatePlaylistModalOpen, setIsCreatePlaylistModalOpen] = useState(false);
+  const [newPlaylistName, setNewPlaylistName] = useState("polyplaylist1");
+  const [isPlaylistRequired, setIsPlaylistRequired] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const scratchPlayersRef = useRef<HTMLAudioElement[]>([]);
   const activeScratchRef = useRef<HTMLAudioElement | null>(null);
-  const importPolyplaylistInputRef = useRef<HTMLInputElement | null>(null);
+  const importUniverseInputRef = useRef<HTMLInputElement | null>(null);
   const pendingAutoPlayRef = useRef(false);
   const audioSrcRef = useRef<string | null>(null);
   const splashTimeoutRef = useRef<number | null>(null);
@@ -385,6 +389,46 @@ export default function App() {
       return normalizeLibrary(JSON.parse(raw) as unknown);
     } catch {
       return normalizeLibrary(null);
+    }
+  };
+
+  const readPersistedLastActivePlaylistId = (): string | null => {
+    try {
+      const raw = localStorage.getItem(APP_STATE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { lastActivePlaylistId?: unknown };
+      return typeof parsed.lastActivePlaylistId === "string" ? parsed.lastActivePlaylistId : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const persistAppStateSnapshot = (library: LibraryState) => {
+    try {
+      const playlists = Object.values(library.playlistsById).map((playlist) => ({
+        id: playlist.id,
+        name: playlist.name,
+        createdAt: playlist.createdAt,
+        updatedAt: playlist.updatedAt,
+        trackIds: playlist.trackIds
+      }));
+      localStorage.setItem(
+        APP_STATE_KEY,
+        JSON.stringify({
+          version: APP_VERSION,
+          playlists,
+          tracksById: library.tracksById,
+          lastActivePlaylistId: library.activePlaylistId,
+          ui: {
+            viewMode: layoutMode,
+            dim: dimMode !== "normal",
+            theme: themeMode,
+            fxMode
+          }
+        })
+      );
+    } catch {
+      // Ignore localStorage failures.
     }
   };
 
@@ -490,39 +534,21 @@ export default function App() {
 
   const refreshTracks = async () => {
     let librarySnapshot = await getLibrary();
+    const preferredActivePlaylistId = readPersistedLastActivePlaylistId();
+    const ensured = ensureActivePlaylist(librarySnapshot, preferredActivePlaylistId);
+    librarySnapshot = ensured.library;
+    if (ensured.changed) setLibrary(librarySnapshot);
     const playlistIds = Object.keys(librarySnapshot.playlistsById || {});
-    let libraryChanged = false;
-    if (!playlistIds.length) {
-      const createdAt = Date.now();
-      const playlistId = makeLocalId("playlist");
-      librarySnapshot = {
-        ...librarySnapshot,
-        playlistsById: {
-          ...librarySnapshot.playlistsById,
-          [playlistId]: {
-            id: playlistId,
-            name: "polyplaylist1",
-            trackIds: [],
-            createdAt,
-            updatedAt: createdAt
-          }
-        },
-        activePlaylistId: playlistId
-      };
-      libraryChanged = true;
-    } else if (!librarySnapshot.activePlaylistId || !librarySnapshot.playlistsById[librarySnapshot.activePlaylistId]) {
-      librarySnapshot = {
-        ...librarySnapshot,
-        activePlaylistId: playlistIds[0] ?? null
-      };
-      libraryChanged = true;
-    }
-    if (libraryChanged) setLibrary(librarySnapshot);
-    const loaded = await getTracksFromDb();
+    const loaded = librarySnapshot.activePlaylistId ? await getTracksFromDb() : [];
     setRuntimeLibrary(librarySnapshot);
     setTracks(loaded);
     const activePlaylist = librarySnapshot.activePlaylistId ? librarySnapshot.playlistsById[librarySnapshot.activePlaylistId] : null;
     setActivePlaylistId(activePlaylist?.id || null);
+    setIsPlaylistRequired(playlistIds.length === 0);
+    if (playlistIds.length === 0) {
+      setIsCreatePlaylistModalOpen(true);
+      setNewPlaylistName("polyplaylist1");
+    }
     void refreshVaultInspector();
     setCurrentTrackId((prev) => {
       if (prev && loaded.some((track) => track.id === prev)) return prev;
@@ -531,9 +557,38 @@ export default function App() {
       }
       return loaded[0]?.id ?? null;
     });
-    if (!librarySnapshot.activePlaylistId || !librarySnapshot.playlistsById[librarySnapshot.activePlaylistId]) {
-      setOverlayPage("playlists");
-    }
+  };
+
+  const setActivePlaylist = async (playlistId: string) => {
+    const library = await getLibrary();
+    const playlist = library.playlistsById[playlistId];
+    if (!playlist) return;
+    playlist.updatedAt = Date.now();
+    library.activePlaylistId = playlistId;
+    setLibrary(library);
+    window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
+    await refreshTracks();
+  };
+
+  const createPlaylist = async (name: string) => {
+    const nextName = name.trim() || getNextDefaultPolyplaylistName();
+    const library = await getLibrary();
+    const playlistId = makeLocalId("playlist");
+    const stamp = Date.now();
+    library.playlistsById[playlistId] = {
+      id: playlistId,
+      name: nextName,
+      trackIds: [],
+      createdAt: stamp,
+      updatedAt: stamp
+    };
+    library.activePlaylistId = playlistId;
+    setLibrary(library);
+    setIsCreatePlaylistModalOpen(false);
+    setIsPlaylistRequired(false);
+    setNewPlaylistName(getNextDefaultPolyplaylistName());
+    window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
+    await refreshTracks();
   };
 
   const teardownCurrentAudio = () => {
@@ -752,6 +807,11 @@ export default function App() {
       // Ignore localStorage failures.
     }
   }, [fxEnabled, fxMode, fxQuality]);
+
+  useEffect(() => {
+    if (!runtimeLibrary) return;
+    persistAppStateSnapshot(runtimeLibrary);
+  }, [runtimeLibrary, layoutMode, dimMode, themeMode, fxMode]);
 
   useEffect(() => {
     if (!fxToast) return;
@@ -1655,7 +1715,8 @@ export default function App() {
 
   const saveBlobWithBestEffort = async (
     blob: Blob,
-    filename: string
+    filename: string,
+    options?: { accept?: Record<string, string[]>; description?: string }
   ): Promise<"save-dialog" | "downloaded"> => {
     const pickerHost = window as typeof window & {
       showSaveFilePicker?: (options: {
@@ -1675,8 +1736,8 @@ export default function App() {
           suggestedName: filename,
           types: [
             {
-              description: "PolyPlaylist Config",
-              accept: { "application/json": [".polyplaylist.json", ".json"] }
+              description: options?.description || "Polyplay Backup",
+              accept: options?.accept || { "application/octet-stream": [".zip"] }
             }
           ]
         });
@@ -1693,37 +1754,31 @@ export default function App() {
     return "downloaded";
   };
 
-  const exportCurrentPolyplaylist = async (): Promise<boolean> => {
-    const suggestedName = getNextDefaultPolyplaylistName();
-    const input = window.prompt("Name your PolyPlaylist", suggestedName);
-    if (input === null) return false;
-    const playlistName = input.trim() || suggestedName;
+  const saveUniverseBackup = async (): Promise<boolean> => {
     try {
-      const targetPlaylistId = vaultSelectedPlaylistId || activePlaylistId;
-      const content = await serializePolyplaylistConfig(playlistName, {
-        playlistId: targetPlaylistId,
-        sourceLibrary: runtimeLibrary
+      const payload = await exportFullBackup();
+      const filename = getFullBackupFilename();
+      const saveMode = await saveBlobWithBestEffort(payload.blob, filename, {
+        description: "Polyplay Universe Backup",
+        accept: { "application/zip": [".zip"] }
       });
-      const blob = new Blob([content], { type: "application/json;charset=utf-8" });
-      const filename = getPolyplaylistConfigFilename();
-      const saveMode = await saveBlobWithBestEffort(blob, filename);
       const stamp = new Date().toISOString();
       setLastExportedAt(stamp);
       try {
         localStorage.setItem(LAST_EXPORTED_AT_KEY, stamp);
-        if (targetPlaylistId) localStorage.setItem(LAST_EXPORTED_PLAYLIST_ID_KEY, targetPlaylistId);
+        if (activePlaylistId) localStorage.setItem(LAST_EXPORTED_PLAYLIST_ID_KEY, activePlaylistId);
       } catch {
         // Ignore localStorage failures.
       }
       clearActivePlaylistDirty();
       setVaultStatus(
         saveMode === "save-dialog"
-          ? `Exported "${playlistName}" as ${filename}.`
-          : `Exported "${playlistName}" as ${filename}. Check your browser Downloads folder (or chosen download location).`
+          ? `Universe saved as ${filename}.`
+          : `Universe saved as ${filename}. Check your browser Downloads folder (or chosen download location).`
       );
       return true;
     } catch (error) {
-      setVaultStatus(`Export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      setVaultStatus(`Save Universe failed: ${error instanceof Error ? error.message : "Unknown error"}`);
       return false;
     }
   };
@@ -1740,7 +1795,7 @@ export default function App() {
       setShowImportWarning(true);
       return;
     }
-    importPolyplaylistInputRef.current?.click();
+    importUniverseInputRef.current?.click();
   };
 
   const openSettingsPanel = () => {
@@ -1748,81 +1803,23 @@ export default function App() {
     setOverlayPage("settings");
   };
 
-  const onImportPolyplaylistFile = async (file: File | null) => {
+  const onLoadUniverseFile = async (file: File | null) => {
     if (!file) return;
     try {
       setImportSummary(null);
       setShowMissingIds(false);
-      const lowerName = file.name.toLowerCase();
-      const isPlaylistBackup =
-        lowerName.endsWith(".zip") ||
-        lowerName.endsWith(".polyplaylist") ||
-        file.type === "application/zip" ||
-        file.type === "application/x-zip-compressed";
-      if (isPlaylistBackup) {
-        const restored = await importPolyplaylist(file);
-        window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
-        syncPlayerStateFromStorage();
-        await refreshTracks();
-        await refreshVaultInspector();
-        clearActivePlaylistDirty();
-        setVaultSelectedPlaylistId(restored.playlistId);
-        setVaultStatus(
-          `Imported backup playlist "${restored.playlistName}". Restored ${restored.importedTracks} tracks and ${restored.importedMediaFiles} media files.`
-        );
-        return;
-      }
-      const librarySnapshot = runtimeLibrary ?? (await getLibrary());
-      const storageSnapshot = readStorageLibrarySnapshot();
-      if (tracks.length > 0 && Object.keys(librarySnapshot.tracksById).length === 0 && Object.keys(storageSnapshot.tracksById).length === 0) {
-        console.warn("[polyplaylist] Import reading empty library — source mismatch bug", {
-          renderedTrackCount: tracks.length,
-          localTracksByIdCount: 0
-        });
-        setVaultStatus("Import blocked: library source mismatch (empty tracksById while UI has tracks).");
-        return;
-      }
-      if (Object.keys(librarySnapshot.tracksById).length > 0 && Object.keys(storageSnapshot.tracksById).length === 0) {
-        setVaultStatus("Tracks exist in memory but not persisted yet - persisting now...");
-        setLibrary(librarySnapshot);
-      }
-      const content = await file.text();
-      const targetPlaylistId = vaultSelectedPlaylistId || activePlaylistId || librarySnapshot.activePlaylistId;
-      const summary = await applyImportedPolyplaylistConfig(content, {
-        targetPlaylistId,
-        sourceLibrary: librarySnapshot
-      });
+      const summary = await importFullBackup(file);
       window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
       syncPlayerStateFromStorage();
       await refreshTracks();
       await refreshVaultInspector();
       clearActivePlaylistDirty();
-      setImportSummary({
-        playlistName: summary.playlistName,
-        updatedTrackCount: summary.updatedTrackCount,
-        missingTrackIds: summary.missingTrackIds,
-        reorderedCount: summary.reorderedCount,
-        foundLocallyCount: summary.foundLocallyCount,
-        totalTrackOrderCount: summary.totalTrackOrderCount,
-        targetPlaylistId: summary.targetPlaylistId,
-        debug: summary.debug,
-        sourceMismatch: summary.sourceMismatch
-      });
-      setShowMissingIds(false);
-      if (summary.sourceMismatch) {
-        setVaultStatus(
-          `Vault cannot see local tracks. Source mismatch on key "${getLibraryKeyUsed()}". Press Hard Refresh Library.`
-        );
-        return;
-      }
       setVaultStatus(
-        summary.updatedTrackCount === 0 && summary.reorderedCount === 0
-          ? "Imported file applied 0 changes. Likely reason: none of the track IDs in this file exist on this device."
-          : `PolyPlaylist applied. Updated ${summary.updatedTrackCount} tracks. Missing ${summary.missingTrackIds.length} tracks. Reordered ${summary.reorderedCount}.`
+        `Universe loaded. Restored ${summary.restoredTracks} tracks and ${summary.restoredMediaFiles} media files.`
       );
     } catch (error) {
       setImportSummary(null);
-      setVaultStatus(`Import failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      setVaultStatus(`Load Universe failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   };
 
@@ -1849,7 +1846,7 @@ export default function App() {
   }, [overlayPage, runtimeLibrary]);
 
   const isAnyModalOpen = Boolean(
-    overlayPage || isTipsOpen || isJournalOpen || isGratitudeOpen || showSplash || isFullscreenPlayerOpen
+    overlayPage || isTipsOpen || isJournalOpen || isGratitudeOpen || showSplash || isFullscreenPlayerOpen || isCreatePlaylistModalOpen
   );
   const bubblesEnabled = false;
   const isMainPlayerView = !isAnyModalOpen;
@@ -1966,12 +1963,24 @@ export default function App() {
               void completeNukeSequence("animationend");
             }}
           >
-        <header className="topbar">
-          <div className="brand">
-            <img className="brand-logo" src={logo} alt="Polyplay logo" />
-            <span>{APP_TITLE}</span>
+        <header className="topbar topbar--two-tier">
+          <div className="topbar-tier topbar-tier--primary">
+            <div className="brand">
+              <img className="brand-logo" src={logo} alt="Polyplay logo" />
+            </div>
+            <div className="topbar-title">{APP_TITLE}</div>
+            <button
+              type="button"
+              className="gear-link nav-action-btn"
+              aria-label="Open settings panel"
+              onClick={openSettingsPanel}
+            >
+              <span className="gear-icon" aria-hidden="true">
+                ⚙
+              </span>
+            </button>
           </div>
-          <div className="top-actions">
+          <div className="topbar-tier topbar-tier--controls">
             <button
               type="button"
               className={`theme-switch ${themeToggleAnim ? `is-anim-${themeToggleAnim}` : ""} ${
@@ -2000,8 +2009,8 @@ export default function App() {
               className={`journal-link nav-action-btn header-icon-btn--hero ${
                 isJournalOpen ? "is-active" : ""
               }`.trim()}
-              aria-label="Open Journal"
-              title="Journal"
+              aria-label="Open Notes"
+              title="Notes"
               onClick={openJournal}
             >
               <span className="journal-icon" aria-hidden="true">
@@ -2010,17 +2019,14 @@ export default function App() {
                   <path d="M8 7h8M8 10h8M8 13h6" />
                 </svg>
               </span>
-              <span className="journal-tooltip" aria-hidden="true">
-                Journal
-              </span>
             </button>
             <button
               type="button"
               className={`vault-link nav-action-btn header-icon-btn--hero ${
                 overlayPage === "vault" ? "is-active" : ""
               }`.trim()}
-              aria-label="Open PolyPlaylist Vault"
-              title="Vault"
+              aria-label="Save or Load Universe"
+              title="Save / Load Universe"
               onClick={() => {
                 setVaultStatus("");
                 refreshActivePlaylistInfo();
@@ -2034,21 +2040,8 @@ export default function App() {
                   <path d="M8 14h8" />
                 </svg>
               </span>
-              <span className="vault-tooltip" aria-hidden="true">
-                Vault
-              </span>
             </button>
             <PolyOracleOrb />
-            <button
-              type="button"
-              className="help-link nav-action-btn"
-              aria-label="Open quick tips"
-              onClick={() => setIsTipsOpen(true)}
-            >
-              <span className="help-icon" aria-hidden="true">
-                ?
-              </span>
-            </button>
             <button
               type="button"
               className="layout-link nav-action-btn"
@@ -2059,21 +2052,37 @@ export default function App() {
                 {layoutMode === "grid" ? "≡" : "▦"}
               </span>
             </button>
-            <button
-              type="button"
-              className="gear-link nav-action-btn"
-              aria-label="Open settings panel"
-              onClick={openSettingsPanel}
-            >
-              <span className="gear-icon" aria-hidden="true">
-                ⚙
-              </span>
-            </button>
           </div>
           <div className="hint">
-            {hasTracks ? "Tap tiles to play • Tap artwork to build aura" : "Upload your first track to get started"}
+            {hasTracks ? "Tap tiles to play • Tap artwork to build aura" : "Create/select a playlist, then upload tracks."}
           </div>
         </header>
+
+        {runtimeLibrary && Object.keys(runtimeLibrary.playlistsById || {}).length > 0 && (
+          <section className="playlist-selector" data-ui="true">
+            <label htmlFor="current-playlist-select">Current Playlist</label>
+            <select
+              id="current-playlist-select"
+              value={activePlaylistId || ""}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                if (value === "__create__") {
+                  setNewPlaylistName(getNextDefaultPolyplaylistName());
+                  setIsCreatePlaylistModalOpen(true);
+                  return;
+                }
+                void setActivePlaylist(value);
+              }}
+            >
+              {Object.values(runtimeLibrary.playlistsById).map((playlist) => (
+                <option key={playlist.id} value={playlist.id}>
+                  {playlist.name}
+                </option>
+              ))}
+              <option value="__create__">Create new playlist…</option>
+            </select>
+          </section>
+        )}
 
         {showOpenState && hasTracks && (
           <section className="open-state-card" role="region" aria-label="Welcome">
@@ -2173,6 +2182,59 @@ export default function App() {
           }}
           onSkip={skip}
         />
+      )}
+
+      {isCreatePlaylistModalOpen && (
+        <section className="app-overlay" role="dialog" aria-modal="true" aria-label="Create playlist">
+          <div className="app-overlay-card playlist-create-card">
+            <div className="app-overlay-head">
+              <div className="app-overlay-title">Create your first playlist</div>
+              {!isPlaylistRequired && (
+                <button
+                  type="button"
+                  className="app-overlay-close"
+                  aria-label="Close create playlist"
+                  onClick={() => setIsCreatePlaylistModalOpen(false)}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            <div className="playlist-create-body">
+              <p className="playlist-create-copy">
+                {isPlaylistRequired
+                  ? "Create your first playlist to begin."
+                  : "Create a new playlist and set it active."}
+              </p>
+              <input
+                type="text"
+                value={newPlaylistName}
+                onChange={(event) => setNewPlaylistName(event.currentTarget.value)}
+                placeholder="polyplaylist1"
+                autoFocus
+                data-ui="true"
+              />
+              <div className="playlist-create-actions">
+                {!isPlaylistRequired && (
+                  <button
+                    type="button"
+                    className="vault-btn vault-btn--ghost"
+                    onClick={() => setIsCreatePlaylistModalOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="vault-btn vault-btn--primary"
+                  onClick={() => void createPlaylist(newPlaylistName)}
+                >
+                  Create Playlist
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
       )}
 
       {overlayPage === "settings" && (
@@ -2349,20 +2411,20 @@ export default function App() {
               </div>
 
               <div className="vault-actions">
-                <button type="button" className="vault-btn vault-btn--primary" onClick={() => void exportCurrentPolyplaylist()}>
-                  Export PolyPlaylist
+                <button type="button" className="vault-btn vault-btn--primary" onClick={() => void saveUniverseBackup()}>
+                  Save Universe
                 </button>
                 <button type="button" className="vault-btn vault-btn--secondary" onClick={onStartImportPolyplaylist}>
-                  Import PolyPlaylist
+                  Load Universe
                 </button>
                 <input
-                  ref={importPolyplaylistInputRef}
+                  ref={importUniverseInputRef}
                   type="file"
-                  accept=".polyplaylist,.zip,application/zip,.polyplaylist.json,application/json,.json"
+                  accept="application/zip,.zip"
                   className="hidden"
                   onChange={(event) => {
                     const file = event.currentTarget.files?.[0] ?? null;
-                    void onImportPolyplaylistFile(file);
+                    void onLoadUniverseFile(file);
                     event.currentTarget.value = "";
                   }}
                 />
@@ -2370,26 +2432,26 @@ export default function App() {
 
               {showImportWarning && (
                 <div className="vault-warning" role="alertdialog" aria-modal="true">
-                  <p>Your current playlist has changes not saved to a PolyPlaylist file.</p>
+                  <p>Your current playlist has changes not saved to a Universe backup.</p>
                   <div className="vault-warning__actions">
                     <button
                       type="button"
                       className="vault-btn vault-btn--primary"
                       onClick={async () => {
-                        const didExport = await exportCurrentPolyplaylist();
+                        const didExport = await saveUniverseBackup();
                         if (!didExport) return;
                         setShowImportWarning(false);
-                        importPolyplaylistInputRef.current?.click();
+                        importUniverseInputRef.current?.click();
                       }}
                     >
-                      Export current first
+                      Save universe first
                     </button>
                     <button
                       type="button"
                       className="vault-btn vault-btn--danger"
                       onClick={() => {
                         setShowImportWarning(false);
-                        importPolyplaylistInputRef.current?.click();
+                        importUniverseInputRef.current?.click();
                       }}
                     >
                       Continue without saving
