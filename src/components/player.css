@@ -156,6 +156,14 @@
   overflow: hidden;
 }
 
+.pc-btn--aura-inline {
+  min-width: 92px;
+  min-height: 36px;
+  height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
 .pc-btn--aura-burst {
   animation: pc-aura-flash 1200ms ease-out;
 }

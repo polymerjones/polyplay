@@ -61,6 +61,8 @@ export function PlayerControls({
   const [shuffleAnimState, setShuffleAnimState] = useState<"on" | "off" | null>(null);
   const safeDuration = Math.max(0, duration || 0);
   const safeCurrent = clampTime(currentTime, safeDuration);
+  void onVinylScratch;
+  void onToggleLoopMode;
 
   useEffect(() => {
     const onAuraTrigger = () => {
@@ -230,14 +232,18 @@ export function PlayerControls({
         >
           {dimMode === "mute" ? "MUTE" : "DIM"}
         </button>
-        {onVinylScratch && (
+        {onAuraUp && (
           <button
             type="button"
-            className="pc-btn pc-btn--sm pc-vinyl-btn"
-            aria-label="Vinyl scratch"
-            onClick={onVinylScratch}
+            className="pc-btn pc-btn--primary pc-btn--aura pc-btn--aura-inline"
+            onClick={(event) => {
+              const button = event.currentTarget;
+              emitPinkSparkle(button, { sparks: 7, distance: 24, includeFlash: true });
+              if (navigator.vibrate) navigator.vibrate(12);
+              onAuraUp();
+            }}
           >
-            <span className="pc-vinyl-disc" aria-hidden="true" />
+            Aura +
           </button>
         )}
       </div>
@@ -253,32 +259,12 @@ export function PlayerControls({
             </button>
           </>
         )}
-        {onAuraUp && (
-          <button
-            type="button"
-            className="pc-btn pc-btn--primary pc-btn--aura"
-            onClick={(event) => {
-              const button = event.currentTarget;
-              emitPinkSparkle(button, { sparks: 7, distance: 24, includeFlash: true });
-              if (navigator.vibrate) navigator.vibrate(12);
-              onAuraUp();
-            }}
-          >
-            Aura +
-          </button>
-        )}
         <button
           type="button"
-          className={`pc-btn pc-btn--sm pc-btn--toggle ${loopMode !== "off" ? "is-active" : ""} ${
-            loopMode === "region" ? "is-region" : ""
-          }`.trim()}
-          onClick={onToggleLoopMode}
+          className={`pc-btn pc-btn--sm pc-btn--toggle ${loopMode !== "off" ? "is-active" : ""}`.trim()}
+          onClick={onSetLoop}
         >
-          Loop {loopMode === "track" ? "Track" : loopMode === "region" ? "Region" : "Off"}
-          {loopMode === "region" && <span className="pc-loop-badge">REGION</span>}
-        </button>
-        <button type="button" className="pc-btn pc-btn--sm" onClick={onSetLoop}>
-          Set Loop
+          {loopMode !== "off" ? "Loop Active" : "Set Loop"}
         </button>
         <button type="button" className="pc-btn pc-btn--sm" onClick={onClearLoop}>
           Clear Loop
