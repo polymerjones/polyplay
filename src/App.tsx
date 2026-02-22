@@ -20,7 +20,7 @@ import {
   importPolyplaylist,
   serializePolyplaylistConfig
 } from "./lib/backup";
-import { installDemoPackIfNeeded } from "./lib/demoPack";
+import { seedDemoTracksIfNeeded } from "./lib/demoSeed";
 import {
   appendGratitudeEntry,
   loadGratitudeSettings,
@@ -617,8 +617,8 @@ export default function App() {
     (async () => {
       try {
         await refreshTracks();
-        const seeded = await installDemoPackIfNeeded().catch(() => ({ installed: 0, skipped: 0 }));
-        if (seeded.installed > 0) await refreshTracks();
+        const seedResult = await seedDemoTracksIfNeeded().catch(() => ({ seeded: false, reason: "seed-failed" }));
+        if (seedResult.seeded) await refreshTracks();
       } catch {
         if (!mounted) return;
         setTracks([]);
