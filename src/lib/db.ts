@@ -342,6 +342,7 @@ export async function addTrackToDb(params: {
   }
 
   const library = loadLibrary();
+  ensureAtLeastOnePlaylist(library);
   library.tracksById[trackId] = {
     id: trackId,
     demoId: params.demoId || null,
@@ -595,10 +596,16 @@ export type DeletePlaylistResult = {
 };
 
 function ensureAtLeastOnePlaylist(library: LibraryState): void {
-  if (Object.keys(library.playlistsById).length > 0) return;
-  const fallback = createEmptyLibrary();
-  library.playlistsById = fallback.playlistsById;
-  library.activePlaylistId = fallback.activePlaylistId;
+  const playlistIds = Object.keys(library.playlistsById);
+  if (!playlistIds.length) {
+    const fallback = createEmptyLibrary();
+    library.playlistsById = fallback.playlistsById;
+    library.activePlaylistId = fallback.activePlaylistId;
+    return;
+  }
+  if (!library.activePlaylistId || !library.playlistsById[library.activePlaylistId]) {
+    library.activePlaylistId = playlistIds[0] ?? null;
+  }
 }
 
 function countTrackReferences(playlistsById: LibraryState["playlistsById"]): Map<string, number> {

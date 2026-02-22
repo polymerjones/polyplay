@@ -40,7 +40,7 @@ import {
   setLibrary
 } from "./lib/library";
 import { revokeAllMediaUrls } from "./lib/player/media";
-import { ensureActivePlaylist } from "./lib/playlistState";
+import { createPlaylistInLibrary, ensureActivePlaylist, setActivePlaylistInLibrary } from "./lib/playlistState";
 import type { LibraryState } from "./lib/storage/library";
 import type { LoopMode, LoopRegion, Track } from "./types";
 import type { AmbientFxMode, AmbientFxQuality } from "./fx/ambientFxEngine";
@@ -164,13 +164,6 @@ function isCoarsePointer(): boolean {
     typeof window.matchMedia === "function" &&
     window.matchMedia("(hover: none) and (pointer: coarse)").matches
   );
-}
-
-function makeLocalId(prefix: string): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return `${prefix}_${crypto.randomUUID()}`;
-  }
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function parseLoopByTrack(raw: string | null): Record<string, LoopRegion> {
@@ -319,7 +312,6 @@ export default function App() {
     sourceMismatch: boolean;
   } | null>(null);
   const [showMissingIds, setShowMissingIds] = useState(false);
-  const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
   const [vaultSelectedPlaylistId, setVaultSelectedPlaylistId] = useState<string | null>(null);
   const [vaultInspector, setVaultInspector] = useState<VaultLibraryInspector | null>(null);
   const [runtimeLibrary, setRuntimeLibrary] = useState<LibraryState | null>(null);
@@ -363,6 +355,7 @@ export default function App() {
   const [safeTapBursts, setSafeTapBursts] = useState<SafeTapBurst[]>([]);
   const ambientFxRef = useRef<AmbientFxCanvasHandle | null>(null);
   const fxToastTimeoutRef = useRef<number | null>(null);
+  const activePlaylistId = runtimeLibrary?.activePlaylistId ?? null;
 
   const markActivePlaylistDirty = () => {
     setIsActivePlaylistDirty(true);
@@ -389,17 +382,6 @@ export default function App() {
       return normalizeLibrary(JSON.parse(raw) as unknown);
     } catch {
       return normalizeLibrary(null);
-    }
-  };
-
-  const readPersistedLastActivePlaylistId = (): string | null => {
-    try {
-      const raw = localStorage.getItem(APP_STATE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as { lastActivePlaylistId?: unknown };
-      return typeof parsed.lastActivePlaylistId === "string" ? parsed.lastActivePlaylistId : null;
-    } catch {
-      return null;
     }
   };
 
@@ -430,16 +412,6 @@ export default function App() {
     } catch {
       // Ignore localStorage failures.
     }
-  };
-
-  const refreshActivePlaylistInfo = () => {
-    const source = runtimeLibrary;
-    if (!source) {
-      setActivePlaylistId(null);
-      return;
-    }
-    const activePlaylist = source.activePlaylistId ? source.playlistsById[source.activePlaylistId] : null;
-    setActivePlaylistId(activePlaylist?.id || null);
   };
 
   const buildInspectorPayload = (runtimeSource: LibraryState, storageSource: LibraryState, migratedFromKey: string | null): VaultLibraryInspector => {
@@ -534,16 +506,13 @@ export default function App() {
 
   const refreshTracks = async () => {
     let librarySnapshot = await getLibrary();
-    const preferredActivePlaylistId = readPersistedLastActivePlaylistId();
-    const ensured = ensureActivePlaylist(librarySnapshot, preferredActivePlaylistId);
+    const ensured = ensureActivePlaylist(librarySnapshot);
     librarySnapshot = ensured.library;
     if (ensured.changed) setLibrary(librarySnapshot);
     const playlistIds = Object.keys(librarySnapshot.playlistsById || {});
     const loaded = librarySnapshot.activePlaylistId ? await getTracksFromDb() : [];
     setRuntimeLibrary(librarySnapshot);
     setTracks(loaded);
-    const activePlaylist = librarySnapshot.activePlaylistId ? librarySnapshot.playlistsById[librarySnapshot.activePlaylistId] : null;
-    setActivePlaylistId(activePlaylist?.id || null);
     setIsPlaylistRequired(playlistIds.length === 0);
     if (playlistIds.length === 0) {
       setIsCreatePlaylistModalOpen(true);
@@ -560,30 +529,18 @@ export default function App() {
   };
 
   const setActivePlaylist = async (playlistId: string) => {
-    const library = await getLibrary();
-    const playlist = library.playlistsById[playlistId];
-    if (!playlist) return;
-    playlist.updatedAt = Date.now();
-    library.activePlaylistId = playlistId;
-    setLibrary(library);
+    const source = await getLibrary();
+    const applied = setActivePlaylistInLibrary(source, playlistId);
+    setLibrary(applied.library);
     window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
     await refreshTracks();
   };
 
   const createPlaylist = async (name: string) => {
     const nextName = name.trim() || getNextDefaultPolyplaylistName();
-    const library = await getLibrary();
-    const playlistId = makeLocalId("playlist");
-    const stamp = Date.now();
-    library.playlistsById[playlistId] = {
-      id: playlistId,
-      name: nextName,
-      trackIds: [],
-      createdAt: stamp,
-      updatedAt: stamp
-    };
-    library.activePlaylistId = playlistId;
-    setLibrary(library);
+    const source = await getLibrary();
+    const created = createPlaylistInLibrary(source, nextName);
+    setLibrary(created.library);
     setIsCreatePlaylistModalOpen(false);
     setIsPlaylistRequired(false);
     setNewPlaylistName(getNextDefaultPolyplaylistName());
@@ -2029,7 +1986,6 @@ export default function App() {
               title="Save / Load Universe"
               onClick={() => {
                 setVaultStatus("");
-                refreshActivePlaylistInfo();
                 setOverlayPage("vault");
               }}
             >
