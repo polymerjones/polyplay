@@ -241,7 +241,7 @@ export default function App() {
   const [isGratitudeReactive, setIsGratitudeReactive] = useState(false);
   const [isJournalOpen, setIsJournalOpen] = useState(false);
   const [showJournalTapToast, setShowJournalTapToast] = useState(false);
-  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
+  const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [customThemeSlot, setCustomThemeSlot] = useState<CustomThemeSlot>("crimson");
   const [themeToggleAnim, setThemeToggleAnim] = useState<"on" | "off" | null>(null);
   const [themeBloomActive, setThemeBloomActive] = useState(false);
@@ -760,7 +760,12 @@ export default function App() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(THEME_MODE_KEY);
-      if (saved === "light" || saved === "dark" || saved === "custom") setThemeMode(saved);
+      if (saved === "light" || saved === "dark" || saved === "custom") {
+        setThemeMode(saved);
+      } else {
+        setThemeMode("dark");
+        localStorage.setItem(THEME_MODE_KEY, "dark");
+      }
       const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
       if (slot === "crimson" || slot === "teal" || slot === "amber") setCustomThemeSlot(slot);
     } catch {
