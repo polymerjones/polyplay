@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import logo from "../logo.png";
 import { quickTipsContent } from "./content/quickTips";
 import { APP_TITLE, APP_VERSION } from "./config/version";
+import { AmbientFxCanvas, type AmbientFxCanvasHandle } from "./components/AmbientFxCanvas";
 import { EmptyLibraryWelcome } from "./components/EmptyLibraryWelcome";
 import { BubbleLayer } from "./components/BubbleLayer";
 import { FullscreenPlayer } from "./components/FullscreenPlayer";
@@ -40,6 +41,7 @@ import {
 import { revokeAllMediaUrls } from "./lib/player/media";
 import type { LibraryState } from "./lib/storage/library";
 import type { LoopMode, LoopRegion, Track } from "./types";
+import type { AmbientFxMode, AmbientFxQuality } from "./fx/ambientFxEngine";
 
 type DimMode = "normal" | "dim" | "mute";
 type ThemeMode = "light" | "dark" | "custom";
@@ -97,8 +99,10 @@ const SAFE_TAP_BASE_SIZE = 120;
 const SAFE_TAP_MAX_SIZE = 420;
 const SAFE_TAP_MAX_ACTIVE = 12;
 const SAFE_TAP_SPAWN_THROTTLE_MS = 40;
-const BUBBLE_SPAWN_EVENT = "polyplay:bubble-spawn";
-const SAFE_TAP_BLOCK_SELECTORS = [
+const FX_ENABLED_KEY = "polyplay_fxEnabled_v1";
+const FX_MODE_KEY = "polyplay_fxMode_v1";
+const FX_QUALITY_KEY = "polyplay_fxQuality_v1";
+const FX_INTERACTIVE_GUARD_SELECTORS = [
   "button",
   "a",
   "input",
@@ -108,6 +112,13 @@ const SAFE_TAP_BLOCK_SELECTORS = [
   "[role='button']",
   "[role='menuitem']",
   "[contenteditable='true']",
+  ".playerbar",
+  ".player-controls",
+  ".modal",
+  ".panel",
+  ".admin",
+  ".vault",
+  ".journal",
   ".topbar",
   ".trackRow",
   ".tile-hit",
@@ -122,6 +133,7 @@ const SAFE_TAP_BLOCK_SELECTORS = [
   ".journal-modal-shell",
   ".vault-card",
   ".safe-tap-layer",
+  ".ambient-fx-canvas",
   ".bubble-layer",
   "[data-bubble-safe='off']"
 ].join(", ");
@@ -141,6 +153,14 @@ function clamp01(value: number): number {
 function easeOutQuad(value: number): number {
   const clamped = clamp01(value);
   return 1 - (1 - clamped) * (1 - clamped);
+}
+
+function isCoarsePointer(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(hover: none) and (pointer: coarse)").matches
+  );
 }
 
 function parseLoopByTrack(raw: string | null): Record<string, LoopRegion> {
@@ -217,6 +237,33 @@ export default function App() {
   const [customThemeSlot, setCustomThemeSlot] = useState<CustomThemeSlot>("crimson");
   const [themeToggleAnim, setThemeToggleAnim] = useState<"on" | "off" | null>(null);
   const [themeBloomActive, setThemeBloomActive] = useState(false);
+  const [fxEnabled] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(FX_ENABLED_KEY);
+      return raw !== "false";
+    } catch {
+      return true;
+    }
+  });
+  const [fxMode, setFxMode] = useState<AmbientFxMode>(() => {
+    try {
+      const raw = localStorage.getItem(FX_MODE_KEY);
+      if (raw === "gravity" || raw === "pop" || raw === "splatter") return raw;
+    } catch {
+      // Ignore localStorage failures.
+    }
+    return "gravity";
+  });
+  const [fxQuality] = useState<AmbientFxQuality>(() => {
+    try {
+      const raw = localStorage.getItem(FX_QUALITY_KEY);
+      if (raw === "auto" || raw === "lite" || raw === "high") return raw;
+    } catch {
+      // Ignore localStorage failures.
+    }
+    return "auto";
+  });
+  const [fxToast, setFxToast] = useState<string | null>(null);
   const [isShuffleEnabled, setIsShuffleEnabled] = useState(false);
   const [isRepeatTrackEnabled, setIsRepeatTrackEnabled] = useState(false);
   const [dimMode, setDimMode] = useState<DimMode>("normal");
@@ -301,6 +348,8 @@ export default function App() {
   );
   const safeTapLastSpawnAtRef = useRef(0);
   const [safeTapBursts, setSafeTapBursts] = useState<SafeTapBurst[]>([]);
+  const ambientFxRef = useRef<AmbientFxCanvasHandle | null>(null);
+  const fxToastTimeoutRef = useRef<number | null>(null);
 
   const markActivePlaylistDirty = () => {
     setIsActivePlaylistDirty(true);
@@ -654,6 +703,31 @@ export default function App() {
       // Ignore localStorage failures.
     }
   }, [loopModeByTrack]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(FX_ENABLED_KEY, fxEnabled ? "true" : "false");
+      localStorage.setItem(FX_MODE_KEY, fxMode);
+      localStorage.setItem(FX_QUALITY_KEY, fxQuality);
+    } catch {
+      // Ignore localStorage failures.
+    }
+  }, [fxEnabled, fxMode, fxQuality]);
+
+  useEffect(() => {
+    if (!fxToast) return;
+    if (fxToastTimeoutRef.current !== null) window.clearTimeout(fxToastTimeoutRef.current);
+    fxToastTimeoutRef.current = window.setTimeout(() => {
+      setFxToast(null);
+      fxToastTimeoutRef.current = null;
+    }, 800);
+    return () => {
+      if (fxToastTimeoutRef.current !== null) {
+        window.clearTimeout(fxToastTimeoutRef.current);
+        fxToastTimeoutRef.current = null;
+      }
+    };
+  }, [fxToast]);
 
   useEffect(() => {
     const reducedMotion =
@@ -1674,23 +1748,60 @@ export default function App() {
   const isAnyModalOpen = Boolean(
     overlayPage || isTipsOpen || isJournalOpen || isGratitudeOpen || showSplash || isFullscreenPlayerOpen
   );
-  const bubblesEnabled = !isAnyModalOpen && !isNuking;
-  const onAppPointerDownCapture = (event: PointerEvent<HTMLDivElement>) => {
-    if (!bubblesEnabled) return;
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    if (!(event.target instanceof Element)) return;
-    if (event.target.closest(SAFE_TAP_BLOCK_SELECTORS)) return;
-    window.dispatchEvent(
-      new CustomEvent(BUBBLE_SPAWN_EVENT, {
-        detail: { x: event.clientX, y: event.clientY }
-      })
-    );
+  const bubblesEnabled = false;
+  const isMainPlayerView = !isAnyModalOpen;
+  const fxAllowed = isMainPlayerView && !isNuking && fxEnabled;
+
+  useEffect(() => {
+    if (!fxAllowed) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      if (!(event.target instanceof Element)) return;
+      if (event.target.closest(FX_INTERACTIVE_GUARD_SELECTORS)) return;
+      ambientFxRef.current?.onTap(event.clientX, event.clientY);
+    };
+
+    const enablePointerMove = !isCoarsePointer();
+    const onPointerMove = (event: PointerEvent) => {
+      if (fxMode !== "gravity") return;
+      if (!(event.target instanceof Element)) return;
+      if (event.target.closest(FX_INTERACTIVE_GUARD_SELECTORS)) return;
+      ambientFxRef.current?.onPointerMove(event.clientX, event.clientY);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown, { passive: true });
+    if (enablePointerMove) document.addEventListener("pointermove", onPointerMove, { passive: true });
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      if (enablePointerMove) document.removeEventListener("pointermove", onPointerMove);
+    };
+  }, [fxAllowed, fxMode]);
+
+  const cycleFxMode = () => {
+    const order: AmbientFxMode[] = ["gravity", "pop", "splatter"];
+    const currentIndex = order.indexOf(fxMode);
+    const next = order[(currentIndex + 1) % order.length] ?? "gravity";
+    setFxMode(next);
+    const label = next === "gravity" ? "Gravity" : next === "pop" ? "Pop" : "Splatter";
+    setFxToast(`FX: ${label}`);
   };
 
   return (
     <>
       <div className="app-shell">
         <div className="effects-layer" aria-hidden="true">
+          <AmbientFxCanvas
+            ref={ambientFxRef}
+            allowed={fxAllowed}
+            mode={fxMode}
+            quality={fxQuality}
+            reducedMotion={
+              typeof window !== "undefined" &&
+              typeof window.matchMedia === "function" &&
+              window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            }
+          />
           <div
             className={`track-backdrop ${currentTrack?.artUrl || currentTrack?.artGrad ? "is-visible" : ""}`.trim()}
             style={{
@@ -1746,7 +1857,6 @@ export default function App() {
         <div className="main-ui-layer">
           <div
             className={`app touch-clean ${isNuking ? "is-nuking" : ""}`.trim()}
-            onPointerDownCapture={onAppPointerDownCapture}
             onAnimationEnd={(event) => {
               if (!isNuking) return;
               if (event.target !== event.currentTarget) return;
@@ -1771,6 +1881,16 @@ export default function App() {
               <span className="theme-switch__icon" aria-hidden="true">
                 {themeMode === "light" ? "☀" : themeMode === "dark" ? "◑" : "✦"}
               </span>
+            </button>
+            <button
+              type="button"
+              className={`fx-link nav-action-btn header-icon-btn--hero ${fxEnabled ? "is-active" : ""}`.trim()}
+              aria-label={`Ambient FX mode: ${fxMode}`}
+              title={`FX: ${fxMode}`}
+              onClick={cycleFxMode}
+              data-ui="true"
+            >
+              <span className="fx-icon" aria-hidden="true">FX</span>
             </button>
             <button
               type="button"
@@ -2278,6 +2398,7 @@ export default function App() {
         }}
       />
       {showJournalTapToast && <div className="journal-tap-toast">Journal</div>}
+      {fxToast && <div className="fx-toast">{fxToast}</div>}
         </div>
       </div>
     </>

@@ -111,6 +111,15 @@ body.perf-lite::before {
   overflow: hidden;
 }
 
+.ambient-fx-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 0;
+}
+
 .main-ui-layer {
   position: relative;
   z-index: 10;
@@ -227,6 +236,28 @@ body.perf-lite::before {
 .top-actions {
   display: flex;
   gap: 8px;
+}
+
+.fx-link {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 1px solid rgba(198, 165, 255, 0.42);
+  background: rgba(28, 18, 52, 0.78);
+  color: #f6ecff;
+  box-shadow:
+    0 0 16px rgba(173, 118, 255, 0.32),
+    0 8px 18px rgba(18, 10, 36, 0.3);
+}
+
+.fx-link .fx-icon {
+  font-size: 11px;
+  letter-spacing: 0.35px;
+  font-weight: 800;
+}
+
+.fx-link.is-active {
+  background: radial-gradient(circle at 28% 24%, rgba(168, 111, 255, 0.92), rgba(84, 48, 186, 0.92));
 }
 
 @media (max-width: 760px) {
@@ -3285,6 +3316,21 @@ body.mute-freeze .track-backdrop {
   font-weight: 700;
   padding: 6px 10px;
   z-index: 130;
+}
+
+.fx-toast {
+  position: fixed;
+  right: 14px;
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  z-index: 130;
+  border-radius: 10px;
+  border: 1px solid rgba(201, 174, 255, 0.42);
+  background: rgba(20, 12, 36, 0.9);
+  color: #f2e8ff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+  pointer-events: none;
 }
 
 @keyframes journal-delete-wipe {
