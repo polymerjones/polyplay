@@ -3948,3 +3948,94 @@ body.nuke-flash::after {
 .upload-artwork-crop[hidden] {
   display: none !important;
 }
+
+/* ============================= */
+/* POLYORACLE ORB */
+/* ============================= */
+
+.pp-oracle-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  position: relative;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pp-oracle-orb {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  position: relative;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.98) 0 40%, rgba(255, 255, 255, 0) 60%),
+    radial-gradient(circle at 70% 75%, rgba(190, 120, 255, 0.9) 0 35%, rgba(190, 120, 255, 0) 70%),
+    radial-gradient(circle at 55% 55%, rgba(255, 120, 220, 0.4) 0 45%, rgba(255, 120, 220, 0) 75%);
+  box-shadow:
+    0 0 18px rgba(255, 150, 230, 0.35),
+    0 0 28px rgba(170, 110, 255, 0.35),
+    0 0 40px rgba(255, 255, 255, 0.2);
+  animation: pp-orbPulse 2.8s ease-in-out infinite;
+  transform: translateZ(0);
+}
+
+.pp-oracle-orb::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.25) 0%,
+    rgba(210, 140, 255, 0.18) 35%,
+    rgba(255, 160, 230, 0.1) 55%,
+    rgba(0, 0, 0, 0) 75%
+  );
+  filter: blur(2px);
+  animation: pp-orbHalo 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.pp-oracle-link:hover .pp-oracle-orb {
+  transform: scale(1.05);
+  box-shadow:
+    0 0 22px rgba(255, 150, 230, 0.45),
+    0 0 36px rgba(170, 110, 255, 0.48),
+    0 0 52px rgba(255, 255, 255, 0.25);
+}
+
+.pp-oracle-link:active .pp-oracle-orb {
+  transform: scale(0.95);
+}
+
+@keyframes pp-orbPulse {
+  0%,
+  100% {
+    filter: saturate(1) brightness(1);
+  }
+  50% {
+    filter: saturate(1.15) brightness(1.15);
+  }
+}
+
+@keyframes pp-orbHalo {
+  0%,
+  100% {
+    opacity: 0.65;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.05);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-oracle-orb,
+  .pp-oracle-orb::before {
+    animation: none !important;
+  }
+}

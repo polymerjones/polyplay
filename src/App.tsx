@@ -9,6 +9,7 @@ import { FullscreenPlayer } from "./components/FullscreenPlayer";
 import { GratitudePrompt } from "./components/GratitudePrompt";
 import { JournalModal } from "./components/JournalModal";
 import { MiniPlayerBar } from "./components/MiniPlayerBar";
+import { PolyOracleOrb } from "./components/PolyOracleOrb";
 import { QuickTipsModal } from "./components/QuickTipsModal";
 import { SplashOverlay } from "./components/SplashOverlay";
 import { TrackGrid } from "./components/TrackGrid";
@@ -2037,6 +2038,7 @@ export default function App() {
                 Vault
               </span>
             </button>
+            <PolyOracleOrb />
             <button
               type="button"
               className="help-link nav-action-btn"
