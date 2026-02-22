@@ -1,5 +1,7 @@
+import { generateVideoPoster } from "./artwork/videoPoster";
 import { addTrackToDb } from "./db";
 import { getLibrary, setLibrary } from "./library";
+import { getBlob, putBlob } from "./storage/db";
 
 const DEMO_SEED_DONE_KEY = "polyplay_demo_seed_done_v1";
 const MAX_DEMO_ASSET_BYTES = 30 * 1024 * 1024;
@@ -20,6 +22,60 @@ const DEMO_TRACKS = [
 function makeId(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function makeFallbackPoster(title: string): Blob | null {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = 1200;
+  canvas.height = 1200;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const grad = ctx.createLinearGradient(0, 0, 1200, 1200);
+  grad.addColorStop(0, "#2a1647");
+  grad.addColorStop(1, "#0a1020");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 1200, 1200);
+  ctx.fillStyle = "rgba(255,255,255,0.08)";
+  ctx.beginPath();
+  ctx.arc(360, 360, 280, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(189,132,255,0.95)";
+  ctx.font = "bold 76px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("POLYPLAY", 600, 560);
+  ctx.fillStyle = "rgba(233,242,255,0.85)";
+  ctx.font = "600 44px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.fillText(title || "Demo Track", 600, 640);
+  const dataUrl = canvas.toDataURL("image/png");
+  const bytes = atob(dataUrl.split(",")[1] || "");
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i += 1) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: "image/png" });
+}
+
+async function ensureDemoPostersIfMissing(library: Awaited<ReturnType<typeof getLibrary>>): Promise<number> {
+  let repaired = 0;
+  let touched = false;
+  for (const track of Object.values(library.tracksById || {})) {
+    if (!track?.isDemo) continue;
+    if (track.artKey) continue;
+    if (!track.artVideoKey) continue;
+    const artVideoBlob = await getBlob(track.artVideoKey);
+    if (!artVideoBlob) continue;
+    const posterBlob = (await generateVideoPoster(artVideoBlob).catch(() => null)) ?? makeFallbackPoster(track.title);
+    if (!posterBlob) continue;
+    const posterKey = makeId("poster");
+    await putBlob(posterKey, posterBlob, { type: "image" });
+    track.artKey = posterKey;
+    track.posterBytes = posterBlob.size;
+    track.artworkBytes = Math.max(track.artworkBytes ?? 0, posterBlob.size);
+    track.updatedAt = Date.now();
+    repaired += 1;
+    touched = true;
+  }
+  if (touched) setLibrary(library);
+  return repaired;
 }
 
 function markSeedDone(): void {
@@ -61,6 +117,14 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
       : null;
   const activeTrackCount = activePlaylist?.trackIds?.length ?? 0;
 
+  if (hasAnyDemo) {
+    const repaired = await ensureDemoPostersIfMissing(library);
+    if (repaired > 0) {
+      markSeedDone();
+      return { seeded: false, reason: "repaired-demo-posters" };
+    }
+  }
+
   if (wasSeedDone() && hasAnyDemo) {
     return { seeded: false, reason: "already-seeded" };
   }
@@ -98,13 +162,14 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
   let installed = 0;
   for (const demo of DEMO_TRACKS) {
     const mediaBlob = await fetchBlobBounded(demo.mediaUrl, MAX_DEMO_ASSET_BYTES);
+    const posterBlob = (await generateVideoPoster(mediaBlob).catch(() => null)) ?? makeFallbackPoster(demo.title);
     await addTrackToDb({
       demoId: demo.demoId,
       isDemo: true,
       title: demo.title,
       sub: "Demo",
       audio: mediaBlob,
-      artPoster: null,
+      artPoster: posterBlob,
       artVideo: mediaBlob
     });
     installed += 1;
