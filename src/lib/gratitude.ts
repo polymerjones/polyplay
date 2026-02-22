@@ -191,7 +191,7 @@ export function formatGratitudeExport(entries: GratitudeEntry[]): string {
       ? localDate.toISOString().slice(0, 10)
       : entry.createdAt;
     lines.push(heading);
-    lines.push(`- What I'm grateful for: ${entry.text.trim()}`);
+    lines.push(`- I am grateful for ${entry.text.trim()}`);
     lines.push("");
   }
   return lines.join("\n").trimEnd();

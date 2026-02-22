@@ -4,7 +4,7 @@ import { generateVideoPoster } from "./artwork/videoPoster";
 import { getMediaUrl, revokeAllMediaUrls, revokeMediaUrl } from "./player/media";
 import { isConstrainedMobileDevice } from "./platform";
 import { deleteBlob, getBlob, initDB, listBlobStats, putBlob } from "./storage/db";
-import { createEmptyLibrary, loadLibrary, saveLibrary, type LibraryState, type TrackRecord } from "./storage/library";
+import { loadLibrary, saveLibrary, type LibraryState, type TrackRecord } from "./storage/library";
 import { titleFromFilename } from "./title";
 
 export type DbTrackRecord = {
@@ -535,6 +535,38 @@ export async function clearTracksInDb(): Promise<void> {
   revokeAllMediaUrls();
 }
 
+export async function hardResetLibraryInDb(): Promise<void> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const keys = Object.values(library.tracksById)
+    .flatMap((track) => [track.audioKey, track.artKey, track.artVideoKey])
+    .filter(Boolean) as string[];
+
+  for (const key of keys) {
+    await deleteBlob(key);
+    revokeMediaUrl(key);
+  }
+
+  const ts = now();
+  const playlistId = "default";
+  const reset: LibraryState = {
+    version: library.version,
+    tracksById: {},
+    playlistsById: {
+      [playlistId]: {
+        id: playlistId,
+        name: "polyplaylist1",
+        trackIds: [],
+        createdAt: ts,
+        updatedAt: ts
+      }
+    },
+    activePlaylistId: playlistId
+  };
+  saveLibrary(reset);
+  revokeAllMediaUrls();
+}
+
 export async function hasDemoTrackByDemoId(demoId: string): Promise<boolean> {
   await maybeMigrateLegacyTracks();
   const library = loadLibrary();
@@ -606,9 +638,17 @@ export type DeletePlaylistResult = {
 function ensureAtLeastOnePlaylist(library: LibraryState): void {
   const playlistIds = Object.keys(library.playlistsById);
   if (!playlistIds.length) {
-    const fallback = createEmptyLibrary();
-    library.playlistsById = fallback.playlistsById;
-    library.activePlaylistId = fallback.activePlaylistId;
+    const ts = now();
+    library.playlistsById = {
+      default: {
+        id: "default",
+        name: "polyplaylist1",
+        trackIds: [],
+        createdAt: ts,
+        updatedAt: ts
+      }
+    };
+    library.activePlaylistId = "default";
     return;
   }
   if (!library.activePlaylistId || !library.playlistsById[library.activePlaylistId]) {

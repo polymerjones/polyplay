@@ -5,7 +5,6 @@ import { GratitudeEntriesModal } from "./GratitudeEntriesModal";
 import { GratitudeHubPanel } from "./GratitudeHubPanel";
 import {
   addTrackToDb,
-  clearTracksInDb,
   createPlaylistInDb,
   deletePlaylistInDb,
   getStorageUsageSummary,
@@ -16,6 +15,7 @@ import {
   loadLibraryFromAppSourceOfTruth,
   removeDemoTracksInDb,
   removeTrackFromDb,
+  hardResetLibraryInDb,
   renamePlaylistInDb,
   renameTrackInDb,
   replaceAudioInDb,
@@ -186,6 +186,7 @@ export function AdminApp() {
   const importPolyplaylistInputRef = useRef<HTMLInputElement | null>(null);
   const [backupProgress, setBackupProgress] = useState("");
   const [isBackupBusy, setIsBackupBusy] = useState(false);
+  const SHOW_TRANSFER_LANES = false;
 
   const hasTracks = tracks.length > 0;
 
@@ -720,12 +721,14 @@ export function AdminApp() {
       return;
     }
 
-    setStatus("Clearing playlist...");
+    setStatus("Resetting library...");
     try {
-      await clearTracksInDb();
-      setStatus("All tracks deleted.");
+      await hardResetLibraryInDb();
+      setStatus("Library reset complete.");
       await refreshTracks();
       await refreshStorage();
+      await refreshPlaylists();
+      emitLibraryUpdated();
     } catch {
       setStatus("Nuke failed.");
     }
@@ -816,10 +819,16 @@ export function AdminApp() {
 
   const onDeleteGratitudeEntry = (entry: GratitudeEntry) => {
     if (!window.confirm("Delete this gratitude entry?")) return;
-    deleteGratitudeEntry(entry.id);
-    setGratitudeEntries(getGratitudeEntries());
+    const previousEntries = gratitudeEntries.slice();
+    setGratitudeEntries((prev) => prev.filter((item) => item.id !== entry.id));
     if (selectedGratitudeEntry?.id === entry.id) setSelectedGratitudeEntry(null);
-    setStatus("Gratitude entry deleted.");
+    try {
+      deleteGratitudeEntry(entry.id);
+      setStatus("Gratitude entry deleted.");
+    } catch {
+      setGratitudeEntries(previousEntries);
+      setStatus("Failed to delete gratitude entry.");
+    }
   };
 
   const onCopyAllGratitude = async () => {
@@ -860,10 +869,11 @@ export function AdminApp() {
 
   const onExportConfig = () => {
     try {
+      setStatus("Preparing download…");
       const content = serializeConfig(buildConfigSnapshot());
       const blob = new Blob([content], { type: "application/json;charset=utf-8" });
       downloadBlobFile(blob, getConfigExportFilename());
-      setStatus("Config exported.");
+      setStatus("Download started. If you canceled the dialog, nothing was saved.");
     } catch {
       setStatus("Config export failed.");
     }
@@ -894,12 +904,13 @@ export function AdminApp() {
     if (isBackupBusy) return;
     setIsBackupBusy(true);
     setBackupProgress("Preparing backup…");
+    setStatus("Preparing download…");
     try {
       const result = await exportFullBackup((progress) => {
         setBackupProgress(progress.label);
       });
       downloadBlobFile(result.blob, getFullBackupFilename());
-      setStatus(`Full backup exported (${result.trackCount} tracks).`);
+      setStatus(`Download started (${result.trackCount} tracks). If you canceled the dialog, nothing was saved.`);
       setBackupProgress("");
     } catch (error) {
       if (error instanceof BackupSizeError) {
@@ -945,10 +956,11 @@ export function AdminApp() {
     if (userInput === null) return;
     const playlistName = userInput.trim() || suggestedName;
     try {
+      setStatus("Preparing download…");
       const content = await serializePolyplaylistConfig(playlistName);
       const blob = new Blob([content], { type: "application/json;charset=utf-8" });
       downloadBlobFile(blob, getPolyplaylistConfigFilename());
-      setStatus(`PolyPlaylist exported as "${playlistName}".`);
+      setStatus(`Download started for "${playlistName}". If you canceled the dialog, nothing was saved.`);
     } catch (error) {
       setStatus(`PolyPlaylist export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
@@ -1096,6 +1108,8 @@ export function AdminApp() {
   const onDeletePlaylist = async (playlist: PlaylistRow) => {
     if (!window.confirm(`Delete "${playlist.name}"? Tracks only in this playlist will also be removed.`)) return;
     setPlaylistBusyId(playlist.id);
+    const previousPlaylists = playlists.slice();
+    setPlaylists((prev) => prev.filter((item) => item.id !== playlist.id));
     try {
       const result = await deletePlaylistInDb(playlist.id);
       setStatus(
@@ -1110,6 +1124,7 @@ export function AdminApp() {
         window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
       }
     } catch (error) {
+      setPlaylists(previousPlaylists);
       setStatus(`Playlist delete failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setPlaylistBusyId(null);
@@ -1177,10 +1192,15 @@ export function AdminApp() {
         <div className="flex items-center gap-2">
           <a
             href="/index.html"
-            className="rounded-xl border border-slate-300/20 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
+            className="admin-back-link rounded-xl border border-slate-300/20 bg-slate-800/70 px-3 py-2 text-sm text-slate-100"
             onClick={onBackToPlayer}
           >
-            Back to Player
+            <span className="admin-back-link__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M15 5l-7 7 7 7" />
+              </svg>
+            </span>
+            <span>Back to Player</span>
           </a>
         </div>
       </header>
@@ -1201,6 +1221,7 @@ export function AdminApp() {
             <TransferLaneDropZone
               label="Audio (.wav/.mp3)"
               tooltip="Fallback uploader for direct track creation."
+              iconType="audio"
               accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,.wav,.mp3,.m4a,.aac,.mp4"
               selectedFileName={uploadAudio?.name}
               onFileSelected={(file) => void onPickUploadAudio(file)}
@@ -1209,6 +1230,7 @@ export function AdminApp() {
             <TransferLaneDropZone
               label="Artwork (image, mp4, or mov, optional)"
               tooltip="Fallback artwork picker for manual upload flow."
+              iconType="artwork"
               accept="image/*,video/mp4,video/quicktime,.mov"
               selectedFileName={uploadArt?.name}
               onFileSelected={(file) => void onPickUploadArtwork(file)}
@@ -1271,6 +1293,7 @@ export function AdminApp() {
               <TransferLaneDropZone
                 label="New artwork file"
                 tooltip="Manual replace: choose artwork for the selected track."
+                iconType="artwork"
                 accept="image/*,video/mp4,video/quicktime,.mov"
                 selectedFileName={selectedArtworkFile?.name}
                 onFileSelected={(file) => void onPickSelectedArtwork(file)}
@@ -1328,6 +1351,7 @@ export function AdminApp() {
               <TransferLaneDropZone
                 label="Replacement audio file"
                 tooltip="Manual replace: choose new audio for the selected track."
+                iconType="audio"
                 accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,.wav,.mp3,.m4a,.aac,.mp4"
                 selectedFileName={selectedAudioFile?.name}
                 onFileSelected={(file) => void onPickSelectedAudio(file)}
@@ -1359,6 +1383,7 @@ export function AdminApp() {
           </div>
         </div>
 
+        {SHOW_TRANSFER_LANES && (
         <div className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3 lg:col-span-2">
           <h2 className="mb-2 text-base font-semibold text-slate-100">Transfer Lanes</h2>
           <div className="mb-2 grid gap-2 sm:grid-cols-2">
@@ -1402,6 +1427,7 @@ export function AdminApp() {
             <TransferLaneDropZone
               label="Audio Track"
               tooltip="Drop audio files here to create a new track or replace the selected track’s audio."
+              iconType="audio"
               accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,.wav,.mp3,.m4a,.aac,.mp4"
               selectedFileName={audioTransferMode === "replace" ? selectedAudioFile?.name : uploadAudio?.name}
               busy={isAudioLaneBusy}
@@ -1415,6 +1441,7 @@ export function AdminApp() {
             <TransferLaneDropZone
               label="Artwork (Image or Video Artwork Loop)"
               tooltip="Drop images or short video loops here to set artwork for the selected track."
+              iconType="artwork"
               hint="Video loops ≤20s • ≤60MB mobile"
               accept="image/*,video/mp4,video/quicktime,.mov,.jpg,.jpeg,.png,.webp"
               selectedFileName={selectedArtworkFile?.name || uploadArt?.name}
@@ -1427,6 +1454,7 @@ export function AdminApp() {
             />
           </div>
         </div>
+        )}
       </section>
 
       <GratitudeHubPanel

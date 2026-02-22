@@ -4,6 +4,7 @@ type Props = {
   label: string;
   accept: string;
   tooltip: string;
+  iconType?: "audio" | "artwork";
   hint?: string;
   selectedFileName?: string;
   disabled?: boolean;
@@ -15,6 +16,7 @@ export function TransferLaneDropZone({
   label,
   accept,
   tooltip,
+  iconType,
   hint,
   selectedFileName,
   disabled = false,
@@ -70,7 +72,7 @@ export function TransferLaneDropZone({
   };
 
   return (
-    <div className="transfer-lane">
+    <div className={`transfer-lane ${iconType ? `transfer-lane--${iconType}` : ""}`.trim()}>
       <div className="transfer-lane__head">
         <div className="transfer-lane__label">{label}</div>
         <button
@@ -101,6 +103,7 @@ export function TransferLaneDropZone({
         onDrop={(event) => void onDrop(event)}
         disabled={disabled || busy}
       >
+        <span className="transfer-lane__icon-bg" aria-hidden="true" />
         <span className="transfer-lane__title">
           {busy ? "Processing..." : "Drag and drop file here or click to browse"}
         </span>
