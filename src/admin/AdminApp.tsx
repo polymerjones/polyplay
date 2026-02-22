@@ -1012,21 +1012,25 @@ export function AdminApp() {
     try {
       const result = await restoreDemoTracks();
       setStatus(
-        result.restored > 0
+        result.failed > 0 && result.restored === 0
+          ? `Restore failed for ${result.failed} demo track${result.failed === 1 ? "" : "s"}.`
+          : result.restored > 0
           ? `Restored ${result.restored} demo track${result.restored === 1 ? "" : "s"}.${
               result.repaired > 0 ? ` Repaired ${result.repaired} poster${result.repaired === 1 ? "" : "s"}.` : ""
             }`
           : result.repaired > 0
             ? `Demo tracks already existed. Repaired ${result.repaired} poster${result.repaired === 1 ? "" : "s"}.`
-            : "Demo tracks are already restored."
+            : result.failed > 0
+              ? `Demo restore partial: ${result.failed} failed, ${result.skipped} skipped.`
+              : "Demo tracks are already restored."
       );
       await refreshTracks();
       await refreshStorage();
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
       }
-    } catch {
-      setStatus("Failed to restore demo tracks.");
+    } catch (error) {
+      setStatus(`Failed to restore demo tracks: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   };
 
