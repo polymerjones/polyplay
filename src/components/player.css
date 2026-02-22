@@ -746,8 +746,8 @@
 
 .fullscreen-player-shell__close {
   position: absolute;
-  top: 14px;
-  left: 14px;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  left: max(12px, env(safe-area-inset-left, 0px));
   z-index: 3;
   width: 40px;
   height: 40px;
@@ -755,6 +755,21 @@
   border-radius: var(--pc-radius-pill);
   color: #fff;
   background: rgba(12, 14, 20, 0.56);
+}
+
+.fullscreen-player-shell__close-bottom {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  height: 42px;
+  min-width: 92px;
+  padding: 0 16px;
+  margin: 4px auto calc(env(safe-area-inset-bottom, 0px) + 8px);
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(12, 14, 20, 0.72);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
 }
 
 .fullscreen-player-shell__art {
@@ -968,6 +983,16 @@ body.perf-lite .fullscreen-player-shell__art.is-aura-flash::after {
 
   .pc-row > * {
     flex: 0 0 auto;
+  }
+
+  .fullscreen-player-shell__close {
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
+  }
+
+  .fullscreen-player-shell__close-bottom {
+    display: inline-flex;
   }
 }
 

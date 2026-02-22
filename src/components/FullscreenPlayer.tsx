@@ -194,7 +194,16 @@ export function FullscreenPlayer({
   };
 
   return (
-    <section className="fullscreen-player-shell" role="dialog" aria-modal="true" aria-label="Fullscreen player">
+    <section
+      className="fullscreen-player-shell"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Fullscreen player"
+      onPointerDown={(event) => {
+        const target = event.target as HTMLElement | null;
+        if (!target?.closest(".fullscreen-player-shell__content")) onClose();
+      }}
+    >
       <div className="fullscreen-player-shell__bg" style={artStyle} aria-hidden="true" />
 
       <button className="fullscreen-player-shell__close" aria-label="Close fullscreen player" onClick={onClose}>
@@ -269,6 +278,15 @@ export function FullscreenPlayer({
             onSetLoopRange={onSetLoopRange}
           />
         )}
+
+        <button
+          type="button"
+          className="fullscreen-player-shell__close-bottom"
+          aria-label="Close fullscreen player"
+          onClick={onClose}
+        >
+          Done
+        </button>
       </div>
     </section>
   );
