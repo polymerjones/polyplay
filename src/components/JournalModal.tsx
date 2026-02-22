@@ -36,7 +36,7 @@ const JOURNAL_BACKGROUNDS: JournalBackground[] = [
   { id: "2", src: "/clouds2waudio.mov" }
 ];
 
-const JOURNAL_VERSES = [
+const DEFAULT_JOURNAL_VERSES = [
   "Be still, and know that I am God. — Psalm 46:10",
   "I can do all things through Christ who strengthens me. — Philippians 4:13",
   "The Lord is my shepherd; I shall not want. — Psalm 23:1",
@@ -102,11 +102,12 @@ export function JournalModal({ open, onClose }: Props) {
   const [selectedBgId, setSelectedBgId] = useState<"1" | "2">(JOURNAL_BACKGROUNDS[0]?.id || "1");
   const [videoFailed, setVideoFailed] = useState(false);
   const [query, setQuery] = useState("");
+  const [verses, setVerses] = useState<string[]>(DEFAULT_JOURNAL_VERSES);
   const [verseIndex, setVerseIndex] = useState<number>(() => {
     try {
       const raw = localStorage.getItem(JOURNAL_VERSE_INDEX_KEY);
       const parsed = Number(raw);
-      if (Number.isFinite(parsed) && parsed >= 0) return parsed % JOURNAL_VERSES.length;
+      if (Number.isFinite(parsed) && parsed >= 0) return parsed % DEFAULT_JOURNAL_VERSES.length;
     } catch {
       // Ignore localStorage failures.
     }
@@ -142,6 +143,36 @@ export function JournalModal({ open, onClose }: Props) {
     if (!isComposerOpen) return;
     composerRef.current?.focus();
   }, [isComposerOpen]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch("/content/journal-verses.json", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json()) as unknown;
+        if (!Array.isArray(payload)) return;
+        const next = payload
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0);
+        if (!next.length || cancelled) return;
+        setVerses(next);
+      } catch {
+        // Keep fallback verses.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setVerseIndex((prev) => {
+      const safeLength = Math.max(1, verses.length);
+      return prev % safeLength;
+    });
+  }, [verses]);
 
   useEffect(() => {
     if (!open) return;
@@ -215,6 +246,7 @@ export function JournalModal({ open, onClose }: Props) {
   const isWritingActive = isComposerOpen || editingEntryId !== null;
   const reducedMotion = useMemo(() => prefersReducedMotion(), []);
   const sparkles = useMemo(() => (reducedMotion ? [] : createSparkles(14)), [reducedMotion, selectedBgId]);
+  const currentVerse = verses[verseIndex % Math.max(1, verses.length)] || DEFAULT_JOURNAL_VERSES[0];
 
   useEffect(() => {
     const video = backgroundVideoRef.current;
@@ -330,11 +362,11 @@ export function JournalModal({ open, onClose }: Props) {
           <div className="journalControlRow">
             <div className="journalVerseCard">
               <strong>Verse</strong>
-              <p>{JOURNAL_VERSES[verseIndex % JOURNAL_VERSES.length]}</p>
+              <p>{currentVerse}</p>
               <button
                 type="button"
                 className="journalVerseBtn"
-                onClick={() => setVerseIndex((prev) => (prev + 1) % JOURNAL_VERSES.length)}
+                onClick={() => setVerseIndex((prev) => (prev + 1) % Math.max(1, verses.length))}
               >
                 New Verse
               </button>
@@ -375,7 +407,7 @@ export function JournalModal({ open, onClose }: Props) {
                 onClick={() => {
                   const trimmed = newEntryText.trim();
                   if (!trimmed) return;
-                  createEntry(trimmed, JOURNAL_VERSES[verseIndex % JOURNAL_VERSES.length]);
+                  createEntry(trimmed, currentVerse);
                   setEntries(listEntries());
                   setNewEntryText("");
                   setIsComposerOpen(false);
