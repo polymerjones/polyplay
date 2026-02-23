@@ -103,7 +103,21 @@ export function TransferLaneDropZone({
         onDrop={(event) => void onDrop(event)}
         disabled={disabled || busy}
       >
-        <span className="transfer-lane__icon-bg" aria-hidden="true" />
+        <span className="transfer-lane__icon-bg" aria-hidden="true">
+          {iconType === "audio" ? (
+            <svg viewBox="0 0 24 24" className="transfer-lane__icon-svg">
+              <path d="M9 18V6l10-2v12" />
+              <circle cx="6" cy="18" r="3" />
+              <circle cx="16" cy="16" r="3" />
+            </svg>
+          ) : iconType === "artwork" ? (
+            <svg viewBox="0 0 24 24" className="transfer-lane__icon-svg">
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <circle cx="9" cy="10" r="1.6" />
+              <path d="M5 17l5-5 4 4 2-2 3 3" />
+            </svg>
+          ) : null}
+        </span>
         <span className="transfer-lane__title">
           {busy ? "Processing..." : "Drag and drop file here or click to browse"}
         </span>
