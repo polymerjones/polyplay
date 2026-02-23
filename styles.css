@@ -3758,17 +3758,17 @@ body.mute-freeze .track-backdrop {
 
 .transfer-lane__icon-bg {
   position: absolute;
-  inset: 10px;
+  inset: 8px 14px 8px 52%;
   display: grid;
-  place-items: center;
-  opacity: 0.12;
+  place-items: center end;
+  opacity: 0.15;
   pointer-events: none;
 }
 
 .transfer-lane__icon-svg {
-  width: min(68%, 210px);
+  width: min(100%, 168px);
   height: auto;
-  max-height: 86%;
+  max-height: 82%;
   stroke: rgba(255, 255, 255, 0.6);
   fill: none;
   stroke-width: 1.5;
