@@ -110,14 +110,29 @@ export function MiniPlayerBar({
           {track?.missingAudio && <div className="mini-player-bar__sub">Missing audio</div>}
           {track?.missingArt && <div className="mini-player-bar__sub">Missing artwork</div>}
         </div>
-        <button
-          type="button"
-          className="mini-player-bar__compact-toggle"
-          aria-label={isCompact ? "Expand player" : "Collapse player"}
-          onClick={onToggleCompact}
-        >
-          <span aria-hidden="true">{isCompact ? "▴" : "▾"}</span>
-        </button>
+        <div className="mini-player-bar__header-actions">
+          {track && (
+            <button
+              type="button"
+              className="mini-player-bar__aura-toggle"
+              aria-label="Increase aura"
+              onClick={() => {
+                triggerArtworkFlash();
+                onAuraUp();
+              }}
+            >
+              Aura +
+            </button>
+          )}
+          <button
+            type="button"
+            className="mini-player-bar__compact-toggle"
+            aria-label={isCompact ? "Expand player" : "Collapse player"}
+            onClick={onToggleCompact}
+          >
+            <span aria-hidden="true">{isCompact ? "▴" : "▾"}</span>
+          </button>
+        </div>
       </div>
 
       <PlayerControls
@@ -148,6 +163,7 @@ export function MiniPlayerBar({
               }
             : undefined
         }
+        showAuraInline={false}
         onSkip={onSkip}
       />
 

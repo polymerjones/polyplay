@@ -12,7 +12,6 @@ import {
   getTrackStorageRows,
   getTrackRowsFromDb,
   isStorageCapError,
-  loadLibraryFromAppSourceOfTruth,
   removeDemoTracksInDb,
   removeTrackFromDb,
   hardResetLibraryInDb,
@@ -42,18 +41,17 @@ import {
   saveGratitudeSettings
 } from "../lib/gratitude";
 import {
-  applyImportedPolyplaylistConfig,
   BackupSizeError,
   applyImportedConfig,
   buildConfigSnapshot,
   exportFullBackup,
+  exportPolyplaylist,
   getConfigExportFilename,
   getFullBackupFilename,
-  getNextDefaultPolyplaylistName,
-  getPolyplaylistConfigFilename,
+  getPolyplaylistFilename,
   importFullBackup,
+  importPolyplaylist,
   parseConfigImportText,
-  serializePolyplaylistConfig,
   serializeConfig
 } from "../lib/backup";
 import { titleFromFilename } from "../lib/title";
@@ -61,6 +59,9 @@ import { Button } from "../components/button";
 
 const HAS_IMPORTED_KEY = "polyplay_hasImported";
 const HAS_ONBOARDED_KEY = "polyplay_hasOnboarded_v1";
+const SPLASH_SEEN_KEY = "polyplay_hasSeenSplash";
+const SPLASH_SESSION_KEY = "polyplay_hasSeenSplashSession";
+const OPEN_STATE_SEEN_KEY = "polyplay_open_state_seen_v102";
 const THEME_MODE_KEY = "polyplay_themeMode";
 const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
 
@@ -775,16 +776,23 @@ export function AdminApp() {
     };
   }, [isNukePromptOpen]);
 
-  const onResetOnboarding = () => {
-    if (!window.confirm("Reset onboarding and splash for this browser?")) return;
+  const onFactoryReset = async () => {
+    if (!window.confirm("Factory Reset will delete all playlists and tracks, and reset onboarding. Continue?")) return;
+    setStatus("Running factory reset...");
     try {
-      localStorage.removeItem("polyplay_hasSeenSplash");
-      localStorage.removeItem("polyplay_open_state_seen_v102");
+      await hardResetLibraryInDb();
+      localStorage.removeItem(SPLASH_SEEN_KEY);
+      localStorage.removeItem(OPEN_STATE_SEEN_KEY);
       localStorage.removeItem(HAS_IMPORTED_KEY);
       localStorage.removeItem(HAS_ONBOARDED_KEY);
-      setStatus("Onboarding reset. Reload the player to see the splash again.");
+      sessionStorage.removeItem(SPLASH_SESSION_KEY);
+      await refreshTracks();
+      await refreshStorage();
+      await refreshPlaylists();
+      emitLibraryUpdated();
+      setStatus("Factory reset complete. All playlists/content removed and onboarding reset.");
     } catch {
-      setStatus("Could not reset onboarding.");
+      setStatus("Factory reset failed.");
     }
   };
 
@@ -951,52 +959,33 @@ export function AdminApp() {
   };
 
   const onExportPolyplaylist = async () => {
-    const suggestedName = getNextDefaultPolyplaylistName();
-    const userInput = window.prompt("Name your PolyPlaylist", suggestedName);
-    if (userInput === null) return;
-    const playlistName = userInput.trim() || suggestedName;
     try {
+      setIsBackupBusy(true);
       setStatus("Preparing download…");
-      const content = await serializePolyplaylistConfig(playlistName);
-      const blob = new Blob([content], { type: "application/json;charset=utf-8" });
-      downloadBlobFile(blob, getPolyplaylistConfigFilename());
-      setStatus(`Download started for "${playlistName}". If you canceled the dialog, nothing was saved.`);
+      const result = await exportPolyplaylist();
+      downloadBlobFile(result.blob, getPolyplaylistFilename(result.playlistName));
+      setStatus(
+        `PolyPlaylist exported: ${result.trackCount} track${result.trackCount === 1 ? "" : "s"} from "${result.playlistName}".`
+      );
     } catch (error) {
       setStatus(`PolyPlaylist export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      setIsBackupBusy(false);
     }
   };
 
   const onImportPolyplaylistFile = async (file: File | null) => {
     if (!file) return;
     try {
-      const librarySnapshot = await loadLibraryFromAppSourceOfTruth();
-      if (tracks.length > 0 && Object.keys(librarySnapshot.tracksById).length === 0) {
-        console.warn("[polyplaylist] Import reading empty library — source mismatch bug", {
-          renderedTrackCount: tracks.length,
-          localTracksByIdCount: 0
-        });
-        setStatus("Import blocked: library source mismatch (empty tracksById while UI has tracks).");
-        return;
-      }
-      const content = await file.text();
-      const summary = await applyImportedPolyplaylistConfig(content, {
-        targetPlaylistId: librarySnapshot.activePlaylistId
-      });
-      if (summary.sourceMismatch) {
-        setStatus("Vault cannot see local tracks. This is a library source mismatch. Press Refresh Library.");
-        return;
-      }
+      setIsBackupBusy(true);
+      const summary = await importPolyplaylist(file);
       await refreshTracks();
       await refreshPlaylists();
       await refreshStorage();
-      const missingPreview =
-        summary.missingTrackIds.length > 0
-          ? ` Missing IDs: ${summary.missingTrackIds.slice(0, 5).join(", ")}${
-              summary.missingTrackIds.length > 5 ? "…" : ""
-            }.`
-          : "";
       setStatus(
-        `PolyPlaylist applied. Updated ${summary.updatedTrackCount} tracks. Missing ${summary.missingTrackIds.length} tracks.${missingPreview}`
+        `PolyPlaylist imported to "${summary.playlistName}" (${summary.importedTracks} track${
+          summary.importedTracks === 1 ? "" : "s"
+        }, ${summary.importedMediaFiles} media files).`
       );
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type: "polyplay:config-imported" }, window.location.origin);
@@ -1004,6 +993,8 @@ export function AdminApp() {
       }
     } catch (error) {
       setStatus(`PolyPlaylist import failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      setIsBackupBusy(false);
     }
   };
 
@@ -1644,7 +1635,7 @@ export function AdminApp() {
         <input
           ref={importPolyplaylistInputRef}
           type="file"
-          accept=".polyplaylist.json,application/json,.json"
+          accept=".polyplaylist,application/zip,.zip"
           className="hidden"
           onChange={(event) => {
             const file = event.currentTarget.files?.[0] ?? null;
@@ -1812,8 +1803,8 @@ export function AdminApp() {
           <Button variant="secondary" onClick={() => void refreshTracks()}>
             Refresh Tracks
           </Button>
-          <Button variant="secondary" onClick={onResetOnboarding}>
-            Reset Onboarding
+          <Button variant="secondary" onClick={() => void onFactoryReset()}>
+            Factory Reset
           </Button>
           <Button variant="danger" onClick={onResetAura} disabled={!hasTracks}>
             Reset Aura

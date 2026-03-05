@@ -253,6 +253,25 @@ main,
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
 
+.upload-link {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: #f3f2ff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: linear-gradient(135deg, rgba(121, 84, 245, 0.54), rgba(64, 136, 255, 0.36));
+  border: 1px solid rgba(178, 150, 255, 0.58);
+  box-shadow:
+    0 0 16px rgba(149, 106, 255, 0.28),
+    0 8px 18px rgba(16, 10, 34, 0.3);
+}
+
 .top-actions {
   display: flex;
   gap: 8px;
@@ -929,6 +948,98 @@ body.gratitude-reactive .track-backdrop {
   max-width: 980px;
   margin: 0 auto;
   width: 100%;
+}
+
+.track-grid--paged {
+  display: block;
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
+.track-grid-pages {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 100%;
+  gap: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.track-grid-pages::-webkit-scrollbar {
+  display: none;
+}
+
+.track-grid-page {
+  scroll-snap-align: start;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-content: start;
+  min-height: 100%;
+}
+
+.track-grid--paged .tile {
+  touch-action: manipulation;
+}
+
+.track-grid--paged .tile-title {
+  font-size: 0.66rem;
+  letter-spacing: 0.2px;
+  line-height: 1.2;
+}
+
+.track-grid--paged .meta {
+  padding: 8px 8px 8px;
+  gap: 0;
+  background: linear-gradient(180deg, rgba(8, 12, 18, 0) 14%, rgba(8, 12, 18, 0.72) 58%, rgba(8, 12, 18, 0.9) 100%);
+}
+
+.track-grid--paged .aura-like {
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: rgba(8, 12, 18, 0.5);
+  border-color: rgba(200, 140, 255, 0.35);
+}
+
+.track-grid--paged .aura-icon {
+  width: 11px;
+  height: 11px;
+}
+
+.track-grid--paged .art {
+  background:
+    radial-gradient(150px 120px at 18% 16%, rgba(142, 102, 240, 0.42), transparent 62%),
+    radial-gradient(160px 130px at 82% 84%, rgba(72, 176, 255, 0.26), transparent 64%),
+    linear-gradient(145deg, #171d2d, #0f141f);
+  background-size: cover;
+  background-position: center;
+}
+
+.track-grid-pager {
+  margin: 8px auto 2px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.track-grid-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 0;
+  padding: 0;
+  background: rgba(232, 239, 255, 0.32);
+}
+
+.track-grid-dot.is-active {
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .tile {
@@ -4125,7 +4236,10 @@ body.nuke-flash::after {
   display: grid;
   grid-template-columns: 1fr;
   gap: 8px;
-  padding: clamp(10px, 1.2vw, 16px);
+  padding:
+    calc(clamp(10px, 1.2vw, 16px) + env(safe-area-inset-top, 0px))
+    clamp(10px, 1.2vw, 16px)
+    clamp(10px, 1.2vw, 16px);
   min-height: unset;
   max-height: min(25vh, 220px);
 }
@@ -4293,5 +4407,223 @@ body.nuke-flash::after {
   .topbar-tier--controls {
     justify-content: start;
     grid-template-columns: repeat(auto-fit, minmax(36px, max-content));
+  }
+
+  .track-grid-page {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
+
+/* ===== YTM-style deterministic tiles grid ===== */
+.ytm-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px 16px 16px;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+/* Force true row-list behavior (single column, tight spacing) */
+.track-grid.track-grid--list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px 16px calc(140px + env(safe-area-inset-bottom, 0px));
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.track-grid.track-grid--list .trackRow {
+  width: 100%;
+  height: 86px;
+  min-height: 86px;
+  max-height: 86px;
+  padding: 8px 10px;
+  column-gap: 14px;
+}
+
+.track-grid.track-grid--list .trackRow__art,
+.track-grid.track-grid--list .trackRow__thumb {
+  width: 66px;
+  min-width: 66px;
+  height: 66px;
+}
+
+.ytm-tile {
+  position: relative;
+  border-radius: 16px;
+  overflow: visible;
+  aspect-ratio: 1 / 1;
+  min-height: 150px;
+  background: linear-gradient(145deg, rgba(28, 34, 50, 0.92), rgba(14, 18, 28, 0.9));
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.26);
+  isolation: isolate;
+  pointer-events: auto;
+}
+
+.ytm-tile.is-active {
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.26),
+    0 0 0 1px rgba(178, 140, 255, 0.62),
+    0 0 22px rgba(155, 109, 255, 0.34);
+}
+
+.ytm-tile.has-aura::before {
+  content: "";
+  position: absolute;
+  inset: -16px;
+  border-radius: 22px;
+  z-index: 0;
+  pointer-events: none;
+  opacity: calc(0.22 + (var(--tile-aura-level, 0) * 0.62));
+  background:
+    radial-gradient(78% 92% at 36% 50%, rgba(163, 112, 255, 0.4), rgba(163, 112, 255, 0) 70%),
+    radial-gradient(60% 72% at 64% 48%, rgba(118, 82, 240, 0.32), rgba(118, 82, 240, 0) 72%);
+  filter: blur(14px);
+}
+
+.ytm-tile.has-aura {
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.26),
+    0 0 calc(14px + (var(--tile-aura-level, 0) * 24px)) rgba(160, 108, 255, calc(0.24 + (var(--tile-aura-level, 0) * 0.46)));
+}
+
+.ytm-tile.is-active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(120deg, rgba(140, 90, 230, 0.24), rgba(110, 255, 255, 0.16), rgba(180, 120, 255, 0.26)),
+    radial-gradient(220px 120px at 25% 20%, rgba(255, 255, 255, 0.17), transparent 60%);
+  animation: ytm-neon-strobe 3.6s ease-in-out infinite;
+}
+
+.ytm-tile.is-aura-hit {
+  animation: ytm-tile-aura-hit 360ms ease-out;
+}
+
+.ytm-tile-hit {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: block;
+  border-radius: 16px;
+  overflow: hidden;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.ytm-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(145, 102, 245, 0.44), rgba(145, 102, 245, 0) 58%),
+    radial-gradient(circle at 80% 80%, rgba(72, 170, 255, 0.24), rgba(72, 170, 255, 0) 60%),
+    linear-gradient(145deg, #1b2336, #101521);
+  z-index: 2;
+}
+
+.ytm-cover-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+.ytm-cover.is-fallback::after {
+  content: "♪";
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  color: rgba(240, 236, 255, 0.78);
+  font-size: 28px;
+  line-height: 1;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+.ytm-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px 10px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.68), rgba(0, 0, 0, 0));
+  pointer-events: none;
+  z-index: 3;
+}
+
+.ytm-title {
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.62);
+}
+
+.ytm-aura {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(203, 169, 255, 0.45);
+  background: rgba(9, 12, 20, 0.45);
+  color: #f3ebff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 4;
+}
+
+@keyframes ytm-neon-strobe {
+  0%, 100% { opacity: 0.4; filter: saturate(1.1) brightness(1); }
+  50% { opacity: 0.85; filter: saturate(1.6) brightness(1.2); }
+}
+
+@keyframes ytm-tile-aura-hit {
+  0% {
+    transform: scale(1);
+    box-shadow:
+      0 0 0 0 rgba(181, 128, 255, 0.5),
+      0 8px 18px rgba(8, 12, 18, 0.24);
+  }
+  45% {
+    transform: scale(1.014);
+    box-shadow:
+      0 0 0 4px rgba(181, 128, 255, 0.24),
+      0 12px 24px rgba(8, 12, 18, 0.32);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 0 0 rgba(181, 128, 255, 0),
+      0 8px 18px rgba(8, 12, 18, 0.22);
+  }
+}
+
+@media (min-width: 900px) {
+  .ytm-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

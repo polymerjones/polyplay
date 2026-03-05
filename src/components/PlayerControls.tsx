@@ -25,6 +25,7 @@ type Props = {
   onClearLoop: () => void;
   onVinylScratch?: () => void;
   onAuraUp?: () => void;
+  showAuraInline?: boolean;
   onSkip?: (delta: number) => void;
 };
 
@@ -53,6 +54,7 @@ export function PlayerControls({
   onClearLoop,
   onVinylScratch,
   onAuraUp,
+  showAuraInline = true,
   onSkip
 }: Props) {
   const rootRef = useRef<HTMLElement | null>(null);
@@ -232,7 +234,7 @@ export function PlayerControls({
         >
           {dimMode === "mute" ? "MUTE" : "DIM"}
         </button>
-        {onAuraUp && (
+        {onAuraUp && showAuraInline && (
           <button
             type="button"
             className="pc-btn pc-btn--primary pc-btn--aura pc-btn--aura-inline"
@@ -259,16 +261,20 @@ export function PlayerControls({
             </button>
           </>
         )}
-        <button
-          type="button"
-          className={`pc-btn pc-btn--sm pc-btn--toggle ${loopMode !== "off" ? "is-active" : ""}`.trim()}
-          onClick={onSetLoop}
-        >
-          {loopMode !== "off" ? "Loop Active" : "Set Loop"}
-        </button>
-        <button type="button" className="pc-btn pc-btn--sm" onClick={onClearLoop}>
-          Clear Loop
-        </button>
+        {variant !== "mini" && (
+          <>
+            <button
+              type="button"
+              className={`pc-btn pc-btn--sm pc-btn--toggle ${loopMode !== "off" ? "is-active" : ""}`.trim()}
+              onClick={loopMode === "off" ? onSetLoop : onToggleLoopMode}
+            >
+              {loopMode !== "off" ? "Loop Active" : "Set Loop"}
+            </button>
+            <button type="button" className="pc-btn pc-btn--sm" onClick={onClearLoop}>
+              Clear Loop
+            </button>
+          </>
+        )}
       </div>
     </section>
   );

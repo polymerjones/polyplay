@@ -416,6 +416,26 @@
   font-weight: 800;
 }
 
+.mini-player-bar__header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mini-player-bar__aura-toggle {
+  min-height: 30px;
+  min-width: 62px;
+  border-radius: 999px;
+  border: 1px solid rgba(194, 156, 255, 0.48);
+  background: linear-gradient(135deg, rgba(145, 89, 255, 0.82), rgba(107, 70, 236, 0.78));
+  color: #f8f2ff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  padding: 0 10px;
+  box-shadow: 0 0 12px rgba(164, 112, 255, 0.32);
+}
+
 .mini-player-bar.is-compact .playerExpanded {
   display: none;
 }

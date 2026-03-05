@@ -11,6 +11,7 @@
     "ios:copy": "npx cap copy ios",
     "ios:sync": "npx cap sync ios",
     "ios:open": "npx cap open ios",
+    "push xcode": "npm run build && npm run ios:sync && npm run ios:open",
     "ios:update": "npm run build && npm run ios:sync",
     "ios:run": "npm run ios:update && npm run ios:open",
     "ios:icon": "bash ./scripts/set-ios-icon.sh"

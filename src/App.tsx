@@ -522,7 +522,24 @@ export default function App() {
       acc[track.id] = track;
       return acc;
     }, {});
-    const loaded = getVisibleTracksFromLibrary(librarySnapshot, allTracksById);
+    let loaded = getVisibleTracksFromLibrary(librarySnapshot, allTracksById);
+    if (loaded.length === 0 && allTracks.length > 0) {
+      // Recovery path: only correct invalid active playlist pointers.
+      // Do not auto-inject all tracks into empty playlists (breaks playlist isolation).
+      const activeId = librarySnapshot.activePlaylistId;
+      const hasValidActive = Boolean(activeId && librarySnapshot.playlistsById[activeId]);
+      if (!hasValidActive) {
+        const firstPlaylistId = Object.keys(librarySnapshot.playlistsById || {})[0] ?? null;
+        if (firstPlaylistId) {
+          librarySnapshot = {
+            ...librarySnapshot,
+            activePlaylistId: firstPlaylistId
+          };
+          setLibrary(librarySnapshot);
+          loaded = getVisibleTracksFromLibrary(librarySnapshot, allTracksById);
+        }
+      }
+    }
     setRuntimeLibrary(librarySnapshot);
     setTracks(loaded);
     setIsPlaylistRequired(playlistIds.length === 0);
@@ -2034,13 +2051,12 @@ export default function App() {
             <div className="topbar-title">{APP_TITLE}</div>
             <button
               type="button"
-              className="gear-link nav-action-btn"
-              aria-label="Open settings panel"
+              className="upload-link nav-action-btn"
+              aria-label="Upload tracks"
+              title="Upload"
               onClick={openSettingsPanel}
             >
-              <span className="gear-icon" aria-hidden="true">
-                ⚙
-              </span>
+              Upload
             </button>
           </div>
           <div className="topbar-tier topbar-tier--controls">

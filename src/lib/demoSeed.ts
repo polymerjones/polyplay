@@ -164,6 +164,12 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
   let library = await getLibrary();
   const trackValues = Object.values(library.tracksById || {});
   const hasAnyDemo = trackValues.some((track) => Boolean(track.isDemo));
+  const hasDemoPlaylist = Boolean(
+    library.playlistsById[DEMO_PLAYLIST_ID] ||
+      Object.values(library.playlistsById || {}).find(
+        (playlist) => playlist.name.trim().toLowerCase() === DEMO_PLAYLIST_NAME.toLowerCase()
+      )
+  );
   const activePlaylist =
     library.activePlaylistId && library.playlistsById[library.activePlaylistId]
       ? library.playlistsById[library.activePlaylistId]
@@ -189,7 +195,7 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
 
   // Seed demos whenever the active playlist is empty and no demo tracks exist yet.
   // This keeps first-run experience consistent on iOS even if other playlists contain tracks.
-  if (activeTrackCount > 0) {
+  if (activeTrackCount > 0 && !hasDemoPlaylist) {
     markSeedDone();
     return { seeded: false, reason: "existing-user-library" };
   }

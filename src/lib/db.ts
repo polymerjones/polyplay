@@ -42,8 +42,9 @@ const LEGACY_DB_NAME = "carplay_app";
 const LEGACY_DB_VERSION = 1;
 const LEGACY_STORE_NAME = "tracks";
 const LEGACY_MIGRATION_FLAG = "showoff_legacy_migrated_v1";
-const STORAGE_CAP_BYTES_MOBILE = 250 * 1024 * 1024;
-const STORAGE_CAP_BYTES_DESKTOP = 750 * 1024 * 1024;
+const STORAGE_CAP_BYTES_MOBILE = 750 * 1024 * 1024;
+const STORAGE_CAP_BYTES_DESKTOP = 4 * 1024 * 1024 * 1024;
+const STORAGE_CAP_HEADROOM_BYTES = 128 * 1024 * 1024;
 
 function clampAura(aura: number): number {
   return Math.max(0, Math.min(5, Math.round(aura)));
@@ -75,8 +76,20 @@ export function isStorageCapError(error: unknown): error is StorageCapError {
   return error instanceof StorageCapError;
 }
 
-function getStorageCapBytes(): number {
-  return isConstrainedMobileDevice() ? STORAGE_CAP_BYTES_MOBILE : STORAGE_CAP_BYTES_DESKTOP;
+async function getStorageCapBytes(): Promise<number> {
+  const fallback = isConstrainedMobileDevice() ? STORAGE_CAP_BYTES_MOBILE : STORAGE_CAP_BYTES_DESKTOP;
+  try {
+    if (typeof navigator === "undefined" || !navigator.storage || typeof navigator.storage.estimate !== "function") {
+      return fallback;
+    }
+    const estimate = await navigator.storage.estimate();
+    const quota = Number(estimate.quota ?? 0);
+    if (!Number.isFinite(quota) || quota <= 0) return fallback;
+    const softCap = Math.max(64 * 1024 * 1024, Math.floor(quota - STORAGE_CAP_HEADROOM_BYTES));
+    return Math.max(fallback, softCap);
+  } catch {
+    return fallback;
+  }
 }
 
 async function ensureStorageCapacity(additionalBytes: number): Promise<void> {
@@ -84,7 +97,7 @@ async function ensureStorageCapacity(additionalBytes: number): Promise<void> {
   const stats = await listBlobStats();
   const usedBytes = stats.reduce((sum, stat) => sum + stat.bytes, 0);
   const projectedBytes = usedBytes + additionalBytes;
-  const capBytes = getStorageCapBytes();
+  const capBytes = await getStorageCapBytes();
   if (projectedBytes > capBytes) {
     throw new StorageCapError(capBytes, usedBytes, projectedBytes);
   }
@@ -780,7 +793,7 @@ export async function getStorageUsageSummary(): Promise<StorageUsageSummary> {
   const imageBytes = stats.filter((stat) => stat.type === "image").reduce((sum, stat) => sum + stat.bytes, 0);
   const videoBytes = stats.filter((stat) => stat.type === "video").reduce((sum, stat) => sum + stat.bytes, 0);
   return {
-    capBytes: getStorageCapBytes(),
+    capBytes: await getStorageCapBytes(),
     totalBytes,
     audioBytes,
     imageBytes,
