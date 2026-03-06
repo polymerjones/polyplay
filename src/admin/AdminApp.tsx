@@ -1161,6 +1161,14 @@ export function AdminApp() {
     return next.sort((a, b) => b.updatedAt - a.updatedAt);
   }, [sortLargestFirst, trackStorageRows]);
 
+  const adminMode = useMemo<"upload" | "manage">(() => {
+    if (typeof window === "undefined") return "manage";
+    const mode = new URLSearchParams(window.location.search).get("mode");
+    return mode === "upload" ? "upload" : "manage";
+  }, []);
+  const showUploadTrackSection = adminMode === "upload";
+  const showManageSections = adminMode !== "upload";
+
   return (
     <div
       className={`admin-v1 touch-clean mx-auto min-h-screen w-full max-w-5xl px-3 pb-5 pt-3 sm:px-4 ${
@@ -1176,7 +1184,9 @@ export function AdminApp() {
           />
           <div className="min-w-0">
             <h1 className="truncate text-lg font-semibold text-slate-100">Polyplay Admin</h1>
-            <p className="truncate text-xs text-slate-400">React + TypeScript</p>
+            <p className="truncate text-xs text-slate-400">
+              {adminMode === "upload" ? "Upload Track" : "Manage Library"}
+            </p>
           </div>
         </div>
 
@@ -1196,7 +1206,8 @@ export function AdminApp() {
         </div>
       </header>
 
-      <section className="admin-v1-section grid gap-3 lg:grid-cols-2">
+      <section className={`admin-v1-section grid gap-3 ${showManageSections ? "lg:grid-cols-2" : ""}`.trim()}>
+        {showUploadTrackSection && (
         <form onSubmit={onUpload} className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
           <h2 className="mb-2 text-base font-semibold text-slate-100">Upload Track</h2>
           <div className="admin-v1-fields admin-upload-stack grid gap-2">
@@ -1262,7 +1273,9 @@ export function AdminApp() {
             </Button>
           </div>
         </form>
+        )}
 
+        {showManageSections && (
         <div className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
           <h2 className="mb-2 text-base font-semibold text-slate-100">Track Operations</h2>
 
@@ -1373,8 +1386,9 @@ export function AdminApp() {
             </label>
           </div>
         </div>
+        )}
 
-        {SHOW_TRANSFER_LANES && (
+        {showManageSections && SHOW_TRANSFER_LANES && (
         <div className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3 lg:col-span-2">
           <h2 className="mb-2 text-base font-semibold text-slate-100">Transfer Lanes</h2>
           <div className="mb-2 grid gap-2 sm:grid-cols-2">
@@ -1448,6 +1462,8 @@ export function AdminApp() {
         )}
       </section>
 
+      {showManageSections && (
+      <>
       <GratitudeHubPanel
         settings={gratitudeSettings}
         entries={gratitudeEntries}
@@ -1814,6 +1830,8 @@ export function AdminApp() {
           </Button>
         </div>
       </section>
+      </>
+      )}
 
       <p className="mt-3 rounded-xl border border-slate-300/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-200">
         {status || "Ready."}

@@ -4254,6 +4254,13 @@ body.nuke-flash::after {
   gap: 12px;
 }
 
+.topbar-primary-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .topbar-title {
   text-align: center;
   font-size: clamp(16px, 2.1vw, 26px);

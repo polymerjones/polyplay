@@ -234,6 +234,7 @@ export default function App() {
   const [loopModeByTrack, setLoopModeByTrack] = useState<Record<string, LoopMode>>({});
   const [isFullscreenPlayerOpen, setIsFullscreenPlayerOpen] = useState(false);
   const [overlayPage, setOverlayPage] = useState<"settings" | "vault" | "playlists" | null>(null);
+  const [settingsPanelMode, setSettingsPanelMode] = useState<"upload" | "manage">("upload");
   const [isTipsOpen, setIsTipsOpen] = useState(false);
   const [layoutMode, setLayoutMode] = useState<"grid" | "list">("grid");
   const [gratitudeSettings, setGratitudeSettings] = useState<GratitudeSettings>(() => loadGratitudeSettings());
@@ -1877,8 +1878,9 @@ export default function App() {
     importUniverseInputRef.current?.click();
   };
 
-  const openSettingsPanel = () => {
+  const openSettingsPanel = (mode: "upload" | "manage" = "upload") => {
     markHasOnboarded();
+    setSettingsPanelMode(mode);
     setOverlayPage("settings");
   };
 
@@ -2049,15 +2051,26 @@ export default function App() {
               <img className="brand-logo" src={logo} alt="Polyplay logo" />
             </div>
             <div className="topbar-title">{APP_TITLE}</div>
-            <button
-              type="button"
-              className="upload-link nav-action-btn"
-              aria-label="Upload tracks"
-              title="Upload"
-              onClick={openSettingsPanel}
-            >
-              Upload
-            </button>
+            <div className="topbar-primary-actions">
+              <button
+                type="button"
+                className="upload-link nav-action-btn"
+                aria-label="Upload tracks"
+                title="Upload"
+                onClick={() => openSettingsPanel("upload")}
+              >
+                Upload
+              </button>
+              <button
+                type="button"
+                className="upload-link nav-action-btn"
+                aria-label="Open admin tools"
+                title="Admin"
+                onClick={() => openSettingsPanel("manage")}
+              >
+                ⚙
+              </button>
+            </div>
           </div>
           <div className="topbar-tier topbar-tier--controls">
             <button
@@ -2200,7 +2213,7 @@ export default function App() {
         ) : (
           !hasOnboarded && (
             <EmptyLibraryWelcome
-              onUploadFirstTrack={openSettingsPanel}
+              onUploadFirstTrack={() => openSettingsPanel("upload")}
               onOpenTips={() => setIsTipsOpen(true)}
             />
           )
@@ -2344,7 +2357,11 @@ export default function App() {
                 ✕
               </button>
             </div>
-            <iframe title="Settings" src="/admin.html" className="app-overlay-frame" />
+            <iframe
+              title="Settings"
+              src={`/admin.html?mode=${settingsPanelMode}`}
+              className="app-overlay-frame"
+            />
           </div>
         </section>
       )}
