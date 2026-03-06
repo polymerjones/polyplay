@@ -2054,21 +2054,21 @@ export default function App() {
             <div className="topbar-primary-actions">
               <button
                 type="button"
+                className="upload-link upload-link--icon nav-action-btn"
+                aria-label="Open admin tools"
+                title="Admin"
+                onClick={() => openSettingsPanel("manage")}
+              >
+                ⚙
+              </button>
+              <button
+                type="button"
                 className="upload-link nav-action-btn"
                 aria-label="Upload tracks"
                 title="Upload"
                 onClick={() => openSettingsPanel("upload")}
               >
                 Upload
-              </button>
-              <button
-                type="button"
-                className="upload-link nav-action-btn"
-                aria-label="Open admin tools"
-                title="Admin"
-                onClick={() => openSettingsPanel("manage")}
-              >
-                ⚙
               </button>
             </div>
           </div>

@@ -254,15 +254,16 @@ main,
 }
 
 .upload-link {
-  min-height: 36px;
-  padding: 0 12px;
+  min-height: 44px;
+  min-width: 92px;
+  padding: 0 14px;
   border-radius: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   text-decoration: none;
   color: #f3f2ff;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.02em;
   background: linear-gradient(135deg, rgba(121, 84, 245, 0.54), rgba(64, 136, 255, 0.36));
@@ -270,6 +271,15 @@ main,
   box-shadow:
     0 0 16px rgba(149, 106, 255, 0.28),
     0 8px 18px rgba(16, 10, 34, 0.3);
+}
+
+.upload-link--icon {
+  min-width: 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
 }
 
 .top-actions {
