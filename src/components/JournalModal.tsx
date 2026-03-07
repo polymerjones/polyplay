@@ -34,7 +34,7 @@ const JOURNAL_LOOP_END_GUARD_SEC = 0.06;
 
 const JOURNAL_BACKGROUNDS: JournalBackground[] = [
   { id: "1", src: "/clouds1.mov" },
-  { id: "2", src: "/clouds2waudio.mov" }
+  { id: "2", src: "/clouds2waudio.mov?v=20260307" }
 ];
 
 const DEFAULT_JOURNAL_VERSES = [
