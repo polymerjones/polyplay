@@ -569,6 +569,19 @@
   min-width: 0;
 }
 
+.pc-mini-loop-row {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.pc-mini-clear-loop {
+  min-width: 116px;
+  border-color: rgba(255, 214, 130, 0.46);
+  color: #ffe8bc;
+  background: rgba(44, 28, 12, 0.45);
+}
+
 .player-controls--mini .pc-loop-row {
   display: none;
 }
@@ -1144,6 +1157,45 @@ body.perf-lite .fullscreen-player-shell__art.is-aura-flash::after {
     min-height: 32px;
     font-size: 11px;
     padding: 0 6px;
+  }
+
+  .pc-range {
+    height: 30px;
+    margin: -8px 0;
+    touch-action: pan-y;
+  }
+
+  .pc-range::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+  }
+
+  .pc-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    border: 9px solid transparent;
+    background: #f5f8ff;
+    background-clip: content-box;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.52);
+    margin-top: -13px;
+  }
+
+  .pc-range::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+  }
+
+  .pc-range::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 8px solid transparent;
+    background: #f5f8ff;
+    background-clip: content-box;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5);
   }
 
   .fullscreen-player-shell__close {

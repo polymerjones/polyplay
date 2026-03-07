@@ -23,10 +23,10 @@ export function GratitudePrompt({
 }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pulseTimeoutRef = useRef<number | null>(null);
+  const lastTypingNotifyAtRef = useRef(0);
   const [text, setText] = useState("");
   const [pulseMode, setPulseMode] = useState<"save" | "skip" | null>(null);
-  const [isTypingActive, setIsTypingActive] = useState(false);
-  const typingCooldownRef = useRef<number | null>(null);
+  const [isTextareaFocused, setIsTextareaFocused] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -42,10 +42,6 @@ export function GratitudePrompt({
       if (pulseTimeoutRef.current !== null) {
         window.clearTimeout(pulseTimeoutRef.current);
         pulseTimeoutRef.current = null;
-      }
-      if (typingCooldownRef.current !== null) {
-        window.clearTimeout(typingCooldownRef.current);
-        typingCooldownRef.current = null;
       }
     };
   }, []);
@@ -75,7 +71,7 @@ export function GratitudePrompt({
     <section className="gratitude-modal" role="dialog" aria-modal="true" aria-label="Gratitude prompt">
       <div
         className={`gratitude-modal__card ${pulseMode ? `is-pulse-${pulseMode}` : ""} ${
-          isTypingActive ? "is-typing" : ""
+          isTextareaFocused ? "is-typing" : ""
         }`.trim()}
       >
         <div className="gratitude-modal__clouds" aria-hidden="true" />
@@ -87,14 +83,14 @@ export function GratitudePrompt({
           value={text}
           onChange={(event) => {
             setText(event.currentTarget.value);
-            setIsTypingActive(true);
-            if (typingCooldownRef.current !== null) window.clearTimeout(typingCooldownRef.current);
-            typingCooldownRef.current = window.setTimeout(() => {
-              setIsTypingActive(false);
-              typingCooldownRef.current = null;
-            }, 1000);
-            onTyping();
+            const now = performance.now();
+            if (now - lastTypingNotifyAtRef.current > 180) {
+              lastTypingNotifyAtRef.current = now;
+              onTyping();
+            }
           }}
+          onFocus={() => setIsTextareaFocused(true)}
+          onBlur={() => setIsTextareaFocused(false)}
           rows={4}
         />
         <div className="gratitude-modal__footer">

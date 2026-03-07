@@ -271,6 +271,13 @@ export function PlayerControls({
             </button>
           </div>
         )}
+        {variant === "mini" && loopMode !== "off" && (
+          <div className="pc-mini-loop-row" role="group" aria-label="Loop controls">
+            <button type="button" className="pc-btn pc-btn--sm pc-mini-clear-loop" onClick={onClearLoop}>
+              Clear Loop
+            </button>
+          </div>
+        )}
         {variant !== "mini" && (
           <div className="pc-loop-row" role="group" aria-label="Loop controls">
             <button

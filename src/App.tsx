@@ -1889,7 +1889,7 @@ export default function App() {
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reducedMotion) return;
-    setIsGratitudeReactive(true);
+    setIsGratitudeReactive((prev) => (prev ? prev : true));
     if (gratitudeTypingTimeoutRef.current !== null) window.clearTimeout(gratitudeTypingTimeoutRef.current);
     gratitudeTypingTimeoutRef.current = window.setTimeout(() => {
       setIsGratitudeReactive(false);
