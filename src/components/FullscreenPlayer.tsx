@@ -15,6 +15,7 @@ type Props = {
   loopRegion: LoopRegion;
   loopMode: LoopMode;
   dimMode: "normal" | "dim" | "mute";
+  noveltyMode: "normal" | "dim" | "mute";
   onClose: () => void;
   onPrev: () => void;
   onPlayPause: () => void;
@@ -25,6 +26,7 @@ type Props = {
   onToggleShuffle: () => void;
   onToggleRepeatTrack: () => void;
   onCycleDimMode: () => void;
+  onCycleNoveltyMode: () => void;
   onVinylScratch: () => void;
   onSetLoopRange: (start: number, end: number, active: boolean) => void;
   onSetLoop: () => void;
@@ -42,6 +44,7 @@ export function FullscreenPlayer({
   loopRegion,
   loopMode,
   dimMode,
+  noveltyMode,
   onClose,
   onPrev,
   onPlayPause,
@@ -52,6 +55,7 @@ export function FullscreenPlayer({
   onToggleShuffle,
   onToggleRepeatTrack,
   onCycleDimMode,
+  onCycleNoveltyMode,
   onVinylScratch,
   onSetLoopRange,
   onSetLoop,
@@ -247,6 +251,7 @@ export function FullscreenPlayer({
           duration={duration}
           loopMode={loopMode}
           dimMode={dimMode}
+          noveltyMode={noveltyMode}
           onPrev={onPrev}
           onPlayPause={onPlayPause}
           onNext={onNext}
@@ -256,6 +261,7 @@ export function FullscreenPlayer({
           onToggleShuffle={onToggleShuffle}
           onToggleRepeatTrack={onToggleRepeatTrack}
           onCycleDimMode={onCycleDimMode}
+          onCycleNoveltyMode={onCycleNoveltyMode}
           onVinylScratch={onVinylScratch}
           onSetLoop={onSetLoop}
           onToggleLoopMode={onToggleLoopMode}

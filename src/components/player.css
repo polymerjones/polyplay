@@ -279,6 +279,23 @@
   color: #efe5ff;
 }
 
+.pc-novelty-btn {
+  min-width: 62px;
+  letter-spacing: 0.32px;
+}
+
+.pc-novelty-btn.is-active {
+  border-color: rgba(166, 132, 255, 0.62);
+  background: rgba(101, 62, 196, 0.36);
+  color: #f9f2ff;
+}
+
+.pc-novelty-btn.is-mute {
+  border-color: rgba(130, 96, 212, 0.72);
+  background: rgba(64, 35, 128, 0.78);
+  color: #efe5ff;
+}
+
 .pc-vinyl-btn {
   width: 58px;
   min-width: 58px;
@@ -420,6 +437,21 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.mini-player-bar__loop-clear {
+  min-width: 34px;
+  min-height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 214, 130, 0.54);
+  background: rgba(44, 28, 12, 0.52);
+  color: #ffe8bc;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .mini-player-bar__aura-toggle {
@@ -567,19 +599,6 @@
 .pc-extra-skip {
   width: 100%;
   min-width: 0;
-}
-
-.pc-mini-loop-row {
-  display: flex;
-  justify-content: center;
-  width: 100%;
-}
-
-.pc-mini-clear-loop {
-  min-width: 116px;
-  border-color: rgba(255, 214, 130, 0.46);
-  color: #ffe8bc;
-  background: rgba(44, 28, 12, 0.45);
 }
 
 .player-controls--mini .pc-loop-row {

@@ -7,6 +7,7 @@ import type { MouseEvent } from "react";
 type Props = {
   variant: "mini" | "fullscreen";
   dimMode: "normal" | "dim" | "mute";
+  noveltyMode: "normal" | "dim" | "mute";
   isPlaying: boolean;
   currentTime: number;
   duration: number;
@@ -20,6 +21,7 @@ type Props = {
   onToggleShuffle: () => void;
   onToggleRepeatTrack: () => void;
   onCycleDimMode: () => void;
+  onCycleNoveltyMode: () => void;
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
   onClearLoop: () => void;
@@ -36,6 +38,7 @@ function clampTime(value: number, duration: number): number {
 export function PlayerControls({
   variant,
   dimMode,
+  noveltyMode,
   isPlaying,
   currentTime,
   duration,
@@ -49,6 +52,7 @@ export function PlayerControls({
   onToggleShuffle,
   onToggleRepeatTrack,
   onCycleDimMode,
+  onCycleNoveltyMode,
   onSetLoop,
   onToggleLoopMode,
   onClearLoop,
@@ -230,13 +234,29 @@ export function PlayerControls({
           onClick={onCycleDimMode}
           aria-label={
             dimMode === "normal"
-              ? "Dim controls: normal"
+              ? "Brightness: normal"
               : dimMode === "dim"
-                ? "Dim controls: dimmed"
-                : "Dim controls: muted"
+                ? "Brightness: dim"
+                : "Brightness: mute"
           }
         >
-          {dimMode === "mute" ? "MUTE" : "DIM"}
+          {dimMode === "normal" ? "NORMAL" : dimMode === "dim" ? "DIM" : "MUTE"}
+        </button>
+        <button
+          type="button"
+          className={`pc-btn pc-btn--sm pc-novelty-btn ${noveltyMode === "normal" ? "" : "is-active"} ${
+            noveltyMode === "mute" ? "is-mute" : ""
+          }`.trim()}
+          onClick={onCycleNoveltyMode}
+          aria-label={
+            noveltyMode === "normal"
+              ? "Visual style: normal"
+              : noveltyMode === "dim"
+                ? "Visual style: dim vibe"
+                : "Visual style: mute freeze"
+          }
+        >
+          VIBE
         </button>
         {onAuraUp && showAuraInline && (
           <button
@@ -268,13 +288,6 @@ export function PlayerControls({
             </button>
             <button type="button" className="pc-btn pc-btn--sm pc-extra-skip" onClick={() => onSkip(30)}>
               +30s
-            </button>
-          </div>
-        )}
-        {variant === "mini" && loopMode !== "off" && (
-          <div className="pc-mini-loop-row" role="group" aria-label="Loop controls">
-            <button type="button" className="pc-btn pc-btn--sm pc-mini-clear-loop" onClick={onClearLoop}>
-              Clear Loop
             </button>
           </div>
         )}

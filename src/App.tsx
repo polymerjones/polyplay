@@ -95,6 +95,7 @@ const AURA_COLOR_KEY = "polyplay_auraColor_v1";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
 const DIM_MODE_KEY = "polyplay_dimMode_v1";
+const NOVELTY_MODE_KEY = "polyplay_noveltyMode_v1";
 const LOOP_REGION_KEY = "polyplay_loopByTrack";
 const LOOP_MODE_KEY = "polyplay_loopModeByTrack";
 const SPLASH_FADE_MS = 420;
@@ -323,6 +324,7 @@ export default function App() {
   const [isShuffleEnabled, setIsShuffleEnabled] = useState(false);
   const [isRepeatTrackEnabled, setIsRepeatTrackEnabled] = useState(false);
   const [dimMode, setDimMode] = useState<DimMode>("normal");
+  const [noveltyMode, setNoveltyMode] = useState<DimMode>("normal");
   const [showOpenState, setShowOpenState] = useState(false);
   const [hasOnboarded, setHasOnboarded] = useState<boolean>(() => {
     try {
@@ -939,6 +941,10 @@ export default function App() {
       if (savedDimMode === "normal" || savedDimMode === "dim" || savedDimMode === "mute") {
         setDimMode(savedDimMode);
       }
+      const savedNoveltyMode = localStorage.getItem(NOVELTY_MODE_KEY);
+      if (savedNoveltyMode === "normal" || savedNoveltyMode === "dim" || savedNoveltyMode === "mute") {
+        setNoveltyMode(savedNoveltyMode);
+      }
     } catch {
       // Ignore localStorage failures.
     }
@@ -979,15 +985,15 @@ export default function App() {
   }, [themeMode, customThemeSlot, auraColor]);
 
   useEffect(() => {
-    const isDimVibe = dimMode === "dim";
-    const isMuted = dimMode === "mute";
+    const isDimVibe = noveltyMode === "dim";
+    const isMuted = noveltyMode === "mute";
     document.body.classList.toggle("dim-vibe", isDimVibe);
     document.body.classList.toggle("mute-freeze", isMuted);
     return () => {
       document.body.classList.remove("dim-vibe");
       document.body.classList.remove("mute-freeze");
     };
-  }, [dimMode]);
+  }, [noveltyMode]);
 
   useEffect(() => {
     try {
@@ -1120,6 +1126,7 @@ export default function App() {
           localStorage.removeItem(REPEAT_TRACK_KEY);
           localStorage.removeItem(LAYOUT_MODE_KEY);
           localStorage.removeItem(DIM_MODE_KEY);
+          localStorage.removeItem(NOVELTY_MODE_KEY);
           localStorage.removeItem(LOOP_REGION_KEY);
           localStorage.removeItem(LOOP_MODE_KEY);
           localStorage.removeItem(HAS_IMPORTED_KEY);
@@ -1136,6 +1143,7 @@ export default function App() {
         setIsShuffleEnabled(false);
         setIsRepeatTrackEnabled(false);
         setDimMode("normal");
+        setNoveltyMode("normal");
         setLoopByTrack({});
         setLoopModeByTrack({});
         setHasOnboarded(false);
@@ -1687,6 +1695,18 @@ export default function App() {
       const next: DimMode = prev === "normal" ? "dim" : prev === "dim" ? "mute" : "normal";
       try {
         localStorage.setItem(DIM_MODE_KEY, next);
+      } catch {
+        // Ignore localStorage failures.
+      }
+      return next;
+    });
+  };
+
+  const cycleNoveltyMode = () => {
+    setNoveltyMode((prev) => {
+      const next: DimMode = prev === "normal" ? "dim" : prev === "dim" ? "mute" : "normal";
+      try {
+        localStorage.setItem(NOVELTY_MODE_KEY, next);
       } catch {
         // Ignore localStorage failures.
       }
@@ -2384,9 +2404,11 @@ export default function App() {
           shuffleEnabled={isShuffleEnabled}
           repeatTrackEnabled={isRepeatTrackEnabled}
           dimMode={dimMode}
+          noveltyMode={noveltyMode}
           onToggleShuffle={toggleShuffle}
           onToggleRepeatTrack={toggleRepeatTrack}
           onCycleDimMode={cycleDimMode}
+          onCycleNoveltyMode={cycleNoveltyMode}
           onVinylScratch={playVinylScratch}
           onSetLoopRange={setLoopRange}
           onSetLoop={setLoopFromCurrentWithExpand}
@@ -2416,9 +2438,11 @@ export default function App() {
           shuffleEnabled={isShuffleEnabled}
           repeatTrackEnabled={isRepeatTrackEnabled}
           dimMode={dimMode}
+          noveltyMode={noveltyMode}
           onToggleShuffle={toggleShuffle}
           onToggleRepeatTrack={toggleRepeatTrack}
           onCycleDimMode={cycleDimMode}
+          onCycleNoveltyMode={cycleNoveltyMode}
           onVinylScratch={playVinylScratch}
           onSetLoopRange={setLoopRange}
           onSetLoop={setLoopFromCurrent}

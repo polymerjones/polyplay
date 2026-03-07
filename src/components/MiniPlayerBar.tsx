@@ -14,6 +14,7 @@ type Props = {
   loopRegion: LoopRegion;
   loopMode: LoopMode;
   dimMode: "normal" | "dim" | "mute";
+  noveltyMode: "normal" | "dim" | "mute";
   onPrev: () => void;
   onPlayPause: () => void;
   onNext: () => void;
@@ -25,6 +26,7 @@ type Props = {
   onToggleShuffle: () => void;
   onToggleRepeatTrack: () => void;
   onCycleDimMode: () => void;
+  onCycleNoveltyMode: () => void;
   onVinylScratch: () => void;
   onSetLoopRange: (start: number, end: number, active: boolean) => void;
   onSetLoop: () => void;
@@ -43,6 +45,7 @@ export function MiniPlayerBar({
   loopRegion,
   loopMode,
   dimMode,
+  noveltyMode,
   onPrev,
   onPlayPause,
   onNext,
@@ -54,6 +57,7 @@ export function MiniPlayerBar({
   onToggleShuffle,
   onToggleRepeatTrack,
   onCycleDimMode,
+  onCycleNoveltyMode,
   onVinylScratch,
   onSetLoopRange,
   onSetLoop,
@@ -111,6 +115,16 @@ export function MiniPlayerBar({
           {track?.missingArt && <div className="mini-player-bar__sub">Missing artwork</div>}
         </div>
         <div className="mini-player-bar__header-actions">
+          {loopMode !== "off" && (
+            <button
+              type="button"
+              className="mini-player-bar__loop-clear"
+              aria-label="Clear active loop"
+              onClick={onClearLoop}
+            >
+              ⟲
+            </button>
+          )}
           {track && (
             <button
               type="button"
@@ -142,6 +156,7 @@ export function MiniPlayerBar({
         duration={duration}
         loopMode={loopMode}
         dimMode={dimMode}
+        noveltyMode={noveltyMode}
         onPrev={onPrev}
         onPlayPause={onPlayPause}
         onNext={onNext}
@@ -151,6 +166,7 @@ export function MiniPlayerBar({
         onToggleShuffle={onToggleShuffle}
         onToggleRepeatTrack={onToggleRepeatTrack}
         onCycleDimMode={onCycleDimMode}
+        onCycleNoveltyMode={onCycleNoveltyMode}
         onVinylScratch={onVinylScratch}
         onSetLoop={onSetLoop}
         onToggleLoopMode={onToggleLoopMode}
