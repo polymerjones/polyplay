@@ -28,6 +28,11 @@ export function GratitudePrompt({
   const [pulseMode, setPulseMode] = useState<"save" | "skip" | null>(null);
   const [isTextareaFocused, setIsTextareaFocused] = useState(false);
 
+  const isDesktopLike = () =>
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
   useEffect(() => {
     if (!open) return;
     const raf = window.requestAnimationFrame(() => {
@@ -92,7 +97,11 @@ export function GratitudePrompt({
           onFocus={() => setIsTextareaFocused(true)}
           onBlur={() => setIsTextareaFocused(false)}
           onKeyDown={(event) => {
-            if (event.key === "Enter") event.stopPropagation();
+            if (event.key !== "Enter") return;
+            event.stopPropagation();
+            if (event.shiftKey || event.repeat || !isDesktopLike() || event.nativeEvent.isComposing) return;
+            event.preventDefault();
+            onContinue();
           }}
           rows={4}
         />

@@ -2983,8 +2983,13 @@ body.mute-freeze .track-backdrop {
   object-fit: cover;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.86;
+  opacity: 0;
   filter: saturate(1.06) contrast(1.03);
+  transition: opacity 320ms ease;
+}
+
+.journalVideoLayer.is-ready {
+  opacity: 0.86;
 }
 
 .journalVideoFallback {
@@ -2992,10 +2997,16 @@ body.mute-freeze .track-backdrop {
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  opacity: 1;
+  transition: opacity 300ms ease;
   background:
-    radial-gradient(circle at 22% 18%, rgba(132, 171, 236, 0.26), rgba(132, 171, 236, 0) 54%),
-    radial-gradient(circle at 78% 64%, rgba(176, 132, 255, 0.2), rgba(176, 132, 255, 0) 58%),
-    linear-gradient(180deg, rgba(7, 13, 24, 0.94), rgba(10, 17, 30, 0.96));
+    radial-gradient(circle at 24% 22%, rgba(255, 207, 129, 0.24), rgba(255, 207, 129, 0) 56%),
+    radial-gradient(circle at 76% 62%, rgba(255, 164, 96, 0.18), rgba(255, 164, 96, 0) 58%),
+    linear-gradient(180deg, rgba(14, 17, 26, 0.95), rgba(18, 24, 35, 0.96));
+}
+
+.journalVideoFallback.is-hidden {
+  opacity: 0;
 }
 
 .journalAmbientLayer {

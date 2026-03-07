@@ -174,6 +174,7 @@ export function JournalModal({ open, onClose }: Props) {
   const backgroundVideoRef = useRef<HTMLVideoElement | null>(null);
   const [entries, setEntries] = useState<GratitudeEntry[]>([]);
   const [selectedBgId, setSelectedBgId] = useState<"1" | "2">(JOURNAL_BACKGROUNDS[0]?.id || "1");
+  const [isVideoReady, setIsVideoReady] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
   const [query, setQuery] = useState("");
   const [verses, setVerses] = useState<string[]>(DEFAULT_JOURNAL_VERSES);
@@ -211,6 +212,7 @@ export function JournalModal({ open, onClose }: Props) {
     if (!open) return;
     const selected = pickAlternatingBackground();
     setSelectedBgId(selected.id);
+    setIsVideoReady(false);
     setVideoFailed(false);
   }, [open]);
 
@@ -352,6 +354,9 @@ export function JournalModal({ open, onClose }: Props) {
     video.addEventListener("loadedmetadata", jumpToSafeStart);
     video.addEventListener("timeupdate", onTimeUpdate);
     video.addEventListener("ended", onEnded);
+    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      setIsVideoReady(true);
+    }
     void video.play().catch(() => undefined);
     return () => {
       video.removeEventListener("loadedmetadata", jumpToSafeStart);
@@ -375,7 +380,7 @@ export function JournalModal({ open, onClose }: Props) {
       <video
         key={selectedBackground.id}
         ref={backgroundVideoRef}
-        className="journalVideoLayer"
+        className={`journalVideoLayer ${isVideoReady && !videoFailed ? "is-ready" : ""}`.trim()}
         src={selectedBackground.src}
         preload="auto"
         autoPlay
@@ -383,10 +388,20 @@ export function JournalModal({ open, onClose }: Props) {
         playsInline
         muted
         aria-hidden="true"
-        onError={() => setVideoFailed(true)}
-        onCanPlay={() => setVideoFailed(false)}
+        onError={() => {
+          setVideoFailed(true);
+          setIsVideoReady(false);
+        }}
+        onLoadedData={() => {
+          setVideoFailed(false);
+          setIsVideoReady(true);
+        }}
+        onCanPlay={() => {
+          setVideoFailed(false);
+          setIsVideoReady(true);
+        }}
       />
-      {videoFailed && <div className="journalVideoFallback" aria-hidden="true" />}
+      <div className={`journalVideoFallback ${isVideoReady && !videoFailed ? "is-hidden" : ""}`.trim()} aria-hidden="true" />
       <div className="journalScrimLayer" aria-hidden="true" />
       <div className="journalAmbientLayer" aria-hidden="true" />
       {!reducedMotion && (
