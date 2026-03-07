@@ -1204,13 +1204,36 @@ body.perf-lite .fullscreen-player-shell__art.is-aura-flash::after {
   }
 
   .pc-row {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: center;
-    gap: 6px;
+    gap: 5px;
   }
 
   .pc-row > * {
     flex: 0 0 auto;
+  }
+
+  .pc-btn--aura-inline {
+    min-width: 78px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .pc-dim-btn {
+    min-width: 60px;
+    padding: 0 8px;
+    letter-spacing: 0.28px;
+  }
+
+  .pc-novelty-btn {
+    width: 36px;
+    min-width: 36px;
+  }
+
+  .pc-transport-btn--sm {
+    width: 42px;
+    min-width: 42px;
+    min-height: 42px;
   }
 
   .pc-skip-row {
@@ -1365,6 +1388,27 @@ body.perf-lite .fullscreen-player-shell__art.is-aura-flash::after {
 
   .fullscreen-player-shell__art {
     width: min(360px, 56vw);
+  }
+}
+
+@media (max-width: 420px) {
+  .pc-row {
+    gap: 4px;
+  }
+
+  .pc-btn--aura-inline {
+    min-width: 74px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  .pc-dim-btn {
+    min-width: 56px;
+  }
+
+  .pc-novelty-btn {
+    width: 34px;
+    min-width: 34px;
   }
 }
 
