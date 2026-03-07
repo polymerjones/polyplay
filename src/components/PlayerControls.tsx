@@ -258,8 +258,10 @@ export function PlayerControls({
           title="Visual style mode"
         >
           <svg className="pc-novelty-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 3.5v4.2M12 16.3v4.2M3.5 12h4.2M16.3 12h4.2M6.3 6.3l3 3M14.7 14.7l3 3M17.7 6.3l-3 3M9.3 14.7l-3 3" />
-            <path d="M12 8.6l1.8 1.6L12 12l-1.8-1.8Z" />
+            <circle cx="12" cy="12" r="9" />
+            <path d="M4.7 12c.8-.9 1.5-.9 2.3 0s1.5.9 2.3 0 1.5-.9 2.3 0 1.5.9 2.3 0 1.5-.9 2.3 0 1.5.9 2.3 0" />
+            <circle cx="11.4" cy="8.15" r="1.05" />
+            <path d="M12.1 9.5c-.55 1.8-.35 2.95 1.35 3.7l1.95.85M11.7 10.6l-1.4 2.6M10.3 13.2l1.3 2.75" />
           </svg>
         </button>
         {onAuraUp && showAuraInline && (

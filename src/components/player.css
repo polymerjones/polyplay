@@ -300,8 +300,8 @@
 }
 
 .pc-novelty-icon {
-  width: 15px;
-  height: 15px;
+  width: 18px;
+  height: 18px;
   display: block;
 }
 
@@ -311,6 +311,17 @@
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.pc-novelty-icon circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+}
+
+.pc-novelty-icon circle:last-of-type {
+  fill: currentColor;
+  stroke: none;
 }
 
 .pc-vinyl-btn {
