@@ -570,7 +570,43 @@ body.theme-dark .rowAuraGlow {
   object-fit: contain;
   object-position: center;
   position: relative;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+
+.splash-overlay__video.is-ready {
+  opacity: 1;
+}
+
+.splash-overlay__fallback {
+  position: absolute;
+  inset: 0;
   z-index: 1;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(126, 82, 230, 0.24), rgba(6, 8, 14, 0.88) 60%),
+    linear-gradient(180deg, rgba(5, 8, 14, 0.82), rgba(4, 6, 10, 0.96));
+}
+
+.splash-overlay__fallback-logo {
+  width: min(180px, 36vw);
+  max-width: 180px;
+  height: auto;
+  display: block;
+  filter: drop-shadow(0 10px 18px rgba(8, 10, 20, 0.5));
+}
+
+.splash-overlay__fallback-wordmark {
+  color: rgba(241, 233, 255, 0.96);
+  font-size: clamp(20px, 5vw, 30px);
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-shadow: 0 0 18px rgba(172, 126, 255, 0.36);
 }
 
 .splash-overlay__skip {

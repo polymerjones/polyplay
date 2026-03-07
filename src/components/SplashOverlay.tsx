@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import logoVideo from "../../polyplay_splashvideo_logo480.mp4";
+import logoImage from "../../logo.png";
 
 type Props = {
   isDismissing: boolean;
@@ -12,6 +13,7 @@ export function SplashOverlay({ isDismissing, onComplete }: Props) {
   const lastTapAtRef = useRef(0);
   const [needsUserStart, setNeedsUserStart] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [isVideoReady, setIsVideoReady] = useState(false);
 
   const completeOnce = () => {
     if (completedRef.current) return;
@@ -22,6 +24,7 @@ export function SplashOverlay({ isDismissing, onComplete }: Props) {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) setIsVideoReady(true);
 
     const startPlayback = async () => {
       try {
@@ -82,12 +85,15 @@ export function SplashOverlay({ isDismissing, onComplete }: Props) {
     >
       <video
         ref={videoRef}
-        className="splash-overlay__video"
+        className={`splash-overlay__video ${isVideoReady ? "is-ready" : ""}`.trim()}
         src={logoVideo}
+        poster={logoImage}
         autoPlay
         muted
         playsInline
         preload="auto"
+        onLoadedData={() => setIsVideoReady(true)}
+        onCanPlay={() => setIsVideoReady(true)}
         onTimeUpdate={(event) => {
           const video = event.currentTarget;
           const safeDuration = Number.isFinite(video.duration) ? video.duration : 0;
@@ -96,6 +102,12 @@ export function SplashOverlay({ isDismissing, onComplete }: Props) {
         }}
         onEnded={completeOnce}
       />
+      {!isVideoReady && (
+        <div className="splash-overlay__fallback" aria-hidden="true">
+          <img src={logoImage} alt="" className="splash-overlay__fallback-logo" />
+          <div className="splash-overlay__fallback-wordmark">PolyPlay</div>
+        </div>
+      )}
       <button type="button" className="splash-overlay__close" aria-label="Close welcome" onClick={completeOnce}>
         ✕
       </button>
