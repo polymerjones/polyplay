@@ -197,9 +197,13 @@ export function JournalModal({ open, onClose }: Props) {
   const [savedEntryId, setSavedEntryId] = useState<string | null>(null);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
   const [miniToast, setMiniToast] = useState<string | null>(null);
+  const [verseFxActive, setVerseFxActive] = useState(false);
+  const [verseFxBurstKey, setVerseFxBurstKey] = useState(0);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const deleteTimerRef = useRef<number | null>(null);
+  const verseFxTimerRef = useRef<number | null>(null);
+  const verseFxRafRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -308,8 +312,36 @@ export function JournalModal({ open, onClose }: Props) {
       if (deleteTimerRef.current !== null) {
         window.clearTimeout(deleteTimerRef.current);
       }
+      if (verseFxTimerRef.current !== null) {
+        window.clearTimeout(verseFxTimerRef.current);
+      }
+      if (verseFxRafRef.current !== null) {
+        window.cancelAnimationFrame(verseFxRafRef.current);
+      }
     };
   }, []);
+
+  const triggerVerseFeedback = () => {
+    if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+      const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (prefersReducedMotion) return;
+    }
+    if (verseFxRafRef.current !== null) {
+      window.cancelAnimationFrame(verseFxRafRef.current);
+    }
+    setVerseFxActive(false);
+    verseFxRafRef.current = window.requestAnimationFrame(() => {
+      setVerseFxActive(true);
+      setVerseFxBurstKey((prev) => prev + 1);
+    });
+    if (verseFxTimerRef.current !== null) {
+      window.clearTimeout(verseFxTimerRef.current);
+    }
+    verseFxTimerRef.current = window.setTimeout(() => {
+      setVerseFxActive(false);
+      verseFxTimerRef.current = null;
+    }, 520);
+  };
 
   const filteredEntries = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -516,14 +548,25 @@ export function JournalModal({ open, onClose }: Props) {
             }}
           />
           <div className="journalControlRow">
-            <div className="journalVerseCard">
+            <div className={`journalVerseCard ${verseFxActive ? "is-verse-flash" : ""}`.trim()}>
               <strong>Verse</strong>
               <p>{currentVerse}</p>
+              {verseFxActive && (
+                <div key={verseFxBurstKey} className="journalVerseBurst" aria-hidden="true">
+                  <span className="journalVerseSpark journalVerseSpark--1" />
+                  <span className="journalVerseSpark journalVerseSpark--2" />
+                  <span className="journalVerseSpark journalVerseSpark--3" />
+                  <span className="journalVerseSpark journalVerseSpark--4" />
+                </div>
+              )}
               <button
                 type="button"
                 className="journalVerseBtn"
                 aria-label="Next verse"
-                onClick={() => setVerseIndex((prev) => (prev + 1) % Math.max(1, verses.length))}
+                onClick={() => {
+                  setVerseIndex((prev) => (prev + 1) % Math.max(1, verses.length));
+                  triggerVerseFeedback();
+                }}
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="12" cy="12" r="4.2" />
