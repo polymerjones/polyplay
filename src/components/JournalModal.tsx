@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { getGratitudeBackupFilename, serializeGratitudeJson } from "../lib/backup";
 import {
+  DEFAULT_GRATITUDE_SETTINGS,
+  GRATITUDE_ENTRIES_KEY,
   createEntry,
   deleteEntry,
   listEntries,
+  saveGratitudeSettings,
   type GratitudeEntry,
+  type GratitudeSettings,
   updateEntry
 } from "../lib/gratitude";
 
@@ -44,6 +48,11 @@ const DEFAULT_JOURNAL_VERSES = [
   "Let all that you do be done in love. — 1 Corinthians 16:14",
   "Rejoice in hope, be patient in tribulation, be constant in prayer. — Romans 12:12"
 ];
+
+type GratitudeBackupImportPayload = {
+  settings: GratitudeSettings;
+  entries: GratitudeEntry[];
+};
 
 function pickAlternatingBackground(): JournalBackground {
   let nextId: "1" | "2" = "1";
@@ -96,6 +105,70 @@ function createSparkles(count: number): Sparkle[] {
   }));
 }
 
+function normalizeImportedGratitudeSettings(value: unknown): GratitudeSettings {
+  if (!value || typeof value !== "object") return DEFAULT_GRATITUDE_SETTINGS;
+  const row = value as Partial<GratitudeSettings>;
+  const frequency =
+    row.frequency === "daily" || row.frequency === "weekly" || row.frequency === "launch" || row.frequency === "off"
+      ? row.frequency
+      : DEFAULT_GRATITUDE_SETTINGS.frequency;
+  return {
+    enabled: row.enabled !== false,
+    frequency,
+    doNotSaveText: Boolean(row.doNotSaveText),
+    doNotPromptAgain: Boolean(row.doNotPromptAgain)
+  };
+}
+
+function normalizeImportedGratitudeEntries(value: unknown): GratitudeEntry[] {
+  if (!Array.isArray(value)) return [];
+  const normalized: GratitudeEntry[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const row = value[index];
+    if (!row || typeof row !== "object") continue;
+    const entry = row as Partial<GratitudeEntry>;
+    if (typeof entry.text !== "string") continue;
+    const trimmed = entry.text.trim();
+    if (!trimmed) continue;
+    const createdAt = typeof entry.createdAt === "string" && entry.createdAt ? entry.createdAt : new Date().toISOString();
+    const id = typeof entry.id === "string" && entry.id ? entry.id : `imported-${createdAt}-${index}`;
+    normalized.push({
+      id,
+      text: trimmed,
+      verse: typeof entry.verse === "string" && entry.verse.trim() ? entry.verse.trim() : undefined,
+      createdAt,
+      updatedAt: typeof entry.updatedAt === "string" ? entry.updatedAt : undefined,
+      privateMode: Boolean(entry.privateMode)
+    });
+  }
+  return normalized;
+}
+
+function parseGratitudeBackupImportText(content: string): GratitudeBackupImportPayload {
+  const parsed = JSON.parse(content) as unknown;
+  if (Array.isArray(parsed)) {
+    return {
+      settings: DEFAULT_GRATITUDE_SETTINGS,
+      entries: normalizeImportedGratitudeEntries(parsed)
+    };
+  }
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Invalid backup file.");
+  }
+  const payload = parsed as {
+    kind?: unknown;
+    settings?: unknown;
+    entries?: unknown;
+  };
+  if (typeof payload.kind === "string" && payload.kind !== "polyplay-gratitude") {
+    throw new Error("Unsupported backup file type.");
+  }
+  return {
+    settings: normalizeImportedGratitudeSettings(payload.settings),
+    entries: normalizeImportedGratitudeEntries(payload.entries)
+  };
+}
+
 export function JournalModal({ open, onClose }: Props) {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const backgroundVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -121,6 +194,7 @@ export function JournalModal({ open, onClose }: Props) {
   const [savedEntryId, setSavedEntryId] = useState<string | null>(null);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
   const [miniToast, setMiniToast] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const deleteTimerRef = useRef<number | null>(null);
 
@@ -370,11 +444,51 @@ export function JournalModal({ open, onClose }: Props) {
               >
                 Save Backup
               </button>
+              <button
+                type="button"
+                className="journal-modal__export"
+                onClick={() => importInputRef.current?.click()}
+              >
+                Import Backup
+              </button>
               <button type="button" className="journal-modal__close" aria-label="Close Journal" onClick={onClose}>
                 ✕
               </button>
             </div>
           </div>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            hidden
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (!file) return;
+              void (async () => {
+                try {
+                  const content = await file.text();
+                  const payload = parseGratitudeBackupImportText(content);
+                  if (payload.entries.length === 0) {
+                    throw new Error("Backup has no entries.");
+                  }
+                  const hasExisting = entries.length > 0;
+                  if (hasExisting) {
+                    const confirmed = window.confirm(
+                      "Import Backup will replace your current Gratitude Journal entries on this device. Continue?"
+                    );
+                    if (!confirmed) return;
+                  }
+                  saveGratitudeSettings(payload.settings);
+                  localStorage.setItem(GRATITUDE_ENTRIES_KEY, JSON.stringify(payload.entries));
+                  setEntries(listEntries());
+                  setMiniToast(`Backup imported (${payload.entries.length} entries)`);
+                } catch {
+                  setMiniToast("Import failed");
+                }
+              })();
+            }}
+          />
           <div className="journalControlRow">
             <div className="journalVerseCard">
               <strong>Verse</strong>
