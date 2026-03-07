@@ -110,6 +110,13 @@ body.perf-lite .track-art-badge {
   isolation: isolate;
 }
 
+.trackRow,
+.trackRow * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 .rowAuraGlow {
   border-color: rgba(var(--aura-rgb), calc(0.24 + var(--row-aura-level) * 0.38));
   box-shadow:
@@ -313,6 +320,8 @@ body.theme-dark .rowAuraGlow {
   background-size: cover;
   background-position: center;
   overflow: hidden;
+  -webkit-user-drag: none;
+  user-drag: none;
 }
 
 .trackRow__metaHit {
@@ -377,6 +386,7 @@ body.theme-dark .rowAuraGlow {
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(14, 18, 28, 0.72);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .trackRow__auraButton {

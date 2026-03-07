@@ -4593,11 +4593,19 @@ body.nuke-flash::after {
   overflow: visible;
   aspect-ratio: 1 / 1;
   min-height: 150px;
-  background: linear-gradient(145deg, rgba(28, 34, 50, 0.92), rgba(14, 18, 28, 0.9));
+  background: linear-gradient(145deg, #1c2232, #0e121c);
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.26);
   isolation: isolate;
+  contain: paint;
   pointer-events: auto;
   transition: box-shadow 180ms ease, transform 140ms ease, filter 180ms ease;
+}
+
+.ytm-tile,
+.ytm-tile * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .ytm-tile.is-active {
@@ -4676,10 +4684,11 @@ body.nuke-flash::after {
   display: block;
   border-radius: 16px;
   overflow: hidden;
-  background: transparent;
+  background: #0e121c;
   color: inherit;
   cursor: pointer;
   pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .ytm-cover {
@@ -4721,6 +4730,9 @@ body.theme-custom.theme-custom-amber .ytm-cover {
   object-fit: cover;
   object-position: center;
   display: block;
+  -webkit-user-drag: none;
+  user-drag: none;
+  pointer-events: none;
 }
 
 .ytm-cover.is-fallback::after {
