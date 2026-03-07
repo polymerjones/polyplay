@@ -35,6 +35,9 @@ type Splat = {
   vx: number;
   vy: number;
   r: number;
+  rx: number;
+  ry: number;
+  rot: number;
   alpha: number;
   ttl: number;
   age: number;
@@ -376,10 +379,14 @@ class AmbientFxEngine {
       for (let i = 0; i < this.splatters.length; i += 1) {
         const splat = this.splatters[i];
         const life = 1 - splat.age / splat.ttl;
+        this.ctx.save();
+        this.ctx.translate(splat.x, splat.y);
+        this.ctx.rotate(splat.rot);
         this.ctx.beginPath();
-        this.ctx.arc(splat.x, splat.y, splat.r, 0, Math.PI * 2);
+        this.ctx.ellipse(0, 0, Math.max(1.2, splat.rx), Math.max(1.2, splat.ry), 0, 0, Math.PI * 2);
         this.ctx.fillStyle = `hsla(${splat.hue} 86% 64% / ${splat.alpha * life})`;
         this.ctx.fill();
+        this.ctx.restore();
       }
     }
 
@@ -453,6 +460,9 @@ class AmbientFxEngine {
       vx: 0,
       vy: 0,
       r: 0,
+      rx: 0,
+      ry: 0,
+      rot: 0,
       alpha: 0,
       ttl: 0,
       age: 0,
@@ -514,12 +524,22 @@ class AmbientFxEngine {
 
   private spawnSplat(x: number, y: number, intensity: number): void {
     const splat = this.acquireSplat();
-    const spread = 20 + intensity * 22;
-    splat.x = x + rand(-spread, spread);
-    splat.y = y + rand(-spread, spread);
-    splat.vx = this.reducedMotion ? 0 : rand(-0.02, 0.02);
-    splat.vy = this.reducedMotion ? 0 : rand(-0.02, 0.02);
-    splat.r = rand(2.4, 10.2);
+    const spread = 18 + intensity * 28;
+    const angle = rand(0, Math.PI * 2);
+    const radial = Math.sqrt(Math.random());
+    const burstBias = Math.random() < 0.18 ? rand(1.08, 1.45) : 1;
+    const distance = spread * radial * burstBias;
+    const jitter = 2 + intensity * 3;
+    splat.x = x + Math.cos(angle) * distance + rand(-jitter, jitter);
+    splat.y = y + Math.sin(angle) * distance + rand(-jitter, jitter);
+    splat.vx = this.reducedMotion ? 0 : Math.cos(angle) * rand(0.01, 0.06) + rand(-0.015, 0.015);
+    splat.vy = this.reducedMotion ? 0 : Math.sin(angle) * rand(0.01, 0.06) + rand(-0.015, 0.015);
+    const baseRadius = rand(2.2, 8.8) * (Math.random() < 0.1 ? rand(1.15, 1.5) : 1);
+    const eccentricity = rand(0.82, 1.3);
+    splat.r = baseRadius;
+    splat.rx = baseRadius * eccentricity;
+    splat.ry = baseRadius / eccentricity;
+    splat.rot = angle + rand(-0.55, 0.55);
     splat.alpha = rand(0.14, 0.32);
     splat.ttl = this.resolvedQuality === "lite" ? rand(10000, 18000) : rand(12000, 30000);
     splat.age = 0;
