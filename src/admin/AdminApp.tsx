@@ -76,6 +76,7 @@ const THEME_PACK_AURA_COLORS: Record<"crimson" | "teal" | "amber", string> = {
   teal: "#42c7c4",
   amber: "#f0b35b"
 };
+type ThemeSelection = "dark" | "light" | "amber" | "teal" | "crimson";
 
 function normalizeAuraColor(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -87,6 +88,12 @@ function getDefaultAuraByTheme(themeMode: string | null, slot: "crimson" | "teal
   if (themeMode === "light") return "#a066f8";
   if (themeMode === "custom") return THEME_PACK_AURA_COLORS[slot];
   return "#bc84ff";
+}
+
+function getThemeSelectionFromState(themeMode: string | null, slot: "crimson" | "teal" | "amber"): ThemeSelection {
+  if (themeMode === "light") return "light";
+  if (themeMode === "custom") return slot;
+  return "dark";
 }
 
 function formatTrackLabel(track: DbTrackRecord): string {
@@ -192,6 +199,16 @@ export function AdminApp() {
       return slot === "teal" || slot === "amber" ? slot : "crimson";
     } catch {
       return "crimson";
+    }
+  });
+  const [themeSelection, setThemeSelection] = useState<ThemeSelection>(() => {
+    try {
+      const themeMode = localStorage.getItem(THEME_MODE_KEY);
+      const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
+      const safeSlot: "crimson" | "teal" | "amber" = slot === "teal" || slot === "amber" ? slot : "crimson";
+      return getThemeSelectionFromState(themeMode, safeSlot);
+    } catch {
+      return "dark";
     }
   });
   const [auraColor, setAuraColor] = useState<string>(() => {
@@ -303,6 +320,7 @@ export function AdminApp() {
     try {
       const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
       if (slot === "crimson" || slot === "teal" || slot === "amber") setCustomThemeSlot(slot);
+      setThemeSelection(getThemeSelectionFromState(localStorage.getItem(THEME_MODE_KEY), slot === "teal" || slot === "amber" ? slot : "crimson"));
       const savedAura = normalizeAuraColor(localStorage.getItem(AURA_COLOR_KEY));
       if (savedAura) {
         setAuraColor(savedAura);
@@ -320,6 +338,12 @@ export function AdminApp() {
         const slot = event.newValue;
         if (slot === "crimson" || slot === "teal" || slot === "amber") setCustomThemeSlot(slot);
       }
+      if (event.key === THEME_MODE_KEY || event.key === CUSTOM_THEME_SLOT_KEY) {
+        const mode = localStorage.getItem(THEME_MODE_KEY);
+        const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
+        const safeSlot: "crimson" | "teal" | "amber" = slot === "teal" || slot === "amber" ? slot : "crimson";
+        setThemeSelection(getThemeSelectionFromState(mode, safeSlot));
+      }
       if (event.key === AURA_COLOR_KEY) {
         const next = normalizeAuraColor(event.newValue);
         if (next) {
@@ -335,8 +359,16 @@ export function AdminApp() {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type !== "polyplay:theme-changed") return;
       const mode = event.data?.themeMode;
+      const slot = event.data?.customThemeSlot;
       const next = mode === "dark" ? "dark" : "light";
       applyTheme(next);
+      const safeSlot: "crimson" | "teal" | "amber" = slot === "teal" || slot === "amber" || slot === "crimson"
+        ? slot
+        : (localStorage.getItem(CUSTOM_THEME_SLOT_KEY) === "teal" || localStorage.getItem(CUSTOM_THEME_SLOT_KEY) === "amber"
+            ? (localStorage.getItem(CUSTOM_THEME_SLOT_KEY) as "teal" | "amber")
+            : "crimson");
+      setThemeSelection(getThemeSelectionFromState(mode, safeSlot));
+      if (safeSlot) setCustomThemeSlot(safeSlot);
     };
     window.addEventListener("storage", onStorage);
     window.addEventListener("message", onMessage);
@@ -1643,44 +1675,62 @@ export function AdminApp() {
       </section>
 
       <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
-        <h2 className="mb-2 text-base font-semibold text-slate-100">Theme Packs</h2>
+        <h2 className="mb-2 text-base font-semibold text-slate-100">Theme</h2>
         <div className="grid gap-2 sm:grid-cols-[200px_1fr] sm:items-center">
-          <label className="text-sm text-slate-200" htmlFor="custom-theme-slot">
-            Custom theme slot
+          <label className="text-sm text-slate-200" htmlFor="theme-selection">
+            Theme selection
           </label>
           <select
-            id="custom-theme-slot"
+            id="theme-selection"
             className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
-            value={customThemeSlot}
+            value={themeSelection}
             onChange={(event) => {
-              const slot = event.currentTarget.value;
-              if (slot !== "crimson" && slot !== "teal" && slot !== "amber") return;
-              const auraForSlot = THEME_PACK_AURA_COLORS[slot];
-              setCustomThemeSlot(slot);
-              setAuraColor(auraForSlot);
-              setSavedAuraColor(auraForSlot);
+              const selected = event.currentTarget.value as ThemeSelection;
+              if (selected !== "dark" && selected !== "light" && selected !== "amber" && selected !== "teal" && selected !== "crimson") return;
+              const nextMode = selected === "dark" ? "dark" : selected === "light" ? "light" : "custom";
+              const nextSlot: "crimson" | "teal" | "amber" =
+                selected === "amber" || selected === "teal" || selected === "crimson" ? selected : customThemeSlot;
+              setThemeSelection(selected);
+              setCustomThemeSlot(nextSlot);
               try {
-                localStorage.setItem(CUSTOM_THEME_SLOT_KEY, slot);
-                localStorage.setItem(THEME_MODE_KEY, "custom");
-                localStorage.setItem(AURA_COLOR_KEY, auraForSlot);
+                localStorage.setItem(CUSTOM_THEME_SLOT_KEY, nextSlot);
+                localStorage.setItem(THEME_MODE_KEY, nextMode);
               } catch {
                 // Ignore localStorage failures.
               }
+              if (nextMode === "custom") {
+                const auraForSlot = THEME_PACK_AURA_COLORS[nextSlot];
+                setAuraColor(auraForSlot);
+                setSavedAuraColor(auraForSlot);
+                try {
+                  localStorage.setItem(AURA_COLOR_KEY, auraForSlot);
+                } catch {
+                  // Ignore localStorage failures.
+                }
+              }
               try {
                 if (window.parent && window.parent !== window) {
-                  window.parent.postMessage({ type: "polyplay:theme-mode-updated", themeMode: "custom" }, window.location.origin);
-                  window.parent.postMessage({ type: "polyplay:custom-theme-slot-updated", slot }, window.location.origin);
-                  window.parent.postMessage({ type: "polyplay:aura-color-updated", color: auraForSlot }, window.location.origin);
+                  window.parent.postMessage({ type: "polyplay:theme-mode-updated", themeMode: nextMode }, window.location.origin);
+                  window.parent.postMessage({ type: "polyplay:custom-theme-slot-updated", slot: nextSlot }, window.location.origin);
+                  if (nextMode === "custom") {
+                    window.parent.postMessage({ type: "polyplay:aura-color-updated", color: THEME_PACK_AURA_COLORS[nextSlot] }, window.location.origin);
+                  }
                 }
               } catch {
                 // Ignore postMessage failures.
               }
-              setStatus(`Theme pack set to ${slot}. Aura matched to pack.`);
+              setStatus(
+                nextMode === "custom"
+                  ? `Theme set to ${nextSlot}. Aura matched to pack.`
+                  : `Theme set to ${nextMode === "dark" ? "Default (Dark)" : "Light"}.`
+              );
             }}
           >
-            <option value="crimson">Crimson</option>
-            <option value="teal">Teal</option>
+            <option value="dark">Default (Dark Mode)</option>
+            <option value="light">Light Mode</option>
             <option value="amber">Amber</option>
+            <option value="teal">Teal</option>
+            <option value="crimson">Crimson</option>
           </select>
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-[200px_1fr] sm:items-center">

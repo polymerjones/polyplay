@@ -53,6 +53,7 @@ import type { AmbientFxMode, AmbientFxQuality } from "./fx/ambientFxEngine";
 type DimMode = "normal" | "dim" | "mute";
 type ThemeMode = "light" | "dark" | "custom";
 type CustomThemeSlot = "crimson" | "teal" | "amber";
+type ThemeSelection = "dark" | "light" | "amber" | "teal" | "crimson";
 type SafeTapVariant = "bubble" | "ring" | "blob" | "sparkle";
 type SafeTapBurst = {
   id: number;
@@ -111,6 +112,11 @@ const SAFE_TAP_SPAWN_THROTTLE_MS = 40;
 const FX_ENABLED_KEY = "polyplay_fxEnabled_v1";
 const FX_MODE_KEY = "polyplay_fxMode_v1";
 const FX_QUALITY_KEY = "polyplay_fxQuality_v1";
+const THEME_PACK_AURA_COLORS: Record<CustomThemeSlot, string> = {
+  crimson: "#cf6f82",
+  teal: "#42c7c4",
+  amber: "#f0b35b"
+};
 const FX_INTERACTIVE_GUARD_SELECTORS = [
   "button",
   "a",
@@ -164,6 +170,20 @@ function auraHexToRgb(value: string): string {
   const g = Number.parseInt(normalized.slice(3, 5), 16);
   const b = Number.parseInt(normalized.slice(5, 7), 16);
   return `${r}, ${g}, ${b}`;
+}
+
+function getThemeSelection(mode: ThemeMode, slot: CustomThemeSlot): ThemeSelection {
+  if (mode === "dark") return "dark";
+  if (mode === "light") return "light";
+  return slot;
+}
+
+function getThemeLabel(selection: ThemeSelection): string {
+  if (selection === "dark") return "Default (Dark)";
+  if (selection === "light") return "Light";
+  if (selection === "amber") return "Amber";
+  if (selection === "teal") return "Teal";
+  return "Crimson";
 }
 
 function getSafeDuration(value: number): number {
@@ -1674,25 +1694,29 @@ export default function App() {
     });
   };
 
-  const setThemeModeExplicit = (next: ThemeMode, event?: MouseEvent<HTMLButtonElement>) => {
-    setThemeMode(next);
-    if (next === "custom") {
-      setCustomThemeSlot("crimson");
-      try {
-        localStorage.setItem(CUSTOM_THEME_SLOT_KEY, "crimson");
-      } catch {
-        // Ignore localStorage failures.
-      }
-    }
+  const setThemeModeExplicit = (nextSelection: ThemeSelection, event?: MouseEvent<HTMLButtonElement>) => {
+    const nextMode: ThemeMode = nextSelection === "dark" ? "dark" : nextSelection === "light" ? "light" : "custom";
+    const nextSlot: CustomThemeSlot = nextSelection === "amber" || nextSelection === "teal" || nextSelection === "crimson"
+      ? nextSelection
+      : customThemeSlot;
+    const nextAuraColor = nextMode === "custom" ? THEME_PACK_AURA_COLORS[nextSlot] : null;
+    setThemeMode(nextMode);
+    setCustomThemeSlot(nextSlot);
+    if (nextAuraColor) setAuraColor(nextAuraColor);
     try {
-      localStorage.setItem(THEME_MODE_KEY, next);
+      localStorage.setItem(THEME_MODE_KEY, nextMode);
+      localStorage.setItem(CUSTOM_THEME_SLOT_KEY, nextSlot);
+      if (nextAuraColor) localStorage.setItem(AURA_COLOR_KEY, nextAuraColor);
     } catch {
       // Ignore localStorage failures.
     }
     markActivePlaylistDirty();
     try {
       const overlayFrame = document.querySelector<HTMLIFrameElement>(".app-overlay-frame");
-      overlayFrame?.contentWindow?.postMessage({ type: "polyplay:theme-changed", themeMode: next }, window.location.origin);
+      overlayFrame?.contentWindow?.postMessage(
+        { type: "polyplay:theme-changed", themeMode: nextMode, customThemeSlot: nextSlot },
+        window.location.origin
+      );
     } catch {
       // Ignore cross-document messaging failures.
     }
@@ -1702,7 +1726,7 @@ export default function App() {
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!prefersReducedMotion) {
-      setThemeToggleAnim(next === "light" ? "off" : "on");
+      setThemeToggleAnim(nextMode === "light" ? "off" : "on");
       if (themeAnimTimeoutRef.current !== null) window.clearTimeout(themeAnimTimeoutRef.current);
       themeAnimTimeoutRef.current = window.setTimeout(() => {
         setThemeToggleAnim(null);
@@ -1739,9 +1763,10 @@ export default function App() {
   };
 
   const cycleTheme = (event?: MouseEvent<HTMLButtonElement>) => {
-    const order: ThemeMode[] = ["light", "dark", "custom"];
-    const currentIndex = order.indexOf(themeMode);
-    const next = order[(currentIndex + 1) % order.length];
+    const order: ThemeSelection[] = ["dark", "light", "amber", "teal", "crimson"];
+    const current = getThemeSelection(themeMode, customThemeSlot);
+    const currentIndex = order.indexOf(current);
+    const next = order[(currentIndex + 1) % order.length] ?? "dark";
     setThemeModeExplicit(next, event);
   };
 
@@ -2068,6 +2093,8 @@ export default function App() {
     setFxToast(`FX: ${label}`);
   };
 
+  const activeThemeSelection = getThemeSelection(themeMode, customThemeSlot);
+
   return (
     <>
       <div className="app-shell">
@@ -2178,8 +2205,8 @@ export default function App() {
               className={`theme-switch ${themeToggleAnim ? `is-anim-${themeToggleAnim}` : ""} ${
                 themeBloomActive ? "is-bloom" : ""
               }`.trim()}
-              aria-label={`Theme: ${themeMode}`}
-              title={`Theme: ${themeMode === "custom" ? `Custom (${customThemeSlot})` : themeMode}`}
+              aria-label={`Theme: ${getThemeLabel(activeThemeSelection)}`}
+              title={`Theme: ${getThemeLabel(activeThemeSelection)}`}
               onClick={(event) => cycleTheme(event)}
             >
               <span className="theme-switch__icon" aria-hidden="true">
