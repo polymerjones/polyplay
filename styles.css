@@ -995,11 +995,15 @@ body.theme-custom.theme-custom-amber .topbar-tier--controls .theme-switch {
 }
 
 body.dim-vibe::before {
-  animation-duration: 36s;
+  animation-duration: 42s;
+  opacity: 0.2;
+  filter: saturate(0.74) brightness(0.82);
 }
 
 body.dim-vibe .track-backdrop {
   transition-duration: 340ms;
+  opacity: 0.14;
+  filter: blur(42px) saturate(0.78) brightness(0.72);
 }
 
 body.dim-vibe::after {
@@ -1009,8 +1013,8 @@ body.dim-vibe::after {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(circle at 50% 40%, rgba(153, 91, 232, 0.16), rgba(153, 91, 232, 0) 62%),
-    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.06) 56%, rgba(0, 0, 0, 0.28) 100%);
+    radial-gradient(circle at 50% 44%, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0) 62%),
+    linear-gradient(180deg, rgba(5, 8, 12, 0.12), rgba(4, 6, 10, 0.24));
 }
 
 body.gratitude-reactive::before {
@@ -1194,6 +1198,7 @@ body.mute-freeze .controls-visualizer,
 body.mute-freeze .track-backdrop {
   animation-play-state: paused !important;
   transition-duration: 0ms !important;
+  opacity: 0.52;
 }
 
 .tile::after {
@@ -2099,12 +2104,14 @@ body.mute-freeze .track-backdrop {
 
 .effects-dim-overlay {
   background:
-    radial-gradient(circle at 50% 40%, rgba(88, 48, 166, 0.18), rgba(42, 22, 80, 0.08) 58%, transparent 100%),
-    linear-gradient(180deg, rgba(12, 8, 24, 0.08), rgba(8, 6, 18, 0.16));
+    radial-gradient(circle at 50% 40%, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0) 58%),
+    linear-gradient(180deg, rgba(8, 10, 14, 0.08), rgba(5, 7, 11, 0.22));
 }
 
 .effects-mute-overlay {
-  background: radial-gradient(circle at 50% 40%, rgba(58, 40, 118, 0.16), rgba(12, 10, 20, 0.24));
+  background:
+    radial-gradient(circle at 50% 42%, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.06) 52%, rgba(0, 0, 0, 0.3) 100%),
+    linear-gradient(180deg, rgba(4, 6, 9, 0.16), rgba(2, 4, 7, 0.32));
 }
 
 .safe-tap-burst {

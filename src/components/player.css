@@ -1077,12 +1077,30 @@ body.perf-lite .fullscreen-player-shell__bg {
   opacity: 0.34;
 }
 
+body.dim-vibe .track-backdrop,
+body.dim-vibe .mini-player-bar::before,
+body.dim-vibe .fullscreen-player-shell__bg,
+body.dim-vibe .ambient-fx-canvas,
+body.dim-vibe .bubble-layer {
+  filter: saturate(0.72) brightness(0.76) !important;
+}
+
+body.dim-vibe .ambient-fx-canvas,
+body.dim-vibe .bubble-layer {
+  opacity: 0.72;
+}
+
 body.mute-freeze .track-backdrop,
 body.mute-freeze .mini-player-bar::before,
 body.mute-freeze .fullscreen-player-shell__bg,
 body.mute-freeze .ambient-fx-canvas,
 body.mute-freeze .bubble-layer {
-  filter: grayscale(1) saturate(0.05) !important;
+  filter: grayscale(1) saturate(0.03) brightness(0.54) !important;
+}
+
+body.mute-freeze .ambient-fx-canvas,
+body.mute-freeze .bubble-layer {
+  opacity: 0.48;
 }
 
 body.perf-lite .fullscreen-player-shell__art-canvas {
