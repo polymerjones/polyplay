@@ -551,11 +551,29 @@ main,
   overflow: visible;
 }
 
+.journal-link::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 216, 122, 0.28), rgba(255, 216, 122, 0) 68%),
+    radial-gradient(circle at 30% 25%, rgba(255, 239, 192, 0.24), rgba(255, 239, 192, 0) 62%);
+  opacity: 0.52;
+  filter: blur(5px);
+  animation: journal-icon-gold-shimmer 3.2s ease-in-out infinite;
+}
+
 .journal-link:hover {
   border-color: rgba(230, 198, 255, 0.65);
   box-shadow:
     0 0 20px rgba(191, 145, 255, 0.5),
     0 10px 18px rgba(24, 14, 42, 0.4);
+}
+
+.journal-link:hover::before {
+  opacity: 0.66;
 }
 
 .journal-link:active {
@@ -565,6 +583,8 @@ main,
 .journal-icon {
   font-size: 16px;
   line-height: 1;
+  position: relative;
+  z-index: 1;
 }
 
 .journal-icon-svg {
@@ -4231,6 +4251,17 @@ body.nuke-flash::after {
   }
 }
 
+@keyframes journal-icon-gold-shimmer {
+  0%, 100% {
+    transform: scale(0.98);
+    opacity: 0.46;
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 0.68;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pp-oracle-orb,
   .pp-oracle-orb::before {
@@ -4496,15 +4527,21 @@ body.nuke-flash::after {
   pointer-events: none;
   opacity: calc(0.22 + (var(--tile-aura-level, 0) * 0.62));
   background:
-    radial-gradient(78% 92% at 36% 50%, rgba(163, 112, 255, 0.4), rgba(163, 112, 255, 0) 70%),
-    radial-gradient(60% 72% at 64% 48%, rgba(118, 82, 240, 0.32), rgba(118, 82, 240, 0) 72%);
+    radial-gradient(78% 92% at 36% 50%, rgba(var(--aura-rgb), 0.42), rgba(var(--aura-rgb), 0) 70%),
+    radial-gradient(60% 72% at 64% 48%, rgba(var(--aura-rgb), 0.32), rgba(var(--aura-rgb), 0) 72%);
   filter: blur(14px);
 }
 
 .ytm-tile.has-aura {
   box-shadow:
     0 10px 22px rgba(0, 0, 0, 0.26),
-    0 0 calc(14px + (var(--tile-aura-level, 0) * 24px)) rgba(160, 108, 255, calc(0.24 + (var(--tile-aura-level, 0) * 0.46)));
+    0 0 calc(14px + (var(--tile-aura-level, 0) * 28px)) rgba(var(--aura-rgb), calc(0.24 + (var(--tile-aura-level, 0) * 0.5)));
+}
+
+.ytm-tile.has-aura .ytm-tile-hit {
+  box-shadow:
+    inset 0 0 0 calc(1px + (var(--tile-aura-level, 0) * 1.5px)) rgba(var(--aura-rgb), calc(0.3 + (var(--tile-aura-level, 0) * 0.36))),
+    inset 0 0 calc(10px + (var(--tile-aura-level, 0) * 12px)) rgba(var(--aura-rgb), calc(0.08 + (var(--tile-aura-level, 0) * 0.24)));
 }
 
 .ytm-tile.is-active::after {
@@ -4622,19 +4659,19 @@ body.nuke-flash::after {
   0% {
     transform: scale(1);
     box-shadow:
-      0 0 0 0 rgba(181, 128, 255, 0.5),
+      0 0 0 0 rgba(var(--aura-rgb), 0.5),
       0 8px 18px rgba(8, 12, 18, 0.24);
   }
   45% {
     transform: scale(1.014);
     box-shadow:
-      0 0 0 4px rgba(181, 128, 255, 0.24),
+      0 0 0 4px rgba(var(--aura-rgb), 0.24),
       0 12px 24px rgba(8, 12, 18, 0.32);
   }
   100% {
     transform: scale(1);
     box-shadow:
-      0 0 0 0 rgba(181, 128, 255, 0),
+      0 0 0 0 rgba(var(--aura-rgb), 0),
       0 8px 18px rgba(8, 12, 18, 0.22);
   }
 }

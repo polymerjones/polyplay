@@ -14,7 +14,7 @@ export function TrackTile({ track, trackId, active, onSelectTrack, onAuraUp }: P
   const [artFailed, setArtFailed] = useState(false);
   const artSrc = !artFailed && track.artUrl ? track.artUrl : DEFAULT_ARTWORK_URL;
   const isFallback = artSrc === DEFAULT_ARTWORK_URL;
-  const auraLevel = Math.max(0, Math.min(1, (track.aura || 0) / 5));
+  const auraLevel = Math.max(0, Math.min(1, (track.aura || 0) / 10));
 
   return (
     <article

@@ -47,7 +47,7 @@ const STORAGE_CAP_BYTES_DESKTOP = 4 * 1024 * 1024 * 1024;
 const STORAGE_CAP_HEADROOM_BYTES = 128 * 1024 * 1024;
 
 function clampAura(aura: number): number {
-  return Math.max(0, Math.min(5, Math.round(aura)));
+  return Math.max(0, Math.min(10, Math.round(aura)));
 }
 
 function now(): number {

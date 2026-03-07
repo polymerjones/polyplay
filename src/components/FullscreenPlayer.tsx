@@ -234,7 +234,7 @@ export function FullscreenPlayer({
         <div className="fullscreen-player-shell__meta">
           <h2>{track.title}</h2>
           <p>
-            {formatTime(currentTime)} / {formatTime(duration)} • Aura {track.aura}/5
+            {formatTime(currentTime)} / {formatTime(duration)} • Aura {track.aura}/10
           </p>
           {track.missingAudio && <p>Missing audio</p>}
           {track.missingArt && <p>Missing artwork</p>}

@@ -15,7 +15,7 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
   const artStyle = track.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
     : ({ backgroundImage: track.artGrad || rowFallbackArtwork } as CSSProperties);
-  const auraLevel = Math.max(0, Math.min(1, track.aura / 5));
+  const auraLevel = Math.max(0, Math.min(1, track.aura / 10));
   const hasAura = track.aura > 0;
 
   return (
@@ -47,7 +47,7 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
         <div className="trackRow__meta">
           <div className="trackRow__title">{track.title}</div>
           <div className="trackRow__sub">{track.sub || "Uploaded"}</div>
-          <div className="trackRow__aura">Aura {track.aura}/5</div>
+          <div className="trackRow__aura">Aura {track.aura}/10</div>
         </div>
       </button>
       <div className="trackRow__controls">

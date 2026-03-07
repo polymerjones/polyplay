@@ -80,7 +80,7 @@ export function migrateLibraryIfNeeded(input: unknown): LibraryState {
       sub: t.sub ?? "Uploaded",
       artist: t.artist ?? null,
       duration: Number.isFinite(t.duration) ? Number(t.duration) : null,
-      aura: Math.max(0, Math.min(5, Math.round(Number(t.aura ?? 0)))),
+      aura: Math.max(0, Math.min(10, Math.round(Number(t.aura ?? 0)))),
       audioKey: t.audioKey || null,
       artKey: t.artKey || null,
       artVideoKey: t.artVideoKey || null,

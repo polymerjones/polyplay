@@ -64,6 +64,13 @@ const SPLASH_SESSION_KEY = "polyplay_hasSeenSplashSession";
 const OPEN_STATE_SEEN_KEY = "polyplay_open_state_seen_v102";
 const THEME_MODE_KEY = "polyplay_themeMode";
 const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
+const AURA_COLOR_KEY = "polyplay_auraColor_v1";
+
+function normalizeAuraColor(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed.toLowerCase() : null;
+}
 
 function formatTrackLabel(track: DbTrackRecord): string {
   const shortId = track.id.slice(0, 8);
@@ -170,6 +177,13 @@ export function AdminApp() {
       return "crimson";
     }
   });
+  const [auraColor, setAuraColor] = useState<string>(() => {
+    try {
+      return normalizeAuraColor(localStorage.getItem(AURA_COLOR_KEY)) || "#bc84ff";
+    } catch {
+      return "#bc84ff";
+    }
+  });
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
   const [editingTrackTitle, setEditingTrackTitle] = useState("");
   const [renamingTrackId, setRenamingTrackId] = useState<string | null>(null);
@@ -265,6 +279,8 @@ export function AdminApp() {
     try {
       const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
       if (slot === "crimson" || slot === "teal" || slot === "amber") setCustomThemeSlot(slot);
+      const savedAura = normalizeAuraColor(localStorage.getItem(AURA_COLOR_KEY));
+      if (savedAura) setAuraColor(savedAura);
     } catch {
       // Ignore storage read failures.
     }
@@ -276,6 +292,10 @@ export function AdminApp() {
       if (event.key === CUSTOM_THEME_SLOT_KEY) {
         const slot = event.newValue;
         if (slot === "crimson" || slot === "teal" || slot === "amber") setCustomThemeSlot(slot);
+      }
+      if (event.key === AURA_COLOR_KEY) {
+        const next = normalizeAuraColor(event.newValue);
+        if (next) setAuraColor(next);
       }
     };
     const onMessage = (event: MessageEvent) => {
@@ -1606,6 +1626,35 @@ export function AdminApp() {
             <option value="teal">Teal</option>
             <option value="amber">Amber</option>
           </select>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-[200px_1fr] sm:items-center">
+          <label className="text-sm text-slate-200" htmlFor="aura-color-picker">
+            Aura Color
+          </label>
+          <input
+            id="aura-color-picker"
+            type="color"
+            className="h-10 w-16 cursor-pointer rounded-xl border border-slate-300/20 bg-slate-950/70 p-1"
+            value={auraColor}
+            onChange={(event) => {
+              const next = normalizeAuraColor(event.currentTarget.value);
+              if (!next) return;
+              setAuraColor(next);
+              try {
+                localStorage.setItem(AURA_COLOR_KEY, next);
+              } catch {
+                // Ignore localStorage failures.
+              }
+              try {
+                if (window.parent && window.parent !== window) {
+                  window.parent.postMessage({ type: "polyplay:aura-color-updated", color: next }, window.location.origin);
+                }
+              } catch {
+                // Ignore postMessage failures.
+              }
+              setStatus(`Aura color updated to ${next}.`);
+            }}
+          />
         </div>
       </section>
 

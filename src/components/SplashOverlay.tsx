@@ -96,6 +96,9 @@ export function SplashOverlay({ isDismissing, onComplete }: Props) {
         }}
         onEnded={completeOnce}
       />
+      <button type="button" className="splash-overlay__close" aria-label="Close welcome" onClick={completeOnce}>
+        ✕
+      </button>
       <button type="button" className="splash-overlay__skip" onClick={completeOnce}>
         Skip
       </button>

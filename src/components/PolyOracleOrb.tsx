@@ -1,7 +1,7 @@
 export function PolyOracleOrb() {
   return (
     <a
-      href="https://polyoracle.pages.dev/"
+      href="https://apps.apple.com/app/poly-oracle/id6760079845"
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Open PolyOracle"

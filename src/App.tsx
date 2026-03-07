@@ -90,6 +90,7 @@ const OPEN_STATE_SEEN_KEY = "polyplay_open_state_seen_v102";
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const THEME_MODE_KEY = "polyplay_themeMode";
 const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
+const AURA_COLOR_KEY = "polyplay_auraColor_v1";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
 const DIM_MODE_KEY = "polyplay_dimMode_v1";
@@ -147,7 +148,22 @@ const FX_INTERACTIVE_GUARD_SELECTORS = [
 ].join(", ");
 
 function clampAura(value: number): number {
-  return Math.max(0, Math.min(5, Math.round(value)));
+  return Math.max(0, Math.min(10, Math.round(value)));
+}
+
+function normalizeAuraColor(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed.toLowerCase() : null;
+}
+
+function auraHexToRgb(value: string): string {
+  const normalized = normalizeAuraColor(value);
+  if (!normalized) return "188, 132, 255";
+  const r = Number.parseInt(normalized.slice(1, 3), 16);
+  const g = Number.parseInt(normalized.slice(3, 5), 16);
+  const b = Number.parseInt(normalized.slice(5, 7), 16);
+  return `${r}, ${g}, ${b}`;
 }
 
 function getSafeDuration(value: number): number {
@@ -244,6 +260,13 @@ export default function App() {
   const [showJournalTapToast, setShowJournalTapToast] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [customThemeSlot, setCustomThemeSlot] = useState<CustomThemeSlot>("crimson");
+  const [auraColor, setAuraColor] = useState<string | null>(() => {
+    try {
+      return normalizeAuraColor(localStorage.getItem(AURA_COLOR_KEY));
+    } catch {
+      return null;
+    }
+  });
   const [themeToggleAnim, setThemeToggleAnim] = useState<"on" | "off" | null>(null);
   const [themeBloomActive, setThemeBloomActive] = useState(false);
   const [fxEnabled] = useState<boolean>(() => {
@@ -488,6 +511,7 @@ export default function App() {
       if (savedCustomThemeSlot === "crimson" || savedCustomThemeSlot === "teal" || savedCustomThemeSlot === "amber") {
         setCustomThemeSlot(savedCustomThemeSlot);
       }
+      setAuraColor(normalizeAuraColor(localStorage.getItem(AURA_COLOR_KEY)));
       setIsShuffleEnabled(localStorage.getItem(SHUFFLE_ENABLED_KEY) === "true");
       setIsRepeatTrackEnabled(localStorage.getItem(REPEAT_TRACK_KEY) === "true");
       setLoopByTrack(parseLoopByTrack(localStorage.getItem(LOOP_REGION_KEY)));
@@ -926,7 +950,13 @@ export default function App() {
         themeBloomTimeoutRef.current = null;
       }
     };
-  }, [themeMode, customThemeSlot]);
+    const nextAuraColor = auraColor;
+    if (nextAuraColor) {
+      root.style.setProperty("--aura-rgb", auraHexToRgb(nextAuraColor!));
+    } else {
+      root.style.removeProperty("--aura-rgb");
+    }
+  }, [themeMode, customThemeSlot, auraColor]);
 
   useEffect(() => {
     const isDimVibe = dimMode === "dim";
@@ -1032,6 +1062,20 @@ export default function App() {
           } catch {
             // Ignore localStorage failures.
           }
+        }
+        return;
+      }
+      if (type === "polyplay:aura-color-updated") {
+        const color = normalizeAuraColor(event.data?.color);
+        setAuraColor(color);
+        try {
+          if (color) {
+            localStorage.setItem(AURA_COLOR_KEY, color);
+          } else {
+            localStorage.removeItem(AURA_COLOR_KEY);
+          }
+        } catch {
+          // Ignore localStorage failures.
         }
         return;
       }
@@ -2190,6 +2234,14 @@ export default function App() {
 
         {showOpenState && hasTracks && (
           <section className="open-state-card" role="region" aria-label="Welcome">
+            <button
+              type="button"
+              className="open-state-card__close"
+              aria-label="Close welcome"
+              onClick={dismissOpenState}
+            >
+              ✕
+            </button>
             <div className="open-state-card__title">{`Welcome to Polyplay Beta ${APP_VERSION}`}</div>
             <p className="open-state-card__body">Tap a tile to start playback, then use Loop modes from the player bar.</p>
             <button type="button" className="open-state-card__dismiss" onClick={dismissOpenState}>

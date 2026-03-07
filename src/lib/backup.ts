@@ -193,7 +193,7 @@ export class BackupSizeError extends Error {
 function clampAura(value: number): number {
   const num = Number(value);
   if (!Number.isFinite(num)) return 0;
-  return Math.max(0, Math.min(5, Math.round(num)));
+  return Math.max(0, Math.min(10, Math.round(num)));
 }
 
 function safeJsonParse<T>(value: string | null, fallback: T): T {

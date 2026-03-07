@@ -105,7 +105,7 @@ export function MiniPlayerBar({
         <div className="mini-player-bar__meta">
           <div className="mini-player-bar__title">{track?.title ?? "Select a track"}</div>
           <div className="mini-player-bar__sub">
-            {formatTime(currentTime)} / {formatTime(duration)} • Aura {track?.aura ?? 0}/5
+            {formatTime(currentTime)} / {formatTime(duration)} • Aura {track?.aura ?? 0}/10
           </div>
           {track?.missingAudio && <div className="mini-player-bar__sub">Missing audio</div>}
           {track?.missingArt && <div className="mini-player-bar__sub">Missing artwork</div>}

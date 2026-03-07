@@ -16,7 +16,7 @@ function getCooldownFactor(lastPlayedAt: number | undefined, now: number): numbe
 }
 
 export function computeShuffleWeight(track: Track, now: number, lastPlayedAt?: number): number {
-  const aura = Math.max(0, Math.min(5, Math.round(track.aura || 0)));
+  const aura = Math.max(0, Math.min(10, Math.round(track.aura || 0)));
   const auraWeight = 1 + aura * AURA_MULTIPLIER;
   const cooldownFactor = getCooldownFactor(lastPlayedAt, now);
   return Math.max(0.0001, BASE_WEIGHT * auraWeight * cooldownFactor);
