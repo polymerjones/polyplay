@@ -71,11 +71,22 @@ const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
 const DIM_MODE_KEY = "polyplay_dimMode_v1";
 const LOOP_REGION_KEY = "polyplay_loopByTrack";
 const LOOP_MODE_KEY = "polyplay_loopModeByTrack";
+const THEME_PACK_AURA_COLORS: Record<"crimson" | "teal" | "amber", string> = {
+  crimson: "#cf6f82",
+  teal: "#42c7c4",
+  amber: "#f0b35b"
+};
 
 function normalizeAuraColor(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed.toLowerCase() : null;
+}
+
+function getDefaultAuraByTheme(themeMode: string | null, slot: "crimson" | "teal" | "amber"): string {
+  if (themeMode === "light") return "#a066f8";
+  if (themeMode === "custom") return THEME_PACK_AURA_COLORS[slot];
+  return "#bc84ff";
 }
 
 function formatTrackLabel(track: DbTrackRecord): string {
@@ -1644,20 +1655,27 @@ export function AdminApp() {
             onChange={(event) => {
               const slot = event.currentTarget.value;
               if (slot !== "crimson" && slot !== "teal" && slot !== "amber") return;
+              const auraForSlot = THEME_PACK_AURA_COLORS[slot];
               setCustomThemeSlot(slot);
+              setAuraColor(auraForSlot);
+              setSavedAuraColor(auraForSlot);
               try {
                 localStorage.setItem(CUSTOM_THEME_SLOT_KEY, slot);
+                localStorage.setItem(THEME_MODE_KEY, "custom");
+                localStorage.setItem(AURA_COLOR_KEY, auraForSlot);
               } catch {
                 // Ignore localStorage failures.
               }
               try {
                 if (window.parent && window.parent !== window) {
+                  window.parent.postMessage({ type: "polyplay:theme-mode-updated", themeMode: "custom" }, window.location.origin);
                   window.parent.postMessage({ type: "polyplay:custom-theme-slot-updated", slot }, window.location.origin);
+                  window.parent.postMessage({ type: "polyplay:aura-color-updated", color: auraForSlot }, window.location.origin);
                 }
               } catch {
                 // Ignore postMessage failures.
               }
-              setStatus(`Custom theme slot set to ${slot}.`);
+              setStatus(`Theme pack set to ${slot}. Aura matched to pack.`);
             }}
           >
             <option value="crimson">Crimson</option>
@@ -1681,30 +1699,55 @@ export function AdminApp() {
                 setAuraColor(next);
               }}
             />
-            <Button
-              variant="primary"
-              disabled={auraColor === savedAuraColor}
-              onClick={() => {
-                const next = normalizeAuraColor(auraColor);
-                if (!next) return;
-                setSavedAuraColor(next);
-                try {
-                  localStorage.setItem(AURA_COLOR_KEY, next);
-                } catch {
-                  // Ignore localStorage failures.
-                }
-                try {
-                  if (window.parent && window.parent !== window) {
-                    window.parent.postMessage({ type: "polyplay:aura-color-updated", color: next }, window.location.origin);
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="primary"
+                disabled={auraColor === savedAuraColor}
+                onClick={() => {
+                  const next = normalizeAuraColor(auraColor);
+                  if (!next) return;
+                  setSavedAuraColor(next);
+                  try {
+                    localStorage.setItem(AURA_COLOR_KEY, next);
+                  } catch {
+                    // Ignore localStorage failures.
                   }
-                } catch {
-                  // Ignore postMessage failures.
-                }
-                setStatus(`Aura color applied: ${next}.`);
-              }}
-            >
-              Save / Apply
-            </Button>
+                  try {
+                    if (window.parent && window.parent !== window) {
+                      window.parent.postMessage({ type: "polyplay:aura-color-updated", color: next }, window.location.origin);
+                    }
+                  } catch {
+                    // Ignore postMessage failures.
+                  }
+                  setStatus(`Aura color applied: ${next}.`);
+                }}
+              >
+                Save / Apply
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const fallback = getDefaultAuraByTheme(localStorage.getItem(THEME_MODE_KEY), customThemeSlot);
+                  setAuraColor(fallback);
+                  setSavedAuraColor(fallback);
+                  try {
+                    localStorage.removeItem(AURA_COLOR_KEY);
+                  } catch {
+                    // Ignore localStorage failures.
+                  }
+                  try {
+                    if (window.parent && window.parent !== window) {
+                      window.parent.postMessage({ type: "polyplay:aura-color-updated", color: null }, window.location.origin);
+                    }
+                  } catch {
+                    // Ignore postMessage failures.
+                  }
+                  setStatus("Aura color reset to default.");
+                }}
+              >
+                Reset
+              </Button>
+            </div>
           </div>
         </div>
       </section>

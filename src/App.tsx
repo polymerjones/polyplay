@@ -1065,6 +1065,18 @@ export default function App() {
         }
         return;
       }
+      if (type === "polyplay:theme-mode-updated") {
+        const nextMode = event.data?.themeMode;
+        if (nextMode === "light" || nextMode === "dark" || nextMode === "custom") {
+          setThemeMode(nextMode);
+          try {
+            localStorage.setItem(THEME_MODE_KEY, nextMode);
+          } catch {
+            // Ignore localStorage failures.
+          }
+        }
+        return;
+      }
       if (type === "polyplay:aura-color-updated") {
         const color = normalizeAuraColor(event.data?.color);
         setAuraColor(color);
