@@ -1707,6 +1707,14 @@ export function AdminApp() {
                 } catch {
                   // Ignore localStorage failures.
                 }
+              } else if (selected === "dark") {
+                setAuraColor("#bc84ff");
+                setSavedAuraColor("#bc84ff");
+                try {
+                  localStorage.removeItem(AURA_COLOR_KEY);
+                } catch {
+                  // Ignore localStorage failures.
+                }
               }
               try {
                 if (window.parent && window.parent !== window) {
@@ -1714,6 +1722,8 @@ export function AdminApp() {
                   window.parent.postMessage({ type: "polyplay:custom-theme-slot-updated", slot: nextSlot }, window.location.origin);
                   if (nextMode === "custom") {
                     window.parent.postMessage({ type: "polyplay:aura-color-updated", color: THEME_PACK_AURA_COLORS[nextSlot] }, window.location.origin);
+                  } else if (selected === "dark") {
+                    window.parent.postMessage({ type: "polyplay:aura-color-updated", color: null }, window.location.origin);
                   }
                 }
               } catch {

@@ -20,6 +20,8 @@ import {
 
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const THEME_MODE_KEY = "polyplay_themeMode";
+const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
+const AURA_COLOR_KEY = "polyplay_auraColor_v1";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
 const HAS_IMPORTED_KEY = "polyplay_hasImported";
@@ -57,7 +59,9 @@ export type PolyplayConfig = {
   appVersion: string;
   createdAt: string;
   settings: {
-    themeMode: "light" | "dark";
+    themeMode: "light" | "dark" | "custom";
+    customThemeSlot?: "crimson" | "teal" | "amber";
+    auraColor?: string | null;
     layoutMode: "grid" | "list";
     shuffleEnabled: boolean;
     repeatTrackEnabled: boolean;
@@ -241,6 +245,21 @@ function asTheme(value: unknown): "light" | "dark" {
   return value === "dark" ? "dark" : "light";
 }
 
+function asThemeMode(value: unknown): "light" | "dark" | "custom" {
+  if (value === "custom") return "custom";
+  return asTheme(value);
+}
+
+function asCustomThemeSlot(value: unknown): "crimson" | "teal" | "amber" {
+  return value === "teal" || value === "amber" ? value : "crimson";
+}
+
+function asAuraColor(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed.toLowerCase() : null;
+}
+
 function asLayout(value: unknown): "grid" | "list" {
   return value === "list" ? "list" : "grid";
 }
@@ -338,7 +357,9 @@ export function buildConfigSnapshot(): PolyplayConfig {
     appVersion: APP_VERSION,
     createdAt: nowIso(),
     settings: {
-      themeMode: asTheme(localStorage.getItem(THEME_MODE_KEY)),
+      themeMode: asThemeMode(localStorage.getItem(THEME_MODE_KEY)),
+      customThemeSlot: asCustomThemeSlot(localStorage.getItem(CUSTOM_THEME_SLOT_KEY)),
+      auraColor: asAuraColor(localStorage.getItem(AURA_COLOR_KEY)),
       layoutMode: asLayout(localStorage.getItem(LAYOUT_MODE_KEY)),
       shuffleEnabled: asBoolean(localStorage.getItem(SHUFFLE_ENABLED_KEY)),
       repeatTrackEnabled: asBoolean(localStorage.getItem(REPEAT_TRACK_KEY))
@@ -409,6 +430,8 @@ function normalizeImportedConfig(input: unknown): PolyplayConfig {
 
   const settings = value.settings ?? {
     themeMode: "light",
+    customThemeSlot: "crimson",
+    auraColor: null,
     layoutMode: "grid",
     shuffleEnabled: false,
     repeatTrackEnabled: false
@@ -453,7 +476,9 @@ function normalizeImportedConfig(input: unknown): PolyplayConfig {
     appVersion: typeof value.appVersion === "string" ? value.appVersion : APP_VERSION,
     createdAt: typeof value.createdAt === "string" ? value.createdAt : nowIso(),
     settings: {
-      themeMode: asTheme(settings.themeMode),
+      themeMode: asThemeMode(settings.themeMode),
+      customThemeSlot: asCustomThemeSlot(settings.customThemeSlot),
+      auraColor: asAuraColor(settings.auraColor),
       layoutMode: asLayout(settings.layoutMode),
       shuffleEnabled: asBoolean(settings.shuffleEnabled),
       repeatTrackEnabled: asBoolean(settings.repeatTrackEnabled)
@@ -484,6 +509,10 @@ export function parseConfigImportText(content: string): PolyplayConfig {
 
 export function applyImportedConfig(config: PolyplayConfig): ImportConfigSummary {
   localStorage.setItem(THEME_MODE_KEY, config.settings.themeMode);
+  localStorage.setItem(CUSTOM_THEME_SLOT_KEY, asCustomThemeSlot(config.settings.customThemeSlot));
+  const auraColor = asAuraColor(config.settings.auraColor);
+  if (auraColor) localStorage.setItem(AURA_COLOR_KEY, auraColor);
+  else localStorage.removeItem(AURA_COLOR_KEY);
   localStorage.setItem(LAYOUT_MODE_KEY, config.settings.layoutMode);
   localStorage.setItem(SHUFFLE_ENABLED_KEY, config.settings.shuffleEnabled ? "true" : "false");
   localStorage.setItem(REPEAT_TRACK_KEY, config.settings.repeatTrackEnabled ? "true" : "false");

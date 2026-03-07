@@ -1699,14 +1699,22 @@ export default function App() {
     const nextSlot: CustomThemeSlot = nextSelection === "amber" || nextSelection === "teal" || nextSelection === "crimson"
       ? nextSelection
       : customThemeSlot;
-    const nextAuraColor = nextMode === "custom" ? THEME_PACK_AURA_COLORS[nextSlot] : null;
+    const nextAuraColor = nextMode === "custom" ? THEME_PACK_AURA_COLORS[nextSlot] : nextSelection === "dark" ? null : auraColor;
     setThemeMode(nextMode);
     setCustomThemeSlot(nextSlot);
-    if (nextAuraColor) setAuraColor(nextAuraColor);
+    if (nextMode === "custom") {
+      setAuraColor(nextAuraColor);
+    } else if (nextSelection === "dark") {
+      setAuraColor(null);
+    }
     try {
       localStorage.setItem(THEME_MODE_KEY, nextMode);
       localStorage.setItem(CUSTOM_THEME_SLOT_KEY, nextSlot);
-      if (nextAuraColor) localStorage.setItem(AURA_COLOR_KEY, nextAuraColor);
+      if (nextMode === "custom" && nextAuraColor) {
+        localStorage.setItem(AURA_COLOR_KEY, nextAuraColor);
+      } else if (nextSelection === "dark") {
+        localStorage.removeItem(AURA_COLOR_KEY);
+      }
     } catch {
       // Ignore localStorage failures.
     }
