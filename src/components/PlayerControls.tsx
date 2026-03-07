@@ -234,13 +234,13 @@ export function PlayerControls({
           onClick={onCycleDimMode}
           aria-label={
             dimMode === "normal"
-              ? "Brightness: normal"
+              ? "Brightness: dim control (currently normal)"
               : dimMode === "dim"
-                ? "Brightness: dim"
-                : "Brightness: mute"
+                ? "Brightness: dim active"
+                : "Brightness: mute active"
           }
         >
-          {dimMode === "normal" ? "NORMAL" : dimMode === "dim" ? "DIM" : "MUTE"}
+          {dimMode === "mute" ? "MUTE" : "DIM"}
         </button>
         <button
           type="button"
@@ -255,8 +255,12 @@ export function PlayerControls({
                 ? "Visual style: dim vibe"
                 : "Visual style: mute freeze"
           }
+          title="Visual style mode"
         >
-          VIBE
+          <svg className="pc-novelty-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3.5v4.2M12 16.3v4.2M3.5 12h4.2M16.3 12h4.2M6.3 6.3l3 3M14.7 14.7l3 3M17.7 6.3l-3 3M9.3 14.7l-3 3" />
+            <path d="M12 8.6l1.8 1.6L12 12l-1.8-1.8Z" />
+          </svg>
         </button>
         {onAuraUp && showAuraInline && (
           <button
