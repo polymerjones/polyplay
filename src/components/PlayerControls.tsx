@@ -141,7 +141,11 @@ export function PlayerControls({
   };
 
   return (
-    <section ref={rootRef} className={`player-controls player-controls--${variant}`} aria-label="Player controls">
+    <section
+      ref={rootRef}
+      className={`player-controls player-controls--${variant} ${loopMode !== "off" ? "is-loop-active" : ""}`.trim()}
+      aria-label="Player controls"
+    >
       <div className="pc-progress">
         <input
           className="pc-range"
@@ -252,17 +256,23 @@ export function PlayerControls({
 
       <div className="pc-extras" role="group" aria-label="Playback options">
         {onSkip && (
-          <>
+          <div className="pc-skip-row" role="group" aria-label="Skip controls">
+            <button type="button" className="pc-btn pc-btn--sm pc-extra-skip" onClick={() => onSkip(-30)}>
+              -30s
+            </button>
             <button type="button" className="pc-btn pc-btn--sm pc-extra-skip" onClick={() => onSkip(-10)}>
               -10s
             </button>
             <button type="button" className="pc-btn pc-btn--sm pc-extra-skip" onClick={() => onSkip(10)}>
               +10s
             </button>
-          </>
+            <button type="button" className="pc-btn pc-btn--sm pc-extra-skip" onClick={() => onSkip(30)}>
+              +30s
+            </button>
+          </div>
         )}
         {variant !== "mini" && (
-          <>
+          <div className="pc-loop-row" role="group" aria-label="Loop controls">
             <button
               type="button"
               className={`pc-btn pc-btn--sm pc-btn--toggle ${loopMode !== "off" ? "is-active" : ""}`.trim()}
@@ -273,7 +283,7 @@ export function PlayerControls({
             <button type="button" className="pc-btn pc-btn--sm" onClick={onClearLoop}>
               Clear Loop
             </button>
-          </>
+          </div>
         )}
       </div>
     </section>
