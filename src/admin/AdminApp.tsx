@@ -65,6 +65,12 @@ const OPEN_STATE_SEEN_KEY = "polyplay_open_state_seen_v102";
 const THEME_MODE_KEY = "polyplay_themeMode";
 const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
 const AURA_COLOR_KEY = "polyplay_auraColor_v1";
+const LAYOUT_MODE_KEY = "polyplay_layoutMode";
+const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
+const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
+const DIM_MODE_KEY = "polyplay_dimMode_v1";
+const LOOP_REGION_KEY = "polyplay_loopByTrack";
+const LOOP_MODE_KEY = "polyplay_loopModeByTrack";
 
 function normalizeAuraColor(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -184,6 +190,13 @@ export function AdminApp() {
       return "#bc84ff";
     }
   });
+  const [savedAuraColor, setSavedAuraColor] = useState<string>(() => {
+    try {
+      return normalizeAuraColor(localStorage.getItem(AURA_COLOR_KEY)) || "#bc84ff";
+    } catch {
+      return "#bc84ff";
+    }
+  });
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
   const [editingTrackTitle, setEditingTrackTitle] = useState("");
   const [renamingTrackId, setRenamingTrackId] = useState<string | null>(null);
@@ -280,7 +293,10 @@ export function AdminApp() {
       const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
       if (slot === "crimson" || slot === "teal" || slot === "amber") setCustomThemeSlot(slot);
       const savedAura = normalizeAuraColor(localStorage.getItem(AURA_COLOR_KEY));
-      if (savedAura) setAuraColor(savedAura);
+      if (savedAura) {
+        setAuraColor(savedAura);
+        setSavedAuraColor(savedAura);
+      }
     } catch {
       // Ignore storage read failures.
     }
@@ -295,7 +311,13 @@ export function AdminApp() {
       }
       if (event.key === AURA_COLOR_KEY) {
         const next = normalizeAuraColor(event.newValue);
-        if (next) setAuraColor(next);
+        if (next) {
+          setAuraColor(next);
+          setSavedAuraColor(next);
+        } else {
+          setAuraColor("#bc84ff");
+          setSavedAuraColor("#bc84ff");
+        }
       }
     };
     const onMessage = (event: MessageEvent) => {
@@ -801,16 +823,32 @@ export function AdminApp() {
     setStatus("Running factory reset...");
     try {
       await hardResetLibraryInDb();
+      await restoreDemoTracks();
+      localStorage.setItem(THEME_MODE_KEY, "dark");
+      localStorage.setItem(CUSTOM_THEME_SLOT_KEY, "crimson");
+      localStorage.removeItem(AURA_COLOR_KEY);
+      localStorage.setItem(LAYOUT_MODE_KEY, "grid");
+      localStorage.setItem(SHUFFLE_ENABLED_KEY, "false");
+      localStorage.setItem(REPEAT_TRACK_KEY, "false");
+      localStorage.setItem(DIM_MODE_KEY, "normal");
+      localStorage.removeItem(LOOP_REGION_KEY);
+      localStorage.removeItem(LOOP_MODE_KEY);
       localStorage.removeItem(SPLASH_SEEN_KEY);
       localStorage.removeItem(OPEN_STATE_SEEN_KEY);
       localStorage.removeItem(HAS_IMPORTED_KEY);
       localStorage.removeItem(HAS_ONBOARDED_KEY);
       sessionStorage.removeItem(SPLASH_SESSION_KEY);
+      setCustomThemeSlot("crimson");
+      setAuraColor("#bc84ff");
+      setSavedAuraColor("#bc84ff");
       await refreshTracks();
       await refreshStorage();
       await refreshPlaylists();
       emitLibraryUpdated();
-      setStatus("Factory reset complete. All playlists/content removed and onboarding reset.");
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:factory-reset" }, window.location.origin);
+      }
+      setStatus("Factory reset complete. Defaults and demo tracks restored.");
     } catch {
       setStatus("Factory reset failed.");
     }
@@ -1631,30 +1669,43 @@ export function AdminApp() {
           <label className="text-sm text-slate-200" htmlFor="aura-color-picker">
             Aura Color
           </label>
-          <input
-            id="aura-color-picker"
-            type="color"
-            className="h-10 w-16 cursor-pointer rounded-xl border border-slate-300/20 bg-slate-950/70 p-1"
-            value={auraColor}
-            onChange={(event) => {
-              const next = normalizeAuraColor(event.currentTarget.value);
-              if (!next) return;
-              setAuraColor(next);
-              try {
-                localStorage.setItem(AURA_COLOR_KEY, next);
-              } catch {
-                // Ignore localStorage failures.
-              }
-              try {
-                if (window.parent && window.parent !== window) {
-                  window.parent.postMessage({ type: "polyplay:aura-color-updated", color: next }, window.location.origin);
+          <div className="grid gap-2">
+            <input
+              id="aura-color-picker"
+              type="color"
+              className="h-10 w-16 cursor-pointer rounded-xl border border-slate-300/20 bg-slate-950/70 p-1"
+              value={auraColor}
+              onChange={(event) => {
+                const next = normalizeAuraColor(event.currentTarget.value);
+                if (!next) return;
+                setAuraColor(next);
+              }}
+            />
+            <Button
+              variant="primary"
+              disabled={auraColor === savedAuraColor}
+              onClick={() => {
+                const next = normalizeAuraColor(auraColor);
+                if (!next) return;
+                setSavedAuraColor(next);
+                try {
+                  localStorage.setItem(AURA_COLOR_KEY, next);
+                } catch {
+                  // Ignore localStorage failures.
                 }
-              } catch {
-                // Ignore postMessage failures.
-              }
-              setStatus(`Aura color updated to ${next}.`);
-            }}
-          />
+                try {
+                  if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({ type: "polyplay:aura-color-updated", color: next }, window.location.origin);
+                  }
+                } catch {
+                  // Ignore postMessage failures.
+                }
+                setStatus(`Aura color applied: ${next}.`);
+              }}
+            >
+              Save / Apply
+            </Button>
+          </div>
         </div>
       </section>
 

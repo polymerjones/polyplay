@@ -3,7 +3,6 @@ import { getGratitudeBackupFilename, serializeGratitudeJson } from "../lib/backu
 import {
   createEntry,
   deleteEntry,
-  exportEntriesAsText,
   listEntries,
   type GratitudeEntry,
   updateEntry
@@ -353,20 +352,6 @@ export function JournalModal({ open, onClose }: Props) {
           <div className="journal-modal__head">
             <h3>Gratitude Journal</h3>
             <div className="journal-modal__head-actions">
-              <button
-                type="button"
-                className="journal-modal__export"
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(exportEntriesAsText());
-                    setMiniToast("Copied");
-                  } catch {
-                    setMiniToast("Export coming soon");
-                  }
-                }}
-              >
-                Export
-              </button>
               <button
                 type="button"
                 className="journal-modal__export"

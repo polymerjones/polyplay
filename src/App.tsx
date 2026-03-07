@@ -933,6 +933,12 @@ export default function App() {
     document.body.classList.toggle("theme-custom-crimson", themeMode === "custom" && customThemeSlot === "crimson");
     document.body.classList.toggle("theme-custom-teal", themeMode === "custom" && customThemeSlot === "teal");
     document.body.classList.toggle("theme-custom-amber", themeMode === "custom" && customThemeSlot === "amber");
+    const nextAuraColor = auraColor;
+    if (nextAuraColor) {
+      root.style.setProperty("--aura-rgb", auraHexToRgb(nextAuraColor));
+    } else {
+      root.style.removeProperty("--aura-rgb");
+    }
     return () => {
       document.body.classList.remove("theme-dark");
       document.body.classList.remove("theme-custom");
@@ -950,12 +956,6 @@ export default function App() {
         themeBloomTimeoutRef.current = null;
       }
     };
-    const nextAuraColor = auraColor;
-    if (nextAuraColor) {
-      root.style.setProperty("--aura-rgb", auraHexToRgb(nextAuraColor!));
-    } else {
-      root.style.removeProperty("--aura-rgb");
-    }
   }, [themeMode, customThemeSlot, auraColor]);
 
   useEffect(() => {
@@ -1077,6 +1077,50 @@ export default function App() {
         } catch {
           // Ignore localStorage failures.
         }
+        return;
+      }
+      if (type === "polyplay:factory-reset") {
+        try {
+          localStorage.removeItem(THEME_MODE_KEY);
+          localStorage.removeItem(CUSTOM_THEME_SLOT_KEY);
+          localStorage.removeItem(AURA_COLOR_KEY);
+          localStorage.removeItem(SHUFFLE_ENABLED_KEY);
+          localStorage.removeItem(REPEAT_TRACK_KEY);
+          localStorage.removeItem(LAYOUT_MODE_KEY);
+          localStorage.removeItem(DIM_MODE_KEY);
+          localStorage.removeItem(LOOP_REGION_KEY);
+          localStorage.removeItem(LOOP_MODE_KEY);
+          localStorage.removeItem(HAS_IMPORTED_KEY);
+          localStorage.removeItem(HAS_ONBOARDED_KEY);
+          localStorage.removeItem(OPEN_STATE_SEEN_KEY);
+          sessionStorage.removeItem(SPLASH_SESSION_KEY);
+        } catch {
+          // Ignore storage failures.
+        }
+        setThemeMode("dark");
+        setCustomThemeSlot("crimson");
+        setAuraColor(null);
+        setLayoutMode("grid");
+        setIsShuffleEnabled(false);
+        setIsRepeatTrackEnabled(false);
+        setDimMode("normal");
+        setLoopByTrack({});
+        setLoopModeByTrack({});
+        setHasOnboarded(false);
+        setShowOpenState(false);
+        setOverlayPage(null);
+        setIsTipsOpen(false);
+        setIsFullscreenPlayerOpen(false);
+        setShowSplash(true);
+        setIsSplashDismissing(false);
+        teardownCurrentAudio();
+        pendingAutoPlayRef.current = false;
+        void (async () => {
+          await refreshTracks();
+          const seeded = await seedDemoTracksIfNeeded().catch(() => ({ seeded: false }));
+          if (seeded.seeded) await refreshTracks();
+          setShowOpenState(true);
+        })();
         return;
       }
       if (type === "polyplay:config-imported") {
