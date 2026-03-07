@@ -496,9 +496,14 @@ export function JournalModal({ open, onClose }: Props) {
               <button
                 type="button"
                 className="journalVerseBtn"
+                aria-label="Next verse"
                 onClick={() => setVerseIndex((prev) => (prev + 1) % Math.max(1, verses.length))}
               >
-                New Verse
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="4.2" />
+                  <path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.4 5.4l2.2 2.2M16.4 16.4l2.2 2.2M18.6 5.4l-2.2 2.2M7.6 16.4l-2.2 2.2" />
+                </svg>
+                <span>Verse</span>
               </button>
             </div>
             <div className="journalPrimaryActionWrap">
@@ -529,6 +534,9 @@ export function JournalModal({ open, onClose }: Props) {
               placeholder="Write a new gratitude entry..."
               value={newEntryText}
               onChange={(event) => setNewEntryText(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.stopPropagation();
+              }}
             />
             <div className="journal-entry__editor-actions">
               <button
@@ -686,6 +694,9 @@ export function JournalModal({ open, onClose }: Props) {
                         className="journal-entry__editor"
                         value={draftText}
                         onChange={(event) => setDraftText(event.currentTarget.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") event.stopPropagation();
+                        }}
                         rows={4}
                       />
                       <div className="journal-entry__editor-actions">

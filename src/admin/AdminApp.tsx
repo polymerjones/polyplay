@@ -1565,19 +1565,21 @@ export function AdminApp() {
 
       {showManageSections && (
       <>
-      <GratitudeHubPanel
-        settings={gratitudeSettings}
-        entries={gratitudeEntries}
-        onChangeEnabled={(enabled) => {
-          updateGratitudeSettings({ ...gratitudeSettings, enabled });
-          setStatus(`Gratitude prompt ${enabled ? "enabled" : "disabled"}.`);
-        }}
-        onChangeFrequency={onChangeGratitudeFrequency}
-        onOpenEntry={setSelectedGratitudeEntry}
-        onDeleteEntry={onDeleteGratitudeEntry}
-        onCopyAll={onCopyAllGratitude}
-        onExportTxt={onExportGratitudeTxt}
-      />
+      <div hidden aria-hidden="true">
+        <GratitudeHubPanel
+          settings={gratitudeSettings}
+          entries={gratitudeEntries}
+          onChangeEnabled={(enabled) => {
+            updateGratitudeSettings({ ...gratitudeSettings, enabled });
+            setStatus(`Gratitude prompt ${enabled ? "enabled" : "disabled"}.`);
+          }}
+          onChangeFrequency={onChangeGratitudeFrequency}
+          onOpenEntry={setSelectedGratitudeEntry}
+          onDeleteEntry={onDeleteGratitudeEntry}
+          onCopyAll={onCopyAllGratitude}
+          onExportTxt={onExportGratitudeTxt}
+        />
+      </div>
 
       <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3 playlist-manager">
         <div className="playlist-manager__head">

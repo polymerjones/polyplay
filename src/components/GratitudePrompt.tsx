@@ -91,6 +91,9 @@ export function GratitudePrompt({
           }}
           onFocus={() => setIsTextareaFocused(true)}
           onBlur={() => setIsTextareaFocused(false)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.stopPropagation();
+          }}
           rows={4}
         />
         <div className="gratitude-modal__footer">
