@@ -326,6 +326,10 @@ export default function App() {
   const [dimMode, setDimMode] = useState<DimMode>("normal");
   const [noveltyMode, setNoveltyMode] = useState<DimMode>("normal");
   const [showOpenState, setShowOpenState] = useState(false);
+  const isIOS =
+    typeof navigator !== "undefined" &&
+    /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const headerTitle = isIOS ? `Polyplay ${APP_VERSION}` : APP_TITLE;
   const [hasOnboarded, setHasOnboarded] = useState<boolean>(() => {
     try {
       return localStorage.getItem(HAS_ONBOARDED_KEY) === "true";
@@ -2205,7 +2209,7 @@ export default function App() {
             <div className="brand">
               <img className="brand-logo" src={logo} alt="Polyplay logo" />
             </div>
-            <div className="topbar-title">{APP_TITLE}</div>
+            <div className="topbar-title">{headerTitle}</div>
             <div className="topbar-primary-actions">
               <button
                 type="button"
@@ -2816,6 +2820,7 @@ export default function App() {
       <JournalModal open={isJournalOpen} onClose={() => setIsJournalOpen(false)} />
       <GratitudePrompt
         open={isGratitudeOpen}
+        allowAutofocus={!showSplash && !isSplashDismissing}
         doNotSaveText={gratitudeSettings.doNotSaveText}
         doNotPromptAgain={gratitudeSettings.doNotPromptAgain}
         onDoNotSaveTextChange={onGratitudeDoNotSaveChange}
