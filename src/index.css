@@ -392,6 +392,14 @@ body.theme-dark .rowAuraGlow {
   cursor: pointer;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .trackRow__playButton:hover,
+  .trackRow__auraButton:hover {
+    border-color: rgba(var(--aura-rgb), 0.5);
+    box-shadow: 0 0 12px rgba(var(--aura-rgb), 0.28);
+  }
+}
+
 .trackRow__auraButton--burst {
   animation: track-row-aura-flash 360ms ease-out;
 }
@@ -402,8 +410,11 @@ body.theme-dark .rowAuraGlow {
     filter: brightness(1);
   }
   45% {
-    transform: scale(1.08);
-    filter: brightness(1.25);
+    transform: scale(1.1);
+    filter: brightness(1.34) saturate(1.14);
+    box-shadow:
+      0 0 0 1px rgba(var(--aura-rgb), 0.58),
+      0 0 16px rgba(var(--aura-rgb), 0.48);
   }
   100% {
     transform: scale(1);
