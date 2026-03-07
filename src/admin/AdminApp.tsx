@@ -1269,6 +1269,7 @@ export function AdminApp() {
   }, []);
   const showUploadTrackSection = adminMode === "upload";
   const showManageSections = adminMode !== "upload";
+  const showBackupsSection = false;
 
   return (
     <div
@@ -1814,6 +1815,7 @@ export function AdminApp() {
         </div>
       </section>
 
+      {showBackupsSection && (
       <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
         <h2 className="mb-2 text-base font-semibold text-slate-100">Backups</h2>
         <div className="flex flex-wrap gap-2">
@@ -1888,6 +1890,7 @@ export function AdminApp() {
         />
         {backupProgress && <div className="mt-2 text-sm text-slate-300">{backupProgress}</div>}
       </section>
+      )}
 
       <section
         ref={manageStorageRef}

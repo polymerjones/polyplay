@@ -73,8 +73,7 @@ function formatDateLabel(entry: GratitudeEntry): string {
   return date.toLocaleString();
 }
 
-function downloadTextFile(content: string, filename: string, mime: string): void {
-  const blob = new Blob([content], { type: mime });
+function downloadBlobFile(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -83,6 +82,54 @@ function downloadTextFile(content: string, filename: string, mime: string): void
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
+}
+
+async function saveTextWithBestEffort(content: string, filename: string, mime: string): Promise<"shared" | "save-dialog" | "downloaded"> {
+  const blob = new Blob([content], { type: mime });
+  const nav = navigator as Navigator & {
+    canShare?: (data: { files?: File[] }) => boolean;
+    share?: (data: { title?: string; text?: string; files?: File[] }) => Promise<void>;
+  };
+  if (typeof nav.share === "function" && typeof File !== "undefined") {
+    try {
+      const file = new File([blob], filename, { type: mime });
+      if (!nav.canShare || nav.canShare({ files: [file] })) {
+        await nav.share({ title: filename, files: [file] });
+        return "shared";
+      }
+    } catch {
+      // Share canceled/unsupported in current context; continue with fallback.
+    }
+  }
+
+  const pickerHost = window as typeof window & {
+    showSaveFilePicker?: (options: {
+      suggestedName?: string;
+      types?: Array<{ description?: string; accept: Record<string, string[]> }>;
+    }) => Promise<{
+      createWritable: () => Promise<{
+        write: (data: Blob) => Promise<void>;
+        close: () => Promise<void>;
+      }>;
+    }>;
+  };
+  if (typeof pickerHost.showSaveFilePicker === "function") {
+    try {
+      const handle = await pickerHost.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{ description: "Gratitude Backup", accept: { "application/json": [".json"] } }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return "save-dialog";
+    } catch {
+      // User canceled or picker unsupported in this context; continue with download fallback.
+    }
+  }
+
+  downloadBlobFile(blob, filename);
+  return "downloaded";
 }
 
 function shouldUseLightJournalFx(): boolean {
@@ -488,16 +535,18 @@ export function JournalModal({ open, onClose }: Props) {
                 type="button"
                 className="journal-modal__export"
                 onClick={() => {
-                  try {
-                    downloadTextFile(
-                      serializeGratitudeJson(),
-                      getGratitudeBackupFilename(),
-                      "application/json;charset=utf-8"
-                    );
-                    setMiniToast("Backup saved");
-                  } catch {
-                    setMiniToast("Backup failed");
-                  }
+                  void (async () => {
+                    try {
+                      const saveMode = await saveTextWithBestEffort(
+                        serializeGratitudeJson(),
+                        getGratitudeBackupFilename(),
+                        "application/json;charset=utf-8"
+                      );
+                      setMiniToast(saveMode === "shared" ? "Backup ready to share" : "Backup saved");
+                    } catch {
+                      setMiniToast("Backup failed");
+                    }
+                  })();
                 }}
               >
                 Save Backup
