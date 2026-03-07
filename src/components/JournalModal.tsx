@@ -85,12 +85,14 @@ function downloadTextFile(content: string, filename: string, mime: string): void
   URL.revokeObjectURL(url);
 }
 
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
+function shouldUseLightJournalFx(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  const isCoarse = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const saveData = typeof navigator !== "undefined" && "connection" in navigator
+    ? Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData)
+    : false;
+  return isCoarse || reduced || saveData;
 }
 
 function createSparkles(count: number): Sparkle[] {
@@ -321,8 +323,8 @@ export function JournalModal({ open, onClose }: Props) {
   );
 
   const isWritingActive = isComposerOpen || editingEntryId !== null;
-  const reducedMotion = useMemo(() => prefersReducedMotion(), []);
-  const sparkles = useMemo(() => (reducedMotion ? [] : createSparkles(14)), [reducedMotion, selectedBgId]);
+  const lightFxMode = useMemo(() => shouldUseLightJournalFx(), []);
+  const sparkles = useMemo(() => (lightFxMode ? [] : createSparkles(10)), [lightFxMode, selectedBgId]);
   const currentVerse = verses[verseIndex % Math.max(1, verses.length)] || DEFAULT_JOURNAL_VERSES[0];
 
   useEffect(() => {
@@ -351,9 +353,17 @@ export function JournalModal({ open, onClose }: Props) {
       jumpToSafeStart();
       void video.play().catch(() => undefined);
     };
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        video.pause();
+        return;
+      }
+      void video.play().catch(() => undefined);
+    };
     video.addEventListener("loadedmetadata", jumpToSafeStart);
     video.addEventListener("timeupdate", onTimeUpdate);
     video.addEventListener("ended", onEnded);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
       setIsVideoReady(true);
     }
@@ -362,6 +372,7 @@ export function JournalModal({ open, onClose }: Props) {
       video.removeEventListener("loadedmetadata", jumpToSafeStart);
       video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("ended", onEnded);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [selectedBgId, open]);
 
@@ -403,14 +414,14 @@ export function JournalModal({ open, onClose }: Props) {
       />
       <div className={`journalVideoFallback ${isVideoReady && !videoFailed ? "is-hidden" : ""}`.trim()} aria-hidden="true" />
       <div className="journalScrimLayer" aria-hidden="true" />
-      <div className="journalAmbientLayer" aria-hidden="true" />
-      {!reducedMotion && (
+      <div className={`journalAmbientLayer ${lightFxMode ? "is-light-fx" : ""}`.trim()} aria-hidden="true" />
+      {!lightFxMode && (
         <div className="journalStreaksLayer" aria-hidden="true">
           <span className="journalStreak journalStreak--one" />
           <span className="journalStreak journalStreak--two" />
         </div>
       )}
-      {!reducedMotion && (
+      {!lightFxMode && (
         <div className="journalSparklesLayer" aria-hidden="true">
           {sparkles.map((sparkle) => (
             <span
