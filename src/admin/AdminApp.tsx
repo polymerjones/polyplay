@@ -246,6 +246,7 @@ export function AdminApp() {
   const [backupProgress, setBackupProgress] = useState("");
   const [isBackupBusy, setIsBackupBusy] = useState(false);
   const SHOW_TRANSFER_LANES = false;
+  const SHOW_DEMO_TRACKS_SECTION = false;
 
   const hasTracks = tracks.length > 0;
 
@@ -2018,17 +2019,19 @@ export function AdminApp() {
         </div>
       </section>
 
-      <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
-        <h2 className="mb-2 text-base font-semibold text-slate-100">Demo Tracks</h2>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={onRestoreDemoTracks}>
-            Restore Demo Tracks
-          </Button>
-          <Button variant="danger" onClick={onRemoveDemoTracks}>
-            Remove Demo Tracks
-          </Button>
-        </div>
-      </section>
+      {SHOW_DEMO_TRACKS_SECTION && (
+        <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
+          <h2 className="mb-2 text-base font-semibold text-slate-100">Demo Tracks</h2>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={onRestoreDemoTracks}>
+              Restore Demo Tracks
+            </Button>
+            <Button variant="danger" onClick={onRemoveDemoTracks}>
+              Remove Demo Tracks
+            </Button>
+          </div>
+        </section>
+      )}
 
       <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
         <h2 className="mb-2 text-base font-semibold text-slate-100">Danger Zone</h2>
