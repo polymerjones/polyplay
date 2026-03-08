@@ -238,6 +238,7 @@ export function JournalModal({ open, onClose }: Props) {
     return 0;
   });
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [newEntryText, setNewEntryText] = useState("");
   const [draftText, setDraftText] = useState("");
@@ -256,6 +257,7 @@ export function JournalModal({ open, onClose }: Props) {
     if (!open) return;
     setEntries(listEntries());
     setEditingEntryId(null);
+    setExpandedEntryId(null);
     setIsComposerOpen(false);
     setNewEntryText("");
     setDraftText("");
@@ -267,6 +269,28 @@ export function JournalModal({ open, onClose }: Props) {
     setSelectedBgId(selected.id);
     setIsVideoReady(false);
     setVideoFailed(false);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const scrollY = window.scrollY || window.pageYOffset || 0;
+    const previous = {
+      position: document.body.style.position,
+      top: document.body.style.top,
+      width: document.body.style.width,
+      overflowY: document.body.style.overflowY
+    };
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    document.body.style.overflowY = "hidden";
+    return () => {
+      document.body.style.position = previous.position;
+      document.body.style.top = previous.top;
+      document.body.style.width = previous.width;
+      document.body.style.overflowY = previous.overflowY;
+      window.scrollTo(0, scrollY);
+    };
   }, [open]);
 
   useEffect(() => {
@@ -457,6 +481,8 @@ export function JournalModal({ open, onClose }: Props) {
 
   if (!open) return null;
 
+  const canSaveNewEntry = newEntryText.trim().length > 0;
+
   return (
     <section
       className="journal-modal journalScene"
@@ -643,119 +669,102 @@ export function JournalModal({ open, onClose }: Props) {
             </div>
           </div>
 
-        {isComposerOpen && (
-          <div className="journal-compose">
-            <textarea
-              ref={composerRef}
-              className="journal-entry__editor"
-              rows={4}
-              placeholder="Write a new gratitude entry..."
-              value={newEntryText}
-              onChange={(event) => setNewEntryText(event.currentTarget.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") event.stopPropagation();
-              }}
-            />
-            <div className="journal-entry__editor-actions">
-              <button
-                type="button"
-                className="journal-entry__save"
-                onClick={() => {
-                  const trimmed = newEntryText.trim();
-                  if (!trimmed) return;
-                  createEntry(trimmed, currentVerse);
-                  setEntries(listEntries());
-                  setNewEntryText("");
-                  setIsComposerOpen(false);
-                  setMiniToast("Saved");
-                }}
-              >
-                <svg viewBox="0 0 24 24" className="journal-entry__icon-svg">
-                  <path d="M5 12.5 9.2 17 19 7.5" />
+          <div className="journal-modal__content">
+            {isComposerOpen && (
+              <div className="journal-compose">
+                <textarea
+                  ref={composerRef}
+                  className="journal-entry__editor"
+                  rows={4}
+                  placeholder="Write a new gratitude entry..."
+                  value={newEntryText}
+                  onChange={(event) => setNewEntryText(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") event.stopPropagation();
+                  }}
+                />
+                <div className="journal-entry__editor-actions">
+                  <button
+                    type="button"
+                    className="journal-entry__save"
+                    disabled={!canSaveNewEntry}
+                    onClick={() => {
+                      const trimmed = newEntryText.trim();
+                      if (!trimmed) return;
+                      createEntry(trimmed, currentVerse);
+                      setEntries(listEntries());
+                      setExpandedEntryId(null);
+                      setNewEntryText("");
+                      setIsComposerOpen(false);
+                      setMiniToast("Saved");
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" className="journal-entry__icon-svg">
+                      <path d="M5 12.5 9.2 17 19 7.5" />
+                    </svg>
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    className="journal-entry__cancel"
+                    onClick={() => {
+                      setNewEntryText("");
+                      setIsComposerOpen(false);
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" className="journal-entry__icon-svg">
+                      <path d="M6 6 18 18M18 6 6 18" />
+                    </svg>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="journalSearchBarWrap journalSearchBarWrap--list">
+              <span className="journalSearchIcon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <circle cx="11" cy="11" r="6.5" />
+                  <path d="M16 16 20 20" />
                 </svg>
-                Save
-              </button>
-              <button
-                type="button"
-                className="journal-entry__cancel"
-                onClick={() => {
-                  setNewEntryText("");
-                  setIsComposerOpen(false);
-                }}
-              >
-                <svg viewBox="0 0 24 24" className="journal-entry__icon-svg">
-                  <path d="M6 6 18 18M18 6 6 18" />
-                </svg>
-                Cancel
-              </button>
+              </span>
+              <input
+                className="journalSearchInput"
+                type="search"
+                placeholder="Search journal entries..."
+                value={query}
+                onChange={(event) => setQuery(event.currentTarget.value)}
+              />
+              {query.trim().length > 0 && (
+                <button type="button" className="journalSearchClear" aria-label="Clear search" onClick={() => setQuery("")}>
+                  ×
+                </button>
+              )}
             </div>
-          </div>
-        )}
 
-        <div className="journalSearchBarWrap journalSearchBarWrap--list">
-          <span className="journalSearchIcon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="6.5" />
-              <path d="M16 16 20 20" />
-            </svg>
-          </span>
-          <input
-            className="journalSearchInput"
-            type="search"
-            placeholder="Search journal entries..."
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-          />
-          {query.trim().length > 0 && (
-            <button type="button" className="journalSearchClear" aria-label="Clear search" onClick={() => setQuery("")}>
-              ×
-            </button>
-          )}
-        </div>
-
-        <div className="journal-modal__list">
-          {filteredEntries.length ? (
-            filteredEntries.map((entry) => {
-              const isEditing = editingEntryId === entry.id;
-              const isDeleting = deletingEntryId === entry.id;
-              return (
-                <article
-                  key={entry.id}
-                  className={`journal-entry ${savedEntryId === entry.id ? "is-saved" : ""} ${
-                    isDeleting ? "is-deleting" : ""
-                  }`.trim()}
-                >
+            <div className="journal-modal__list">
+              {filteredEntries.length ? (
+                filteredEntries.map((entry) => {
+                  const isEditing = editingEntryId === entry.id;
+                  const isDeleting = deletingEntryId === entry.id;
+                  const isExpanded = isEditing || expandedEntryId === entry.id;
+                  return (
+                    <article
+                      key={entry.id}
+                      className={`journal-entry ${isExpanded ? "is-expanded" : ""} ${isEditing ? "is-editing" : ""} ${
+                        savedEntryId === entry.id ? "is-saved" : ""
+                      } ${isDeleting ? "is-deleting" : ""}`.trim()}
+                      aria-expanded={isExpanded}
+                      onClick={(event) => {
+                        const target = event.target as HTMLElement | null;
+                        if (target?.closest("button, input, textarea, select, a, label")) return;
+                        if (isEditing) return;
+                        setExpandedEntryId((prev) => (prev === entry.id ? null : entry.id));
+                      }}
+                    >
                   <div className="journal-entry__meta">
                     <span>{formatDateLabel(entry)}</span>
                     <div className="journal-entry__actions">
-                      <button
-                        type="button"
-                        className="journal-entry__lock"
-                        aria-label={isEditing ? "Lock entry" : "Unlock entry"}
-                        disabled={isDeleting}
-                        onClick={() => {
-                          if (isEditing) {
-                            setEditingEntryId(null);
-                            setDraftText("");
-                            return;
-                          }
-                          setEditingEntryId(entry.id);
-                          setIsComposerOpen(false);
-                          setDraftText(entry.text);
-                        }}
-                      >
-                        {isEditing ? (
-                          <svg viewBox="0 0 24 24" className="journal-entry__icon-svg">
-                            <path d="M17 11H7a2 2 0 0 0-2 2v6h14v-6a2 2 0 0 0-2-2Z" />
-                            <path d="M9 11V8a3 3 0 0 1 6 0" />
-                          </svg>
-                        ) : (
-                          <svg viewBox="0 0 24 24" className="journal-entry__icon-svg">
-                            <path d="M17 11H7a2 2 0 0 0-2 2v6h14v-6a2 2 0 0 0-2-2Z" />
-                            <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-                          </svg>
-                        )}
-                      </button>
                       <button
                         type="button"
                         className="journal-entry__edit"
@@ -763,6 +772,7 @@ export function JournalModal({ open, onClose }: Props) {
                         disabled={isDeleting}
                         onClick={() => {
                           setEditingEntryId(entry.id);
+                          setExpandedEntryId(entry.id);
                           setIsComposerOpen(false);
                           setDraftText(entry.text);
                         }}
@@ -785,6 +795,7 @@ export function JournalModal({ open, onClose }: Props) {
                             setEditingEntryId(null);
                             setDraftText("");
                           }
+                          if (expandedEntryId === entry.id) setExpandedEntryId(null);
                           if (deleteTimerRef.current !== null) window.clearTimeout(deleteTimerRef.current);
                           deleteTimerRef.current = window.setTimeout(() => {
                             try {
@@ -832,6 +843,7 @@ export function JournalModal({ open, onClose }: Props) {
                             setEditingEntryId(null);
                             setDraftText("");
                           }}
+                          disabled={draftText.trim().length === 0}
                         >
                           <svg viewBox="0 0 24 24" className="journal-entry__icon-svg">
                             <path d="M5 12.5 9.2 17 19 7.5" />
@@ -856,15 +868,16 @@ export function JournalModal({ open, onClose }: Props) {
                   ) : (
                     <p className="journal-entry__text">{entry.text}</p>
                   )}
-                </article>
-              );
-            })
-          ) : (
-            <div className="journal-modal__emptyHint">
-              <p className="journal-modal__empty">No entries yet. Tap New.</p>
+                  </article>
+                  );
+                })
+              ) : (
+                <div className="journal-modal__emptyHint">
+                  <p className="journal-modal__empty">No entries yet. Tap New.</p>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
           {miniToast && <div className="journal-modal__toast">{miniToast}</div>}
         </div>
       </div>

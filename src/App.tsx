@@ -22,6 +22,10 @@ import {
 } from "./lib/backup";
 import { seedDemoTracksIfNeeded } from "./lib/demoSeed";
 import {
+  DEFAULT_GRATITUDE_SETTINGS,
+  GRATITUDE_ENTRIES_KEY,
+  GRATITUDE_LAST_PROMPT_KEY,
+  GRATITUDE_SETTINGS_KEY,
   appendGratitudeEntry,
   loadGratitudeSettings,
   loadLastGratitudePromptAt,
@@ -1135,6 +1139,9 @@ export default function App() {
           localStorage.removeItem(LOOP_MODE_KEY);
           localStorage.removeItem(HAS_IMPORTED_KEY);
           localStorage.removeItem(HAS_ONBOARDED_KEY);
+          localStorage.removeItem(GRATITUDE_ENTRIES_KEY);
+          localStorage.removeItem(GRATITUDE_LAST_PROMPT_KEY);
+          localStorage.setItem(GRATITUDE_SETTINGS_KEY, JSON.stringify(DEFAULT_GRATITUDE_SETTINGS));
           localStorage.removeItem(OPEN_STATE_SEEN_KEY);
           sessionStorage.removeItem(SPLASH_SESSION_KEY);
         } catch {
@@ -1154,6 +1161,9 @@ export default function App() {
         setShowOpenState(false);
         setOverlayPage(null);
         setIsTipsOpen(false);
+        setIsJournalOpen(false);
+        setIsGratitudeOpen(false);
+        setGratitudeSettings(DEFAULT_GRATITUDE_SETTINGS);
         setIsFullscreenPlayerOpen(false);
         setShowSplash(true);
         setIsSplashDismissing(false);

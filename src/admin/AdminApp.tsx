@@ -31,6 +31,9 @@ import { validateVideoArtworkFile } from "../lib/artwork/videoValidation";
 import { restoreDemoTracks } from "../lib/demoSeed";
 import {
   DEFAULT_GRATITUDE_SETTINGS,
+  GRATITUDE_ENTRIES_KEY,
+  GRATITUDE_LAST_PROMPT_KEY,
+  GRATITUDE_SETTINGS_KEY,
   deleteGratitudeEntry,
   formatGratitudeExport,
   getGratitudeEntries,
@@ -880,10 +883,16 @@ export function AdminApp() {
       localStorage.removeItem(OPEN_STATE_SEEN_KEY);
       localStorage.removeItem(HAS_IMPORTED_KEY);
       localStorage.removeItem(HAS_ONBOARDED_KEY);
+      localStorage.removeItem(GRATITUDE_ENTRIES_KEY);
+      localStorage.removeItem(GRATITUDE_LAST_PROMPT_KEY);
+      localStorage.setItem(GRATITUDE_SETTINGS_KEY, JSON.stringify(DEFAULT_GRATITUDE_SETTINGS));
       sessionStorage.removeItem(SPLASH_SESSION_KEY);
       setCustomThemeSlot("crimson");
       setAuraColor("#bc84ff");
       setSavedAuraColor("#bc84ff");
+      setGratitudeSettings(DEFAULT_GRATITUDE_SETTINGS);
+      setGratitudeEntries([]);
+      setSelectedGratitudeEntry(null);
       await refreshTracks();
       await refreshStorage();
       await refreshPlaylists();
