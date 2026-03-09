@@ -1,6 +1,18 @@
 node_modules/
 dist/
+build/
 .vite/
 .DS_Store
+*.log
+*.zip
+*.mov
+*.mp4
+*.backup
+*.tmp
+
+ios/App/build/
+ios/App/DerivedData/
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/App.xcodeproj/xcuserdata/
 
 *.tsbuildinfo
