@@ -1,0 +1,273 @@
+Polyplay Music App (CarplayMusicApp) - Technical Code Overview
+Generated: 2026-03-05
+
+1) High-level architecture
+- Project type: local-first web app (React SPA) with a Capacitor iOS wrapper.
+- Runtime style: browser app with heavy client-side state + persistent browser storage.
+- Main UX surfaces:
+  - Player app: /index.html -> src/main.tsx -> src/App.tsx
+  - Admin console: /admin.html -> src/admin-main.tsx -> src/admin/AdminApp.tsx
+  - Help page: /help.html -> src/help-main.tsx -> src/help/HelpApp.tsx
+- iOS shell:
+  - Capacitor config in capacitor.config.ts (appId com.polyplay.app, webDir dist)
+  - Native project under ios/App/*
+  - AppDelegate is default Capacitor lifecycle bridge (no custom business logic)
+
+2) Tech stack and build pipeline
+- Language: TypeScript (strict mode enabled in tsconfig.json).
+- UI: React 18 (functional components + hooks).
+- Bundler/dev server: Vite 5.
+- CSS:
+  - Tailwind is installed and used in some files.
+  - There is also large custom CSS (styles.css + src/components/player.css + src/index.css).
+- Package scripts (package.json):
+  - dev/build/preview/typecheck
+  - ios:copy / ios:sync / ios:open / ios:update / ios:run / ios:icon
+- Vite config uses multi-entry build:
+  - main (index.html), admin (admin.html), help (help.html)
+
+3) Core domain model
+- Primary UI entity: Track (src/types.ts)
+  - id, title, sub, aura, media URLs, missing flags, source flags (auto/user artwork), demo flags.
+- Loop model:
+  - LoopRegion {start,end,active,editing}
+  - LoopMode = off | track | region
+- Storage entity model (src/lib/storage/library.ts):
+  - LibraryState:
+    - version
+    - tracksById
+    - playlistsById
+    - activePlaylistId
+  - TrackRecord (persistent record, keys to blob storage)
+  - PlaylistRecord (id/name/trackIds timestamps)
+
+4) Data persistence strategy (local-first)
+- Two-layer storage model:
+  1. Metadata/state in localStorage
+     - Primary key: showoff_library_v1
+     - Also stores many UI flags (theme, loop state, shuffle, repeat, etc.)
+  2. Binary media in IndexedDB
+     - DB: showoff_db
+     - Store: blobs
+     - Audio/art/video stored as BlobRecord keyed by generated IDs
+- Library loading and migration:
+  - migrateLibraryIfNeeded normalizes legacy/partial shapes.
+  - getLibraryCandidates scans localStorage for library-like payloads.
+  - migrateBestLibraryCandidateToPrimary can promote the richest candidate into primary key.
+- Legacy migration path in src/lib/db.ts:
+  - Migrates old indexedDB schema carplay_app/tracks into current library/blob model.
+
+5) Main app orchestration (src/App.tsx)
+- App.tsx is currently the central orchestrator and largest coupling point.
+- Responsibilities handled there:
+  - Load/sync library + tracks
+  - Playback lifecycle (audio element creation/listeners/state sync)
+  - Loop logic (per-track loop region + mode)
+  - Shuffle/repeat/dim/theme/fx toggles
+  - Splash/onboarding/open-state flows
+  - Playlist selection/creation and vault inspector
+  - Gratitude prompt/journal modal integration
+  - Import/export actions (full backup + polyplaylist)
+  - Nuke/reset sequence and cleanup
+  - Gesture/tap effects (safe tap bursts + ambient FX interactions)
+
+6) Playback engine behavior
+- Uses HTMLAudioElement controlled by refs/state in App.tsx.
+- On track changes:
+  - Tears down previous listeners/source.
+  - Sets new src from resolved object URL.
+  - Wires timeupdate/metadata/play/pause/ended handlers.
+- Playback features:
+  - Seek + +/-10s skip
+  - Prev/next track navigation
+  - Shuffle with aura-weighted selection (src/lib/aura.ts)
+  - Repeat track toggle
+  - Loop modes:
+    - off
+    - full track repeat behavior
+    - region loop with user-defined in/out bounds
+- Dim mode:
+  - normal | dim | mute (volume/mute behavior tied to mode)
+
+7) Aura and track selection logic
+- Aura score per track is clamped 0..5.
+- Aura persisted to library via saveAuraToDb.
+- Shuffle weighting (src/lib/aura.ts):
+  - Base weight adjusted by aura multiplier.
+  - Cooldown penalty if recently played.
+  - Weighted random candidate pick avoids current track when possible.
+
+8) UI component boundaries
+- Container/orchestrator: src/App.tsx
+- Display/control components:
+  - TrackGrid + TrackRow: list/grid rendering, tile actions, aura button effects.
+  - MiniPlayerBar: compact transport + waveform section.
+  - FullscreenPlayer: expanded transport + waveform loop editor + artwork rendering.
+  - PlayerControls: transport, seek slider, shuffle/repeat/dim/aura controls.
+  - WaveformLoop: loop region editing UI.
+  - AmbientFxCanvas + BubbleLayer + related visuals for interaction FX.
+  - SplashOverlay, QuickTipsModal, GratitudePrompt, JournalModal.
+
+9) Media handling details
+- Blob retrieval and URL management:
+  - src/lib/player/media.ts caches object URLs by blob key.
+  - Explicit revoke of URLs on replace/delete/reset to avoid leaks.
+- Artwork generation pipeline:
+  - If video artwork exists, poster image can be generated by src/lib/artwork/videoPoster.ts.
+  - If no artwork, waveform-based fallback poster can be generated.
+  - artworkSource tracks whether art is user-provided or auto-generated.
+
+10) DB and storage operations (src/lib/db.ts)
+- Core mutations:
+  - addTrackToDb
+  - replaceAudioInDb
+  - updateArtworkInDb
+  - removeTrackFromDb
+  - clearTracksInDb
+  - hardResetLibraryInDb
+- Playlist CRUD (DB side):
+  - create/rename/delete playlist
+  - set active playlist
+  - deletion can garbage-collect unreferenced tracks/blobs
+- Storage limits:
+  - Mobile cap ~250MB
+  - Desktop cap ~750MB
+  - Throws StorageCapError before writes that exceed cap.
+- Diagnostics:
+  - getStorageUsageSummary + getTrackStorageRows
+
+11) Playlist state helpers (src/lib/playlistState.ts)
+- Includes both older generic AppState utilities and current LibraryState helpers.
+- Current app mainly uses LibraryState functions:
+  - ensureActivePlaylist
+  - setActivePlaylistInLibrary
+  - createPlaylistInLibrary
+  - getVisibleTrackIdsFromLibrary / getVisibleTracksFromLibrary
+- Dedupes track IDs and heals invalid references to maintain playlist integrity.
+
+12) Backup and import/export system (src/lib/backup.ts)
+- Supports multiple export formats:
+  - Full backup bundle (app config + library + gratitude + media)
+  - Polyplaylist (playlist-focused package)
+  - Config-only snapshots
+  - Gratitude exports
+- Includes size cap checks and explicit BackupSizeError handling.
+- Import flows can:
+  - Restore library metadata
+  - Rehydrate media blobs
+  - Apply loop/aura/settings states
+  - Return detailed import summaries (missing IDs, matched counts, reorder counts)
+
+13) Admin app (src/admin/AdminApp.tsx)
+- Purpose: operations console for media/library maintenance.
+- Major capabilities:
+  - Upload audio + optional artwork
+  - Replace track audio
+  - Replace artwork (image/video with poster capture)
+  - Track rename/delete
+  - Playlist create/rename/delete/set active
+  - Manage storage usage + detect cap issues
+  - Reset aura
+  - Remove/restore demo tracks
+  - Full backup export/import
+  - Polyplaylist config export/import
+  - Gratitude settings and entries management
+  - Hard reset/nuke flows
+- Sync strategy:
+  - Emits custom event polyplay:library-updated
+  - Uses postMessage for parent/iframe integration.
+
+14) Demo seeding and onboarding assets
+- src/lib/demoSeed.ts:
+  - Seeds demo tracks when active playlist is empty and no demo exists.
+  - Ensures demo playlist exists.
+  - Fetches demo media from public/demo/*.mp4 with size bounds.
+  - Repairs missing demo poster images when possible.
+- src/lib/demoPack.ts:
+  - Additional versioned demo-pack installer path.
+
+15) Gratitude + Journal subsystem
+- Stored entirely in localStorage keys from src/lib/gratitude.ts.
+- Features:
+  - Prompt cadence (daily/weekly/launch/off)
+  - Entry create/edit/delete/list/export
+  - Optional do-not-prompt and do-not-save toggles
+- JournalModal:
+  - UI for entry management and export.
+  - Verse loading from /public/content/journal-verses.json with fallback set.
+  - Ambient video background loop behavior.
+
+16) Ambient FX subsystem
+- src/fx/ambientFxEngine.ts (canvas-based engine)
+- Modes:
+  - gravity
+  - pop
+  - splatter
+- Handles pointer/tap events, particle pools, theme token integration, quality levels (auto/lite/high), and reduced-motion behavior.
+- Triggered from App-level pointer coordination while avoiding interactive controls.
+
+17) Theme/layout/runtime settings
+- Versioning and title:
+  - src/config/version.ts uses VITE_APP_VERSION (currently 2.1)
+- Theme modes in App:
+  - light, dark, custom (custom slots: crimson/teal/amber)
+- Layout modes:
+  - grid/list persisted in localStorage.
+- Cross-window/theme sync:
+  - uses storage events and postMessage in admin flows.
+
+18) iOS/Capacitor packaging behavior
+- Build output dist is copied/synced to ios via Capacitor scripts.
+- iOS native app is thin wrapper around web app runtime.
+- Info.plist currently defers version values to Xcode build vars:
+  - CFBundleShortVersionString = $(MARKETING_VERSION)
+  - CFBundleVersion = $(CURRENT_PROJECT_VERSION)
+- In pbxproj observed values were MARKETING_VERSION=1.0 and CURRENT_PROJECT_VERSION=1.
+
+19) What this app does functionally
+- User imports or manages local media tracks.
+- Tracks are organized in playlists with an active playlist context.
+- User plays tracks with enhanced controls (looping, shuffle, repeat, aura).
+- User can manage a gratitude journal and export/import data bundles.
+- App is designed to run offline/local-first after assets are loaded.
+
+20) Refactor notes (important hotspots)
+- Biggest refactor opportunity:
+  - src/App.tsx is doing state orchestration + domain logic + side effects + UI glue.
+- Practical decomposition targets:
+  1. Playback controller hook/service (audio lifecycle + events).
+  2. Library/playlist controller hook (load/sync/update/validate).
+  3. UI settings controller (theme/layout/fx/localStorage sync).
+  4. Import/export controller (backup actions + summaries).
+  5. Overlay/modal state coordinator.
+- Risk areas when refactoring:
+  - localStorage key compatibility
+  - import/export schema compatibility
+  - object URL lifecycle (memory leaks)
+  - playlist healing and migration behavior
+  - cross-window event sync (admin <-> main)
+
+21) Quick file map for engineering handoff
+- Runtime entry:
+  - src/main.tsx
+  - src/App.tsx
+- Data and persistence:
+  - src/lib/db.ts
+  - src/lib/storage/library.ts
+  - src/lib/storage/db.ts
+  - src/lib/library.ts
+  - src/lib/playlistState.ts
+- Import/export:
+  - src/lib/backup.ts
+- Playback helpers:
+  - src/lib/player/media.ts
+  - src/lib/aura.ts
+- UI layers:
+  - src/components/*
+- Admin/help:
+  - src/admin/AdminApp.tsx
+  - src/help/HelpApp.tsx
+- Mobile shell:
+  - capacitor.config.ts
+  - ios/App/App/AppDelegate.swift
+

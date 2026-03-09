@@ -212,6 +212,16 @@ function isCoarsePointer(): boolean {
   );
 }
 
+function isFxReducedMotionContext(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return true;
+  const saveData =
+    typeof navigator !== "undefined" && "connection" in navigator
+      ? Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData)
+      : false;
+  return saveData && isCoarsePointer();
+}
+
 function parseLoopByTrack(raw: string | null): Record<string, LoopRegion> {
   if (!raw) return {};
   try {
@@ -321,6 +331,9 @@ export default function App() {
     return "auto";
   });
   const [fxToast, setFxToast] = useState<string | null>(null);
+  const [isPageVisible, setIsPageVisible] = useState<boolean>(() =>
+    typeof document === "undefined" ? true : !document.hidden
+  );
   const [isPlayerCompact, setIsPlayerCompact] = useState<boolean>(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
     return window.matchMedia("(min-width: 900px)").matches;
@@ -925,6 +938,12 @@ export default function App() {
       }
     };
   }, [fxToast]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => setIsPageVisible(!document.hidden);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, []);
 
   useEffect(() => {
     const reducedMotion =
@@ -1964,7 +1983,23 @@ export default function App() {
     blob: Blob,
     filename: string,
     options?: { accept?: Record<string, string[]>; description?: string }
-  ): Promise<"save-dialog" | "downloaded"> => {
+  ): Promise<"shared" | "save-dialog" | "downloaded"> => {
+    const nav = navigator as Navigator & {
+      canShare?: (data: { files?: File[] }) => boolean;
+      share?: (data: { title?: string; text?: string; files?: File[] }) => Promise<void>;
+    };
+    if (typeof nav.share === "function" && typeof File !== "undefined") {
+      try {
+        const file = new File([blob], filename, { type: blob.type || "application/zip" });
+        if (!nav.canShare || nav.canShare({ files: [file] })) {
+          await nav.share({ title: filename, files: [file] });
+          return "shared";
+        }
+      } catch {
+        // Share canceled/unsupported in this context; continue with picker/download fallback.
+      }
+    }
+
     const pickerHost = window as typeof window & {
       showSaveFilePicker?: (options: {
         suggestedName?: string;
@@ -2019,9 +2054,11 @@ export default function App() {
       }
       clearActivePlaylistDirty();
       setVaultStatus(
-        saveMode === "save-dialog"
-          ? `Saved to selected location: ${filename}.`
-          : `Download started for ${filename}. If you canceled the dialog, nothing was saved.`
+        saveMode === "shared"
+          ? `Share sheet opened for ${filename}.`
+          : saveMode === "save-dialog"
+            ? `Saved to selected location: ${filename}.`
+            : `Download started for ${filename}. If iOS blocks downloads, use Share when prompted.`
       );
       return true;
     } catch (error) {
@@ -2098,7 +2135,8 @@ export default function App() {
   );
   const bubblesEnabled = false;
   const isMainPlayerView = !isAnyModalOpen;
-  const fxAllowed = isMainPlayerView && !isNuking && fxEnabled;
+  const fxAllowed = isMainPlayerView && !isNuking && fxEnabled && isPageVisible;
+  const fxReducedMotion = isFxReducedMotionContext();
 
   useEffect(() => {
     if (!fxAllowed) return;
@@ -2146,11 +2184,7 @@ export default function App() {
             allowed={fxAllowed}
             mode={fxMode}
             quality={fxQuality}
-            reducedMotion={
-              typeof window !== "undefined" &&
-              typeof window.matchMedia === "function" &&
-              window.matchMedia("(prefers-reduced-motion: reduce)").matches
-            }
+            reducedMotion={fxReducedMotion}
           />
           <div
             className={`track-backdrop ${currentTrack?.artUrl || currentTrack?.artGrad ? "is-visible" : ""}`.trim()}

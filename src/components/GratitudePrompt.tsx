@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 type Props = {
   open: boolean;
+  allowAutofocus?: boolean;
   doNotSaveText: boolean;
   doNotPromptAgain: boolean;
   onDoNotSaveTextChange: (next: boolean) => void;
@@ -13,6 +14,7 @@ type Props = {
 
 export function GratitudePrompt({
   open,
+  allowAutofocus = true,
   doNotSaveText,
   doNotPromptAgain,
   onDoNotSaveTextChange,
@@ -34,13 +36,20 @@ export function GratitudePrompt({
     window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !allowAutofocus) return;
     const raf = window.requestAnimationFrame(() => {
       textareaRef.current?.focus();
       textareaRef.current?.setSelectionRange(textareaRef.current.value.length, textareaRef.current.value.length);
     });
     return () => window.cancelAnimationFrame(raf);
-  }, [open]);
+  }, [open, allowAutofocus]);
+
+  useEffect(() => {
+    if (allowAutofocus) return;
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    if (document.activeElement === textarea) textarea.blur();
+  }, [allowAutofocus]);
 
   useEffect(() => {
     return () => {

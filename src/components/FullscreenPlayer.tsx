@@ -89,7 +89,18 @@ export function FullscreenPlayer({
     }
     (window as Window & { __polyplayActiveArtworkVideo?: HTMLVideoElement | null }).__polyplayActiveArtworkVideo =
       currentVideo;
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        currentVideo.pause();
+        return;
+      }
+      void currentVideo.play().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
     return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       try {
         currentVideo.pause();
         currentVideo.removeAttribute("src");

@@ -1,9 +1,9 @@
 import type { MouseEvent } from "react";
 
-const ORACLE_URL_SCHEME = "polyoracle://";
+const ORACLE_URL_SCHEMES = ["polyoracle://", "poly-oracle://"] as const;
 const ORACLE_APP_STORE_URL = "https://apps.apple.com/app/poly-oracle/id6760079845";
 const ORACLE_FALLBACK_DELAY_MS = 1400;
-const ORACLE_SECONDARY_ATTEMPT_DELAY_MS = 260;
+const ORACLE_SCHEME_RETRY_DELAY_MS = 220;
 
 function isLikelyIOSDevice(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -13,38 +13,18 @@ function isLikelyIOSDevice(): boolean {
   return isAppleMobile || isTouchMac;
 }
 
-function getSchemeCandidates(rawScheme: string): string[] {
-  const trimmed = rawScheme.trim();
-  if (!trimmed) return [];
-  const withColon = trimmed.includes(":") ? trimmed : `${trimmed}:`;
-  const withSlashes = withColon.endsWith("//") ? withColon : withColon.endsWith(":") ? `${withColon}//` : withColon;
-  const withoutTrailingSlashes = withSlashes.replace(/\/+$/, "");
-  return Array.from(new Set([withSlashes, withoutTrailingSlashes]));
-}
-
-function tryOpenViaIframe(url: string): void {
-  if (typeof document === "undefined") return;
-  const frame = document.createElement("iframe");
-  frame.style.display = "none";
-  frame.setAttribute("aria-hidden", "true");
-  frame.src = url;
-  document.body.appendChild(frame);
-  window.setTimeout(() => frame.remove(), 520);
-}
-
 export function PolyOracleOrb() {
   const onOpenOracle = (event: MouseEvent<HTMLAnchorElement>) => {
     if (!isLikelyIOSDevice()) return;
     event.preventDefault();
     if (typeof window === "undefined" || typeof document === "undefined") return;
 
-    const candidates = getSchemeCandidates(ORACLE_URL_SCHEME);
+    const candidates = ORACLE_URL_SCHEMES.map((value) => value.trim()).filter(Boolean);
     const primary = candidates[0];
     if (!primary) {
       window.location.href = ORACLE_APP_STORE_URL;
       return;
     }
-    const secondary = candidates[1];
 
     let didLeavePage = false;
     let fallbackTimer: number | null = null;
@@ -87,14 +67,13 @@ export function PolyOracleOrb() {
     }, ORACLE_FALLBACK_DELAY_MS);
 
     window.location.assign(primary);
-    tryOpenViaIframe(primary);
 
+    const secondary = candidates[1];
     if (secondary && secondary !== primary) {
       secondaryAttemptTimer = window.setTimeout(() => {
         if (didLeavePage) return;
         window.location.assign(secondary);
-        tryOpenViaIframe(secondary);
-      }, ORACLE_SECONDARY_ATTEMPT_DELAY_MS);
+      }, ORACLE_SCHEME_RETRY_DELAY_MS);
     }
   };
 

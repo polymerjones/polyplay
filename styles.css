@@ -3078,7 +3078,11 @@ body.mute-freeze .track-backdrop {
   z-index: 10;
   height: 100%;
   overflow: hidden;
-  padding: 10px;
+  padding:
+    max(10px, calc(env(safe-area-inset-top, 0px) + 6px))
+    max(10px, env(safe-area-inset-right, 0px))
+    max(10px, calc(env(safe-area-inset-bottom, 0px) + 8px))
+    max(10px, env(safe-area-inset-left, 0px));
   box-sizing: border-box;
   display: grid;
   justify-items: center;
@@ -3485,6 +3489,7 @@ body.mute-freeze .track-backdrop {
   color: #f6edff;
   font: inherit;
   padding: 0 44px 0 40px;
+  font-size: 16px;
 }
 
 .journalSearchInput:focus {
@@ -3516,6 +3521,8 @@ body.mute-freeze .track-backdrop {
 .journal-modal__list {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   padding-right: 4px;
   display: grid;
   gap: 10px;
@@ -3547,6 +3554,47 @@ body.mute-freeze .track-backdrop {
   padding: 10px;
   min-height: 92px;
   cursor: pointer;
+  transform: translateZ(0);
+  transition:
+    border-color 150ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease,
+    transform 120ms ease;
+}
+
+.journal-entry::before {
+  content: "Tap to open";
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.22px;
+  color: rgba(255, 214, 150, 0.76);
+  opacity: 0.72;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.journal-entry:hover {
+  transform: translateY(-1px);
+}
+
+.journal-entry.is-expanded {
+  border-color: rgba(255, 194, 112, 0.62);
+  background:
+    radial-gradient(circle at 92% 10%, rgba(255, 196, 108, 0.18), rgba(255, 196, 108, 0) 52%),
+    linear-gradient(145deg, rgba(36, 30, 17, 0.76), rgba(22, 18, 11, 0.7));
+  box-shadow:
+    0 0 0 1px rgba(255, 198, 120, 0.28),
+    0 0 20px rgba(255, 178, 80, 0.24),
+    0 10px 20px rgba(8, 6, 2, 0.36);
+  transform: translateY(-1px);
+}
+
+.journal-entry.is-expanded::before,
+.journal-entry.is-editing::before {
+  opacity: 0;
 }
 
 .journal-entry.is-saved {
@@ -3628,11 +3676,15 @@ body.mute-freeze .track-backdrop {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
   overflow: hidden;
+  max-height: calc(1.45em * 3 + 2px);
+  transition: max-height 170ms ease, opacity 130ms ease;
 }
 
 .journal-entry.is-expanded .journal-entry__text {
   -webkit-line-clamp: unset;
   overflow: visible;
+  max-height: 60vh;
+  opacity: 1;
 }
 
 .journal-entry.is-editing {
@@ -3866,12 +3918,16 @@ body.mute-freeze .track-backdrop {
   }
 
   .journalUI {
-    padding: 10px;
+    padding:
+      max(8px, calc(env(safe-area-inset-top, 0px) + 6px))
+      max(8px, env(safe-area-inset-right, 0px))
+      max(8px, calc(env(safe-area-inset-bottom, 0px) + 8px))
+      max(8px, env(safe-area-inset-left, 0px));
   }
 
   .journal-modal__card {
-    max-height: 94dvh;
-    min-height: 86dvh;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 12px);
+    min-height: min(84dvh, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 12px));
     padding: 10px;
   }
 

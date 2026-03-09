@@ -1197,6 +1197,19 @@ body.perf-lite .fullscreen-player-shell__art.is-aura-flash::after {
 }
 
 @media (max-width: 739px) {
+  .fullscreen-player-shell {
+    padding:
+      max(10px, env(safe-area-inset-top, 0px))
+      max(10px, env(safe-area-inset-right, 0px))
+      max(10px, env(safe-area-inset-bottom, 0px))
+      max(10px, env(safe-area-inset-left, 0px));
+  }
+
+  .fullscreen-player-shell__content {
+    gap: 10px;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 20px);
+  }
+
   .mini-player-bar {
     left: max(8px, env(safe-area-inset-left, 0px));
     right: max(8px, env(safe-area-inset-right, 0px));
@@ -1211,9 +1224,21 @@ body.perf-lite .fullscreen-player-shell__art.is-aura-flash::after {
     min-width: 0;
   }
 
+  .player-controls--fullscreen {
+    gap: 8px;
+  }
+
+  .player-controls--fullscreen .pc-progress {
+    gap: 4px;
+  }
+
+  .player-controls--fullscreen .pc-time {
+    font-size: 11px;
+  }
+
   .player-controls--fullscreen .pc-row {
     flex-wrap: wrap;
-    row-gap: 6px;
+    row-gap: 5px;
   }
 
   .player-controls--fullscreen .pc-btn--aura-inline {
@@ -1256,7 +1281,7 @@ body.perf-lite .fullscreen-player-shell__art.is-aura-flash::after {
 
   .pc-skip-row {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 6px;
+    gap: 5px;
   }
 
   .pc-extra-skip {
@@ -1321,7 +1346,7 @@ body.perf-lite .fullscreen-player-shell__art.is-aura-flash::after {
 
 @media (max-height: 760px) {
   .fullscreen-player-shell__content {
-    gap: 10px;
+    gap: 8px;
   }
 
   .fullscreen-player-shell__art {

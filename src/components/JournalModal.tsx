@@ -472,6 +472,7 @@ export function JournalModal({ open, onClose }: Props) {
     }
     void video.play().catch(() => undefined);
     return () => {
+      video.pause();
       video.removeEventListener("loadedmetadata", jumpToSafeStart);
       video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("ended", onEnded);

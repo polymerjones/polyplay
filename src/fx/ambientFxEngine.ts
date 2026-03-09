@@ -128,7 +128,7 @@ class AmbientFxEngine {
     this.reducedMotion = options.reducedMotion;
     this.isMobile = options.isMobile;
     this.resolvedQuality = this.resolveQuality(options.quality);
-    this.frameThrottleMs = this.isMobile ? 33 : 16;
+    this.updateFrameThrottle();
     this.resize();
 
     this.popAudio = new Audio("/hyper-notif.wav");
@@ -166,10 +166,12 @@ class AmbientFxEngine {
 
   setQuality(quality: AmbientFxQuality): void {
     this.resolvedQuality = this.resolveQuality(quality);
+    this.updateFrameThrottle();
   }
 
   setReducedMotion(reducedMotion: boolean): void {
     this.reducedMotion = reducedMotion;
+    this.updateFrameThrottle();
   }
 
   setThemeTokens(tokens: Partial<ThemeTokens>): void {
@@ -417,8 +419,23 @@ class AmbientFxEngine {
     return quality;
   }
 
+  private updateFrameThrottle(): void {
+    if (this.reducedMotion) {
+      this.frameThrottleMs = this.isMobile ? 50 : 40;
+      return;
+    }
+    this.frameThrottleMs = this.isMobile ? 33 : 16;
+  }
+
   private getCaps() {
     const lite = this.resolvedQuality === "lite";
+    if (this.reducedMotion) {
+      return {
+        gravity: this.isMobile ? 10 : 14,
+        pop: this.isMobile ? 10 : 14,
+        splat: this.isMobile ? 110 : 180
+      };
+    }
     return {
       gravity: lite ? 18 : 28,
       pop: lite ? 16 : 24,

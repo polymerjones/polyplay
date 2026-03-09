@@ -1,0 +1,185 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2868
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 TASK: Make my music playlist app persist user-added tracks + artwork across refresh/new builds. Currently uploads live in runtime state and get wiped on reload/deploy.\
+\
+GOAL: Local-only persistence (no hosting, no Spotify). The app should keep working even if the original file on the user\'92s device is renamed/moved/deleted.\
+\
+CORE DECISION:\
+- We must NOT store \'93file path references\'94 (fragile).\
+- We must COPY the selected audio/artwork blobs into IndexedDB and store only stable keys + metadata in localStorage (or IndexedDB metadata store).\
+- If blobs are missing (user cleared site data, storage purge, etc.), show a clean \'93Missing media\'94 state and allow Replace audio/artwork.\
+\
+--------------------------------------------------------------------------------\
+A) ARCHITECTURE OVERVIEW (Local-first persistence)\
+1) Metadata Store (small JSON):\
+   - localStorage (or an IndexedDB store)\
+   - contains playlists + track metadata + references to blob keys\
+\
+2) Blob Store (durable files):\
+   - IndexedDB (use idb library or direct IndexedDB)\
+   - store audio and image blobs keyed by generated IDs\
+\
+Rationale:\
+- If we copy blobs into IndexedDB, renaming/deleting the original file does NOT break playback/artwork.\
+- localStorage holds the \'93library index,\'94 IndexedDB holds the actual bytes.\
+\
+--------------------------------------------------------------------------------\
+B) DATA MODEL (minimal but future-proof)\
+\
+TrackRecord (persisted metadata):\
+- id: string (uuid)\
+- title: string\
+- artist: string | null\
+- duration: number | null\
+- createdAt: number (ms)\
+- updatedAt: number (ms)\
+\
+Persistence keys:\
+- audioKey: string | null   // key used to load audio blob from IndexedDB\
+- artKey: string | null     // key used to load artwork blob from IndexedDB\
+\
+Status flags (derived at runtime; do NOT store):\
+- missingAudio: boolean\
+- missingArt: boolean\
+\
+PlaylistRecord:\
+- id: string\
+- name: string\
+- trackIds: string[]\
+- createdAt, updatedAt\
+\
+LibraryState:\
+- version: number (for migrations)\
+- tracksById: Record<string, TrackRecord>\
+- playlistsById: Record<string, PlaylistRecord>\
+- activePlaylistId: string | null\
+- settings: (optional)\
+\
+--------------------------------------------------------------------------------\
+C) STORAGE IMPLEMENTATION DETAILS\
+\
+C1) IndexedDB schema\
+Create an IndexedDB database (e.g., "showoff_db") with object stores:\
+- "blobs" store:\
+   key: string\
+   value: \{ blob: Blob, mime: string, type: "audio"|"image", createdAt: number \}\
+Optionally separate stores:\
+- "audioBlobs"\
+- "imageBlobs"\
+\
+C2) localStorage\
+Save LibraryState JSON under a single key, e.g. "showoff_library_v1"\
+\
+On app boot:\
+1) load LibraryState from localStorage\
+2) for each TrackRecord:\
+   - check if audioKey exists in IndexedDB => if not, set missingAudio = true\
+   - check if artKey exists in IndexedDB => if not, set missingArt = true\
+\
+IMPORTANT: createObjectURL management\
+- When you fetch a blob, create an object URL: URL.createObjectURL(blob)\
+- Cache these URLs in memory (Map) keyed by blobKey\
+- Revoke URLs on replacement/removal/unmount: URL.revokeObjectURL(url)\
+\
+--------------------------------------------------------------------------------\
+D) USER FLOWS (Acceptance Criteria)\
+\
+D1) Add Audio Track\
+When user selects an audio file:\
+- Generate track.id and audioKey (uuid)\
+- Copy audio blob into IndexedDB under audioKey\
+- Extract minimal metadata (filename => title, duration if available)\
+- Save TrackRecord with audioKey, updatedAt\
+- Persist LibraryState to localStorage\
+\
+ACCEPTANCE:\
+- Refresh page/new build: track remains and plays.\
+- If user deletes/renames original file: track still plays (because we stored a copy).\
+\
+D2) Add/Replace Artwork\
+When user selects artwork image:\
+- Generate new artKey (uuid)\
+- Copy image blob into IndexedDB under artKey\
+- Update TrackRecord.artKey\
+- Persist LibraryState\
+\
+ACCEPTANCE:\
+- Refresh/new build: artwork remains.\
+- If user deletes the original photo from device: artwork still shows.\
+\
+D3) Replace Audio Track (existing feature)\
+Update Replace logic to:\
+- Write new blob to a new audioKey OR overwrite existing key\
+- If using new key, delete old blob from IndexedDB to avoid storage bloat\
+- Update TrackRecord.audioKey, updatedAt\
+- Revoke old object URL and create new one\
+\
+ACCEPTANCE:\
+- Replace works immediately and persists across refresh.\
+\
+D4) Missing Media State\
+If audioKey or artKey not found in IndexedDB:\
+- In UI show badge "Missing audio" or "Missing artwork"\
+- Disable play if missingAudio\
+- Provide buttons:\
+   - Replace audio track (existing)\
+   - Replace artwork (existing)\
+   - Remove track\
+\
+ACCEPTANCE:\
+- If user clears site data, app shows missing state instead of crashing.\
+\
+D5) Remove Track\
+On remove:\
+- Delete blob(s) from IndexedDB (audioKey/artKey)\
+- Remove track from tracksById and from any playlist trackIds\
+- Revoke any cached object URLs\
+\
+ACCEPTANCE:\
+- Storage is cleaned up; no orphan blobs.\
+\
+--------------------------------------------------------------------------------\
+E) STORAGE LIMITS + UX (keep it simple)\
+- Default behavior: ALWAYS copy artwork to IndexedDB (small, stable)\
+- Audio: copy to IndexedDB by default (best UX), but add a setting later if needed.\
+- Add a simple \'93Storage used\'94 readout (optional) via navigator.storage.estimate()\
+- Add Export/Import later; not required for this task.\
+\
+--------------------------------------------------------------------------------\
+F) FILES / MODULES TO CREATE\
+\
+1) /lib/storage/db.ts\
+- initDB()\
+- putBlob(key, blob, meta)\
+- getBlob(key)\
+- deleteBlob(key)\
+- hasBlob(key)\
+\
+2) /lib/storage/library.ts\
+- loadLibrary()\
+- saveLibrary(libraryState)\
+- migrateLibraryIfNeeded()\
+\
+3) /lib/player/media.ts\
+- getAudioUrl(audioKey) -> objectURL\
+- getArtUrl(artKey) -> objectURL\
+- urlCache + revoke helpers\
+\
+4) Update UI components\
+- TrackRow: handles missingAudio/missingArt display\
+- Replace dialogs: now write to IndexedDB\
+- Player: loads audio via objectURL from IndexedDB\
+\
+--------------------------------------------------------------------------------\
+G) DONE CRITERIA (must pass)\
+1) Add 3 tracks + artwork, refresh page => everything remains and plays/displays.\
+2) Simulate \'93original file renamed/deleted\'94 (not relevant anymore) => still works.\
+3) Clear site storage => tracks show Missing media state with Replace actions.\
+4) No console errors; object URLs are revoked on replacement/removal.\
+\
+Implement this first. After this is stable, we will implement Aura and weighted shuffle features on top of persisted TrackRecord fields (aura, auraUpdatedAt, etc.).}

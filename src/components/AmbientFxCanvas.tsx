@@ -90,12 +90,27 @@ export const AmbientFxCanvas = forwardRef<AmbientFxCanvasHandle, Props>(function
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;
-    if (allowed) {
+    if (allowed && (typeof document === "undefined" || !document.hidden)) {
       engine.start();
       return;
     }
     engine.stop();
     engine.clear();
+  }, [allowed]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const onVisibilityChange = () => {
+      if (!allowed) return;
+      if (document.hidden) {
+        engine.stop();
+        return;
+      }
+      engine.start();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, [allowed]);
 
   useImperativeHandle(

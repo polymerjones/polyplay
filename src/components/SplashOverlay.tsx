@@ -38,6 +38,20 @@ export function SplashOverlay({ isDismissing, onComplete }: Props) {
     void startPlayback();
   }, []);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        video.pause();
+        return;
+      }
+      void video.play().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, []);
+
   const startFromTap = async () => {
     const video = videoRef.current;
     if (!video) return;
