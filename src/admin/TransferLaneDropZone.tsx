@@ -126,6 +126,12 @@ export function TransferLaneDropZone({
           Supports audio, image, and video artwork.
           <br />
           Import media you own or have permission to use.
+          {iconType === "artwork" && (
+            <>
+              <br />
+              If you skip artwork, PolyPlay generates auto art.
+            </>
+          )}
         </span>
       </button>
       <input ref={inputRef} type="file" accept={accept} onChange={(event) => void onChange(event)} className="transfer-lane__input" />

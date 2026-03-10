@@ -860,6 +860,12 @@
   animation: pc-playback-sparkles 1200ms ease-out;
 }
 
+.player-controls--fullscreen.is-aura-pulse .pc-progress,
+.player-controls--fullscreen.is-aura-pulse .pc-progress::after,
+.player-controls--fullscreen.is-aura-pulse .pc-progress::before {
+  animation-duration: 340ms;
+}
+
 .pc-wave.is-aura-pulse {
   animation: pc-playback-flash 1200ms ease-out;
 }
@@ -1015,6 +1021,10 @@
   opacity: 0.74;
 }
 
+.fullscreen-player-shell__art-canvas.is-aura-flash-canvas {
+  animation: pc-art-canvas-aura 320ms ease-out;
+}
+
 .fullscreen-player-shell__art::after {
   content: "";
   position: absolute;
@@ -1058,6 +1068,21 @@
   100% {
     opacity: 0;
     transform: scale(1.12);
+  }
+}
+
+@keyframes pc-art-canvas-aura {
+  0% {
+    opacity: 0.74;
+    filter: brightness(1) saturate(1);
+  }
+  28% {
+    opacity: 0.96;
+    filter: brightness(1.24) saturate(1.35) hue-rotate(-8deg);
+  }
+  100% {
+    opacity: 0.74;
+    filter: brightness(1) saturate(1);
   }
 }
 

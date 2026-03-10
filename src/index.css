@@ -744,9 +744,14 @@ body.theme-dark .rowAuraGlow {
 
 .empty-library-card {
   position: relative;
-  max-width: 720px;
+  z-index: 4;
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 9px;
+  width: min(680px, 100%);
   margin: 8px auto 0;
-  padding: 18px 18px 16px;
+  padding: 14px 16px 12px;
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background:
@@ -776,21 +781,35 @@ body.theme-dark .rowAuraGlow {
 .empty-library-card__title {
   margin: 0;
   color: #f4ecff;
-  font-size: clamp(20px, 3.6vw, 30px);
+  font-size: clamp(20px, 3.3vw, 28px);
   line-height: 1.12;
   font-weight: 800;
+  max-width: 20ch;
 }
 
 .empty-library-card__body {
-  margin: 10px 0 0;
+  margin: 0;
   color: rgba(238, 230, 255, 0.9);
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.42;
   max-width: 62ch;
 }
 
+.empty-library-card__tip {
+  display: inline-flex;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(var(--aura-rgb, 188, 132, 255), 0.46);
+  background: rgba(12, 17, 29, 0.94);
+  color: #f2e8ff;
+  font-size: 12px;
+  line-height: 1.35;
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.22);
+}
+
 .empty-library-card__actions {
-  margin-top: 14px;
+  margin-top: 1px;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;

@@ -203,9 +203,15 @@ export function FullscreenPlayer({
   const triggerArtworkFlash = () => {
     const art = artRef.current;
     if (!art) return;
+    const artCanvas = canvasRef.current;
     art.classList.remove("is-aura-flash");
     void art.offsetWidth;
     art.classList.add("is-aura-flash");
+    if (artCanvas) {
+      artCanvas.classList.remove("is-aura-flash-canvas");
+      void artCanvas.offsetWidth;
+      artCanvas.classList.add("is-aura-flash-canvas");
+    }
   };
 
   return (
