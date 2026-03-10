@@ -402,6 +402,7 @@ export default function App() {
   const [isCreatePlaylistModalOpen, setIsCreatePlaylistModalOpen] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("polyplaylist1");
   const [isPlaylistRequired, setIsPlaylistRequired] = useState(false);
+  const [isEmptyWelcomeDismissed, setIsEmptyWelcomeDismissed] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const scratchPlayersRef = useRef<HTMLAudioElement[]>([]);
@@ -2447,10 +2448,11 @@ export default function App() {
             }}
           />
         ) : (
-          !hasOnboarded && (
+          !hasOnboarded && !isEmptyWelcomeDismissed && (
             <EmptyLibraryWelcome
               onUploadFirstTrack={() => openSettingsPanel("upload")}
               onOpenTips={() => setIsTipsOpen(true)}
+              onClose={() => setIsEmptyWelcomeDismissed(true)}
             />
           )
         )}
