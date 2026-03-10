@@ -346,9 +346,9 @@ class AmbientFxEngine {
           bubble.y,
           bubble.r
         );
-        gradient.addColorStop(0, `hsla(${bubble.hue} 100% 92% / ${alpha * 0.75})`);
-        gradient.addColorStop(0.55, `hsla(${bubble.hue} 90% 72% / ${alpha * 0.55})`);
-        gradient.addColorStop(1, `hsla(${bubble.hue} 88% 46% / 0)`);
+        gradient.addColorStop(0, `hsla(${bubble.hue} 100% 95% / ${alpha * 0.88})`);
+        gradient.addColorStop(0.55, `hsla(${bubble.hue} 96% 78% / ${alpha * 0.68})`);
+        gradient.addColorStop(1, `hsla(${bubble.hue} 92% 54% / 0)`);
         this.ctx.fillStyle = gradient;
         this.ctx.beginPath();
         this.ctx.arc(bubble.x, bubble.y, bubble.r, 0, Math.PI * 2);
@@ -366,12 +366,12 @@ class AmbientFxEngine {
 
         this.ctx.beginPath();
         this.ctx.arc(bubble.x, bubble.y, radius, 0, Math.PI * 2);
-        this.ctx.fillStyle = `rgba(255,255,255,${baseAlpha * 0.08})`;
+        this.ctx.fillStyle = `rgba(255,255,255,${baseAlpha * 0.12})`;
         this.ctx.fill();
 
         this.ctx.beginPath();
         this.ctx.arc(bubble.x, bubble.y, radius, 0, Math.PI * 2);
-        this.ctx.strokeStyle = `rgba(255,255,255,${baseAlpha * 0.52})`;
+        this.ctx.strokeStyle = `rgba(255,255,255,${baseAlpha * 0.66})`;
         this.ctx.lineWidth = 1.2;
         this.ctx.stroke();
       }
@@ -386,7 +386,7 @@ class AmbientFxEngine {
         this.ctx.rotate(splat.rot);
         this.ctx.beginPath();
         this.ctx.ellipse(0, 0, Math.max(1.2, splat.rx), Math.max(1.2, splat.ry), 0, 0, Math.PI * 2);
-        this.ctx.fillStyle = `hsla(${splat.hue} 86% 64% / ${splat.alpha * life})`;
+        this.ctx.fillStyle = `hsla(${splat.hue} 94% 72% / ${splat.alpha * life})`;
         this.ctx.fill();
         this.ctx.restore();
       }
@@ -517,7 +517,7 @@ class AmbientFxEngine {
     bubble.vy = rand(-0.28, 0.1);
     bubble.r = rand(14, 34) * (1 + intensity * 0.28);
     bubble.hue = weightedHue();
-    bubble.alpha = rand(0.18, 0.34) * this.themeTokens.glowIntensity;
+    bubble.alpha = rand(0.24, 0.4) * this.themeTokens.glowIntensity;
     bubble.ttl = rand(8000, 26000);
     bubble.age = 0;
     bubble.popping = false;
@@ -532,7 +532,7 @@ class AmbientFxEngine {
     bubble.vy = rand(-0.04, 0.12);
     bubble.r = rand(16, 36) * (1 + intensity * 0.2);
     bubble.hue = 220;
-    bubble.alpha = rand(0.24, 0.42);
+    bubble.alpha = rand(0.3, 0.48);
     bubble.ttl = rand(18000, 46000);
     bubble.age = 0;
     bubble.popping = false;
@@ -541,7 +541,7 @@ class AmbientFxEngine {
 
   private spawnSplat(x: number, y: number, intensity: number): void {
     const splat = this.acquireSplat();
-    const spread = 18 + intensity * 28;
+    const spread = 22 + intensity * 34;
     const angle = rand(0, Math.PI * 2);
     const radial = Math.sqrt(Math.random());
     const burstBias = Math.random() < 0.18 ? rand(1.08, 1.45) : 1;
@@ -549,15 +549,15 @@ class AmbientFxEngine {
     const jitter = 2 + intensity * 3;
     splat.x = x + Math.cos(angle) * distance + rand(-jitter, jitter);
     splat.y = y + Math.sin(angle) * distance + rand(-jitter, jitter);
-    splat.vx = this.reducedMotion ? 0 : Math.cos(angle) * rand(0.01, 0.06) + rand(-0.015, 0.015);
-    splat.vy = this.reducedMotion ? 0 : Math.sin(angle) * rand(0.01, 0.06) + rand(-0.015, 0.015);
-    const baseRadius = rand(2.2, 8.8) * (Math.random() < 0.1 ? rand(1.15, 1.5) : 1);
+    splat.vx = this.reducedMotion ? 0 : Math.cos(angle) * rand(0.016, 0.082) + rand(-0.018, 0.018);
+    splat.vy = this.reducedMotion ? 0 : Math.sin(angle) * rand(0.016, 0.082) + rand(-0.018, 0.018);
+    const baseRadius = rand(2.8, 10.2) * (Math.random() < 0.12 ? rand(1.18, 1.56) : 1);
     const eccentricity = rand(0.82, 1.3);
     splat.r = baseRadius;
     splat.rx = baseRadius * eccentricity;
     splat.ry = baseRadius / eccentricity;
     splat.rot = angle + rand(-0.55, 0.55);
-    splat.alpha = rand(0.14, 0.32);
+    splat.alpha = rand(0.2, 0.4);
     splat.ttl = this.resolvedQuality === "lite" ? rand(10000, 18000) : rand(12000, 30000);
     splat.age = 0;
     splat.hue = weightedHue();

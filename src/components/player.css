@@ -1027,11 +1027,11 @@
 }
 
 .fullscreen-player-shell__art.is-aura-flash {
-  animation: pc-art-cinematic-flash 1200ms ease-out;
+  animation: pc-art-cinematic-flash 320ms ease-out;
 }
 
 .fullscreen-player-shell__art.is-aura-flash::after {
-  animation: pc-art-cinematic-overlay 1200ms ease-out;
+  animation: pc-art-cinematic-overlay 320ms ease-out;
 }
 
 @keyframes pc-art-cinematic-flash {
