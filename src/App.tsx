@@ -1377,6 +1377,16 @@ export default function App() {
     ).length;
     return !hasImported && demoTrackCount > 0 && nonDemoTrackCount === 0;
   }, [activePlaylistId, hasOnboarded, runtimeLibrary]);
+  const derivedQuickTourPhase = useMemo<QuickTourPhase>(() => {
+    if (quickTourPhase) return quickTourPhase;
+    if (hasOnboarded || hasTracks || isInitialDemoFirstRunState) return null;
+    const activePlaylist =
+      activePlaylistId && runtimeLibrary?.playlistsById ? runtimeLibrary.playlistsById[activePlaylistId] : null;
+    if (!activePlaylist) return null;
+    const activeName = (activePlaylist.name || "").trim().toLowerCase();
+    const activeIsDemo = activePlaylist.id === DEMO_PLAYLIST_ID || activeName === DEMO_PLAYLIST_NAME;
+    return activeIsDemo ? null : "upload-track";
+  }, [activePlaylistId, hasOnboarded, hasTracks, isInitialDemoFirstRunState, quickTourPhase, runtimeLibrary]);
   const canCreatePolyplaylist = newPlaylistName.trim().length > 0;
   const currentAudioUrl = currentTrack?.audioUrl ?? null;
 
@@ -2452,7 +2462,7 @@ export default function App() {
               </button>
               <button
                 type="button"
-                className={`upload-link nav-action-btn ${quickTourPhase === "upload-track" ? "is-onboarding-target" : ""}`.trim()}
+                className={`upload-link nav-action-btn ${derivedQuickTourPhase === "upload-track" ? "is-onboarding-target" : ""}`.trim()}
                 aria-label="Upload tracks"
                 title="Upload"
                 onClick={() => openSettingsPanel("upload")}
@@ -2566,7 +2576,7 @@ export default function App() {
               <div className="playlist-selector__action-wrap">
                 <button
                   type="button"
-                  className={`playlist-selector__action ${quickTourPhase === "create-playlist" ? "is-onboarding-target" : ""}`.trim()}
+                  className={`playlist-selector__action ${derivedQuickTourPhase === "create-playlist" ? "is-onboarding-target" : ""}`.trim()}
                   onClick={() => {
                     setNewPlaylistName("");
                     setIsCreatePlaylistModalOpen(true);
@@ -2574,7 +2584,7 @@ export default function App() {
                 >
                   New
                 </button>
-                {quickTourPhase === "create-playlist" && (
+                {derivedQuickTourPhase === "create-playlist" && (
                   <div className="playlist-selector__tutorial-tip onboarding-tooltip" role="note">
                     Start by creating a new Polyplaylist.
                   </div>
@@ -2610,14 +2620,14 @@ export default function App() {
                 : () => openSettingsPanel("upload")
             }
             primaryButtonLabel={isInitialDemoFirstRunState ? "Start Quick Tour" : "Upload your first track"}
-            showPrimaryButton={quickTourPhase !== "create-playlist"}
+            showPrimaryButton={derivedQuickTourPhase !== "create-playlist"}
             bodyText={
               isInitialDemoFirstRunState
                 ? "Start with a quick tutorial: create a new Polyplaylist, then upload your own tracks."
                 : undefined
             }
-            tipText={quickTourPhase === "upload-track" ? "Upload your first track" : undefined}
-            primaryButtonClassName={quickTourPhase === "upload-track" ? "is-onboarding-target" : undefined}
+            tipText={derivedQuickTourPhase === "upload-track" ? "Upload your first track" : undefined}
+            primaryButtonClassName={derivedQuickTourPhase === "upload-track" ? "is-onboarding-target" : undefined}
             onOpenTips={() => setIsTipsOpen(true)}
             onClose={() => setIsEmptyWelcomeDismissed(true)}
           />
