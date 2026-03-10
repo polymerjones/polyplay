@@ -1411,9 +1411,14 @@ export default function App() {
   }, [activePlaylistId, hasOnboarded, isInitialDemoFirstRunState, runtimeLibrary]);
 
   useEffect(() => {
-    if (isInitialDemoFirstRunState) return;
-    setQuickTourPhase(null);
-  }, [isInitialDemoFirstRunState]);
+    if (quickTourPhase === "create-playlist" && !isInitialDemoFirstRunState) {
+      setQuickTourPhase(null);
+      return;
+    }
+    if (quickTourPhase === "upload-track" && (hasOnboarded || hasTracks)) {
+      setQuickTourPhase(null);
+    }
+  }, [hasOnboarded, hasTracks, isInitialDemoFirstRunState, quickTourPhase]);
 
   const currentLoop = useMemo(() => {
     if (!currentTrackId) return EMPTY_LOOP;
