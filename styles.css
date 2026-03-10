@@ -847,7 +847,16 @@ main,
   margin: 0;
   color: rgba(204, 224, 244, 0.72);
   font-size: 12px;
-  line-height: 1.35;
+  line-height: 1.45;
+  padding-inline: 16px;
+}
+
+.vault-actions + .vault-helper {
+  margin-top: 10px;
+}
+
+.vault-helper + .vault-helper {
+  margin-top: 4px;
 }
 
 .vault-import-summary {
