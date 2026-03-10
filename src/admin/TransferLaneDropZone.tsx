@@ -122,6 +122,11 @@ export function TransferLaneDropZone({
           {busy ? "Processing..." : "Drag and drop file here or click to browse"}
         </span>
         <span className="transfer-lane__file">{selectedFileName || "No file selected"}</span>
+        <span className="transfer-lane__policy">
+          Supports audio, image, and video artwork.
+          <br />
+          Import media you own or have permission to use.
+        </span>
       </button>
       <input ref={inputRef} type="file" accept={accept} onChange={(event) => void onChange(event)} className="transfer-lane__input" />
     </div>

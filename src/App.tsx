@@ -2765,6 +2765,10 @@ export default function App() {
                   }}
                 />
               </div>
+              <p className="vault-helper">
+                Vault backups contain your personal playlists, media links, and journal entries.
+              </p>
+              <p className="vault-helper">Only restore backups you trust.</p>
 
               {showImportWarning && (
                 <div className="vault-warning" role="alertdialog" aria-modal="true">
