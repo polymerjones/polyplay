@@ -35,7 +35,7 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
         <div className="trackRow__thumb" style={artStyle} />
         <div className="trackRow__artBadges" aria-hidden="true">
           {track.isDemo && <div className="track-art-badge track-art-badge--row track-art-badge--demo">DEMO</div>}
-          {track.artworkSource === "auto" && <div className="track-art-badge track-art-badge--row">AUTO ART</div>}
+          {track.artworkSource === "auto" && <div className="track-art-badge track-art-badge--row track-art-badge--auto">AUTO ART</div>}
         </div>
       </button>
       <button

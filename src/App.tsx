@@ -91,6 +91,8 @@ type VaultLibraryInspector = {
 const EMPTY_LOOP: LoopRegion = { start: 0, end: 0, active: false, editing: false };
 const SPLASH_SEEN_KEY = "polyplay_hasSeenSplash";
 const SPLASH_SESSION_KEY = "polyplay_hasSeenSplashSession";
+const DEMO_PLAYLIST_ID = "polyplaylist-demo";
+const DEMO_PLAYLIST_NAME = "demo playlist";
 const OPEN_STATE_SEEN_KEY = "polyplay_open_state_seen_v102";
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const THEME_MODE_KEY = "polyplay_themeMode";
@@ -606,6 +608,23 @@ export default function App() {
           setLibrary(librarySnapshot);
           loaded = getVisibleTracksFromLibrary(librarySnapshot, allTracksById);
         }
+      } else if (activeId) {
+        const activePlaylist = librarySnapshot.playlistsById[activeId];
+        const activeName = (activePlaylist?.name || "").trim().toLowerCase();
+        const isEmptyDemo = activePlaylist?.trackIds?.length === 0 && (activeId === DEMO_PLAYLIST_ID || activeName === DEMO_PLAYLIST_NAME);
+        if (isEmptyDemo) {
+          const fallback = Object.values(librarySnapshot.playlistsById || {}).find(
+            (playlist) => playlist.id !== activeId && playlist.trackIds.some((trackId) => Boolean(allTracksById[trackId]))
+          );
+          if (fallback) {
+            librarySnapshot = {
+              ...librarySnapshot,
+              activePlaylistId: fallback.id
+            };
+            setLibrary(librarySnapshot);
+            loaded = getVisibleTracksFromLibrary(librarySnapshot, allTracksById);
+          }
+        }
       }
     }
     setRuntimeLibrary(librarySnapshot);
@@ -799,7 +818,9 @@ export default function App() {
 
   useEffect(() => {
     try {
-      if (sessionStorage.getItem(SPLASH_SESSION_KEY) !== "true") setShowSplash(true);
+      const skipAlways = localStorage.getItem(SPLASH_SEEN_KEY) === "true";
+      const seenSession = sessionStorage.getItem(SPLASH_SESSION_KEY) === "true";
+      if (!skipAlways && !seenSession) setShowSplash(true);
     } catch {
       setShowSplash(true);
     }
@@ -1035,11 +1056,15 @@ export default function App() {
     }
   }, []);
 
-  const finishSplash = () => {
+  const finishSplash = (skipEveryTime = false) => {
     if (!showSplash || isSplashDismissing) return;
     setIsSplashDismissing(true);
     try {
-      localStorage.setItem(SPLASH_SEEN_KEY, "true");
+      if (skipEveryTime) {
+        localStorage.setItem(SPLASH_SEEN_KEY, "true");
+      } else {
+        localStorage.removeItem(SPLASH_SEEN_KEY);
+      }
       sessionStorage.setItem(SPLASH_SESSION_KEY, "true");
     } catch {
       // Ignore storage failures.
@@ -2860,7 +2885,13 @@ export default function App() {
       <audio ref={audioRef} preload="metadata" playsInline />
 
       <QuickTipsModal open={isTipsOpen} onClose={() => setIsTipsOpen(false)} tips={quickTipsContent} />
-      {showSplash && <SplashOverlay isDismissing={isSplashDismissing} onComplete={finishSplash} />}
+      {showSplash && (
+        <SplashOverlay
+          isDismissing={isSplashDismissing}
+          onClose={() => finishSplash(false)}
+          onSkip={(skipEveryTime) => finishSplash(skipEveryTime)}
+        />
+      )}
       <JournalModal open={isJournalOpen} onClose={() => setIsJournalOpen(false)} />
       <GratitudePrompt
         open={isGratitudeOpen}

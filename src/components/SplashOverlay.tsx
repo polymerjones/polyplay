@@ -4,10 +4,11 @@ import logoImage from "../../logo.png";
 
 type Props = {
   isDismissing: boolean;
-  onComplete: () => void;
+  onClose: () => void;
+  onSkip: (skipEveryTime: boolean) => void;
 };
 
-export function SplashOverlay({ isDismissing, onComplete }: Props) {
+export function SplashOverlay({ isDismissing, onClose, onSkip }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const completedRef = useRef(false);
   const lastTapAtRef = useRef(0);
@@ -18,7 +19,15 @@ export function SplashOverlay({ isDismissing, onComplete }: Props) {
   const completeOnce = () => {
     if (completedRef.current) return;
     completedRef.current = true;
-    onComplete();
+    onClose();
+  };
+
+  const skipOnce = () => {
+    if (completedRef.current) return;
+    const skipEveryTime =
+      typeof window !== "undefined" ? window.confirm("Skip every time? You can change this later by resetting app defaults.") : false;
+    completedRef.current = true;
+    onSkip(skipEveryTime);
   };
 
   useEffect(() => {
@@ -125,7 +134,7 @@ export function SplashOverlay({ isDismissing, onComplete }: Props) {
       <button type="button" className="splash-overlay__close" aria-label="Close welcome" onClick={completeOnce}>
         ✕
       </button>
-      <button type="button" className="splash-overlay__skip" onClick={completeOnce}>
+      <button type="button" className="splash-overlay__skip" onClick={skipOnce}>
         Skip
       </button>
       {!soundEnabled && (

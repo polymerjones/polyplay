@@ -218,15 +218,16 @@ body.theme-dark .rowAuraGlow {
   z-index: 3;
   border: 1px solid rgba(215, 188, 255, 0.42);
   border-radius: 999px;
-  background: rgba(88, 52, 160, 0.46);
+  background: rgba(60, 34, 104, 0.58);
   color: #f8f1ff;
   font-size: 9px;
   font-weight: 800;
-  letter-spacing: 0.25px;
+  letter-spacing: 0.3px;
   line-height: 1;
-  padding: 3px 6px;
+  padding: 3px 7px;
   backdrop-filter: blur(5px);
   pointer-events: none;
+  box-shadow: 0 4px 10px rgba(8, 10, 16, 0.28);
 }
 
 .track-badges {
@@ -290,13 +291,13 @@ body.theme-dark .rowAuraGlow {
 .trackRow__artBadges .track-art-badge--row {
   display: inline-flex;
   align-items: center;
-  max-width: clamp(110px, 14vw, 140px);
-  padding: 6px 10px;
-  font-size: 10px;
+  max-width: none;
+  padding: 4px 8px;
+  font-size: 9px;
   line-height: 1;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .trackRow__artBadges .track-art-badge--demo,
@@ -309,6 +310,12 @@ body.theme-dark .rowAuraGlow {
 .trackRow__artBadges .track-art-badge--demo {
   font-size: 7px;
   padding: 2px 4px;
+}
+
+.track-art-badge--auto {
+  border-color: rgba(255, 205, 128, 0.52);
+  background: linear-gradient(135deg, rgba(58, 34, 22, 0.82), rgba(93, 56, 26, 0.78));
+  color: #ffe3c2;
 }
 
 .trackRow__thumb {

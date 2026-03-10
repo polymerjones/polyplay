@@ -196,6 +196,8 @@ export function AdminApp() {
   const [editingPlaylistName, setEditingPlaylistName] = useState("");
   const [playlistBusyId, setPlaylistBusyId] = useState<string | null>(null);
   const [sortLargestFirst, setSortLargestFirst] = useState(true);
+  const uploadPreviewVideoRef = useRef<HTMLVideoElement | null>(null);
+  const selectedPreviewVideoRef = useRef<HTMLVideoElement | null>(null);
   const [customThemeSlot, setCustomThemeSlot] = useState<"crimson" | "teal" | "amber">(() => {
     try {
       const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
@@ -492,6 +494,11 @@ export function AdminApp() {
       setUploadArtworkFile(null);
       return;
     }
+    if (!uploadAudio) {
+      setUploadArtworkFile(null);
+      setStatus("Add an audio source to complete this track.");
+      return;
+    }
     if (isVideoArtwork(file)) {
       const validation = await validateVideoArtworkFile(file);
       if (!validation.ok) {
@@ -511,6 +518,12 @@ export function AdminApp() {
       setSelectedArtworkAssetFile(null);
       return;
     }
+    const selectedTrack = tracks.find((track) => track.id === selectedArtworkTrackId);
+    if (selectedTrack?.missingAudio) {
+      setSelectedArtworkAssetFile(null);
+      setStatus("Add an audio source to complete this track.");
+      return;
+    }
     if (isVideoArtwork(file)) {
       const validation = await validateVideoArtworkFile(file);
       if (!validation.ok) {
@@ -527,6 +540,19 @@ export function AdminApp() {
 
   const onPickSelectedAudio = (file: File | null) => {
     setSelectedAudioFile(file);
+  };
+
+  const seekPreviewVideo = (video: HTMLVideoElement | null, timeSec: number) => {
+    if (!video) return;
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    const maxTime = Math.max(0, duration - 0.05);
+    const nextTime = Math.max(0, Math.min(timeSec, maxTime));
+    try {
+      video.currentTime = nextTime;
+      video.pause();
+    } catch {
+      // Ignore transient media seek failures.
+    }
   };
 
   const runAudioLaneTransfer = async (file: File) => {
@@ -623,30 +649,6 @@ export function AdminApp() {
     return { artPoster: effectivePoster ?? null, artVideo: file, posterCaptureFailed: !effectivePoster };
   };
 
-  const captureUploadFrame = async () => {
-    if (!uploadArt || !isVideoArtwork(uploadArt)) return;
-    setStatus("Capturing artwork frame...");
-    try {
-      const poster = await capturePosterFrame(uploadArt, uploadArtFrameTime);
-      setUploadArtPosterBlob(poster);
-      setStatus("Frame captured.");
-    } catch {
-      setStatus("Could not capture frame from artwork video.");
-    }
-  };
-
-  const captureSelectedFrame = async () => {
-    if (!selectedArtworkFile || !isVideoArtwork(selectedArtworkFile)) return;
-    setStatus("Capturing artwork frame...");
-    try {
-      const poster = await capturePosterFrame(selectedArtworkFile, selectedArtFrameTime);
-      setSelectedArtPosterBlob(poster);
-      setStatus("Frame captured.");
-    } catch {
-      setStatus("Could not capture frame from artwork video.");
-    }
-  };
-
   const onUpload = async (event: FormEvent) => {
     event.preventDefault();
     if (!isSupportedTrackFile(uploadAudio)) {
@@ -698,6 +700,11 @@ export function AdminApp() {
     }
     if (!selectedArtworkFile) {
       setStatus("Select an artwork file.");
+      return;
+    }
+    const selectedTrack = tracks.find((track) => track.id === selectedArtworkTrackId);
+    if (selectedTrack?.missingAudio) {
+      setStatus("Add an audio source to complete this track.");
       return;
     }
 
@@ -1348,20 +1355,25 @@ export function AdminApp() {
               accept="image/*,video/mp4,video/quicktime,.mov"
               selectedFileName={uploadArt?.name}
               onFileSelected={(file) => void onPickUploadArtwork(file)}
+              disabled={!uploadAudio}
             />
             {uploadArtPreviewUrl && (
               <div className="video-frame-picker">
                 <label className="text-xs text-slate-300">Poster frame for static artwork</label>
                 <video
+                  ref={uploadPreviewVideoRef}
                   className="frame-video"
                   src={uploadArtPreviewUrl}
                   muted
                   playsInline
                   controls
+                  preload="metadata"
                   onLoadedMetadata={(event) => {
                     const duration = Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0;
+                    const frameTime = getDefaultVideoFrameTime(duration);
                     setUploadArtDuration(duration);
-                    setUploadArtFrameTime(getDefaultVideoFrameTime(duration));
+                    setUploadArtFrameTime(frameTime);
+                    seekPreviewVideo(event.currentTarget, frameTime);
                   }}
                 />
                 <input
@@ -1371,12 +1383,13 @@ export function AdminApp() {
                   max={Math.max(0, uploadArtDuration)}
                   step={0.05}
                   value={Math.min(uploadArtFrameTime, Math.max(0, uploadArtDuration))}
-                  onChange={(event) => setUploadArtFrameTime(Number(event.currentTarget.value))}
+                  onChange={(event) => {
+                    const nextTime = Number(event.currentTarget.value);
+                    setUploadArtFrameTime(nextTime);
+                    seekPreviewVideo(uploadPreviewVideoRef.current, nextTime);
+                  }}
                 />
                 <div className="text-xs text-slate-400">Frame: {uploadArtFrameTime.toFixed(2)}s</div>
-                <Button variant="primary" onClick={() => void captureUploadFrame()}>
-                  Use This Frame
-                </Button>
               </div>
             )}
 
@@ -1419,15 +1432,19 @@ export function AdminApp() {
                 <div className="video-frame-picker">
                   <label className="text-xs text-slate-300">Poster frame for static artwork</label>
                   <video
+                    ref={selectedPreviewVideoRef}
                     className="frame-video"
                     src={selectedArtPreviewUrl}
                     muted
                     playsInline
                     controls
+                    preload="metadata"
                     onLoadedMetadata={(event) => {
                       const duration = Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0;
+                      const frameTime = getDefaultVideoFrameTime(duration);
                       setSelectedArtDuration(duration);
-                      setSelectedArtFrameTime(getDefaultVideoFrameTime(duration));
+                      setSelectedArtFrameTime(frameTime);
+                      seekPreviewVideo(event.currentTarget, frameTime);
                     }}
                   />
                   <input
@@ -1437,12 +1454,13 @@ export function AdminApp() {
                     max={Math.max(0, selectedArtDuration)}
                     step={0.05}
                     value={Math.min(selectedArtFrameTime, Math.max(0, selectedArtDuration))}
-                    onChange={(event) => setSelectedArtFrameTime(Number(event.currentTarget.value))}
+                    onChange={(event) => {
+                      const nextTime = Number(event.currentTarget.value);
+                      setSelectedArtFrameTime(nextTime);
+                      seekPreviewVideo(selectedPreviewVideoRef.current, nextTime);
+                    }}
                   />
                   <div className="text-xs text-slate-400">Frame: {selectedArtFrameTime.toFixed(2)}s</div>
-                  <Button variant="primary" onClick={() => void captureSelectedFrame()}>
-                    Use This Frame
-                  </Button>
                 </div>
               )}
               <Button variant="primary" onClick={onUpdateArtwork} disabled={!hasTracks}>
@@ -2037,7 +2055,7 @@ export function AdminApp() {
         <h2 className="mb-2 text-base font-semibold text-slate-100">Danger Zone</h2>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => void refreshTracks()}>
-            Refresh Tracks
+            Reload Library View
           </Button>
           <Button variant="secondary" onClick={() => void onFactoryReset()}>
             Factory Reset
@@ -2049,6 +2067,9 @@ export function AdminApp() {
             Nuke Playlist
           </Button>
         </div>
+        <p className="mt-2 text-xs text-slate-400">
+          Reload Library View re-syncs this panel with current saved tracks and playlist state.
+        </p>
       </section>
       </>
       )}

@@ -38,6 +38,12 @@ export function TrackTile({ track, trackId, active, onSelectTrack, onAuraUp }: P
             draggable={false}
           />
         </div>
+        <div className="track-badges" aria-hidden="true">
+          {track.isDemo && <div className="track-art-badge track-art-badge--tile track-art-badge--demo">DEMO</div>}
+          {track.artworkSource === "auto" && (
+            <div className="track-art-badge track-art-badge--tile track-art-badge--auto">AUTO ART</div>
+          )}
+        </div>
         <div className="ytm-overlay" aria-hidden="true">
           <div className="ytm-title">{track.title}</div>
         </div>
