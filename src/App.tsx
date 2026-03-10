@@ -2765,10 +2765,12 @@ export default function App() {
                   }}
                 />
               </div>
-              <p className="vault-helper">
-                Vault backups contain your personal playlists, media links, and journal entries.
-              </p>
-              <p className="vault-helper">Only restore backups you trust.</p>
+              <div className="vault-helper-block">
+                <p className="vault-helper">
+                  Vault backups contain your personal playlists, media links, and journal entries.
+                </p>
+                <p className="vault-helper">Only restore backups you trust.</p>
+              </div>
 
               {showImportWarning && (
                 <div className="vault-warning" role="alertdialog" aria-modal="true">
@@ -2808,7 +2810,7 @@ export default function App() {
               )}
 
               {vaultStatus && <p className="vault-status">{vaultStatus}</p>}
-              <p className="vault-status">Full backup includes library metadata and bundled media available in this browser.</p>
+              <p className="vault-status vault-status--meta">Full backup includes library metadata and bundled media available in this browser.</p>
               {importSummary && (
                 <div className="vault-import-summary">
                   <div>Updated tracks: {importSummary.updatedTrackCount}</div>
