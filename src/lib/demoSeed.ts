@@ -20,6 +20,7 @@ const DEMO_TRACKS = [
     mediaUrl: "/demo/demo2.mp4"
   }
 ] as const;
+const DEMO_IDS: Set<string> = new Set(DEMO_TRACKS.map((track) => track.demoId));
 
 function makeId(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -90,7 +91,7 @@ async function ensureDemoPostersIfMissing(library: Awaited<ReturnType<typeof get
   let repaired = 0;
   let touched = false;
   for (const track of Object.values(library.tracksById || {})) {
-    if (!track?.isDemo) continue;
+    if (!(track?.isDemo || (track?.demoId ? DEMO_IDS.has(track.demoId) : false))) continue;
     if (track.artKey) continue;
     if (!track.artVideoKey) continue;
     const artVideoBlob = await getBlob(track.artVideoKey);
@@ -108,6 +109,36 @@ async function ensureDemoPostersIfMissing(library: Awaited<ReturnType<typeof get
   }
   if (touched) setLibrary(library);
   return repaired;
+}
+
+function collectDemoTrackIds(library: Awaited<ReturnType<typeof getLibrary>>): string[] {
+  return Object.values(library.tracksById || {})
+    .filter((track) => Boolean(track.isDemo) || (track.demoId ? DEMO_IDS.has(track.demoId) : false))
+    .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0))
+    .map((track) => track.id);
+}
+
+function ensureDemoPlaylistAttachment(library: Awaited<ReturnType<typeof getLibrary>>): boolean {
+  const demoTrackIds = collectDemoTrackIds(library);
+  const demoPlaylist =
+    library.playlistsById[DEMO_PLAYLIST_ID] ||
+    Object.values(library.playlistsById || {}).find(
+      (playlist) => playlist.name.trim().toLowerCase() === DEMO_PLAYLIST_NAME.toLowerCase()
+    );
+  const beforeTrackIds = Array.isArray(demoPlaylist?.trackIds) ? [...demoPlaylist.trackIds] : [];
+  if (!demoPlaylist || demoTrackIds.length === 0) return false;
+  const existing = Array.isArray(demoPlaylist.trackIds) ? demoPlaylist.trackIds : [];
+  const missing = demoTrackIds.filter((id) => !existing.includes(id));
+  if (missing.length === 0) return false;
+  demoPlaylist.trackIds = [...existing, ...missing];
+  demoPlaylist.updatedAt = Date.now();
+  console.debug("[demoSeed] ensureDemoPlaylistAttachment", {
+    demoPlaylistId: demoPlaylist.id,
+    beforeTrackIds,
+    afterTrackIds: [...demoPlaylist.trackIds],
+    attachedDemoTrackIds: demoTrackIds
+  });
+  return true;
 }
 
 function markSeedDone(): void {
@@ -163,7 +194,7 @@ async function fetchBlobBounded(url: string, maxBytes: number): Promise<Blob> {
 export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reason: string }> {
   let library = await getLibrary();
   const trackValues = Object.values(library.tracksById || {});
-  const hasAnyDemo = trackValues.some((track) => Boolean(track.isDemo));
+  const hasAnyDemo = trackValues.some((track) => Boolean(track.isDemo) || (track.demoId ? DEMO_IDS.has(track.demoId) : false));
   const hasDemoPlaylist = Boolean(
     library.playlistsById[DEMO_PLAYLIST_ID] ||
       Object.values(library.playlistsById || {}).find(
@@ -178,17 +209,21 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
 
   if (hasAnyDemo) {
     const repaired = await ensureDemoPostersIfMissing(library);
-    if (repaired > 0) {
+    const reattached = ensureDemoPlaylistAttachment(library);
+    if (reattached) setLibrary(library);
+    if (repaired > 0 || reattached) {
       markSeedDone();
-      return { seeded: false, reason: "repaired-demo-posters" };
+      return { seeded: false, reason: repaired > 0 ? "repaired-demo-posters" : "reattached-demo-playlist" };
     }
   }
 
   if (wasSeedDone() && hasAnyDemo) {
+    if (ensureDemoPlaylistAttachment(library)) setLibrary(library);
     return { seeded: false, reason: "already-seeded" };
   }
 
   if (hasAnyDemo) {
+    if (ensureDemoPlaylistAttachment(library)) setLibrary(library);
     markSeedDone();
     return { seeded: false, reason: "demo-already-present" };
   }
@@ -224,6 +259,8 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
   }
 
   markSeedDone();
+  const seededLibrary = await getLibrary();
+  if (ensureDemoPlaylistAttachment(seededLibrary)) setLibrary(seededLibrary);
   return installed > 0 ? { seeded: true, reason: "seeded-first-run" } : { seeded: false, reason: "no-demo-installed" };
 }
 
@@ -262,6 +299,8 @@ export async function restoreDemoTracks(): Promise<{ restored: number; skipped: 
 
   const postLibrary = await getLibrary();
   const repaired = await ensureDemoPostersIfMissing(postLibrary).catch(() => 0);
+  const reattached = ensureDemoPlaylistAttachment(postLibrary);
+  if (reattached) setLibrary(postLibrary);
   markSeedDone();
-  return { restored, skipped, repaired, failed };
+  return { restored, skipped, repaired: repaired + (reattached ? 1 : 0), failed };
 }

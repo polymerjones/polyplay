@@ -16,11 +16,10 @@ import { TrackGrid } from "./components/TrackGrid";
 import { getAllTracksFromDb, hardResetLibraryInDb, saveAuraToDb } from "./lib/db";
 import {
   exportFullBackup,
-  getNextDefaultPolyplaylistName,
   getFullBackupFilename,
   importFullBackup
 } from "./lib/backup";
-import { seedDemoTracksIfNeeded } from "./lib/demoSeed";
+import { restoreDemoTracks, seedDemoTracksIfNeeded } from "./lib/demoSeed";
 import {
   DEFAULT_GRATITUDE_SETTINGS,
   GRATITUDE_ENTRIES_KEY,
@@ -58,6 +57,7 @@ type DimMode = "normal" | "dim" | "mute";
 type ThemeMode = "light" | "dark" | "custom";
 type CustomThemeSlot = "crimson" | "teal" | "amber";
 type ThemeSelection = "dark" | "light" | "amber" | "teal" | "crimson";
+type QuickTourPhase = "create-playlist" | "upload-track" | null;
 type SafeTapVariant = "bubble" | "ring" | "blob" | "sparkle";
 type SafeTapBurst = {
   id: number;
@@ -93,6 +93,7 @@ const SPLASH_SEEN_KEY = "polyplay_hasSeenSplash";
 const SPLASH_SESSION_KEY = "polyplay_hasSeenSplashSession";
 const DEMO_PLAYLIST_ID = "polyplaylist-demo";
 const DEMO_PLAYLIST_NAME = "demo playlist";
+const DEMO_TRACK_IDS = new Set(["first-run-demo-1", "first-run-demo-2"]);
 const OPEN_STATE_SEEN_KEY = "polyplay_open_state_seen_v102";
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const THEME_MODE_KEY = "polyplay_themeMode";
@@ -400,9 +401,10 @@ export default function App() {
     }
   });
   const [isCreatePlaylistModalOpen, setIsCreatePlaylistModalOpen] = useState(false);
-  const [newPlaylistName, setNewPlaylistName] = useState("polyplaylist1");
+  const [newPlaylistName, setNewPlaylistName] = useState("");
   const [isPlaylistRequired, setIsPlaylistRequired] = useState(false);
   const [isEmptyWelcomeDismissed, setIsEmptyWelcomeDismissed] = useState(false);
+  const [quickTourPhase, setQuickTourPhase] = useState<QuickTourPhase>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const scratchPlayersRef = useRef<HTMLAudioElement[]>([]);
@@ -633,7 +635,7 @@ export default function App() {
     setIsPlaylistRequired(playlistIds.length === 0);
     if (playlistIds.length === 0) {
       setIsCreatePlaylistModalOpen(true);
-      setNewPlaylistName("polyplaylist1");
+      setNewPlaylistName("");
     }
     void refreshVaultInspector();
     setCurrentTrackId((prev) => {
@@ -656,15 +658,102 @@ export default function App() {
   };
 
   const createPlaylist = async (name: string) => {
-    const nextName = name.trim() || getNextDefaultPolyplaylistName();
+    const nextName = name.trim();
+    if (!nextName) return;
     const source = await getLibrary();
     const created = createPlaylistInLibrary(source, nextName);
     setLibrary(created.library);
     setRuntimeLibrary(created.library);
     setIsCreatePlaylistModalOpen(false);
     setIsPlaylistRequired(false);
-    setNewPlaylistName(getNextDefaultPolyplaylistName());
+    setNewPlaylistName("");
+    setQuickTourPhase((current) => (current === "create-playlist" ? "upload-track" : current));
     window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
+    await refreshTracks();
+  };
+
+  const ensureDemoTracksForFirstRun = async (options?: { preferDemoActive?: boolean }) => {
+    await seedDemoTracksIfNeeded().catch(() => ({ seeded: false, reason: "seed-failed" }));
+    await restoreDemoTracks().catch(() => ({ restored: 0, skipped: 0, repaired: 0, failed: 0 }));
+    let latest = await getLibrary();
+    const startingActivePlaylist =
+      latest.activePlaylistId && latest.playlistsById[latest.activePlaylistId]
+        ? latest.playlistsById[latest.activePlaylistId]
+        : null;
+    const demoTrackIds = Object.values(latest.tracksById || {})
+      .filter((track) => Boolean(track.isDemo) || (track.demoId ? DEMO_TRACK_IDS.has(track.demoId) : false))
+      .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0))
+      .map((track) => track.id);
+    const officialDemoTracks = Object.values(latest.tracksById || {})
+      .filter((track) => (track.demoId ? DEMO_TRACK_IDS.has(track.demoId) : false))
+      .map((track) => ({ id: track.id, demoId: track.demoId }));
+    const hasDemo = demoTrackIds.length > 0;
+    console.debug("[first-run] startup reconcile begin", {
+      preferDemoActive: Boolean(options?.preferDemoActive),
+      activePlaylistId: latest.activePlaylistId,
+      activePlaylistName: startingActivePlaylist?.name ?? null,
+      officialDemoTracks,
+      demoTrackIds
+    });
+    if (options?.preferDemoActive && hasDemo) {
+      const demoPlaylistById = latest.playlistsById[DEMO_PLAYLIST_ID];
+      const demoPlaylistByName = Object.values(latest.playlistsById || {}).find(
+        (playlist) => playlist.name.trim().toLowerCase() === DEMO_PLAYLIST_NAME
+      );
+      const demoPlaylist = demoPlaylistById || demoPlaylistByName;
+      if (demoPlaylist) {
+        const beforeTrackIds = Array.isArray(demoPlaylist.trackIds) ? [...demoPlaylist.trackIds] : [];
+        const demoTrackIdSet = new Set(demoTrackIds);
+        const nextPlaylistsById = { ...latest.playlistsById };
+        let playlistsTouched = false;
+        for (const [playlistId, playlist] of Object.entries(nextPlaylistsById)) {
+          if (playlistId === demoPlaylist.id) continue;
+          const nextTrackIds = (playlist.trackIds || []).filter((trackId) => !demoTrackIdSet.has(trackId));
+          if (nextTrackIds.length !== (playlist.trackIds || []).length) {
+            nextPlaylistsById[playlistId] = { ...playlist, trackIds: nextTrackIds, updatedAt: Date.now() };
+            playlistsTouched = true;
+          }
+        }
+        const currentDemoPlaylist = nextPlaylistsById[demoPlaylist.id] || demoPlaylist;
+        const existingTrackIds = Array.isArray(currentDemoPlaylist.trackIds) ? currentDemoPlaylist.trackIds : [];
+        const missingDemoTrackIds = demoTrackIds.filter((trackId) => !existingTrackIds.includes(trackId));
+        const repairedTrackIds = missingDemoTrackIds.length > 0 ? [...existingTrackIds, ...missingDemoTrackIds] : existingTrackIds;
+        const needsRepair = missingDemoTrackIds.length > 0;
+        if (options.preferDemoActive) {
+          for (const [playlistId, playlist] of Object.entries(nextPlaylistsById)) {
+            if (playlistId === demoPlaylist.id) continue;
+            if ((playlist.trackIds || []).length === 0) {
+              delete nextPlaylistsById[playlistId];
+              playlistsTouched = true;
+            }
+          }
+        }
+        const needsActiveSwitch = latest.activePlaylistId !== demoPlaylist.id;
+        if (needsRepair || needsActiveSwitch || playlistsTouched) {
+          latest = {
+            ...latest,
+            activePlaylistId: demoPlaylist.id,
+            playlistsById: {
+              ...nextPlaylistsById,
+              [demoPlaylist.id]: needsRepair
+                ? { ...currentDemoPlaylist, trackIds: repairedTrackIds, updatedAt: Date.now() }
+                : currentDemoPlaylist
+            }
+          };
+          setLibrary(latest);
+        }
+        const finalDemoPlaylist = latest.playlistsById[demoPlaylist.id];
+        console.debug("[first-run] startup reconcile demo playlist", {
+          beforeTrackIds,
+          afterTrackIds: Array.isArray(finalDemoPlaylist?.trackIds) ? [...finalDemoPlaylist.trackIds] : [],
+          activePlaylistId: latest.activePlaylistId,
+          activePlaylistName: finalDemoPlaylist?.name ?? null,
+          needsRepair,
+          needsActiveSwitch,
+          playlistsTouched
+        });
+      }
+    }
     await refreshTracks();
   };
 
@@ -750,8 +839,13 @@ export default function App() {
     (async () => {
       try {
         await refreshTracks();
-        const seedResult = await seedDemoTracksIfNeeded().catch(() => ({ seeded: false, reason: "seed-failed" }));
-        if (seedResult.seeded) await refreshTracks();
+        let preferDemoActive = true;
+        try {
+          preferDemoActive = localStorage.getItem(HAS_IMPORTED_KEY) !== "true" && localStorage.getItem(HAS_ONBOARDED_KEY) !== "true";
+        } catch {
+          preferDemoActive = true;
+        }
+        await ensureDemoTracksForFirstRun({ preferDemoActive });
       } catch {
         if (!mounted) return;
         setTracks([]);
@@ -819,6 +913,12 @@ export default function App() {
 
   useEffect(() => {
     try {
+      const hasImported = localStorage.getItem(HAS_IMPORTED_KEY) === "true";
+      const hasOnboarded = localStorage.getItem(HAS_ONBOARDED_KEY) === "true";
+      if (!hasImported && !hasOnboarded) {
+        setShowSplash(true);
+        return;
+      }
       const skipAlways = localStorage.getItem(SPLASH_SEEN_KEY) === "true";
       const seenSession = sessionStorage.getItem(SPLASH_SESSION_KEY) === "true";
       if (!skipAlways && !seenSession) setShowSplash(true);
@@ -1215,9 +1315,7 @@ export default function App() {
         teardownCurrentAudio();
         pendingAutoPlayRef.current = false;
         void (async () => {
-          await refreshTracks();
-          const seeded = await seedDemoTracksIfNeeded().catch(() => ({ seeded: false }));
-          if (seeded.seeded) await refreshTracks();
+          await ensureDemoTracksForFirstRun({ preferDemoActive: true });
           setShowOpenState(true);
         })();
         return;
@@ -1257,7 +1355,65 @@ export default function App() {
     [tracks, currentTrackId]
   );
   const hasTracks = tracks.length > 0;
+  const isInitialDemoFirstRunState = useMemo(() => {
+    if (hasOnboarded) return false;
+    const activePlaylist =
+      activePlaylistId && runtimeLibrary?.playlistsById ? runtimeLibrary.playlistsById[activePlaylistId] : null;
+    const activeName = (activePlaylist?.name || "").trim().toLowerCase();
+    const activeIsDemo = Boolean(activePlaylist && (activePlaylist.id === DEMO_PLAYLIST_ID || activeName === DEMO_PLAYLIST_NAME));
+    if (!activeIsDemo) return false;
+    let hasImported = false;
+    try {
+      hasImported = localStorage.getItem(HAS_IMPORTED_KEY) === "true";
+    } catch {
+      hasImported = false;
+    }
+    const runtimeTracks = Object.values(runtimeLibrary?.tracksById || {});
+    const demoTrackCount = runtimeTracks.filter(
+      (track) => Boolean(track.isDemo) || (track.demoId ? DEMO_TRACK_IDS.has(track.demoId) : false)
+    ).length;
+    const nonDemoTrackCount = runtimeTracks.filter(
+      (track) => !(track.isDemo || (track.demoId ? DEMO_TRACK_IDS.has(track.demoId) : false))
+    ).length;
+    return !hasImported && demoTrackCount > 0 && nonDemoTrackCount === 0;
+  }, [activePlaylistId, hasOnboarded, runtimeLibrary]);
+  const canCreatePolyplaylist = newPlaylistName.trim().length > 0;
   const currentAudioUrl = currentTrack?.audioUrl ?? null;
+
+  useEffect(() => {
+    const activePlaylist =
+      activePlaylistId && runtimeLibrary?.playlistsById ? runtimeLibrary.playlistsById[activePlaylistId] : null;
+    const activeName = (activePlaylist?.name || "").trim().toLowerCase();
+    const activeIsDemo = Boolean(activePlaylist && (activePlaylist.id === DEMO_PLAYLIST_ID || activeName === DEMO_PLAYLIST_NAME));
+    const runtimeTracks = Object.values(runtimeLibrary?.tracksById || {});
+    const officialDemoTracks = runtimeTracks
+      .filter((track) => (track.demoId ? DEMO_TRACK_IDS.has(track.demoId) : false))
+      .map((track) => ({ id: track.id, demoId: track.demoId }));
+    const nonDemoTrackCount = runtimeTracks.filter(
+      (track) => !(track.isDemo || (track.demoId ? DEMO_TRACK_IDS.has(track.demoId) : false))
+    ).length;
+    let hasImported = false;
+    try {
+      hasImported = localStorage.getItem(HAS_IMPORTED_KEY) === "true";
+    } catch {
+      hasImported = false;
+    }
+    console.debug("[first-run] isInitialDemoFirstRunState", {
+      activePlaylistId,
+      activePlaylistName: activePlaylist?.name ?? null,
+      activeIsDemo,
+      hasImported,
+      hasOnboarded,
+      officialDemoTracks,
+      nonDemoTrackCount,
+      isInitialDemoFirstRunState
+    });
+  }, [activePlaylistId, hasOnboarded, isInitialDemoFirstRunState, runtimeLibrary]);
+
+  useEffect(() => {
+    if (isInitialDemoFirstRunState) return;
+    setQuickTourPhase(null);
+  }, [isInitialDemoFirstRunState]);
 
   const currentLoop = useMemo(() => {
     if (!currentTrackId) return EMPTY_LOOP;
@@ -1520,7 +1676,6 @@ export default function App() {
   };
 
   const triggerAuraPulseForTrack = (trackId: string) => {
-    if (!isPlaying) return;
     if (!currentTrackId || currentTrackId !== trackId) return;
     window.dispatchEvent(new CustomEvent("polyplay:aura-trigger"));
   };
@@ -2292,7 +2447,7 @@ export default function App() {
               </button>
               <button
                 type="button"
-                className="upload-link nav-action-btn"
+                className={`upload-link nav-action-btn ${quickTourPhase === "upload-track" ? "is-onboarding-target" : ""}`.trim()}
                 aria-label="Upload tracks"
                 title="Upload"
                 onClick={() => openSettingsPanel("upload")}
@@ -2389,7 +2544,7 @@ export default function App() {
                 onChange={(event) => {
                   const value = event.currentTarget.value;
                   if (value === "__create__") {
-                    setNewPlaylistName(getNextDefaultPolyplaylistName());
+                    setNewPlaylistName("");
                     setIsCreatePlaylistModalOpen(true);
                     return;
                   }
@@ -2401,23 +2556,30 @@ export default function App() {
                     {playlist.name}
                   </option>
                 ))}
-                <option value="__create__">Create new playlist…</option>
+                <option value="__create__">Create new Polyplaylist…</option>
               </select>
-              <button
-                type="button"
-                className="playlist-selector__action"
-                onClick={() => {
-                  setNewPlaylistName(getNextDefaultPolyplaylistName());
-                  setIsCreatePlaylistModalOpen(true);
-                }}
-              >
-                New
-              </button>
+              <div className="playlist-selector__action-wrap">
+                <button
+                  type="button"
+                  className={`playlist-selector__action ${quickTourPhase === "create-playlist" ? "is-onboarding-target" : ""}`.trim()}
+                  onClick={() => {
+                    setNewPlaylistName("");
+                    setIsCreatePlaylistModalOpen(true);
+                  }}
+                >
+                  New
+                </button>
+                {quickTourPhase === "create-playlist" && (
+                  <div className="playlist-selector__tutorial-tip onboarding-tooltip" role="note">
+                    Start by creating a new Polyplaylist.
+                  </div>
+                )}
+              </div>
             </div>
           </section>
         )}
 
-        {showOpenState && hasTracks && (
+        {showOpenState && hasTracks && !showSplash && !isSplashDismissing && !isGratitudeOpen && !isInitialDemoFirstRunState && (
           <section className="open-state-card" role="region" aria-label="Welcome">
             <button
               type="button"
@@ -2435,6 +2597,27 @@ export default function App() {
           </section>
         )}
 
+        {!hasOnboarded && !isEmptyWelcomeDismissed && (!hasTracks || isInitialDemoFirstRunState) && (
+          <EmptyLibraryWelcome
+            onUploadFirstTrack={
+              isInitialDemoFirstRunState
+                ? () => setQuickTourPhase("create-playlist")
+                : () => openSettingsPanel("upload")
+            }
+            primaryButtonLabel={isInitialDemoFirstRunState ? "Start Quick Tour" : "Upload your first track"}
+            showPrimaryButton={quickTourPhase !== "create-playlist"}
+            bodyText={
+              isInitialDemoFirstRunState
+                ? "Start with a quick tutorial: create a new Polyplaylist, then upload your own tracks."
+                : undefined
+            }
+            tipText={quickTourPhase === "upload-track" ? "Upload your first track" : undefined}
+            primaryButtonClassName={quickTourPhase === "upload-track" ? "is-onboarding-target" : undefined}
+            onOpenTips={() => setIsTipsOpen(true)}
+            onClose={() => setIsEmptyWelcomeDismissed(true)}
+          />
+        )}
+
         {hasTracks ? (
           <TrackGrid
             tracks={tracks}
@@ -2447,15 +2630,7 @@ export default function App() {
               void updateAura(trackId, 1);
             }}
           />
-        ) : (
-          !hasOnboarded && !isEmptyWelcomeDismissed && (
-            <EmptyLibraryWelcome
-              onUploadFirstTrack={() => openSettingsPanel("upload")}
-              onOpenTips={() => setIsTipsOpen(true)}
-              onClose={() => setIsEmptyWelcomeDismissed(true)}
-            />
-          )
-        )}
+        ) : null}
       </div>
 
       {hasTracks && !overlayPage && (
@@ -2533,15 +2708,17 @@ export default function App() {
       )}
 
       {isCreatePlaylistModalOpen && (
-        <section className="app-overlay" role="dialog" aria-modal="true" aria-label="Create playlist">
+        <section className="app-overlay" role="dialog" aria-modal="true" aria-label="Create Polyplaylist">
           <div className="app-overlay-card playlist-create-card">
             <div className="app-overlay-head">
-              <div className="app-overlay-title">Create your first playlist</div>
+              <div className="app-overlay-title">
+                {isPlaylistRequired ? "Create your first Polyplaylist" : "Create a new Polyplaylist"}
+              </div>
               {!isPlaylistRequired && (
                 <button
                   type="button"
                   className="app-overlay-close"
-                  aria-label="Close create playlist"
+                  aria-label="Close create Polyplaylist"
                   onClick={() => setIsCreatePlaylistModalOpen(false)}
                 >
                   ✕
@@ -2551,14 +2728,14 @@ export default function App() {
             <div className="playlist-create-body">
               <p className="playlist-create-copy">
                 {isPlaylistRequired
-                  ? "Create your first playlist to begin."
-                  : "Create a new playlist and set it active."}
+                  ? "Create your first Polyplaylist to begin."
+                  : "Create a new Polyplaylist and set it active."}
               </p>
               <input
                 type="text"
                 value={newPlaylistName}
                 onChange={(event) => setNewPlaylistName(event.currentTarget.value)}
-                placeholder="polyplaylist1"
+                placeholder="Polyplaylist name"
                 autoFocus
                 data-ui="true"
               />
@@ -2575,9 +2752,10 @@ export default function App() {
                 <button
                   type="button"
                   className="vault-btn vault-btn--primary"
+                  disabled={!canCreatePolyplaylist}
                   onClick={() => void createPlaylist(newPlaylistName)}
                 >
-                  Create Playlist
+                  Create Polyplaylist
                 </button>
               </div>
             </div>

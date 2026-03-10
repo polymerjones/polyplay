@@ -183,6 +183,7 @@ export function AdminApp() {
   const [isAudioLaneBusy, setIsAudioLaneBusy] = useState(false);
   const [isArtworkLaneBusy, setIsArtworkLaneBusy] = useState(false);
   const [laneToast, setLaneToast] = useState<string | null>(null);
+  const [uploadSuccessNotice, setUploadSuccessNotice] = useState<string | null>(null);
 
   const [selectedRemoveTrackId, setSelectedRemoveTrackId] = useState<string>("");
   const [gratitudeSettings, setGratitudeSettings] = useState<GratitudeSettings>(DEFAULT_GRATITUDE_SETTINGS);
@@ -241,6 +242,7 @@ export function AdminApp() {
   const [nukeCountdownMs, setNukeCountdownMs] = useState(2000);
   const [isNukeRunning, setIsNukeRunning] = useState(false);
   const nukeTimerRef = useRef<number | null>(null);
+  const uploadSuccessNoticeTimeoutRef = useRef<number | null>(null);
   const manageStorageRef = useRef<HTMLElement | null>(null);
   const importConfigInputRef = useRef<HTMLInputElement | null>(null);
   const importBackupInputRef = useRef<HTMLInputElement | null>(null);
@@ -429,6 +431,10 @@ export function AdminApp() {
         window.clearInterval(nukeTimerRef.current);
         nukeTimerRef.current = null;
       }
+      if (uploadSuccessNoticeTimeoutRef.current !== null) {
+        window.clearTimeout(uploadSuccessNoticeTimeoutRef.current);
+        uploadSuccessNoticeTimeoutRef.current = null;
+      }
     };
   }, [selectedArtPreviewUrl, uploadArtPreviewUrl]);
 
@@ -449,6 +455,17 @@ export function AdminApp() {
     } catch {
       // Keep admin page open if messaging/navigation fails.
     }
+  };
+
+  const showUploadSuccessNotice = (message: string) => {
+    setUploadSuccessNotice(message);
+    if (uploadSuccessNoticeTimeoutRef.current !== null) {
+      window.clearTimeout(uploadSuccessNoticeTimeoutRef.current);
+    }
+    uploadSuccessNoticeTimeoutRef.current = window.setTimeout(() => {
+      setUploadSuccessNotice(null);
+      uploadSuccessNoticeTimeoutRef.current = null;
+    }, 2600);
   };
 
   const notifyUserImported = () => {
@@ -675,6 +692,11 @@ export function AdminApp() {
       setStatus(
         artwork.posterCaptureFailed
           ? "Upload complete. Video artwork added (poster frame unavailable on this browser)."
+          : "Upload complete."
+      );
+      showUploadSuccessNotice(
+        artwork.posterCaptureFailed
+          ? "Upload complete. Video artwork added."
           : "Upload complete."
       );
       await refreshTracks();
@@ -1294,6 +1316,11 @@ export function AdminApp() {
         isNukePromptOpen ? "admin-v1--nuke-arming" : ""
       }`.trim()}
     >
+      {uploadSuccessNotice && (
+        <div className="admin-upload-success-toast" role="status" aria-live="polite">
+          {uploadSuccessNotice}
+        </div>
+      )}
       <header className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-300/20 bg-slate-900/85 p-3 shadow-glow backdrop-blur">
         <div className="flex min-w-0 items-center gap-2">
           <img
