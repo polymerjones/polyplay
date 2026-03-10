@@ -1314,6 +1314,10 @@ export default function App() {
         setIsSplashDismissing(false);
         teardownCurrentAudio();
         pendingAutoPlayRef.current = false;
+        if (!isIOS) {
+          window.location.reload();
+          return;
+        }
         void (async () => {
           await ensureDemoTracksForFirstRun({ preferDemoActive: true });
           setShowOpenState(true);
