@@ -4,7 +4,7 @@ import { generateVideoPoster } from "./artwork/videoPoster";
 import { getMediaUrl, revokeAllMediaUrls, revokeMediaUrl } from "./player/media";
 import { isConstrainedMobileDevice } from "./platform";
 import { deleteBlob, getBlob, initDB, listBlobStats, putBlob } from "./storage/db";
-import { loadLibrary, saveLibrary, type LibraryState, type TrackRecord } from "./storage/library";
+import { clearCompetingLibraryCandidates, loadLibrary, saveLibrary, type LibraryState, type TrackRecord } from "./storage/library";
 import { titleFromFilename } from "./title";
 
 export type DbTrackRecord = {
@@ -576,6 +576,7 @@ export async function hardResetLibraryInDb(): Promise<void> {
     },
     activePlaylistId: playlistId
   };
+  clearCompetingLibraryCandidates();
   saveLibrary(reset);
   revokeAllMediaUrls();
 }

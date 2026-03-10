@@ -218,6 +218,14 @@ export function migrateBestLibraryCandidateToPrimary(): {
   return { migrated: true, fromKey: best.key, library: bestLibrary, candidateKeys };
 }
 
+export function clearCompetingLibraryCandidates(): void {
+  const candidates = getLibraryCandidates();
+  for (const candidate of candidates) {
+    if (candidate.key === LIBRARY_STORAGE_KEY) continue;
+    localStorage.removeItem(candidate.key);
+  }
+}
+
 export function loadLibrary(): LibraryState {
   try {
     const primaryRaw = localStorage.getItem(LIBRARY_STORAGE_KEY);
