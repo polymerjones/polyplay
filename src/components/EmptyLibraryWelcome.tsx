@@ -1,8 +1,11 @@
+import type { MouseEvent } from "react";
+
 type WelcomePhase = "pre-tour" | "create-playlist" | "upload-track";
 
 type Props = {
   phase: WelcomePhase;
   onUploadFirstTrack: () => void;
+  onPrimaryButtonClick?: (event: MouseEvent<HTMLButtonElement>) => void;
   primaryButtonLabel?: string;
   primaryButtonClassName?: string;
   bodyText?: string;
@@ -12,6 +15,7 @@ type Props = {
 export function EmptyLibraryWelcome({
   phase,
   onUploadFirstTrack,
+  onPrimaryButtonClick,
   primaryButtonLabel = "Upload your first track",
   primaryButtonClassName,
   bodyText = "Start by uploading your first track. Once you add music, aura controls and loop tools unlock.",
@@ -31,8 +35,11 @@ export function EmptyLibraryWelcome({
         <div className="empty-library-card__actions">
           <button
             type="button"
-            className={`empty-library-card__primary ${primaryButtonClassName ?? ""}`.trim()}
-            onClick={onUploadFirstTrack}
+            className={`empty-library-card__primary guided-cta onboarding-action ${primaryButtonClassName ?? ""}`.trim()}
+            onClick={(event) => {
+              onPrimaryButtonClick?.(event);
+              onUploadFirstTrack();
+            }}
           >
             {primaryButtonLabel}
           </button>

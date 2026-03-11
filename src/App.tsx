@@ -2126,6 +2126,16 @@ export default function App() {
     }, durationMs + 80);
   };
 
+  const triggerOnboardingSparkle = (event: MouseEvent<HTMLElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    spawnSafeTapBurstAt(centerX, centerY);
+    window.setTimeout(() => {
+      spawnSafeTapBurstAt(centerX + Math.min(16, rect.width * 0.14), centerY - Math.min(8, rect.height * 0.12));
+    }, 36);
+  };
+
   const onGratitudeDoNotSaveChange = (next: boolean) => {
     setGratitudeSettings((prev) => {
       const updated = { ...prev, doNotSaveText: next };
@@ -2572,7 +2582,10 @@ export default function App() {
         </header>
 
         {runtimeLibrary && Object.keys(runtimeLibrary.playlistsById || {}).length > 0 && (
-          <section className="playlist-selector" data-ui="true">
+          <section
+            className={`playlist-selector ${isCreatePlaylistGuidanceActive ? "playlist-selector--guided" : ""}`.trim()}
+            data-ui="true"
+          >
             <label htmlFor="current-playlist-select">Current Playlist</label>
             <div className="playlist-selector__controls">
               <select
@@ -2598,8 +2611,11 @@ export default function App() {
               <div className="playlist-selector__action-wrap">
                 <button
                   type="button"
-                  className={`playlist-selector__action ${isCreatePlaylistGuidanceActive ? "is-onboarding-target" : ""}`.trim()}
-                  onClick={() => {
+                  className={`playlist-selector__action guided-cta onboarding-action ${
+                    isCreatePlaylistGuidanceActive ? "is-onboarding-target" : ""
+                  }`.trim()}
+                  onClick={(event) => {
+                    if (isCreatePlaylistGuidanceActive) triggerOnboardingSparkle(event);
                     setNewPlaylistName("");
                     setIsCreatePlaylistModalOpen(true);
                   }}
@@ -2642,13 +2658,14 @@ export default function App() {
                 ? () => setQuickTourPhase("create-playlist")
                 : () => openSettingsPanel("upload")
             }
+            onPrimaryButtonClick={triggerOnboardingSparkle}
             primaryButtonLabel={isInitialDemoFirstRunState ? "Start Quick Tour" : "Upload your first track"}
             bodyText={
               welcomePhase === "create-playlist"
-                ? "Start by creating your first Polyplaylist."
+                ? "Create your first Polyplaylist to get started."
                 : welcomePhase === "upload-track"
-                  ? "Upload your first track to bring your new Polyplaylist to life."
-                  : "Start with a quick tutorial: create a new Polyplaylist, then upload your own tracks."
+                  ? "Now upload your first track."
+                  : "Take a quick tour to create your first Polyplaylist and add your own music."
             }
             primaryButtonClassName={
               shouldHighlightQuickTourStart || shouldHighlightWelcomeUpload ? "is-onboarding-target" : undefined
