@@ -1,7 +1,8 @@
 import { generateVideoPoster } from "./artwork/videoPoster";
 import { addTrackToDb } from "./db";
 import { getLibrary, setLibrary } from "./library";
-import { getBlob, putBlob } from "./storage/db";
+import { deleteBlob, getBlob, putBlob } from "./storage/db";
+import type { LibraryState, PlaylistRecord, TrackRecord } from "./storage/library";
 
 const DEMO_SEED_DONE_KEY = "polyplay_demo_seed_done_v1";
 const MAX_DEMO_ASSET_BYTES = 30 * 1024 * 1024;
@@ -27,7 +28,7 @@ function makeId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function ensureDemoPlaylist(library: Awaited<ReturnType<typeof getLibrary>>, makeActive: boolean) {
+function ensureDemoPlaylist(library: LibraryState, makeActive: boolean) {
   const now = Date.now();
   const existingById = library.playlistsById[DEMO_PLAYLIST_ID];
   if (existingById) {
@@ -87,7 +88,7 @@ function makeFallbackPoster(title: string): Blob | null {
   return new Blob([arr], { type: "image/png" });
 }
 
-async function ensureDemoPostersIfMissing(library: Awaited<ReturnType<typeof getLibrary>>): Promise<number> {
+async function ensureDemoPostersIfMissing(library: LibraryState): Promise<number> {
   let repaired = 0;
   let touched = false;
   for (const track of Object.values(library.tracksById || {})) {
@@ -111,14 +112,14 @@ async function ensureDemoPostersIfMissing(library: Awaited<ReturnType<typeof get
   return repaired;
 }
 
-function collectDemoTrackIds(library: Awaited<ReturnType<typeof getLibrary>>): string[] {
+function collectDemoTrackIds(library: LibraryState): string[] {
   return Object.values(library.tracksById || {})
     .filter((track) => Boolean(track.isDemo) || (track.demoId ? DEMO_IDS.has(track.demoId) : false))
     .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0))
     .map((track) => track.id);
 }
 
-function ensureDemoPlaylistAttachment(library: Awaited<ReturnType<typeof getLibrary>>): boolean {
+function ensureDemoPlaylistAttachment(library: LibraryState): boolean {
   const demoTrackIds = collectDemoTrackIds(library);
   const demoPlaylist =
     library.playlistsById[DEMO_PLAYLIST_ID] ||
@@ -139,6 +140,150 @@ function ensureDemoPlaylistAttachment(library: Awaited<ReturnType<typeof getLibr
     attachedDemoTrackIds: demoTrackIds
   });
   return true;
+}
+
+function getDemoCandidatesForSeed(library: LibraryState, demoId: string): TrackRecord[] {
+  return Object.values(library.tracksById || {}).filter(
+    (track) => track.demoId === demoId || track.id === demoId || (Boolean(track.isDemo) && track.demoId === demoId)
+  );
+}
+
+function getDemoTrackScore(track: TrackRecord, canonicalId: string): number {
+  return [
+    track.id === canonicalId ? 64 : 0,
+    track.demoId === canonicalId ? 32 : 0,
+    track.artKey ? 16 : 0,
+    track.artVideoKey ? 8 : 0,
+    track.audioKey ? 4 : 0,
+    track.posterBytes && track.posterBytes > 0 ? 2 : 0,
+    track.artworkBytes && track.artworkBytes > 0 ? 1 : 0
+  ].reduce((sum, value) => sum + value, 0);
+}
+
+function pickCanonicalDemoTrack(candidates: TrackRecord[], canonicalId: string): TrackRecord {
+  return [...candidates].sort((a, b) => {
+    const scoreDiff = getDemoTrackScore(b, canonicalId) - getDemoTrackScore(a, canonicalId);
+    if (scoreDiff !== 0) return scoreDiff;
+    return (a.createdAt ?? 0) - (b.createdAt ?? 0);
+  })[0]!;
+}
+
+async function deleteTrackArtifacts(track: TrackRecord): Promise<void> {
+  const keys = [track.audioKey, track.artKey, track.artVideoKey].filter(Boolean) as string[];
+  for (const key of keys) {
+    await deleteBlob(key).catch(() => undefined);
+  }
+}
+
+export async function normalizeDemoLibrary(options?: { preferDemoActive?: boolean }): Promise<{
+  normalized: boolean;
+  removedTrackIds: string[];
+  canonicalTrackIds: string[];
+}> {
+  let library = await getLibrary();
+  const now = Date.now();
+  let normalized = false;
+  const removedTrackIds: string[] = [];
+  const duplicatePlaylistIds = Object.values(library.playlistsById || {})
+    .filter((playlist) => playlist.id !== DEMO_PLAYLIST_ID && playlist.name.trim().toLowerCase() === DEMO_PLAYLIST_NAME.toLowerCase())
+    .map((playlist) => playlist.id);
+
+  if (duplicatePlaylistIds.length > 0) {
+    const nextPlaylistsById = { ...library.playlistsById };
+    for (const playlistId of duplicatePlaylistIds) delete nextPlaylistsById[playlistId];
+    library = { ...library, playlistsById: nextPlaylistsById };
+    normalized = true;
+  }
+
+  library = ensureDemoPlaylist(library, Boolean(options?.preferDemoActive));
+
+  const canonicalTrackIds: string[] = [];
+  const tracksById = { ...library.tracksById };
+  for (const demo of DEMO_TRACKS) {
+    const candidates = getDemoCandidatesForSeed({ ...library, tracksById }, demo.demoId);
+    if (candidates.length === 0) continue;
+
+    const keeper = pickCanonicalDemoTrack(candidates, demo.demoId);
+    const canonicalId = demo.demoId;
+    const canonicalTrack: TrackRecord = {
+      ...keeper,
+      id: canonicalId,
+      demoId: canonicalId,
+      isDemo: true,
+      title: demo.title,
+      sub: "Demo",
+      updatedAt: now
+    };
+
+    if (keeper.id !== canonicalId || keeper.demoId !== canonicalId || keeper.title !== demo.title || keeper.sub !== "Demo" || !keeper.isDemo) {
+      delete tracksById[keeper.id];
+      tracksById[canonicalId] = canonicalTrack;
+      normalized = true;
+    } else {
+      tracksById[canonicalId] = canonicalTrack;
+    }
+
+    const duplicateCandidates = candidates.filter((track) => track.id !== keeper.id && track.id !== canonicalId);
+    for (const duplicate of duplicateCandidates) {
+      delete tracksById[duplicate.id];
+      removedTrackIds.push(duplicate.id);
+      normalized = true;
+      await deleteTrackArtifacts(duplicate);
+    }
+
+    if (keeper.id !== canonicalId) {
+      removedTrackIds.push(keeper.id);
+    }
+    canonicalTrackIds.push(canonicalId);
+  }
+
+  const removedTrackIdSet = new Set(removedTrackIds);
+  const canonicalTrackIdSet = new Set(canonicalTrackIds);
+  const nextPlaylistsById: Record<string, PlaylistRecord> = {};
+  for (const [playlistId, playlist] of Object.entries(library.playlistsById || {})) {
+    if (playlistId !== DEMO_PLAYLIST_ID && duplicatePlaylistIds.includes(playlistId)) continue;
+    const nextTrackIds = (playlist.trackIds || []).filter(
+      (trackId, index, array) =>
+        !removedTrackIdSet.has(trackId) &&
+        (playlistId === DEMO_PLAYLIST_ID || !canonicalTrackIdSet.has(trackId)) &&
+        array.indexOf(trackId) === index
+    );
+    const shouldForceDemoPlaylist = playlistId === DEMO_PLAYLIST_ID;
+    const finalTrackIds = shouldForceDemoPlaylist ? canonicalTrackIds : nextTrackIds;
+    nextPlaylistsById[playlistId] =
+      finalTrackIds.length !== (playlist.trackIds || []).length ||
+      finalTrackIds.some((trackId, index) => (playlist.trackIds || [])[index] !== trackId)
+        ? { ...playlist, id: playlistId, name: shouldForceDemoPlaylist ? DEMO_PLAYLIST_NAME : playlist.name, trackIds: finalTrackIds, updatedAt: now }
+        : shouldForceDemoPlaylist && playlist.name !== DEMO_PLAYLIST_NAME
+          ? { ...playlist, id: playlistId, name: DEMO_PLAYLIST_NAME, updatedAt: now }
+          : playlist;
+  }
+
+  if (!nextPlaylistsById[DEMO_PLAYLIST_ID]) {
+    nextPlaylistsById[DEMO_PLAYLIST_ID] = {
+      id: DEMO_PLAYLIST_ID,
+      name: DEMO_PLAYLIST_NAME,
+      trackIds: canonicalTrackIds,
+      createdAt: now,
+      updatedAt: now
+    };
+    normalized = true;
+  }
+
+  const activePlaylistId = options?.preferDemoActive && canonicalTrackIds.length > 0 ? DEMO_PLAYLIST_ID : library.activePlaylistId;
+  if (activePlaylistId !== library.activePlaylistId) normalized = true;
+
+  if (normalized) {
+    library = {
+      ...library,
+      tracksById,
+      playlistsById: nextPlaylistsById,
+      activePlaylistId
+    };
+    setLibrary(library);
+  }
+
+  return { normalized, removedTrackIds, canonicalTrackIds };
 }
 
 function markSeedDone(): void {
@@ -193,6 +338,10 @@ async function fetchBlobBounded(url: string, maxBytes: number): Promise<Blob> {
 
 export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reason: string }> {
   let library = await getLibrary();
+  const normalizedBefore = await normalizeDemoLibrary();
+  if (normalizedBefore.normalized) {
+    library = await getLibrary();
+  }
   const trackValues = Object.values(library.tracksById || {});
   const hasAnyDemo = trackValues.some((track) => Boolean(track.isDemo) || (track.demoId ? DEMO_IDS.has(track.demoId) : false));
   const hasDemoPlaylist = Boolean(
@@ -209,21 +358,31 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
 
   if (hasAnyDemo) {
     const repaired = await ensureDemoPostersIfMissing(library);
-    const reattached = ensureDemoPlaylistAttachment(library);
-    if (reattached) setLibrary(library);
-    if (repaired > 0 || reattached) {
+    const normalized = await normalizeDemoLibrary();
+    const reattached = ensureDemoPlaylistAttachment(await getLibrary());
+    if (reattached) setLibrary(await getLibrary());
+    if (repaired > 0 || normalized.normalized || reattached) {
       markSeedDone();
-      return { seeded: false, reason: repaired > 0 ? "repaired-demo-posters" : "reattached-demo-playlist" };
+      return {
+        seeded: false,
+        reason: repaired > 0 ? "repaired-demo-posters" : normalized.normalized ? "normalized-demo-library" : "reattached-demo-playlist"
+      };
     }
   }
 
   if (wasSeedDone() && hasAnyDemo) {
+    const normalized = await normalizeDemoLibrary();
+    library = await getLibrary();
     if (ensureDemoPlaylistAttachment(library)) setLibrary(library);
+    if (normalized.normalized) return { seeded: false, reason: "normalized-demo-library" };
     return { seeded: false, reason: "already-seeded" };
   }
 
   if (hasAnyDemo) {
+    const normalized = await normalizeDemoLibrary();
+    library = await getLibrary();
     if (ensureDemoPlaylistAttachment(library)) setLibrary(library);
+    if (normalized.normalized) return { seeded: false, reason: "normalized-demo-library" };
     markSeedDone();
     return { seeded: false, reason: "demo-already-present" };
   }
@@ -259,6 +418,7 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
   }
 
   markSeedDone();
+  await normalizeDemoLibrary({ preferDemoActive: true });
   const seededLibrary = await getLibrary();
   if (ensureDemoPlaylistAttachment(seededLibrary)) setLibrary(seededLibrary);
   return installed > 0 ? { seeded: true, reason: "seeded-first-run" } : { seeded: false, reason: "no-demo-installed" };
@@ -299,8 +459,10 @@ export async function restoreDemoTracks(): Promise<{ restored: number; skipped: 
 
   const postLibrary = await getLibrary();
   const repaired = await ensureDemoPostersIfMissing(postLibrary).catch(() => 0);
-  const reattached = ensureDemoPlaylistAttachment(postLibrary);
-  if (reattached) setLibrary(postLibrary);
+  const normalized = await normalizeDemoLibrary({ preferDemoActive: true });
+  const latest = await getLibrary();
+  const reattached = ensureDemoPlaylistAttachment(latest);
+  if (reattached) setLibrary(latest);
   markSeedDone();
-  return { restored, skipped, repaired: repaired + (reattached ? 1 : 0), failed };
+  return { restored, skipped, repaired: repaired + (normalized.normalized ? 1 : 0) + (reattached ? 1 : 0), failed };
 }

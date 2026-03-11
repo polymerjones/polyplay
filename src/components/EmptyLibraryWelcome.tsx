@@ -1,38 +1,34 @@
+type WelcomePhase = "pre-tour" | "create-playlist" | "upload-track";
+
 type Props = {
+  phase: WelcomePhase;
   onUploadFirstTrack: () => void;
   primaryButtonLabel?: string;
   primaryButtonClassName?: string;
-  showPrimaryButton?: boolean;
   bodyText?: string;
-  tipText?: string;
-  onOpenTips: () => void;
   onClose: () => void;
 };
 
 export function EmptyLibraryWelcome({
+  phase,
   onUploadFirstTrack,
   primaryButtonLabel = "Upload your first track",
   primaryButtonClassName,
-  showPrimaryButton = true,
   bodyText = "Start by uploading your first track. Once you add music, aura controls and loop tools unlock.",
-  tipText,
-  onOpenTips,
   onClose
 }: Props) {
+  const showPrimaryButton = phase === "pre-tour" || phase === "upload-track";
+  const cardClassName = `empty-library-card empty-library-card--${phase}`.trim();
+
   return (
-    <section className="empty-library-card" role="region" aria-label="Welcome">
+    <section className={cardClassName} role="region" aria-label="Welcome">
       <button type="button" className="empty-library-card__close" aria-label="Close welcome" onClick={onClose}>
         ✕
       </button>
       <h2 className="empty-library-card__title">Hey new person! Welcome to Polyplay.</h2>
       <p className="empty-library-card__body">{bodyText}</p>
-      {tipText && (
-        <div className="empty-library-card__tip onboarding-tooltip" role="note">
-          {tipText}
-        </div>
-      )}
-      <div className="empty-library-card__actions">
-        {showPrimaryButton && (
+      {showPrimaryButton && (
+        <div className="empty-library-card__actions">
           <button
             type="button"
             className={`empty-library-card__primary ${primaryButtonClassName ?? ""}`.trim()}
@@ -40,11 +36,8 @@ export function EmptyLibraryWelcome({
           >
             {primaryButtonLabel}
           </button>
-        )}
-        <button type="button" className="empty-library-card__secondary" onClick={onOpenTips}>
-          Learn how it works
-        </button>
-      </div>
+        </div>
+      )}
     </section>
   );
 }
