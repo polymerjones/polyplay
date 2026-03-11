@@ -30,9 +30,11 @@ const LOOP_MODE_KEY = "polyplay_loopModeByTrack";
 
 const BACKUP_ROOT = "polyplay-backup";
 const BACKUP_CAP_BYTES = 250 * 1024 * 1024;
+export const MIN_FULL_BACKUP_USER_TRACKS = 1;
 const FULL_BACKUP_VERSION = 1;
 const POLYPLAYLIST_ROOT = "polyplaylist";
 const POLYPLAYLIST_VERSION = 1;
+const CANONICAL_DEMO_TRACK_IDS = new Set(["first-run-demo-1", "first-run-demo-2"]);
 
 export type LoopRegion = {
   start: number;
@@ -100,6 +102,12 @@ export type ExportFullBackupResult = {
   estimatedBytes: number;
   trackCount: number;
 };
+
+export function countNonDemoTracksForFullBackup(library: LibraryState): number {
+  return Object.values(library.tracksById || {}).filter(
+    (track) => !(track.isDemo || (track.demoId ? CANONICAL_DEMO_TRACK_IDS.has(track.demoId) : false))
+  ).length;
+}
 
 export type ExportPolyplaylistResult = {
   blob: Blob;

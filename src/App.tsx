@@ -15,8 +15,10 @@ import { SplashOverlay } from "./components/SplashOverlay";
 import { TrackGrid } from "./components/TrackGrid";
 import { getAllTracksFromDb, hardResetLibraryInDb, saveAuraToDb } from "./lib/db";
 import {
+  countNonDemoTracksForFullBackup,
   exportFullBackup,
   getFullBackupFilename,
+  MIN_FULL_BACKUP_USER_TRACKS,
   importFullBackup
 } from "./lib/backup";
 import { normalizeDemoLibrary, restoreDemoTracks, seedDemoTracksIfNeeded } from "./lib/demoSeed";
@@ -58,6 +60,7 @@ type ThemeMode = "light" | "dark" | "custom";
 type CustomThemeSlot = "crimson" | "teal" | "amber";
 type ThemeSelection = "dark" | "light" | "amber" | "teal" | "crimson";
 type QuickTourPhase = "create-playlist" | "upload-track" | null;
+type VaultToastTone = "info" | "success" | "error";
 type SafeTapVariant = "bubble" | "ring" | "blob" | "sparkle";
 type SafeTapBurst = {
   id: number;
@@ -368,7 +371,7 @@ export default function App() {
     }
   });
   const [showImportWarning, setShowImportWarning] = useState(false);
-  const [vaultStatus, setVaultStatus] = useState("");
+  const [vaultToast, setVaultToastState] = useState<{ message: string; tone: VaultToastTone } | null>(null);
   const [importSummary, setImportSummary] = useState<{
     playlistName: string;
     updatedTrackCount: number;
@@ -425,6 +428,7 @@ export default function App() {
   const themeBloomTimeoutRef = useRef<number | null>(null);
   const gratitudeTypingTimeoutRef = useRef<number | null>(null);
   const journalToastTimeoutRef = useRef<number | null>(null);
+  const vaultToastTimeoutRef = useRef<number | null>(null);
   const gratitudeEvaluatedRef = useRef(false);
   const safeTapSeqRef = useRef(0);
   const safeTapHeatRef = useRef(0);
@@ -847,7 +851,13 @@ export default function App() {
         await refreshTracks();
         let preferDemoActive = true;
         try {
-          preferDemoActive = localStorage.getItem(HAS_IMPORTED_KEY) !== "true" && localStorage.getItem(HAS_ONBOARDED_KEY) !== "true";
+          const library = await getLibrary();
+          const nonDemoTrackCount = Object.values(library.tracksById || {}).filter(
+            (track) => !(track.isDemo || (track.demoId ? DEMO_TRACK_IDS.has(track.demoId) : false))
+          ).length;
+          preferDemoActive =
+            nonDemoTrackCount === 0 ||
+            (localStorage.getItem(HAS_IMPORTED_KEY) !== "true" && localStorage.getItem(HAS_ONBOARDED_KEY) !== "true");
         } catch {
           preferDemoActive = true;
         }
@@ -874,9 +884,35 @@ export default function App() {
         window.clearTimeout(journalToastTimeoutRef.current);
         journalToastTimeoutRef.current = null;
       }
+      if (vaultToastTimeoutRef.current !== null) {
+        window.clearTimeout(vaultToastTimeoutRef.current);
+        vaultToastTimeoutRef.current = null;
+      }
       revokeAllMediaUrls();
     };
   }, []);
+
+  const isStandalonePwa = () => {
+    if (typeof window === "undefined") return false;
+    const nav = navigator as Navigator & { standalone?: boolean };
+    return Boolean(nav.standalone) || (typeof window.matchMedia === "function" && window.matchMedia("(display-mode: standalone)").matches);
+  };
+
+  const setVaultStatus = (message: string, tone: VaultToastTone = "info") => {
+    if (vaultToastTimeoutRef.current !== null) {
+      window.clearTimeout(vaultToastTimeoutRef.current);
+      vaultToastTimeoutRef.current = null;
+    }
+    if (!message) {
+      setVaultToastState(null);
+      return;
+    }
+    setVaultToastState({ message, tone });
+    vaultToastTimeoutRef.current = window.setTimeout(() => {
+      setVaultToastState((current) => (current?.message === message ? null : current));
+      vaultToastTimeoutRef.current = null;
+    }, tone === "error" ? 5400 : 3800);
+  };
 
   useEffect(() => {
     document.title = APP_TITLE;
@@ -1387,6 +1423,21 @@ export default function App() {
     ).length;
     return !hasImported && demoTrackCount > 0 && nonDemoTrackCount === 0;
   }, [activePlaylistId, hasOnboarded, runtimeLibrary]);
+  const isPristineDemoLibraryState = useMemo(() => {
+    const activePlaylist =
+      activePlaylistId && runtimeLibrary?.playlistsById ? runtimeLibrary.playlistsById[activePlaylistId] : null;
+    const activeName = (activePlaylist?.name || "").trim().toLowerCase();
+    const activeIsDemo = Boolean(activePlaylist && (activePlaylist.id === DEMO_PLAYLIST_ID || activeName === DEMO_PLAYLIST_NAME));
+    if (!activeIsDemo) return false;
+    const runtimeTracks = Object.values(runtimeLibrary?.tracksById || {});
+    const demoTrackCount = runtimeTracks.filter(
+      (track) => Boolean(track.isDemo) || (track.demoId ? DEMO_TRACK_IDS.has(track.demoId) : false)
+    ).length;
+    const nonDemoTrackCount = runtimeTracks.filter(
+      (track) => !(track.isDemo || (track.demoId ? DEMO_TRACK_IDS.has(track.demoId) : false))
+    ).length;
+    return demoTrackCount > 0 && nonDemoTrackCount === 0;
+  }, [activePlaylistId, runtimeLibrary]);
   const derivedQuickTourPhase = useMemo<QuickTourPhase>(() => {
     if (quickTourPhase) return quickTourPhase;
     if (hasOnboarded || hasTracks || isInitialDemoFirstRunState) return null;
@@ -1399,6 +1450,27 @@ export default function App() {
   }, [activePlaylistId, hasOnboarded, hasTracks, isInitialDemoFirstRunState, quickTourPhase, runtimeLibrary]);
   const canCreatePolyplaylist = newPlaylistName.trim().length > 0;
   const currentAudioUrl = currentTrack?.audioUrl ?? null;
+
+  useEffect(() => {
+    if (!isPristineDemoLibraryState) return;
+    let hadStaleFlags = false;
+    try {
+      if (localStorage.getItem(HAS_IMPORTED_KEY) === "true") {
+        localStorage.removeItem(HAS_IMPORTED_KEY);
+        hadStaleFlags = true;
+      }
+      if (localStorage.getItem(HAS_ONBOARDED_KEY) === "true") {
+        localStorage.removeItem(HAS_ONBOARDED_KEY);
+        hadStaleFlags = true;
+      }
+    } catch {
+      return;
+    }
+    if (!hadStaleFlags) return;
+    setHasOnboarded(false);
+    setIsEmptyWelcomeDismissed(false);
+    setShowOpenState(false);
+  }, [isPristineDemoLibraryState]);
 
   useEffect(() => {
     const activePlaylist =
@@ -2195,11 +2267,24 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  const openBlobPreview = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
   const saveBlobWithBestEffort = async (
     blob: Blob,
     filename: string,
     options?: { accept?: Record<string, string[]>; description?: string }
-  ): Promise<"shared" | "save-dialog" | "downloaded"> => {
+  ): Promise<"shared" | "save-dialog" | "downloaded" | "opened-preview"> => {
     const nav = navigator as Navigator & {
       canShare?: (data: { files?: File[] }) => boolean;
       share?: (data: { title?: string; text?: string; files?: File[] }) => Promise<void>;
@@ -2248,12 +2333,26 @@ export default function App() {
       }
     }
 
+    if (isIOS || isStandalonePwa()) {
+      openBlobPreview(blob, filename);
+      return "opened-preview";
+    }
+
     downloadBlobFile(blob, filename);
     return "downloaded";
   };
 
   const saveUniverseBackup = async (): Promise<boolean> => {
     try {
+      const library = await getLibrary();
+      const nonDemoTrackCount = countNonDemoTracksForFullBackup(library);
+      if (nonDemoTrackCount < MIN_FULL_BACKUP_USER_TRACKS) {
+        setVaultStatus(
+          `Add at least ${MIN_FULL_BACKUP_USER_TRACKS} uploaded track before saving a Universe backup.`,
+          "error"
+        );
+        return false;
+      }
       const payload = await exportFullBackup();
       const filename = getFullBackupFilename();
       const saveMode = await saveBlobWithBestEffort(payload.blob, filename, {
@@ -2274,11 +2373,14 @@ export default function App() {
           ? `Share sheet opened for ${filename}.`
           : saveMode === "save-dialog"
             ? `Saved to selected location: ${filename}.`
-            : `Download started for ${filename}. If iOS blocks downloads, use Share when prompted.`
+            : saveMode === "opened-preview"
+              ? `Backup opened for ${filename}. Use Share and Save to Files on iPhone.`
+              : `Download started for ${filename}.`,
+        "success"
       );
       return true;
     } catch (error) {
-      setVaultStatus(`Save Universe failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      setVaultStatus(`Save Universe failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
       return false;
     }
   };
@@ -2316,11 +2418,12 @@ export default function App() {
       await refreshVaultInspector();
       clearActivePlaylistDirty();
       setVaultStatus(
-        `Universe loaded. Restored ${summary.restoredTracks} tracks and ${summary.restoredMediaFiles} media files.`
+        `Universe loaded. Restored ${summary.restoredTracks} tracks and ${summary.restoredMediaFiles} media files.`,
+        "success"
       );
     } catch (error) {
       setImportSummary(null);
-      setVaultStatus(`Load Universe failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      setVaultStatus(`Load Universe failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
     }
   };
 
@@ -2887,7 +2990,7 @@ export default function App() {
                     onClick={async () => {
                       const source = runtimeLibrary ?? (await getLibrary());
                       setLibrary(source);
-                      setVaultStatus("Library persisted to canonical storage key.");
+                      setVaultStatus("Library persisted to canonical storage key.", "success");
                       await refreshVaultInspector();
                     }}
                   >
@@ -2901,7 +3004,8 @@ export default function App() {
                       setVaultStatus(
                         migration.migrated && migration.fromKey
                           ? `Migrated legacy key "${migration.fromKey}" into ${getLibraryKeyUsed()}.`
-                          : "No legacy migration needed."
+                          : "No legacy migration needed.",
+                        "success"
                       );
                       const latest = await getLibrary();
                       setRuntimeLibrary(latest);
@@ -2916,7 +3020,7 @@ export default function App() {
                     onClick={async () => {
                       await refreshTracks();
                       await refreshVaultInspector();
-                      setVaultStatus("Library hard refresh complete.");
+                      setVaultStatus("Library hard refresh complete.", "success");
                     }}
                   >
                     Hard Refresh Library
@@ -2953,9 +3057,9 @@ export default function App() {
                       };
                       try {
                         await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-                        setVaultStatus("Library debug copied.");
+                        setVaultStatus("Library debug copied.", "success");
                       } catch {
-                        setVaultStatus("Copy library debug failed.");
+                        setVaultStatus("Copy library debug failed.", "error");
                       }
                     }}
                   >
@@ -3044,8 +3148,6 @@ export default function App() {
                   </div>
                 </div>
               )}
-
-              {vaultStatus && <p className="vault-status">{vaultStatus}</p>}
               <p className="vault-status vault-status--meta">Full backup includes library metadata and bundled media available in this browser.</p>
               {importSummary && (
                 <div className="vault-import-summary">
@@ -3081,9 +3183,9 @@ export default function App() {
                       };
                       try {
                         await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-                        setVaultStatus("Import debug copied.");
+                        setVaultStatus("Import debug copied.", "success");
                       } catch {
-                        setVaultStatus("Copy debug failed.");
+                        setVaultStatus("Copy debug failed.", "error");
                       }
                     }}
                   >
@@ -3151,6 +3253,11 @@ export default function App() {
       />
       {showJournalTapToast && <div className="journal-tap-toast">Journal</div>}
       {fxToast && <div className="fx-toast">{fxToast}</div>}
+      {vaultToast && (
+        <div className={`vault-toast vault-toast--${vaultToast.tone}`.trim()} role="status" aria-live="polite">
+          {vaultToast.message}
+        </div>
+      )}
         </div>
       </div>
     </>
