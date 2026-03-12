@@ -29,6 +29,18 @@ Primary code inspected for this blueprint:
 - [`src/fx/ambientFxEngine.ts`](/Users/paulfisher/Polyplay/src/fx/ambientFxEngine.ts)
 - [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx)
 
+## Design Principles
+
+These principles should guide future implementation decisions, especially when the codebase allows multiple technically valid approaches.
+
+- Fast: actions should feel immediate, especially import, playback, track switching, and player controls.
+- Offline-first: the app should remain useful and complete without network dependency after installation and local media import.
+- Tactile: controls should feel direct, touch-friendly, and satisfying rather than dense or fiddly.
+- Visually alive: motion, artwork, aura, and FX should make the app feel expressive without becoming noisy or distracting.
+- Low-friction: core tasks should require as little setup and explanation as possible.
+- Personal-media ownership: the library belongs to the user and is built from the user’s own files, not a remote catalog.
+- Performance-conscious: visual ambition should not come at the cost of sluggishness, battery drain, or unreliable mobile behavior.
+
 ## 1. Product Overview
 
 ### Confirmed implementation
@@ -46,7 +58,14 @@ Relevant files:
 
 ### Intended product behavior
 
-The product summary positions Polyplay as an offline-first personal media player that lets users import their own audio, organize it into playlists, customize artwork, and interact with a more visual and reflective experience than a plain utility player.
+The product summary positions Polyplay more specifically as a personal offline audio streaming frontend built from the user’s own files. The goal is not just local playback. The goal is to let a user turn their private media library into something that feels fast, immersive, visually expressive, and emotionally personal.
+
+Its core differentiator is the combination of:
+
+- user-owned offline media
+- playlist-based listening
+- creative visual identity
+- a reflective journal layer that lives alongside playback instead of feeling bolted on
 
 ### Known gaps / verification needs
 
@@ -80,9 +99,11 @@ When overlays are open, the app suppresses parts of the main experience. The mai
 
 The current implementation is optimized around keeping playback available while the rest of the app swaps between overlays and supporting tools. The bottom player remains the stable control surface; fullscreen and overlays extend that experience rather than replacing the entire app shell.
 
+At a product level, the experience is trying to feel like a personal offline streaming environment rather than a file browser. The user is meant to move quickly from library to playback, then into a more expressive fullscreen or ambient state when they want a deeper experience. The journal sits as a secondary reflective layer, not as the main event, but still as part of the identity of the app.
+
 ### Intended product behavior
 
-The product summary describes Polyplay as a low-friction offline audio experience with visually rich playback, playlist management, and creative controls. The current app aligns with that general direction.
+The product summary describes Polyplay as a low-friction offline audio experience with visually rich playback, playlist management, creative controls, and a reflective side-channel through the Gratitude Journal. The intended experience is practical first, but not emotionally flat: it should feel owned, expressive, offline, and alive.
 
 ### Known gaps / verification needs
 
@@ -1306,3 +1327,165 @@ Before public release, product docs and in-app naming should align with the curr
 3. Audit CPU/memory behavior with FX and video artwork enabled.
 4. Reduce ambiguity between main app and admin/settings workflows.
 5. Update product summary and release docs so they match shipped behavior.
+
+## Release Blocking Checklist
+
+- Playback reliability: play, pause, seek, skip, loop, shuffle, repeat, and track switching behave correctly.
+- Import reliability: track upload, artwork replacement, and audio replacement work on desktop and iPhone.
+- Vault backup/restore on iPhone: full backup export and restore are usable in Safari and installed-PWA contexts.
+- Onboarding correctness: first-run, demo-library, and returning-user states show the right guidance at the right time.
+- Performance on older iPhones: fullscreen playback, video artwork, waveform views, and FX remain responsive.
+- No obvious UI breakpoints on desktop/mobile: player, overlays, vault, onboarding, and settings remain visually stable.
+- App Store polish items: branding, splash/icon behavior, permission messaging, and release-facing fit and finish are acceptable.
+
+## Known Issues / Fragile Areas
+
+This appendix is based on the current implementation and the recent handoff notes in [`march11_2026_devhandoffs/polyplay-dev-handoff-tracker.md`](/Users/paulfisher/Polyplay/march11_2026_devhandoffs/polyplay-dev-handoff-tracker.md).
+
+### Fixed or partially hardened areas
+
+#### Vault export fallback behavior on mobile has been explicitly hardened
+
+Current code in [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) now uses a broader save chain in `saveBlobWithBestEffort()`:
+
+- `navigator.share({ files })` when available
+- `showSaveFilePicker()` when available
+- iOS / standalone-PWA blob preview fallback (`opened-preview`)
+- anchor download fallback
+
+This is relevant because the handoff tracker called out iPhone vault export as a known issue. The implementation now clearly contains iPhone/PWA-specific fallback handling, so the export path is more robust than a desktop-only download flow.
+
+This should be treated as hardened, not fully closed. Real-device verification is still needed.
+
+#### Vault feedback is now a toast-style system in the main app
+
+The handoff tracker noted that vault feedback was previously misaligned and inline. Current `App` code uses `vaultToast` state and renders a dedicated `.vault-toast` status element. That is a meaningful implementation improvement over an inline-only status line.
+
+This appears improved in code, but final quality still depends on CSS and real mobile rendering.
+
+### Fragile areas
+
+#### Onboarding phase logic is sensitive to persisted flags and demo-state heuristics
+
+This is the most clearly fragile area in the current code.
+
+Onboarding visibility is derived from multiple interacting conditions in [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx), including:
+
+- `hasOnboarded`
+- `isEmptyWelcomeDismissed`
+- `hasTracks`
+- `isInitialDemoFirstRunState`
+- demo playlist identity
+- presence of demo versus non-demo tracks
+- `HAS_IMPORTED_KEY`
+- splash visibility and prompt timing
+
+There is additional cleanup logic for stale first-run flags via `isPristineDemoLibraryState`, plus demo normalization and demo-playlist repair in [`src/lib/demoSeed.ts`](/Users/paulfisher/Polyplay/src/lib/demoSeed.ts).
+
+This is not necessarily broken today, but it is easy to regress because small changes to:
+
+- onboarding flags
+- demo seeding
+- active playlist behavior
+- import/reset behavior
+
+can suppress or re-trigger onboarding unexpectedly.
+
+#### Mobile versus desktop layout behavior is split across several heuristics
+
+The current code uses device/media-query branching in several places:
+
+- player compact default uses `(min-width: 900px)`
+- performance-lite mode uses `(max-width: 900px)`
+- constrained media handling uses `(max-width: 820px)` and iOS/Safari checks
+- FX pointer behavior changes based on coarse pointer detection
+- journal behavior changes for coarse pointer and reduced motion
+
+This is a practical approach, but it means layout and behavior are not controlled by one single responsive model. Small CSS or breakpoint changes can affect:
+
+- player compactness
+- FX behavior
+- poster generation scaling
+- artwork video acceptance
+- perceived mobile/desktop feature parity
+
+This should be considered fragile rather than unresolved.
+
+#### Tooltip and render-state coupling still exists in onboarding/admin UI
+
+Tooltip-like guidance in the main app is directly coupled to onboarding render conditions:
+
+- quick-tour state drives whether onboarding tooltips render at all
+- playlist-creation guidance is shown inline next to the button only when `quickTourPhase === "create-playlist"`
+
+In the admin/settings app, drop zones and controls still use inline tooltip props and contextual hints. That is not inherently wrong, but it means guidance text is tightly coupled to the same render branches that control interaction state.
+
+This matters because onboarding/help UI is not isolated from main UI state. Reworking onboarding or admin layout can unintentionally remove guidance, highlight states, or tooltips without touching a dedicated tutorial system.
+
+#### Main app and admin/settings coordination is brittle by design
+
+The app relies on cross-window communication between the main shell and the settings/admin iframe using:
+
+- `window.postMessage(...)`
+- `window.parent.postMessage(...)`
+- `window.dispatchEvent(new CustomEvent("polyplay:library-updated"))`
+
+This pattern is used for:
+
+- upload success
+- library refresh
+- config import
+- factory reset
+- gratitude settings updates
+- theme and aura updates
+
+This is functional, but it is easy to regress because any change to message names, timing, or refresh behavior can desynchronize the main app from the admin UI.
+
+#### Storage refresh and inspector paths indicate ongoing sensitivity
+
+The runtime includes explicit repair and debug actions in the vault overlay:
+
+- Refresh Library
+- Persist Now
+- Migrate Legacy Keys
+- Hard Refresh Library
+- Reload Fallback
+
+Those actions are useful, but they also indicate that library/runtime/storage synchronization remains an area where regressions are plausible.
+
+### Unresolved or still open issues
+
+#### Exact onboarding reliability on real iPhone / PWA state is still not proven from code alone
+
+The handoff tracker specifically calls out iPhone onboarding not appearing as expected. The current code contains several mitigations and cleanup paths, but this remains an unresolved QA concern rather than a confirmed fixed issue.
+
+#### Count-based export/file-limit behavior is still unclear
+
+The handoff tracker notes uncertainty around count-based export restrictions. In the current implementation, the confirmed export guard is:
+
+- byte-size cap in [`src/lib/backup.ts`](/Users/paulfisher/Polyplay/src/lib/backup.ts)
+- minimum non-demo track count before full-backup export in `saveUniverseBackup()`
+
+There is no clearly implemented broader count-based export rule beyond those checks. If product expects a more explicit song-count limit or tier rule, that remains unresolved.
+
+#### Mobile vault UX still needs real-device confirmation
+
+Even with the stronger export fallback path and toast handling, mobile vault behavior is still an area that should be treated as open for QA:
+
+- Share Sheet support varies by browser/context
+- PWA versus Safari behavior can differ
+- preview-based saving on iPhone is functional but less direct than a native save flow
+
+This is not an unresolved code defect, but it is still a release-sensitive area.
+
+### Practical regression watchlist
+
+When changing the app, the following paths deserve targeted regression testing:
+
+- first-run onboarding after factory reset
+- demo playlist normalization and onboarding reappearance
+- switching between mobile and desktop breakpoints
+- vault export from iPhone Safari and installed PWA
+- admin iframe actions that rely on `postMessage`
+- playlist creation guidance and onboarding tooltip visibility
+- library refresh after import, reset, or media replacement
