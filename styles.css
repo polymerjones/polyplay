@@ -4967,14 +4967,32 @@ body.nuke-flash::after {
   }
 
   .empty-library-card {
-    width: min(500px, calc(100% - 64px));
-    margin: 14px auto 0;
+    width: min(560px, calc(100% - 64px));
+    margin: 8px auto 0;
   }
 
   .empty-library-card--create-playlist,
   .empty-library-card--pre-tour,
   .empty-library-card--upload-track {
-    margin-top: 14px;
+    margin-top: 8px;
+  }
+
+  .empty-library-card--upload-track {
+    align-self: start;
+    gap: 6px;
+    padding-bottom: 10px;
+  }
+
+  .empty-library-card--upload-track .empty-library-card__actions {
+    margin-top: 2px;
+  }
+
+  .empty-library-card__title {
+    max-width: 19ch;
+  }
+
+  .empty-library-card__body {
+    max-width: 40ch;
   }
 }
 

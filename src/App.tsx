@@ -665,13 +665,31 @@ export default function App() {
     const nextName = name.trim();
     if (!nextName) return;
     const source = await getLibrary();
+    const existingUserPlaylistCount = Object.values(source.playlistsById || {}).filter((playlist) => {
+      const normalizedName = playlist.name.trim().toLowerCase();
+      return playlist.id !== DEMO_PLAYLIST_ID && normalizedName !== DEMO_PLAYLIST_NAME;
+    }).length;
+    const isFirstPlaylistInTracklessOnboardingState =
+      quickTourPhase === null &&
+      !hasOnboarded &&
+      !isEmptyWelcomeDismissed &&
+      tracks.length === 0 &&
+      existingUserPlaylistCount === 0;
     const created = createPlaylistInLibrary(source, nextName);
+    const createdPlaylist = created.library.playlistsById[created.createdPlaylistId];
     setLibrary(created.library);
     setRuntimeLibrary(created.library);
+    if (!createdPlaylist?.trackIds?.length) {
+      setTracks([]);
+    }
     setIsCreatePlaylistModalOpen(false);
     setIsPlaylistRequired(false);
     setNewPlaylistName("");
-    setQuickTourPhase((current) => (current === "create-playlist" ? "upload-track" : current));
+    setQuickTourPhase((current) => {
+      if (current === "create-playlist") return "upload-track";
+      if (current === null && isFirstPlaylistInTracklessOnboardingState) return "upload-track";
+      return current;
+    });
     window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
     await refreshTracks();
   };
@@ -1356,11 +1374,17 @@ export default function App() {
         setIsSplashDismissing(false);
         teardownCurrentAudio();
         pendingAutoPlayRef.current = false;
-        if (!isIOS) {
-          window.location.reload();
-          return;
-        }
         void (async () => {
+          revokeAllMediaUrls();
+          setTracks([]);
+          setRuntimeLibrary(null);
+          setCurrentTrackId(null);
+          setCurrentTime(0);
+          setDuration(0);
+          setIsPlaying(false);
+          setLoopByTrack({});
+          setLoopModeByTrack({});
+          syncPlayerStateFromStorage();
           await ensureDemoTracksForFirstRun({ preferDemoActive: true });
           setShowOpenState(true);
         })();
@@ -1497,10 +1521,20 @@ export default function App() {
   }, [activePlaylistId, hasOnboarded, isInitialDemoFirstRunState, runtimeLibrary]);
 
   useEffect(() => {
-    if (quickTourPhase === "upload-track" && (hasOnboarded || hasTracks)) {
+    if (quickTourPhase !== "upload-track") return;
+    let hasImported = false;
+    try {
+      hasImported = localStorage.getItem(HAS_IMPORTED_KEY) === "true";
+    } catch {
+      hasImported = false;
+    }
+    const hasUserTracks = Object.values(runtimeLibrary?.tracksById || {}).some(
+      (track) => !(track.isDemo || (track.demoId ? DEMO_TRACK_IDS.has(track.demoId) : false))
+    );
+    if (hasOnboarded || hasImported || hasUserTracks) {
       setQuickTourPhase(null);
     }
-  }, [hasOnboarded, hasTracks, quickTourPhase]);
+  }, [hasOnboarded, quickTourPhase, runtimeLibrary]);
 
   const currentLoop = useMemo(() => {
     if (!currentTrackId) return EMPTY_LOOP;
