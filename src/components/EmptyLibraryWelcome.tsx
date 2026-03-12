@@ -4,6 +4,7 @@ type WelcomePhase = "pre-tour" | "create-playlist" | "upload-track";
 
 type Props = {
   phase: WelcomePhase;
+  onStartQuickTour: () => void;
   onUploadFirstTrack: () => void;
   onPrimaryButtonClick?: (event: MouseEvent<HTMLButtonElement>) => void;
   primaryButtonLabel?: string;
@@ -14,6 +15,7 @@ type Props = {
 
 export function EmptyLibraryWelcome({
   phase,
+  onStartQuickTour,
   onUploadFirstTrack,
   onPrimaryButtonClick,
   primaryButtonLabel = "Upload your first track",
@@ -38,6 +40,10 @@ export function EmptyLibraryWelcome({
             className={`empty-library-card__primary guided-cta onboarding-action ${primaryButtonClassName ?? ""}`.trim()}
             onClick={(event) => {
               onPrimaryButtonClick?.(event);
+              if (phase === "pre-tour") {
+                onStartQuickTour();
+                return;
+              }
               onUploadFirstTrack();
             }}
           >

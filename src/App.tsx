@@ -1440,14 +1440,8 @@ export default function App() {
   }, [activePlaylistId, runtimeLibrary]);
   const derivedQuickTourPhase = useMemo<QuickTourPhase>(() => {
     if (quickTourPhase) return quickTourPhase;
-    if (hasOnboarded || hasTracks || isInitialDemoFirstRunState) return null;
-    const activePlaylist =
-      activePlaylistId && runtimeLibrary?.playlistsById ? runtimeLibrary.playlistsById[activePlaylistId] : null;
-    if (!activePlaylist) return null;
-    const activeName = (activePlaylist.name || "").trim().toLowerCase();
-    const activeIsDemo = activePlaylist.id === DEMO_PLAYLIST_ID || activeName === DEMO_PLAYLIST_NAME;
-    return activeIsDemo ? null : "upload-track";
-  }, [activePlaylistId, hasOnboarded, hasTracks, isInitialDemoFirstRunState, quickTourPhase, runtimeLibrary]);
+    return null;
+  }, [quickTourPhase]);
   const canCreatePolyplaylist = newPlaylistName.trim().length > 0;
   const currentAudioUrl = currentTrack?.audioUrl ?? null;
 
@@ -1503,14 +1497,10 @@ export default function App() {
   }, [activePlaylistId, hasOnboarded, isInitialDemoFirstRunState, runtimeLibrary]);
 
   useEffect(() => {
-    if (quickTourPhase === "create-playlist" && !isInitialDemoFirstRunState) {
-      setQuickTourPhase(null);
-      return;
-    }
     if (quickTourPhase === "upload-track" && (hasOnboarded || hasTracks)) {
       setQuickTourPhase(null);
     }
-  }, [hasOnboarded, hasTracks, isInitialDemoFirstRunState, quickTourPhase]);
+  }, [hasOnboarded, hasTracks, quickTourPhase]);
 
   const currentLoop = useMemo(() => {
     if (!currentTrackId) return EMPTY_LOOP;
@@ -2756,13 +2746,10 @@ export default function App() {
         {!hasOnboarded && !isEmptyWelcomeDismissed && (!hasTracks || isInitialDemoFirstRunState) && (
           <EmptyLibraryWelcome
             phase={welcomePhase}
-            onUploadFirstTrack={
-              isInitialDemoFirstRunState
-                ? () => setQuickTourPhase("create-playlist")
-                : () => openSettingsPanel("upload")
-            }
+            onStartQuickTour={() => setQuickTourPhase("create-playlist")}
+            onUploadFirstTrack={() => openSettingsPanel("upload")}
             onPrimaryButtonClick={triggerOnboardingSparkle}
-            primaryButtonLabel={isInitialDemoFirstRunState ? "Start Quick Tour" : "Upload your first track"}
+            primaryButtonLabel={welcomePhase === "pre-tour" ? "Start Quick Tour" : "Upload your first track"}
             bodyText={
               welcomePhase === "create-playlist"
                 ? "Create your first Polyplaylist to get started."

@@ -5153,25 +5153,34 @@ body.nuke-flash::after {
   }
 
   .playlist-selector__tutorial-tip {
-    left: 0;
-    top: calc(100% + 10px);
-    transform: translateY(0) scale(0.985);
-    transform-origin: top left;
+    left: 50%;
+    right: auto;
+    top: auto;
+    bottom: calc(100% + 10px);
+    transform: translateX(-50%) translateY(0) scale(0.985);
+    transform-origin: bottom center;
     animation: onboarding-tooltip-float-mobile 2.8s ease-in-out infinite;
   }
 
   .playlist-selector__tutorial-tip::before {
-    left: 18px;
-    transform: rotate(45deg);
+    left: 50%;
+    right: auto;
+    top: auto;
+    bottom: -6px;
+    border-left: none;
+    border-top: none;
+    border-right: 1px solid rgba(244, 193, 103, 0.34);
+    border-bottom: 1px solid rgba(244, 193, 103, 0.34);
+    transform: translateX(-50%) rotate(45deg);
   }
 
   @keyframes onboarding-tooltip-float-mobile {
     0%,
     100% {
-      transform: translateY(0) scale(0.985);
+      transform: translateX(-50%) translateY(0) scale(0.985);
     }
     50% {
-      transform: translateY(-3px) scale(1);
+      transform: translateX(-50%) translateY(-3px) scale(1);
     }
   }
 
