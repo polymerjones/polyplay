@@ -1363,6 +1363,7 @@ export default function App() {
         setLoopByTrack({});
         setLoopModeByTrack({});
         setHasOnboarded(false);
+        setIsEmptyWelcomeDismissed(false);
         setShowOpenState(false);
         setOverlayPage(null);
         setIsTipsOpen(false);
