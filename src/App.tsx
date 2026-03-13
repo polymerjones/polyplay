@@ -1369,6 +1369,7 @@ export default function App() {
         setIsTipsOpen(false);
         setIsJournalOpen(false);
         setIsGratitudeOpen(false);
+        gratitudeEvaluatedRef.current = false;
         setGratitudeSettings(DEFAULT_GRATITUDE_SETTINGS);
         setIsFullscreenPlayerOpen(false);
         setShowSplash(true);
