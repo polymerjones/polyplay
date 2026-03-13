@@ -1156,6 +1156,42 @@ body.perf-lite .fullscreen-player-shell__art.is-aura-flash::after {
   animation: none;
 }
 
+body.perf-lite .fullscreen-player-shell .player-controls--fullscreen.is-aura-pulse .pc-progress {
+  animation: pc-playback-flash 340ms ease-out;
+}
+
+body.perf-lite .fullscreen-player-shell .player-controls--fullscreen.is-aura-pulse .pc-progress::after {
+  animation: pc-playback-overlay 340ms ease-out;
+}
+
+body.perf-lite .fullscreen-player-shell .player-controls--fullscreen.is-aura-pulse .pc-progress::before {
+  animation: pc-playback-sparkles 340ms ease-out;
+}
+
+body.perf-lite .fullscreen-player-shell .pc-wave.is-aura-pulse {
+  animation: pc-playback-flash 340ms ease-out;
+}
+
+body.perf-lite .fullscreen-player-shell .pc-wave.is-aura-pulse::after {
+  animation: pc-playback-overlay 340ms ease-out;
+}
+
+body.perf-lite .fullscreen-player-shell .pc-wave.is-aura-pulse::before {
+  animation: pc-playback-sparkles 340ms ease-out;
+}
+
+body.perf-lite .fullscreen-player-shell__art.is-aura-flash {
+  animation: pc-art-cinematic-flash 320ms ease-out;
+}
+
+body.perf-lite .fullscreen-player-shell__art.is-aura-flash::after {
+  animation: pc-art-cinematic-overlay 320ms ease-out;
+}
+
+body.perf-lite .fullscreen-player-shell__art-canvas.is-aura-flash-canvas {
+  animation: pc-art-canvas-aura 320ms ease-out;
+}
+
 @media (max-width: 420px) {
   .mini-player-bar {
     left: max(8px, env(safe-area-inset-left, 0px));
