@@ -11,6 +11,7 @@ import {
   type GratitudeSettings,
   updateEntry
 } from "../lib/gratitude";
+import { saveTextWithBestEffort } from "../lib/saveBlob";
 
 type Props = {
   open: boolean;
@@ -73,65 +74,6 @@ function formatDateLabel(entry: GratitudeEntry): string {
   return date.toLocaleString();
 }
 
-function downloadBlobFile(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
-
-async function saveTextWithBestEffort(content: string, filename: string, mime: string): Promise<"shared" | "save-dialog" | "downloaded"> {
-  const blob = new Blob([content], { type: mime });
-  const nav = navigator as Navigator & {
-    canShare?: (data: { files?: File[] }) => boolean;
-    share?: (data: { title?: string; text?: string; files?: File[] }) => Promise<void>;
-  };
-  if (typeof nav.share === "function" && typeof File !== "undefined") {
-    try {
-      const file = new File([blob], filename, { type: mime });
-      if (!nav.canShare || nav.canShare({ files: [file] })) {
-        await nav.share({ title: filename, files: [file] });
-        return "shared";
-      }
-    } catch {
-      // Share canceled/unsupported in current context; continue with fallback.
-    }
-  }
-
-  const pickerHost = window as typeof window & {
-    showSaveFilePicker?: (options: {
-      suggestedName?: string;
-      types?: Array<{ description?: string; accept: Record<string, string[]> }>;
-    }) => Promise<{
-      createWritable: () => Promise<{
-        write: (data: Blob) => Promise<void>;
-        close: () => Promise<void>;
-      }>;
-    }>;
-  };
-  if (typeof pickerHost.showSaveFilePicker === "function") {
-    try {
-      const handle = await pickerHost.showSaveFilePicker({
-        suggestedName: filename,
-        types: [{ description: "Gratitude Backup", accept: { "application/json": [".json"] } }]
-      });
-      const writable = await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      return "save-dialog";
-    } catch {
-      // User canceled or picker unsupported in this context; continue with download fallback.
-    }
-  }
-
-  downloadBlobFile(blob, filename);
-  return "downloaded";
-}
-
 function shouldUseLightJournalFx(): boolean {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
   const isCoarse = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
@@ -140,6 +82,11 @@ function shouldUseLightJournalFx(): boolean {
     ? Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData)
     : false;
   return isCoarse || reduced || saveData;
+}
+
+function isCompactJournalEditingViewport(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(max-width: 520px)").matches;
 }
 
 function createSparkles(count: number): Sparkle[] {
@@ -221,6 +168,7 @@ function parseGratitudeBackupImportText(content: string): GratitudeBackupImportP
 export function JournalModal({ open, onClose }: Props) {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const backgroundVideoRef = useRef<HTMLVideoElement | null>(null);
+  const entryListRef = useRef<HTMLDivElement | null>(null);
   const [entries, setEntries] = useState<GratitudeEntry[]>([]);
   const [selectedBgId, setSelectedBgId] = useState<"1" | "2">(JOURNAL_BACKGROUNDS[0]?.id || "1");
   const [isVideoReady, setIsVideoReady] = useState(false);
@@ -249,6 +197,11 @@ export function JournalModal({ open, onClose }: Props) {
   const [verseFxBurstKey, setVerseFxBurstKey] = useState(0);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const activeEditEntryRef = useRef<HTMLElement | null>(null);
+  const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const isResolvingEditRef = useRef(false);
+  const pendingEntryTapTimeoutRef = useRef<number | null>(null);
+  const pendingEntryTapIdRef = useRef<string | null>(null);
   const deleteTimerRef = useRef<number | null>(null);
   const verseFxTimerRef = useRef<number | null>(null);
   const verseFxRafRef = useRef<number | null>(null);
@@ -299,6 +252,73 @@ export function JournalModal({ open, onClose }: Props) {
   }, [isComposerOpen]);
 
   useEffect(() => {
+    if (!editingEntryId) return;
+    const scrollActiveEntryIntoComfortableView = () => {
+      const list = entryListRef.current;
+      const entry = activeEditEntryRef.current;
+      if (!list || !entry) return;
+
+      const listRect = list.getBoundingClientRect();
+      const entryRect = entry.getBoundingClientRect();
+      const isCompact = isCompactJournalEditingViewport();
+      const topInset = isCompact ? 22 : 18;
+      const targetTop = list.scrollTop + (entryRect.top - listRect.top) - topInset;
+
+      const nextTop = Math.max(0, targetTop);
+      if (isCompact) {
+        list.scrollTop = nextTop;
+      } else {
+        list.scrollTo({
+          top: nextTop,
+          behavior: "smooth"
+        });
+      }
+    };
+
+    const rafId = window.requestAnimationFrame(() => {
+      scrollActiveEntryIntoComfortableView();
+      editTextareaRef.current?.focus();
+    });
+
+    const settleTimer = window.setTimeout(() => {
+      scrollActiveEntryIntoComfortableView();
+    }, 320);
+
+    const lateSettleTimer = window.setTimeout(() => {
+      scrollActiveEntryIntoComfortableView();
+    }, 650);
+
+    const viewport = typeof window !== "undefined" ? window.visualViewport : null;
+    const onViewportResize = () => scrollActiveEntryIntoComfortableView();
+    viewport?.addEventListener("resize", onViewportResize);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(settleTimer);
+      window.clearTimeout(lateSettleTimer);
+      viewport?.removeEventListener("resize", onViewportResize);
+    };
+  }, [editingEntryId]);
+
+  useEffect(() => {
+    if (!editingEntryId) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (isResolvingEditRef.current) return;
+      const target = event.target as HTMLElement | null;
+      const activeEntry = activeEditEntryRef.current;
+      if (!target || !activeEntry) return;
+      if (activeEntry.contains(target)) return;
+      const clickedAnotherEntry = Boolean(target.closest(".journal-entry"));
+      const didSave = saveEditedEntry(editingEntryId);
+      if (clickedAnotherEntry || !didSave) {
+        event.preventDefault();
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [editingEntryId, draftText, entries]);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
@@ -338,6 +358,11 @@ export function JournalModal({ open, onClose }: Props) {
           setIsComposerOpen(false);
           return;
         }
+        if (editingEntryId) {
+          event.preventDefault();
+          discardEditedEntry();
+          return;
+        }
         onClose();
         return;
       }
@@ -362,7 +387,7 @@ export function JournalModal({ open, onClose }: Props) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose, isComposerOpen]);
+  }, [open, onClose, isComposerOpen, editingEntryId]);
 
   useEffect(() => {
     if (!miniToast) return;
@@ -380,6 +405,9 @@ export function JournalModal({ open, onClose }: Props) {
 
   useEffect(() => {
     return () => {
+      if (pendingEntryTapTimeoutRef.current !== null) {
+        window.clearTimeout(pendingEntryTapTimeoutRef.current);
+      }
       if (deleteTimerRef.current !== null) {
         window.clearTimeout(deleteTimerRef.current);
       }
@@ -484,16 +512,81 @@ export function JournalModal({ open, onClose }: Props) {
 
   const canSaveNewEntry = newEntryText.trim().length > 0;
 
-  const saveEditedEntry = (entryId: string) => {
-    const trimmed = draftText.trim();
-    if (!trimmed) return;
-    updateEntry(entryId, trimmed);
-    const next = listEntries();
-    setEntries(next);
-    setSavedEntryId(entryId);
-    window.setTimeout(() => setSavedEntryId(null), 420);
+  const clearPendingEntryTap = () => {
+    if (pendingEntryTapTimeoutRef.current !== null) {
+      window.clearTimeout(pendingEntryTapTimeoutRef.current);
+      pendingEntryTapTimeoutRef.current = null;
+    }
+    pendingEntryTapIdRef.current = null;
+  };
+
+  const toggleExpandedEntry = (entryId: string) => {
+    setExpandedEntryId((prev) => (prev === entryId ? null : entryId));
+  };
+
+  const startEditingEntry = (entry: GratitudeEntry) => {
+    clearPendingEntryTap();
+    setEditingEntryId(entry.id);
+    setExpandedEntryId(entry.id);
+    setIsComposerOpen(false);
+    setDraftText(entry.text);
+  };
+
+  const handleEntryTap = (entry: GratitudeEntry) => {
+    if (editingEntryId && editingEntryId !== entry.id) return;
+    const pendingId = pendingEntryTapIdRef.current;
+    if (pendingEntryTapTimeoutRef.current !== null && pendingId === entry.id) {
+      clearPendingEntryTap();
+      if (!editingEntryId) startEditingEntry(entry);
+      return;
+    }
+    clearPendingEntryTap();
+    pendingEntryTapIdRef.current = entry.id;
+    pendingEntryTapTimeoutRef.current = window.setTimeout(() => {
+      toggleExpandedEntry(entry.id);
+      pendingEntryTapTimeoutRef.current = null;
+      pendingEntryTapIdRef.current = null;
+    }, 220);
+  };
+
+  const releaseEditResolutionLock = () => {
+    window.setTimeout(() => {
+      isResolvingEditRef.current = false;
+    }, 0);
+  };
+
+  const exitEditMode = () => {
     setEditingEntryId(null);
     setDraftText("");
+  };
+
+  const discardEditedEntry = () => {
+    isResolvingEditRef.current = true;
+    exitEditMode();
+    releaseEditResolutionLock();
+  };
+
+  const saveEditedEntry = (entryId: string) => {
+    if (isResolvingEditRef.current) return false;
+    const trimmed = draftText.trim();
+    if (!trimmed) {
+      editTextareaRef.current?.focus();
+      return false;
+    }
+    isResolvingEditRef.current = true;
+    const previous = entries.find((entry) => entry.id === entryId);
+    const didChange = !previous || previous.text.trim() !== trimmed;
+    if (didChange) {
+      updateEntry(entryId, trimmed);
+      const next = listEntries();
+      setEntries(next);
+      setSavedEntryId(entryId);
+      window.setTimeout(() => setSavedEntryId(null), 420);
+      setMiniToast("Saved");
+    }
+    exitEditMode();
+    releaseEditResolutionLock();
+    return true;
   };
 
   return (
@@ -579,9 +672,19 @@ export function JournalModal({ open, onClose }: Props) {
                       const saveMode = await saveTextWithBestEffort(
                         serializeGratitudeJson(),
                         getGratitudeBackupFilename(),
-                        "application/json;charset=utf-8"
+                        "application/json;charset=utf-8",
+                        {
+                          description: "Gratitude Backup",
+                          accept: { "application/json": [".json"] }
+                        }
                       );
-                      setMiniToast(saveMode === "shared" ? "Backup ready to share" : "Backup saved");
+                      setMiniToast(
+                        saveMode === "shared"
+                          ? "Backup ready to share"
+                          : saveMode === "opened-preview"
+                            ? "Backup opened for Share or Save to Files"
+                            : "Backup saved"
+                      );
                     } catch {
                       setMiniToast("Backup failed");
                     }
@@ -755,39 +858,45 @@ export function JournalModal({ open, onClose }: Props) {
               )}
             </div>
 
-            <div className="journal-modal__list">
+            <div ref={entryListRef} className={`journal-modal__list ${editingEntryId ? "is-edit-mode" : ""}`.trim()}>
               {filteredEntries.length ? (
                 filteredEntries.map((entry) => {
                   const isEditing = editingEntryId === entry.id;
+                  const isAnotherEntryBlocked = editingEntryId !== null && !isEditing;
                   const isDeleting = deletingEntryId === entry.id;
                   const isExpanded = isEditing || expandedEntryId === entry.id;
+                  const helperText = isEditing ? null : isExpanded ? "Double tap to edit" : "Tap to expand";
                   return (
                     <article
                       key={entry.id}
                       className={`journal-entry ${isExpanded ? "is-expanded" : ""} ${isEditing ? "is-editing" : ""} ${
+                        isAnotherEntryBlocked ? "is-edit-blocked" : ""
+                      } ${
                         savedEntryId === entry.id ? "is-saved" : ""
                       } ${isDeleting ? "is-deleting" : ""}`.trim()}
                       aria-expanded={isExpanded}
+                      aria-disabled={isAnotherEntryBlocked}
+                      ref={isEditing ? activeEditEntryRef : null}
                       onClick={(event) => {
                         const target = event.target as HTMLElement | null;
                         if (target?.closest("button, input, textarea, select, a, label")) return;
+                        if (isAnotherEntryBlocked) return;
                         if (isEditing) return;
-                        setExpandedEntryId((prev) => (prev === entry.id ? null : entry.id));
+                        handleEntryTap(entry);
                       }}
                     >
                   <div className="journal-entry__meta">
                     <span>{formatDateLabel(entry)}</span>
                     <div className="journal-entry__actions">
+                      {helperText ? <span className="journal-entry__helper">{helperText}</span> : null}
                       <button
                         type="button"
                         className="journal-entry__edit"
                         aria-label="Edit entry"
-                        disabled={isDeleting || isEditing}
+                        disabled={isDeleting || isEditing || isAnotherEntryBlocked}
                         onClick={() => {
-                          setEditingEntryId(entry.id);
-                          setExpandedEntryId(entry.id);
-                          setIsComposerOpen(false);
-                          setDraftText(entry.text);
+                          if (isAnotherEntryBlocked) return;
+                          startEditingEntry(entry);
                         }}
                       >
                         <svg viewBox="0 0 24 24" className="journal-entry__icon-svg">
@@ -795,47 +904,58 @@ export function JournalModal({ open, onClose }: Props) {
                           <path d="m13 6 3 3" />
                         </svg>
                       </button>
-                      <button
-                        type="button"
-                        className="journal-entry__delete"
-                        aria-label="Delete entry"
-                        disabled={isDeleting}
-                        onClick={() => {
-                          if (isDeleting) return;
-                          const previousEntries = entries.slice();
-                          setDeletingEntryId(entry.id);
-                          if (editingEntryId === entry.id) {
-                            setEditingEntryId(null);
-                            setDraftText("");
-                          }
-                          if (expandedEntryId === entry.id) setExpandedEntryId(null);
-                          if (deleteTimerRef.current !== null) window.clearTimeout(deleteTimerRef.current);
-                          deleteTimerRef.current = window.setTimeout(() => {
-                            try {
-                              deleteEntry(entry.id);
-                              setEntries(listEntries());
-                              setMiniToast("Deleted");
-                            } catch {
-                              setEntries(previousEntries);
-                              setMiniToast("Delete failed");
-                            } finally {
-                              setDeletingEntryId((prev) => (prev === entry.id ? null : prev));
+                      {!isEditing ? (
+                        <button
+                          type="button"
+                          className="journal-entry__delete"
+                          aria-label="Delete entry"
+                          disabled={isDeleting || isAnotherEntryBlocked}
+                          onClick={() => {
+                            if (isAnotherEntryBlocked) return;
+                            if (isDeleting) return;
+                            const previousEntries = entries.slice();
+                            setDeletingEntryId(entry.id);
+                            if (editingEntryId === entry.id) {
+                              setEditingEntryId(null);
+                              setDraftText("");
                             }
-                            deleteTimerRef.current = null;
-                          }, 220);
-                        }}
-                      >
-                        Delete
-                      </button>
+                            if (expandedEntryId === entry.id) setExpandedEntryId(null);
+                            if (deleteTimerRef.current !== null) window.clearTimeout(deleteTimerRef.current);
+                            deleteTimerRef.current = window.setTimeout(() => {
+                              try {
+                                deleteEntry(entry.id);
+                                setEntries(listEntries());
+                                setMiniToast("Deleted");
+                              } catch {
+                                setEntries(previousEntries);
+                                setMiniToast("Delete failed");
+                              } finally {
+                                setDeletingEntryId((prev) => (prev === entry.id ? null : prev));
+                              }
+                              deleteTimerRef.current = null;
+                            }, 220);
+                          }}
+                        >
+                          Delete
+                        </button>
+                      ) : null}
                     </div>
                   </div>
 
                   {isEditing ? (
                     <>
                       <textarea
+                        ref={isEditing ? editTextareaRef : null}
                         className="journal-entry__editor"
                         value={draftText}
                         onChange={(event) => setDraftText(event.currentTarget.value)}
+                        onBlur={(event) => {
+                          if (isResolvingEditRef.current) return;
+                          const nextTarget = event.relatedTarget as HTMLElement | null;
+                          const activeEntry = activeEditEntryRef.current;
+                          if (nextTarget && activeEntry?.contains(nextTarget)) return;
+                          saveEditedEntry(entry.id);
+                        }}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") event.stopPropagation();
                         }}
@@ -856,10 +976,7 @@ export function JournalModal({ open, onClose }: Props) {
                         <button
                           type="button"
                           className="journal-entry__cancel"
-                          onClick={() => {
-                            setEditingEntryId(null);
-                            setDraftText("");
-                          }}
+                          onClick={discardEditedEntry}
                         >
                           <svg viewBox="0 0 24 24" className="journal-entry__icon-svg">
                             <path d="M6 6 18 18M18 6 6 18" />
