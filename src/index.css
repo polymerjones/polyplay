@@ -59,7 +59,9 @@ body.perf-lite .track-art-badge {
   column-count: 1;
   display: grid;
   gap: 10px;
-  max-width: 980px;
+  width: min(100%, 860px);
+  max-width: 860px;
+  margin: 0 auto;
 }
 
 .layout-link {
