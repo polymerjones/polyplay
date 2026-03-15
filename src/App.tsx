@@ -39,8 +39,6 @@ import { pickAuraWeightedTrack } from "./lib/aura";
 import {
   getLibrary,
   getLibraryKeyUsed,
-  getLibraryStorageCandidates,
-  migrateLegacyLibraryKeys,
   normalizeLibrary,
   setLibrary
 } from "./lib/library";
@@ -73,24 +71,6 @@ type SafeTapBurst = {
   opacity: number;
   sparkleCount: number;
 };
-type VaultPlaylistInfo = { id: string; name: string; trackCount: number };
-type VaultLibraryInspector = {
-  libraryKey: string;
-  runtimeTracksByIdCount: number;
-  storageTracksByIdCount: number;
-  runtimePlaylistsByIdCount: number;
-  storagePlaylistsByIdCount: number;
-  runtimeActivePlaylistId: string | null;
-  storageActivePlaylistId: string | null;
-  runtimeActivePlaylistTrackCount: number;
-  storageActivePlaylistTrackCount: number;
-  runtimeIdSample: string[];
-  storageIdSample: string[];
-  candidateKeys: string[];
-  migratedFromKey: string | null;
-  playlists: VaultPlaylistInfo[];
-};
-
 const EMPTY_LOOP: LoopRegion = { start: 0, end: 0, active: false, editing: false };
 const SPLASH_SEEN_KEY = "polyplay_hasSeenSplash";
 const SPLASH_SESSION_KEY = "polyplay_hasSeenSplashSession";
@@ -114,6 +94,7 @@ const HAS_ONBOARDED_KEY = "polyplay_hasOnboarded_v1";
 const ACTIVE_PLAYLIST_DIRTY_KEY = "polyplay_activePlaylistDirty_v1";
 const LAST_EXPORTED_PLAYLIST_ID_KEY = "polyplay_lastExportedPlaylistId";
 const LAST_EXPORTED_AT_KEY = "polyplay_lastExportedAt";
+const FULLSCREEN_ART_HINT_SEEN_KEY = "polyplay_hasSeenFullscreenArtHint_v1";
 const APP_STATE_KEY = "polyplay_app_state_v1";
 const SCRATCH_SFX_PATHS = ["/hyper-notif.wav#s1", "/hyper-notif.wav#s2", "/hyper-notif.wav#s3"];
 const SAFE_TAP_BASE_SIZE = 120;
@@ -394,13 +375,19 @@ export default function App() {
     sourceMismatch: boolean;
   } | null>(null);
   const [showMissingIds, setShowMissingIds] = useState(false);
-  const [vaultInspector, setVaultInspector] = useState<VaultLibraryInspector | null>(null);
   const [runtimeLibrary, setRuntimeLibrary] = useState<LibraryState | null>(null);
   const [lastExportedAt, setLastExportedAt] = useState<string | null>(() => {
     try {
       return localStorage.getItem(LAST_EXPORTED_AT_KEY);
     } catch {
       return null;
+    }
+  });
+  const [hasSeenFullscreenArtHint, setHasSeenFullscreenArtHint] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(FULLSCREEN_ART_HINT_SEEN_KEY) === "true";
+    } catch {
+      return false;
     }
   });
   const [isCreatePlaylistModalOpen, setIsCreatePlaylistModalOpen] = useState(false);
@@ -501,54 +488,13 @@ export default function App() {
     }
   };
 
-  const buildInspectorPayload = (runtimeSource: LibraryState, storageSource: LibraryState, migratedFromKey: string | null): VaultLibraryInspector => {
-    const playlists = Object.values(runtimeSource.playlistsById).map((playlist) => ({
-      id: playlist.id,
-      name: playlist.name,
-      trackCount: playlist.trackIds.filter((trackId) => Boolean(runtimeSource.tracksById[trackId])).length
-    }));
-    const runtimeActiveId = runtimeSource.activePlaylistId;
-    const runtimeActiveTrackCount =
-      runtimeActiveId && runtimeSource.playlistsById[runtimeActiveId]
-        ? runtimeSource.playlistsById[runtimeActiveId].trackIds.filter((trackId) => Boolean(runtimeSource.tracksById[trackId])).length
-        : 0;
-    const storageActiveId = storageSource.activePlaylistId;
-    const storageActiveTrackCount =
-      storageActiveId && storageSource.playlistsById[storageActiveId]
-        ? storageSource.playlistsById[storageActiveId].trackIds.filter((trackId) => Boolean(storageSource.tracksById[trackId])).length
-        : 0;
-    return {
-      libraryKey: getLibraryKeyUsed(),
-      runtimeTracksByIdCount: Object.keys(runtimeSource.tracksById || {}).length,
-      storageTracksByIdCount: Object.keys(storageSource.tracksById || {}).length,
-      runtimePlaylistsByIdCount: Object.keys(runtimeSource.playlistsById || {}).length,
-      storagePlaylistsByIdCount: Object.keys(storageSource.playlistsById || {}).length,
-      runtimeActivePlaylistId: runtimeActiveId,
-      storageActivePlaylistId: storageActiveId,
-      runtimeActivePlaylistTrackCount: runtimeActiveTrackCount,
-      storageActivePlaylistTrackCount: storageActiveTrackCount,
-      runtimeIdSample: Object.keys(runtimeSource.tracksById || {}).slice(0, 5),
-      storageIdSample: Object.keys(storageSource.tracksById || {}).slice(0, 5),
-      candidateKeys: getLibraryStorageCandidates().map((candidate) => candidate.key),
-      migratedFromKey,
-      playlists
-    };
-  };
-
   const refreshVaultInspector = async () => {
     const storageLibrary = readStorageLibrarySnapshot();
     const runtimeSource = runtimeLibrary ?? (await getLibrary());
-    let resolvedRuntime = runtimeSource;
-    let migratedFromKey: string | null = null;
     if (Object.keys(runtimeSource.tracksById || {}).length > 0 && Object.keys(storageLibrary.tracksById || {}).length === 0) {
       setVaultStatus("Tracks exist in memory but not persisted yet - persisting now...");
       setLibrary(runtimeSource);
-      resolvedRuntime = runtimeSource;
-      migratedFromKey = "runtime-persist";
     }
-    const refreshedStorage = readStorageLibrarySnapshot();
-    const payload = buildInspectorPayload(resolvedRuntime, refreshedStorage, migratedFromKey);
-    setVaultInspector(payload);
   };
 
   const syncPlayerStateFromStorage = () => {
@@ -1740,6 +1686,11 @@ export default function App() {
           return;
         }
       }
+      const nextId = getAdjacentTrackId(tracks, currentTrackId, 1, true);
+      if (nextId) {
+        playTrack(nextId, true);
+        return;
+      }
       setIsPlaying(false);
     };
 
@@ -2432,6 +2383,18 @@ export default function App() {
     setOverlayPage("settings");
   };
 
+  const openFullscreenFromPlaybarArt = () => {
+    if (!currentTrack) return;
+    setIsFullscreenPlayerOpen(true);
+    if (hasSeenFullscreenArtHint) return;
+    setHasSeenFullscreenArtHint(true);
+    try {
+      localStorage.setItem(FULLSCREEN_ART_HINT_SEEN_KEY, "true");
+    } catch {
+      // Ignore non-critical onboarding persistence failures.
+    }
+  };
+
   const onLoadUniverseFile = async (file: File | null) => {
     if (!file) return;
     try {
@@ -2710,7 +2673,7 @@ export default function App() {
             </button>
           </div>
           <div className="hint">
-            {hasTracks ? "Tap tiles to play • Tap artwork to build aura" : "Create/select a playlist, then upload tracks."}
+            {hasTracks ? "Tap tiles to play • Tap playbar art for fullscreen" : "Create/select a playlist, then upload tracks."}
           </div>
         </header>
 
@@ -2850,9 +2813,8 @@ export default function App() {
           onSetLoop={setLoopFromCurrentWithExpand}
           onToggleLoopMode={toggleLoopMode}
           onClearLoop={clearLoopWithCompactRestore}
-          onOpenFullscreen={() => {
-            if (currentTrack) setIsFullscreenPlayerOpen(true);
-          }}
+          onOpenFullscreen={openFullscreenFromPlaybarArt}
+          showFullscreenHintCue={!hasSeenFullscreenArtHint}
           isCompact={isPlayerCompact}
           onToggleCompact={() => setIsPlayerCompact((prev) => !prev)}
         />
@@ -2921,6 +2883,13 @@ export default function App() {
                 type="text"
                 value={newPlaylistName}
                 onChange={(event) => setNewPlaylistName(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (!canCreatePolyplaylist) return;
+                  void createPlaylist(newPlaylistName);
+                }}
                 placeholder="Polyplaylist name"
                 autoFocus
                 data-ui="true"
@@ -2990,111 +2959,6 @@ export default function App() {
               </button>
             </div>
             <div className="vault-body">
-              <details className="vault-inspector">
-                <summary>Library Inspector</summary>
-                <div className="vault-inspector__grid">
-                  <div>Library key in use: {vaultInspector?.libraryKey || getLibraryKeyUsed()}</div>
-                  <div>Runtime tracksById count: {vaultInspector?.runtimeTracksByIdCount ?? 0}</div>
-                  <div>Storage tracksById count: {vaultInspector?.storageTracksByIdCount ?? 0}</div>
-                  <div>Runtime playlistsById count: {vaultInspector?.runtimePlaylistsByIdCount ?? 0}</div>
-                  <div>Storage playlistsById count: {vaultInspector?.storagePlaylistsByIdCount ?? 0}</div>
-                  <div>Runtime activePlaylistId: {vaultInspector?.runtimeActivePlaylistId || "none"}</div>
-                  <div>Storage activePlaylistId: {vaultInspector?.storageActivePlaylistId || "none"}</div>
-                  <div>Runtime active track count: {vaultInspector?.runtimeActivePlaylistTrackCount ?? 0}</div>
-                  <div>Storage active track count: {vaultInspector?.storageActivePlaylistTrackCount ?? 0}</div>
-                  <div>Runtime ID sample: {vaultInspector?.runtimeIdSample.join(", ") || "none"}</div>
-                  <div>Storage ID sample: {vaultInspector?.storageIdSample.join(", ") || "none"}</div>
-                  <div>Candidate keys: {vaultInspector?.candidateKeys.join(", ") || "none"}</div>
-                  <div>Migrated from: {vaultInspector?.migratedFromKey || "none"}</div>
-                </div>
-                <div className="vault-inspector__actions">
-                  <button type="button" className="vault-btn vault-btn--ghost" onClick={() => void refreshVaultInspector()}>
-                    Refresh Library
-                  </button>
-                  <button
-                    type="button"
-                    className="vault-btn vault-btn--ghost"
-                    onClick={async () => {
-                      const source = runtimeLibrary ?? (await getLibrary());
-                      setLibrary(source);
-                      setVaultStatus("Library persisted to canonical storage key.", "success");
-                      await refreshVaultInspector();
-                    }}
-                  >
-                    Persist Now
-                  </button>
-                  <button
-                    type="button"
-                    className="vault-btn vault-btn--ghost"
-                    onClick={async () => {
-                      const migration = migrateLegacyLibraryKeys();
-                      setVaultStatus(
-                        migration.migrated && migration.fromKey
-                          ? `Migrated legacy key "${migration.fromKey}" into ${getLibraryKeyUsed()}.`
-                          : "No legacy migration needed.",
-                        "success"
-                      );
-                      const latest = await getLibrary();
-                      setRuntimeLibrary(latest);
-                      await refreshVaultInspector();
-                    }}
-                  >
-                    Migrate Legacy Keys
-                  </button>
-                  <button
-                    type="button"
-                    className="vault-btn vault-btn--ghost"
-                    onClick={async () => {
-                      await refreshTracks();
-                      await refreshVaultInspector();
-                      setVaultStatus("Library hard refresh complete.", "success");
-                    }}
-                  >
-                    Hard Refresh Library
-                  </button>
-                  <button
-                    type="button"
-                    className="vault-btn vault-btn--ghost"
-                    onClick={async () => {
-                      const shouldReload = window.confirm(
-                        "Hard refresh did not reconcile state. Reload the app now as fallback?"
-                      );
-                      if (!shouldReload) return;
-                      window.location.reload();
-                    }}
-                  >
-                    Reload Fallback
-                  </button>
-                  <button
-                    type="button"
-                    className="vault-btn vault-btn--ghost"
-                    onClick={async () => {
-                      const payload = {
-                        libraryKey: vaultInspector?.libraryKey || getLibraryKeyUsed(),
-                        runtimeTracksByIdCount: vaultInspector?.runtimeTracksByIdCount ?? 0,
-                        storageTracksByIdCount: vaultInspector?.storageTracksByIdCount ?? 0,
-                        runtimePlaylistsByIdCount: vaultInspector?.runtimePlaylistsByIdCount ?? 0,
-                        storagePlaylistsByIdCount: vaultInspector?.storagePlaylistsByIdCount ?? 0,
-                        runtimeActivePlaylistId: vaultInspector?.runtimeActivePlaylistId ?? null,
-                        storageActivePlaylistId: vaultInspector?.storageActivePlaylistId ?? null,
-                        runtimeIdSample: vaultInspector?.runtimeIdSample ?? [],
-                        storageIdSample: vaultInspector?.storageIdSample ?? [],
-                        candidateKeys: vaultInspector?.candidateKeys ?? [],
-                        migratedFromKey: vaultInspector?.migratedFromKey ?? null
-                      };
-                      try {
-                        await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-                        setVaultStatus("Library debug copied.", "success");
-                      } catch {
-                        setVaultStatus("Copy library debug failed.", "error");
-                      }
-                    }}
-                  >
-                    Copy Library Debug
-                  </button>
-                </div>
-              </details>
-
               <div className="vault-summary">
                 <div>
                   <span className="vault-summary__label">Active Playlist</span>
@@ -3182,47 +3046,9 @@ export default function App() {
                   <div>Missing track IDs: {importSummary.missingTrackIds.length}</div>
                   <div>Reordered count: {importSummary.reorderedCount}</div>
                   <div>Applied playlist ID: {importSummary.targetPlaylistId}</div>
-                  <div>
-                    Import/local/matched/missing: {importSummary.debug.importedTrackOrderCount}/
-                    {importSummary.debug.localTracksByIdCount}/{importSummary.debug.matchedCount}/
-                    {importSummary.debug.missingCount}
-                  </div>
-                  <div>Local playlists count: {importSummary.debug.localPlaylistsByIdCount}</div>
-                  <div>Active playlist ID: {importSummary.debug.activePlaylistId || "none"}</div>
-                  <div>Imported ID sample: {importSummary.debug.importedIdSample.join(", ") || "none"}</div>
-                  <div>Local ID sample: {importSummary.debug.localIdSample.join(", ") || "none"}</div>
-                  <div>Resulting order sample: {importSummary.debug.resultingOrderSample.join(", ") || "none"}</div>
-                  <button
-                    type="button"
-                    className="vault-btn vault-btn--ghost"
-                    onClick={async () => {
-                      const payload = {
-                        playlistId: importSummary.targetPlaylistId,
-                        importedTrackOrderCount: importSummary.debug.importedTrackOrderCount,
-                        localTracksByIdCount: importSummary.debug.localTracksByIdCount,
-                        localPlaylistsByIdCount: importSummary.debug.localPlaylistsByIdCount,
-                        matchedCount: importSummary.debug.matchedCount,
-                        missingCount: importSummary.debug.missingCount,
-                        importedIdSample: importSummary.debug.importedIdSample,
-                        localIdSample: importSummary.debug.localIdSample,
-                        resultingOrderSample: importSummary.debug.resultingOrderSample,
-                        activePlaylistId: importSummary.debug.activePlaylistId
-                      };
-                      try {
-                        await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-                        setVaultStatus("Import debug copied.", "success");
-                      } catch {
-                        setVaultStatus("Copy debug failed.", "error");
-                      }
-                    }}
-                  >
-                    Copy Debug
-                  </button>
                   {importSummary.debug.matchedCount === 0 && (
                     <p className="vault-import-summary__zero">
-                      {importSummary.sourceMismatch
-                        ? "Vault cannot see local tracks. This is a library source mismatch. Press Refresh Library."
-                        : "0 matching IDs found — ID mismatch bug"}
+                      Imported file applied 0 matching track updates on this device.
                     </p>
                   )}
                   {!importSummary.sourceMismatch &&

@@ -33,6 +33,7 @@ type Props = {
   onToggleLoopMode: () => void;
   onClearLoop: () => void;
   onOpenFullscreen: () => void;
+  showFullscreenHintCue: boolean;
   isCompact: boolean;
   onToggleCompact: () => void;
 };
@@ -64,6 +65,7 @@ export function MiniPlayerBar({
   onToggleLoopMode,
   onClearLoop,
   onOpenFullscreen,
+  showFullscreenHintCue,
   isCompact,
   onToggleCompact
 }: Props) {
@@ -100,7 +102,7 @@ export function MiniPlayerBar({
       <div className="mini-player-bar__header">
         <button
           type="button"
-          className="mini-player-bar__art"
+          className={`mini-player-bar__art ${showFullscreenHintCue ? "has-fullscreen-hint" : ""}`.trim()}
           ref={artRef}
           style={artStyle}
           aria-label="Open fullscreen player"

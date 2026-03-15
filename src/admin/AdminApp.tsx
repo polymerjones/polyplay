@@ -57,6 +57,7 @@ import {
   parseConfigImportText,
   serializeConfig
 } from "../lib/backup";
+import { saveBlobWithBestEffort } from "../lib/saveBlob";
 import { titleFromFilename } from "../lib/title";
 import { Button } from "../components/button";
 
@@ -989,39 +990,47 @@ export function AdminApp() {
     }
   };
 
-  const onExportGratitudeTxt = () => {
+  const onExportGratitudeTxt = async () => {
     const payload = formatGratitudeExport(gratitudeEntries);
     const blob = new Blob([payload], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
     const stamp = new Date().toISOString().slice(0, 10);
-    anchor.href = url;
-    anchor.download = `polyplay-gratitude-${stamp}.txt`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-    setStatus("Gratitude .txt exported.");
+    const filename = `polyplay-gratitude-${stamp}.txt`;
+    try {
+      const saveMode = await saveBlobWithBestEffort(blob, filename, {
+        description: "Gratitude Export",
+        accept: { "text/plain": [".txt"] }
+      });
+      setStatus(
+        saveMode === "shared"
+          ? "Gratitude .txt ready to share."
+          : saveMode === "opened-preview"
+            ? "Gratitude .txt opened. Use Share or Save to Files."
+            : "Gratitude .txt exported."
+      );
+    } catch {
+      setStatus("Gratitude .txt export failed.");
+    }
   };
 
-  const downloadBlobFile = (blob: Blob, filename: string) => {
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-  };
-
-  const onExportConfig = () => {
+  const onExportConfig = async () => {
     try {
       setStatus("Preparing download…");
       const content = serializeConfig(buildConfigSnapshot());
       const blob = new Blob([content], { type: "application/json;charset=utf-8" });
-      downloadBlobFile(blob, getConfigExportFilename());
-      setStatus("Download started. If you canceled the dialog, nothing was saved.");
+      const filename = getConfigExportFilename();
+      const saveMode = await saveBlobWithBestEffort(blob, filename, {
+        description: "Polyplay Config",
+        accept: { "application/json": [".json"] }
+      });
+      setStatus(
+        saveMode === "shared"
+          ? `Share sheet opened for ${filename}.`
+          : saveMode === "save-dialog"
+            ? `Saved to selected location: ${filename}.`
+            : saveMode === "opened-preview"
+              ? `Config opened for ${filename}. Use Share and Save to Files on iPhone.`
+              : `Download started for ${filename}.`
+      );
     } catch {
       setStatus("Config export failed.");
     }
@@ -1057,8 +1066,20 @@ export function AdminApp() {
       const result = await exportFullBackup((progress) => {
         setBackupProgress(progress.label);
       });
-      downloadBlobFile(result.blob, getFullBackupFilename());
-      setStatus(`Download started (${result.trackCount} tracks). If you canceled the dialog, nothing was saved.`);
+      const filename = getFullBackupFilename();
+      const saveMode = await saveBlobWithBestEffort(result.blob, filename, {
+        description: "Polyplay Full Backup",
+        accept: { "application/zip": [".zip"] }
+      });
+      setStatus(
+        saveMode === "shared"
+          ? `Share sheet opened for ${filename}.`
+          : saveMode === "save-dialog"
+            ? `Saved to selected location: ${filename}.`
+            : saveMode === "opened-preview"
+              ? `Backup opened for ${filename}. Use Share and Save to Files on iPhone.`
+              : `Download started (${result.trackCount} tracks).`
+      );
       setBackupProgress("");
     } catch (error) {
       if (error instanceof BackupSizeError) {
@@ -1103,9 +1124,19 @@ export function AdminApp() {
       setIsBackupBusy(true);
       setStatus("Preparing download…");
       const result = await exportPolyplaylist();
-      downloadBlobFile(result.blob, getPolyplaylistFilename(result.playlistName));
+      const filename = getPolyplaylistFilename(result.playlistName);
+      const saveMode = await saveBlobWithBestEffort(result.blob, filename, {
+        description: "PolyPlaylist Export",
+        accept: { "application/zip": [".polyplaylist", ".zip"] }
+      });
       setStatus(
-        `PolyPlaylist exported: ${result.trackCount} track${result.trackCount === 1 ? "" : "s"} from "${result.playlistName}".`
+        saveMode === "shared"
+          ? `Share sheet opened for ${filename}.`
+          : saveMode === "save-dialog"
+            ? `Saved to selected location: ${filename}.`
+            : saveMode === "opened-preview"
+              ? `PolyPlaylist opened for ${filename}. Use Share and Save to Files on iPhone.`
+              : `PolyPlaylist exported: ${result.trackCount} track${result.trackCount === 1 ? "" : "s"} from "${result.playlistName}".`
       );
     } catch (error) {
       setStatus(`PolyPlaylist export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -2081,9 +2112,6 @@ export function AdminApp() {
       <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
         <h2 className="mb-2 text-base font-semibold text-slate-100">Danger Zone</h2>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={() => void refreshTracks()}>
-            Reload Library View
-          </Button>
           <Button variant="secondary" onClick={() => void onFactoryReset()}>
             Factory Reset
           </Button>
@@ -2094,9 +2122,6 @@ export function AdminApp() {
             Nuke Playlist
           </Button>
         </div>
-        <p className="mt-2 text-xs text-slate-400">
-          Reload Library View re-syncs this panel with current saved tracks and playlist state.
-        </p>
       </section>
       </>
       )}
