@@ -1369,6 +1369,7 @@ export default function App() {
         setIsTipsOpen(false);
         setIsJournalOpen(false);
         setIsGratitudeOpen(false);
+        gratitudeEvaluatedRef.current = false;
         setGratitudeSettings(DEFAULT_GRATITUDE_SETTINGS);
         setIsFullscreenPlayerOpen(false);
         setShowSplash(true);
@@ -2595,7 +2596,11 @@ export default function App() {
         <div className="main-ui-layer">
           <div
             id="appScroll"
-            className={`app touch-clean ${isNuking ? "is-nuking" : ""}`.trim()}
+            className={`app touch-clean ${isNuking ? "is-nuking" : ""} ${
+              showOpenState && hasTracks && !showSplash && !isSplashDismissing && !isGratitudeOpen && !isInitialDemoFirstRunState
+                ? "has-open-state-card"
+                : "no-open-state-card"
+            }`.trim()}
             onAnimationEnd={(event) => {
               if (!isNuking) return;
               if (event.target !== event.currentTarget) return;

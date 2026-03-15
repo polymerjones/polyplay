@@ -484,6 +484,18 @@ export function JournalModal({ open, onClose }: Props) {
 
   const canSaveNewEntry = newEntryText.trim().length > 0;
 
+  const saveEditedEntry = (entryId: string) => {
+    const trimmed = draftText.trim();
+    if (!trimmed) return;
+    updateEntry(entryId, trimmed);
+    const next = listEntries();
+    setEntries(next);
+    setSavedEntryId(entryId);
+    window.setTimeout(() => setSavedEntryId(null), 420);
+    setEditingEntryId(null);
+    setDraftText("");
+  };
+
   return (
     <section
       className="journal-modal journalScene"
@@ -491,7 +503,7 @@ export function JournalModal({ open, onClose }: Props) {
       aria-modal="true"
       aria-label="Gratitude Journal"
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget && editingEntryId === null) onClose();
       }}
     >
       <video
@@ -550,7 +562,7 @@ export function JournalModal({ open, onClose }: Props) {
       <div
         className="journalUI"
         onClick={(event) => {
-          if (event.target === event.currentTarget) onClose();
+          if (event.target === event.currentTarget && editingEntryId === null) onClose();
         }}
       >
         <div className={`journal-modal__card journalGlassPanel ${isWritingActive ? "is-writing" : ""}`.trim()} ref={cardRef}>
@@ -770,7 +782,7 @@ export function JournalModal({ open, onClose }: Props) {
                         type="button"
                         className="journal-entry__edit"
                         aria-label="Edit entry"
-                        disabled={isDeleting}
+                        disabled={isDeleting || isEditing}
                         onClick={() => {
                           setEditingEntryId(entry.id);
                           setExpandedEntryId(entry.id);
@@ -833,23 +845,13 @@ export function JournalModal({ open, onClose }: Props) {
                         <button
                           type="button"
                           className="journal-entry__save"
-                          onClick={() => {
-                            const trimmed = draftText.trim();
-                            if (!trimmed) return;
-                            updateEntry(entry.id, trimmed);
-                            const next = listEntries();
-                            setEntries(next);
-                            setSavedEntryId(entry.id);
-                            window.setTimeout(() => setSavedEntryId(null), 420);
-                            setEditingEntryId(null);
-                            setDraftText("");
-                          }}
+                          onClick={() => saveEditedEntry(entry.id)}
                           disabled={draftText.trim().length === 0}
                         >
                           <svg viewBox="0 0 24 24" className="journal-entry__icon-svg">
                             <path d="M5 12.5 9.2 17 19 7.5" />
                           </svg>
-                          Save
+                          Save Changes
                         </button>
                         <button
                           type="button"
@@ -862,7 +864,7 @@ export function JournalModal({ open, onClose }: Props) {
                           <svg viewBox="0 0 24 24" className="journal-entry__icon-svg">
                             <path d="M6 6 18 18M18 6 6 18" />
                           </svg>
-                          Cancel
+                          Discard Changes
                         </button>
                       </div>
                     </>

@@ -5246,6 +5246,7 @@ body.nuke-flash::after {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
+  align-content: start;
   padding: 10px 16px calc(140px + env(safe-area-inset-bottom, 0px));
   max-width: 980px;
   margin: 0 auto;
@@ -5265,6 +5266,12 @@ body.nuke-flash::after {
   width: 66px;
   min-width: 66px;
   height: 66px;
+}
+
+@media (min-width: 761px) {
+  .app.no-open-state-card .track-grid.track-grid--list {
+    padding-top: 2px;
+  }
 }
 
 .ytm-tile {

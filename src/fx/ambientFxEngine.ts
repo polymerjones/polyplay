@@ -381,12 +381,24 @@ class AmbientFxEngine {
       for (let i = 0; i < this.splatters.length; i += 1) {
         const splat = this.splatters[i];
         const life = 1 - splat.age / splat.ttl;
+        const depth = 1 - life;
+        const depthEase = 1 - Math.pow(1 - depth, 2);
+        const depthScale = this.resolvedQuality === "lite" ? 1 + depthEase * 0.22 : 1 + depthEase * 0.48;
+        const depthAlpha = this.resolvedQuality === "lite" ? 1 - depthEase * 0.06 : 1 - depthEase * 0.1;
         this.ctx.save();
         this.ctx.translate(splat.x, splat.y);
         this.ctx.rotate(splat.rot);
         this.ctx.beginPath();
-        this.ctx.ellipse(0, 0, Math.max(1.2, splat.rx), Math.max(1.2, splat.ry), 0, 0, Math.PI * 2);
-        this.ctx.fillStyle = `hsla(${splat.hue} 94% 72% / ${splat.alpha * life})`;
+        this.ctx.ellipse(
+          0,
+          0,
+          Math.max(1.2, splat.rx * depthScale),
+          Math.max(1.2, splat.ry * depthScale),
+          0,
+          0,
+          Math.PI * 2
+        );
+        this.ctx.fillStyle = `hsla(${splat.hue} 94% 72% / ${splat.alpha * life * depthAlpha})`;
         this.ctx.fill();
         this.ctx.restore();
       }
