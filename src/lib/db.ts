@@ -363,7 +363,6 @@ export async function addTrackToDb(params: {
   }
 
   const library = loadLibrary();
-  ensureAtLeastOnePlaylist(library);
   library.tracksById[trackId] = {
     id: trackId,
     demoId: params.demoId || null,
@@ -560,21 +559,11 @@ export async function hardResetLibraryInDb(): Promise<void> {
     revokeMediaUrl(key);
   }
 
-  const ts = now();
-  const playlistId = "default";
   const reset: LibraryState = {
     version: library.version,
     tracksById: {},
-    playlistsById: {
-      [playlistId]: {
-        id: playlistId,
-        name: "polyplaylist1",
-        trackIds: [],
-        createdAt: ts,
-        updatedAt: ts
-      }
-    },
-    activePlaylistId: playlistId
+    playlistsById: {},
+    activePlaylistId: null
   };
   clearCompetingLibraryCandidates();
   saveLibrary(reset);
@@ -651,20 +640,6 @@ export type DeletePlaylistResult = {
 
 function ensureAtLeastOnePlaylist(library: LibraryState): void {
   const playlistIds = Object.keys(library.playlistsById);
-  if (!playlistIds.length) {
-    const ts = now();
-    library.playlistsById = {
-      default: {
-        id: "default",
-        name: "polyplaylist1",
-        trackIds: [],
-        createdAt: ts,
-        updatedAt: ts
-      }
-    };
-    library.activePlaylistId = "default";
-    return;
-  }
   if (!library.activePlaylistId || !library.playlistsById[library.activePlaylistId]) {
     library.activePlaylistId = playlistIds[0] ?? null;
   }

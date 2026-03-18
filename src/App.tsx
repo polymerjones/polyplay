@@ -76,7 +76,7 @@ const SPLASH_SEEN_KEY = "polyplay_hasSeenSplash";
 const SPLASH_SESSION_KEY = "polyplay_hasSeenSplashSession";
 const DEMO_PLAYLIST_ID = "polyplaylist-demo";
 const DEMO_PLAYLIST_NAME = "demo playlist";
-const DEMO_TRACK_IDS = new Set(["first-run-demo-1", "first-run-demo-2"]);
+const DEMO_TRACK_IDS = new Set(["first-run-demo", "first-run-demo-1", "first-run-demo-2"]);
 const OPEN_STATE_SEEN_KEY = "polyplay_open_state_seen_v102";
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const THEME_MODE_KEY = "polyplay_themeMode";
@@ -341,7 +341,18 @@ export default function App() {
       return false;
     }
   });
-  const [showSplash, setShowSplash] = useState(false);
+  const [showSplash, setShowSplash] = useState<boolean>(() => {
+    try {
+      const hasImported = localStorage.getItem(HAS_IMPORTED_KEY) === "true";
+      const hasOnboarded = localStorage.getItem(HAS_ONBOARDED_KEY) === "true";
+      if (!hasImported && !hasOnboarded) return true;
+      const skipAlways = localStorage.getItem(SPLASH_SEEN_KEY) === "true";
+      const seenSession = sessionStorage.getItem(SPLASH_SESSION_KEY) === "true";
+      return !skipAlways && !seenSession;
+    } catch {
+      return true;
+    }
+  });
   const [isSplashDismissing, setIsSplashDismissing] = useState(false);
   const [isNuking, setIsNuking] = useState(false);
   const [isActivePlaylistDirty, setIsActivePlaylistDirty] = useState<boolean>(() => {
@@ -534,7 +545,8 @@ export default function App() {
     });
   };
 
-  const refreshTracks = async () => {
+  const refreshTracks = async (options?: { allowEmptyDemoFallback?: boolean }) => {
+    const allowEmptyDemoFallback = options?.allowEmptyDemoFallback !== false;
     let librarySnapshot = await getLibrary();
     const ensured = ensureActivePlaylist(librarySnapshot);
     librarySnapshot = ensured.library;
@@ -561,7 +573,7 @@ export default function App() {
           setLibrary(librarySnapshot);
           loaded = getVisibleTracksFromLibrary(librarySnapshot, allTracksById);
         }
-      } else if (activeId) {
+      } else if (activeId && allowEmptyDemoFallback) {
         const activePlaylist = librarySnapshot.playlistsById[activeId];
         const activeName = (activePlaylist?.name || "").trim().toLowerCase();
         const isEmptyDemo = activePlaylist?.trackIds?.length === 0 && (activeId === DEMO_PLAYLIST_ID || activeName === DEMO_PLAYLIST_NAME);
@@ -604,7 +616,7 @@ export default function App() {
     setLibrary(applied.library);
     setRuntimeLibrary(applied.library);
     window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
-    await refreshTracks();
+    await refreshTracks({ allowEmptyDemoFallback: false });
   };
 
   const createPlaylist = async (name: string) => {
@@ -693,15 +705,6 @@ export default function App() {
         const missingDemoTrackIds = demoTrackIds.filter((trackId) => !existingTrackIds.includes(trackId));
         const repairedTrackIds = missingDemoTrackIds.length > 0 ? [...existingTrackIds, ...missingDemoTrackIds] : existingTrackIds;
         const needsRepair = missingDemoTrackIds.length > 0;
-        if (options.preferDemoActive) {
-          for (const [playlistId, playlist] of Object.entries(nextPlaylistsById)) {
-            if (playlistId === demoPlaylist.id) continue;
-            if ((playlist.trackIds || []).length === 0) {
-              delete nextPlaylistsById[playlistId];
-              playlistsTouched = true;
-            }
-          }
-        }
         const needsActiveSwitch = latest.activePlaylistId !== demoPlaylist.id;
         if (needsRepair || needsActiveSwitch || playlistsTouched) {
           latest = {
@@ -726,6 +729,27 @@ export default function App() {
           needsActiveSwitch,
           playlistsTouched
         });
+      }
+    } else if (options?.preferDemoActive) {
+      const activePlaylist =
+        latest.activePlaylistId && latest.playlistsById[latest.activePlaylistId]
+          ? latest.playlistsById[latest.activePlaylistId]
+          : null;
+      const activeName = (activePlaylist?.name || "").trim().toLowerCase();
+      const activeIsDemo = Boolean(activePlaylist && (activePlaylist.id === DEMO_PLAYLIST_ID || activeName === DEMO_PLAYLIST_NAME));
+      if (activeIsDemo) {
+        const fallbackPlaylist = Object.values(latest.playlistsById || {}).find((playlist) => {
+          const normalizedName = (playlist.name || "").trim().toLowerCase();
+          const isDemoPlaylist = playlist.id === DEMO_PLAYLIST_ID || normalizedName === DEMO_PLAYLIST_NAME;
+          return !isDemoPlaylist;
+        });
+        if (fallbackPlaylist && fallbackPlaylist.id !== latest.activePlaylistId) {
+          latest = {
+            ...latest,
+            activePlaylistId: fallbackPlaylist.id
+          };
+          setLibrary(latest);
+        }
       }
     }
     await refreshTracks();
@@ -812,7 +836,6 @@ export default function App() {
 
     (async () => {
       try {
-        await refreshTracks();
         let preferDemoActive = true;
         try {
           const library = await getLibrary();

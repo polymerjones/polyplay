@@ -8,17 +8,14 @@ const DEMO_SEED_DONE_KEY = "polyplay_demo_seed_done_v1";
 const MAX_DEMO_ASSET_BYTES = 30 * 1024 * 1024;
 const DEMO_PLAYLIST_ID = "polyplaylist-demo";
 const DEMO_PLAYLIST_NAME = "Demo Playlist";
+const LEGACY_DEMO_IDS = new Set(["first-run-demo-1", "first-run-demo-2"]);
 
 const DEMO_TRACKS = [
   {
-    demoId: "first-run-demo-1",
-    title: "Demo Track 1",
-    mediaUrl: "/demo/demo1.mp4"
-  },
-  {
-    demoId: "first-run-demo-2",
-    title: "Demo Track 2",
-    mediaUrl: "/demo/demo2.mp4"
+    demoId: "first-run-demo",
+    title: "Welcome to Polyplay",
+    audioUrl: "/demo/demo-audio.mp3",
+    artworkVideoUrl: "/demo/demo-art.mp4"
   }
 ] as const;
 const DEMO_IDS: Set<string> = new Set(DEMO_TRACKS.map((track) => track.demoId));
@@ -114,7 +111,7 @@ async function ensureDemoPostersIfMissing(library: LibraryState): Promise<number
 
 function collectDemoTrackIds(library: LibraryState): string[] {
   return Object.values(library.tracksById || {})
-    .filter((track) => Boolean(track.isDemo) || (track.demoId ? DEMO_IDS.has(track.demoId) : false))
+    .filter((track) => (track.demoId ? DEMO_IDS.has(track.demoId) : false))
     .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0))
     .map((track) => track.id);
 }
@@ -144,7 +141,11 @@ function ensureDemoPlaylistAttachment(library: LibraryState): boolean {
 
 function getDemoCandidatesForSeed(library: LibraryState, demoId: string): TrackRecord[] {
   return Object.values(library.tracksById || {}).filter(
-    (track) => track.demoId === demoId || track.id === demoId || (Boolean(track.isDemo) && track.demoId === demoId)
+    (track) =>
+      track.demoId === demoId ||
+      track.id === demoId ||
+      (track.demoId ? LEGACY_DEMO_IDS.has(track.demoId) : false) ||
+      LEGACY_DEMO_IDS.has(track.id)
   );
 }
 
@@ -317,7 +318,7 @@ async function fetchBlobBounded(url: string, maxBytes: number): Promise<Blob> {
   let lastError = "unknown";
   for (const candidate of candidates) {
     try {
-      const response = await fetch(candidate, { cache: "no-store" });
+      const response = await fetch(candidate, { cache: "force-cache" });
       if (!response.ok) {
         lastError = `${candidate} -> HTTP ${response.status}`;
         continue;
@@ -400,19 +401,29 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
   let installed = 0;
   for (const demo of DEMO_TRACKS) {
     try {
-      const mediaBlob = await fetchBlobBounded(demo.mediaUrl, MAX_DEMO_ASSET_BYTES);
-      const posterBlob = (await generateVideoPoster(mediaBlob).catch(() => null)) ?? makeFallbackPoster(demo.title);
+      const [audioBlob, artworkVideoBlob] = await Promise.all([
+        fetchBlobBounded(demo.audioUrl, MAX_DEMO_ASSET_BYTES),
+        fetchBlobBounded(demo.artworkVideoUrl, MAX_DEMO_ASSET_BYTES)
+      ]);
+      if (audioBlob.size + artworkVideoBlob.size > MAX_DEMO_ASSET_BYTES) continue;
+      const posterBlob = (await generateVideoPoster(artworkVideoBlob).catch(() => null)) ?? makeFallbackPoster(demo.title);
       await addTrackToDb({
         demoId: demo.demoId,
         isDemo: true,
         title: demo.title,
         sub: "Demo",
-        audio: mediaBlob,
+        audio: audioBlob,
         artPoster: posterBlob,
-        artVideo: mediaBlob
+        artVideo: artworkVideoBlob
       });
       installed += 1;
-    } catch {
+    } catch (error) {
+      console.error("[demoSeed] seed failed", {
+        demoId: demo.demoId,
+        audioUrl: demo.audioUrl,
+        artworkVideoUrl: demo.artworkVideoUrl,
+        error: error instanceof Error ? error.message : String(error)
+      });
       // Continue seeding remaining demo tracks if one fails.
     }
   }
@@ -440,19 +451,32 @@ export async function restoreDemoTracks(): Promise<{ restored: number; skipped: 
       continue;
     }
     try {
-      const mediaBlob = await fetchBlobBounded(demo.mediaUrl, MAX_DEMO_ASSET_BYTES);
-      const posterBlob = (await generateVideoPoster(mediaBlob).catch(() => null)) ?? makeFallbackPoster(demo.title);
+      const [audioBlob, artworkVideoBlob] = await Promise.all([
+        fetchBlobBounded(demo.audioUrl, MAX_DEMO_ASSET_BYTES),
+        fetchBlobBounded(demo.artworkVideoUrl, MAX_DEMO_ASSET_BYTES)
+      ]);
+      if (audioBlob.size + artworkVideoBlob.size > MAX_DEMO_ASSET_BYTES) {
+        failed += 1;
+        continue;
+      }
+      const posterBlob = (await generateVideoPoster(artworkVideoBlob).catch(() => null)) ?? makeFallbackPoster(demo.title);
       await addTrackToDb({
         demoId: demo.demoId,
         isDemo: true,
         title: demo.title,
         sub: "Demo",
-        audio: mediaBlob,
+        audio: audioBlob,
         artPoster: posterBlob,
-        artVideo: mediaBlob
+        artVideo: artworkVideoBlob
       });
       restored += 1;
-    } catch {
+    } catch (error) {
+      console.error("[demoSeed] restore failed", {
+        demoId: demo.demoId,
+        audioUrl: demo.audioUrl,
+        artworkVideoUrl: demo.artworkVideoUrl,
+        error: error instanceof Error ? error.message : String(error)
+      });
       failed += 1;
     }
   }

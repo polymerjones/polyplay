@@ -37,35 +37,23 @@ export type LibraryState = {
 export const LIBRARY_KEY = "showoff_library_v1";
 export const LIBRARY_STORAGE_KEY = LIBRARY_KEY;
 const LIBRARY_VERSION = 1;
-const DEFAULT_PLAYLIST_ID = "default";
 
 function now(): number {
   return Date.now();
 }
 
 export function createEmptyLibrary(): LibraryState {
-  const ts = now();
   return {
     version: LIBRARY_VERSION,
     tracksById: {},
-    playlistsById: {
-      [DEFAULT_PLAYLIST_ID]: {
-        id: DEFAULT_PLAYLIST_ID,
-        name: "My Playlist",
-        trackIds: [],
-        createdAt: ts,
-        updatedAt: ts
-      }
-    },
-    activePlaylistId: DEFAULT_PLAYLIST_ID
+    playlistsById: {},
+    activePlaylistId: null
   };
 }
 
 export function migrateLibraryIfNeeded(input: unknown): LibraryState {
   if (!input || typeof input !== "object") return createEmptyLibrary();
   const data = input as Partial<LibraryState>;
-  const base = createEmptyLibrary();
-
   const tracksById: Record<string, TrackRecord> = {};
   for (const [id, track] of Object.entries(data.tracksById || {})) {
     if (!track || typeof track !== "object") continue;
@@ -119,10 +107,6 @@ export function migrateLibraryIfNeeded(input: unknown): LibraryState {
       createdAt,
       updatedAt
     };
-  }
-
-  if (!Object.keys(playlistsById).length) {
-    playlistsById[DEFAULT_PLAYLIST_ID] = base.playlistsById[DEFAULT_PLAYLIST_ID];
   }
 
   const activePlaylistId =

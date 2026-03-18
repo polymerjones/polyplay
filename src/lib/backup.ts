@@ -34,7 +34,7 @@ export const MIN_FULL_BACKUP_USER_TRACKS = 1;
 const FULL_BACKUP_VERSION = 1;
 const POLYPLAYLIST_ROOT = "polyplaylist";
 const POLYPLAYLIST_VERSION = 1;
-const CANONICAL_DEMO_TRACK_IDS = new Set(["first-run-demo-1", "first-run-demo-2"]);
+const CANONICAL_DEMO_TRACK_IDS = new Set(["first-run-demo", "first-run-demo-1", "first-run-demo-2"]);
 
 export type LoopRegion = {
   start: number;
