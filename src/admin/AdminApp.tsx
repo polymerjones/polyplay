@@ -656,13 +656,16 @@ export function AdminApp() {
 
   const buildArtworkPayload = async (
     file: File | null,
-    posterBlob: Blob | null
+    posterBlob: Blob | null,
+    frameTimeSec?: number | null
   ): Promise<{ artPoster: Blob | null; artVideo: Blob | null; posterCaptureFailed: boolean }> => {
     if (!file) return { artPoster: null, artVideo: null, posterCaptureFailed: false };
     if (!isVideoArtwork(file)) return { artPoster: file, artVideo: null, posterCaptureFailed: false };
     let effectivePoster = posterBlob;
     if (!effectivePoster) {
-      effectivePoster = await capturePosterFrame(file, 0.45).catch(() => null);
+      const requestedFrameTime =
+        Number.isFinite(frameTimeSec) && (frameTimeSec ?? 0) >= 0 ? Number(frameTimeSec) : 0.45;
+      effectivePoster = await capturePosterFrame(file, requestedFrameTime).catch(() => null);
     }
     return { artPoster: effectivePoster ?? null, artVideo: file, posterCaptureFailed: !effectivePoster };
   };
@@ -678,7 +681,7 @@ export function AdminApp() {
     setStatus("Uploading...");
 
     try {
-      const artwork = await buildArtworkPayload(uploadArt, uploadArtPosterBlob);
+      const artwork = await buildArtworkPayload(uploadArt, uploadArtPosterBlob, uploadArtFrameTime);
       await addTrackToDb({
         title: derivedTitle,
         sub: "Uploaded",
@@ -733,7 +736,7 @@ export function AdminApp() {
 
     setStatus("Updating artwork...");
     try {
-      const artwork = await buildArtworkPayload(selectedArtworkFile, selectedArtPosterBlob);
+      const artwork = await buildArtworkPayload(selectedArtworkFile, selectedArtPosterBlob, selectedArtFrameTime);
       await updateArtworkInDb(selectedArtworkTrackId, artwork);
       notifyUserImported();
       setSelectedArtworkAssetFile(null);

@@ -64,9 +64,11 @@ export function FullscreenPlayer({
   onAuraUp,
   onSkip
 }: Props) {
+  const FULLSCREEN_AURA_FLASH_COOLDOWN_MS = 220;
   const artRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const artworkVideoRef = useRef<HTMLVideoElement | null>(null);
+  const lastAuraFlashAtRef = useRef(0);
   const artStyle = track.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
     : ({ backgroundImage: track.artGrad || `url('${DEFAULT_ARTWORK_URL}')` } as CSSProperties);
@@ -201,6 +203,9 @@ export function FullscreenPlayer({
   }, [shouldAnimateGenerated, peaks]);
 
   const triggerArtworkFlash = () => {
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (now - lastAuraFlashAtRef.current < FULLSCREEN_AURA_FLASH_COOLDOWN_MS) return;
+    lastAuraFlashAtRef.current = now;
     const art = artRef.current;
     if (!art) return;
     const artCanvas = canvasRef.current;

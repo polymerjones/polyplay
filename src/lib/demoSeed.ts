@@ -1,11 +1,12 @@
+import demoAudioAssetUrl from "../assets/demo/demo-audio.mp3";
+import demoArtAssetUrl from "../assets/demo/demo-art.mp4";
+import demoStillAssetUrl from "../assets/demo/demo-still.png";
 import { generateVideoPoster } from "./artwork/videoPoster";
-import { addTrackToDb } from "./db";
 import { getLibrary, setLibrary } from "./library";
 import { deleteBlob, getBlob, putBlob } from "./storage/db";
 import type { LibraryState, PlaylistRecord, TrackRecord } from "./storage/library";
 
 const DEMO_SEED_DONE_KEY = "polyplay_demo_seed_done_v1";
-const MAX_DEMO_ASSET_BYTES = 30 * 1024 * 1024;
 const DEMO_PLAYLIST_ID = "polyplaylist-demo";
 const DEMO_PLAYLIST_NAME = "Demo Playlist";
 const LEGACY_DEMO_IDS = new Set(["first-run-demo-1", "first-run-demo-2"]);
@@ -13,12 +14,17 @@ const LEGACY_DEMO_IDS = new Set(["first-run-demo-1", "first-run-demo-2"]);
 const DEMO_TRACKS = [
   {
     demoId: "first-run-demo",
-    title: "Welcome to Polyplay",
-    audioUrl: "/demo/demo-audio.mp3",
-    artworkVideoUrl: "/demo/demo-art.mp4"
+    title: "Welcome to Polyplay v1",
+    audioUrl: demoAudioAssetUrl,
+    artworkUrl: demoStillAssetUrl,
+    artworkVideoUrl: demoArtAssetUrl
   }
 ] as const;
 const DEMO_IDS: Set<string> = new Set(DEMO_TRACKS.map((track) => track.demoId));
+
+function logDemoSeed(event: string, details?: Record<string, unknown>) {
+  console.debug("[demo-seed]", { event, ...details });
+}
 
 function makeId(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -176,6 +182,36 @@ async function deleteTrackArtifacts(track: TrackRecord): Promise<void> {
   }
 }
 
+function upsertBuiltInDemoTrack(library: LibraryState, demo: (typeof DEMO_TRACKS)[number]): LibraryState {
+  const next = ensureDemoPlaylist(library, true);
+  const current = next.tracksById[demo.demoId];
+  const ts = Date.now();
+  next.tracksById[demo.demoId] = {
+    id: demo.demoId,
+    demoId: demo.demoId,
+    isDemo: true,
+    title: demo.title,
+    sub: "Demo",
+    artist: current?.artist ?? null,
+    duration: current?.duration ?? null,
+    aura: current?.aura ?? 0,
+    audioKey: null,
+    artKey: null,
+    artVideoKey: null,
+    bundledAudioUrl: demo.audioUrl,
+    bundledArtUrl: demo.artworkUrl,
+    bundledArtVideoUrl: demo.artworkVideoUrl,
+    artworkSource: current?.artworkSource ?? "user",
+    createdAt: current?.createdAt ?? ts,
+    updatedAt: ts
+  };
+  const demoPlaylist = next.playlistsById[DEMO_PLAYLIST_ID];
+  demoPlaylist.trackIds = [demo.demoId, ...(demoPlaylist.trackIds || []).filter((id) => id !== demo.demoId)];
+  demoPlaylist.updatedAt = ts;
+  setLibrary(next);
+  return next;
+}
+
 export async function normalizeDemoLibrary(options?: { preferDemoActive?: boolean }): Promise<{
   normalized: boolean;
   removedTrackIds: string[];
@@ -303,41 +339,14 @@ function wasSeedDone(): boolean {
   }
 }
 
-async function fetchBlobBounded(url: string, maxBytes: number): Promise<Blob> {
-  const candidates = new Set<string>();
-  candidates.add(url);
-  if (url.startsWith("/")) candidates.add(url.slice(1));
-  if (typeof window !== "undefined") {
-    try {
-      candidates.add(new URL(url, window.location.origin).toString());
-    } catch {
-      // Ignore URL construction failures.
-    }
-  }
-
-  let lastError = "unknown";
-  for (const candidate of candidates) {
-    try {
-      const response = await fetch(candidate, { cache: "force-cache" });
-      if (!response.ok) {
-        lastError = `${candidate} -> HTTP ${response.status}`;
-        continue;
-      }
-      const contentLength = Number(response.headers.get("content-length") || "0");
-      if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-        throw new Error(`Asset too large: ${candidate}`);
-      }
-      const blob = await response.blob();
-      if (blob.size > maxBytes) throw new Error(`Asset too large: ${candidate}`);
-      return blob;
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error);
-    }
-  }
-  throw new Error(`Failed to fetch ${url} (${lastError})`);
-}
-
 export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reason: string }> {
+  logDemoSeed("seed:start");
+  logDemoSeed("seed:resolved-assets", {
+    demoAudioAssetUrl,
+    demoArtAssetUrl,
+    demoAudioAssetUrlValid: typeof demoAudioAssetUrl === "string" && demoAudioAssetUrl.length > 0,
+    demoArtAssetUrlValid: typeof demoArtAssetUrl === "string" && demoArtAssetUrl.length > 0
+  });
   let library = await getLibrary();
   const normalizedBefore = await normalizeDemoLibrary();
   if (normalizedBefore.normalized) {
@@ -401,30 +410,22 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
   let installed = 0;
   for (const demo of DEMO_TRACKS) {
     try {
-      const [audioBlob, artworkVideoBlob] = await Promise.all([
-        fetchBlobBounded(demo.audioUrl, MAX_DEMO_ASSET_BYTES),
-        fetchBlobBounded(demo.artworkVideoUrl, MAX_DEMO_ASSET_BYTES)
-      ]);
-      if (audioBlob.size + artworkVideoBlob.size > MAX_DEMO_ASSET_BYTES) continue;
-      const posterBlob = (await generateVideoPoster(artworkVideoBlob).catch(() => null)) ?? makeFallbackPoster(demo.title);
-      await addTrackToDb({
-        demoId: demo.demoId,
-        isDemo: true,
-        title: demo.title,
-        sub: "Demo",
-        audio: audioBlob,
-        artPoster: posterBlob,
-        artVideo: artworkVideoBlob
-      });
+      logDemoSeed("seed:track:start", { demoId: demo.demoId, title: demo.title, strategy: "built-in-direct-url" });
+      const postWriteLibrary = upsertBuiltInDemoTrack(await getLibrary(), demo);
       installed += 1;
-    } catch (error) {
-      console.error("[demoSeed] seed failed", {
+      const demoPlaylist = postWriteLibrary.playlistsById[DEMO_PLAYLIST_ID];
+      logDemoSeed("seed:post-write-library", {
         demoId: demo.demoId,
-        audioUrl: demo.audioUrl,
-        artworkVideoUrl: demo.artworkVideoUrl,
+        canonicalTrackExists: Boolean(postWriteLibrary.tracksById["first-run-demo"]),
+        demoPlaylistTrackIds: Array.isArray(demoPlaylist?.trackIds) ? [...demoPlaylist.trackIds] : [],
+        bundledAudioUrl: postWriteLibrary.tracksById["first-run-demo"]?.bundledAudioUrl ?? null,
+        bundledArtVideoUrl: postWriteLibrary.tracksById["first-run-demo"]?.bundledArtVideoUrl ?? null
+      });
+    } catch (error) {
+      logDemoSeed("seed:track:error", {
+        demoId: demo.demoId,
         error: error instanceof Error ? error.message : String(error)
       });
-      // Continue seeding remaining demo tracks if one fails.
     }
   }
 
@@ -436,6 +437,13 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
 }
 
 export async function restoreDemoTracks(): Promise<{ restored: number; skipped: number; repaired: number; failed: number }> {
+  logDemoSeed("restore:start");
+  logDemoSeed("restore:resolved-assets", {
+    demoAudioAssetUrl,
+    demoArtAssetUrl,
+    demoAudioAssetUrlValid: typeof demoAudioAssetUrl === "string" && demoAudioAssetUrl.length > 0,
+    demoArtAssetUrlValid: typeof demoArtAssetUrl === "string" && demoArtAssetUrl.length > 0
+  });
   let library = await getLibrary();
   library = ensureDemoPlaylist(library, true);
   setLibrary(library);
@@ -451,30 +459,20 @@ export async function restoreDemoTracks(): Promise<{ restored: number; skipped: 
       continue;
     }
     try {
-      const [audioBlob, artworkVideoBlob] = await Promise.all([
-        fetchBlobBounded(demo.audioUrl, MAX_DEMO_ASSET_BYTES),
-        fetchBlobBounded(demo.artworkVideoUrl, MAX_DEMO_ASSET_BYTES)
-      ]);
-      if (audioBlob.size + artworkVideoBlob.size > MAX_DEMO_ASSET_BYTES) {
-        failed += 1;
-        continue;
-      }
-      const posterBlob = (await generateVideoPoster(artworkVideoBlob).catch(() => null)) ?? makeFallbackPoster(demo.title);
-      await addTrackToDb({
-        demoId: demo.demoId,
-        isDemo: true,
-        title: demo.title,
-        sub: "Demo",
-        audio: audioBlob,
-        artPoster: posterBlob,
-        artVideo: artworkVideoBlob
-      });
+      logDemoSeed("restore:track:start", { demoId: demo.demoId, title: demo.title, strategy: "built-in-direct-url" });
+      const postWriteLibrary = upsertBuiltInDemoTrack(await getLibrary(), demo);
       restored += 1;
-    } catch (error) {
-      console.error("[demoSeed] restore failed", {
+      const demoPlaylist = postWriteLibrary.playlistsById[DEMO_PLAYLIST_ID];
+      logDemoSeed("restore:post-write-library", {
         demoId: demo.demoId,
-        audioUrl: demo.audioUrl,
-        artworkVideoUrl: demo.artworkVideoUrl,
+        canonicalTrackExists: Boolean(postWriteLibrary.tracksById["first-run-demo"]),
+        demoPlaylistTrackIds: Array.isArray(demoPlaylist?.trackIds) ? [...demoPlaylist.trackIds] : [],
+        bundledAudioUrl: postWriteLibrary.tracksById["first-run-demo"]?.bundledAudioUrl ?? null,
+        bundledArtVideoUrl: postWriteLibrary.tracksById["first-run-demo"]?.bundledArtVideoUrl ?? null
+      });
+    } catch (error) {
+      logDemoSeed("restore:track:error", {
+        demoId: demo.demoId,
         error: error instanceof Error ? error.message : String(error)
       });
       failed += 1;

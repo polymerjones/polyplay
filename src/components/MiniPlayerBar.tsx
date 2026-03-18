@@ -34,6 +34,9 @@ type Props = {
   onClearLoop: () => void;
   onOpenFullscreen: () => void;
   showFullscreenHintCue: boolean;
+  showCompactHintCue: boolean;
+  showVibeHintCue: boolean;
+  showDimHintCue: boolean;
   isCompact: boolean;
   onToggleCompact: () => void;
 };
@@ -66,6 +69,9 @@ export function MiniPlayerBar({
   onClearLoop,
   onOpenFullscreen,
   showFullscreenHintCue,
+  showCompactHintCue,
+  showVibeHintCue,
+  showDimHintCue,
   isCompact,
   onToggleCompact
 }: Props) {
@@ -142,7 +148,7 @@ export function MiniPlayerBar({
           )}
           <button
             type="button"
-            className="mini-player-bar__compact-toggle"
+            className={`mini-player-bar__compact-toggle ${showCompactHintCue ? "has-onboarding-hint" : ""}`.trim()}
             aria-label={isCompact ? "Expand player" : "Collapse player"}
             onClick={onToggleCompact}
           >
@@ -169,6 +175,8 @@ export function MiniPlayerBar({
         onToggleRepeatTrack={onToggleRepeatTrack}
         onCycleDimMode={onCycleDimMode}
         onCycleNoveltyMode={onCycleNoveltyMode}
+        showDimHintCue={showDimHintCue}
+        showNoveltyHintCue={showVibeHintCue}
         onVinylScratch={onVinylScratch}
         onSetLoop={onSetLoop}
         onToggleLoopMode={onToggleLoopMode}

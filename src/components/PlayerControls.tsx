@@ -22,6 +22,8 @@ type Props = {
   onToggleRepeatTrack: () => void;
   onCycleDimMode: () => void;
   onCycleNoveltyMode: () => void;
+  showDimHintCue?: boolean;
+  showNoveltyHintCue?: boolean;
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
   onClearLoop: () => void;
@@ -53,6 +55,8 @@ export function PlayerControls({
   onToggleRepeatTrack,
   onCycleDimMode,
   onCycleNoveltyMode,
+  showDimHintCue = false,
+  showNoveltyHintCue = false,
   onSetLoop,
   onToggleLoopMode,
   onClearLoop,
@@ -229,6 +233,8 @@ export function PlayerControls({
         <button
           type="button"
           className={`pc-btn pc-btn--sm pc-dim-btn ${dimMode === "normal" ? "" : "is-active"} ${
+            showDimHintCue ? "has-onboarding-hint" : ""
+          } ${
             dimMode === "mute" ? "is-mute" : ""
           }`.trim()}
           onClick={onCycleDimMode}
@@ -245,6 +251,8 @@ export function PlayerControls({
         <button
           type="button"
           className={`pc-btn pc-btn--sm pc-novelty-btn ${noveltyMode === "normal" ? "" : "is-active"} ${
+            showNoveltyHintCue ? "has-onboarding-hint" : ""
+          } ${
             noveltyMode === "mute" ? "is-mute" : ""
           }`.trim()}
           onClick={onCycleNoveltyMode}

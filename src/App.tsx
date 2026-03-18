@@ -95,6 +95,9 @@ const ACTIVE_PLAYLIST_DIRTY_KEY = "polyplay_activePlaylistDirty_v1";
 const LAST_EXPORTED_PLAYLIST_ID_KEY = "polyplay_lastExportedPlaylistId";
 const LAST_EXPORTED_AT_KEY = "polyplay_lastExportedAt";
 const FULLSCREEN_ART_HINT_SEEN_KEY = "polyplay_hasSeenFullscreenArtHint_v1";
+const PLAYER_COMPACT_HINT_SEEN_KEY = "polyplay_hasSeenPlayerCompactHint_v1";
+const PLAYER_VIBE_HINT_SEEN_KEY = "polyplay_hasSeenPlayerVibeHint_v1";
+const PLAYER_DIM_HINT_SEEN_KEY = "polyplay_hasSeenPlayerDimHint_v1";
 const APP_STATE_KEY = "polyplay_app_state_v1";
 const SCRATCH_SFX_PATHS = ["/hyper-notif.wav#s1", "/hyper-notif.wav#s2", "/hyper-notif.wav#s3"];
 const SAFE_TAP_BASE_SIZE = 120;
@@ -333,7 +336,7 @@ export default function App() {
   const isIOS =
     typeof navigator !== "undefined" &&
     /iPad|iPhone|iPod/.test(navigator.userAgent);
-  const headerTitle = isIOS ? `Polyplay ${APP_VERSION}` : APP_TITLE;
+  const headerTitle = "Polyplay v1.0.0";
   const [hasOnboarded, setHasOnboarded] = useState<boolean>(() => {
     try {
       return localStorage.getItem(HAS_ONBOARDED_KEY) === "true";
@@ -397,6 +400,27 @@ export default function App() {
   const [hasSeenFullscreenArtHint, setHasSeenFullscreenArtHint] = useState<boolean>(() => {
     try {
       return localStorage.getItem(FULLSCREEN_ART_HINT_SEEN_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [hasSeenPlayerCompactHint, setHasSeenPlayerCompactHint] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(PLAYER_COMPACT_HINT_SEEN_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [hasSeenPlayerVibeHint, setHasSeenPlayerVibeHint] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(PLAYER_VIBE_HINT_SEEN_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [hasSeenPlayerDimHint, setHasSeenPlayerDimHint] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(PLAYER_DIM_HINT_SEEN_KEY) === "true";
     } catch {
       return false;
     }
@@ -653,8 +677,20 @@ export default function App() {
   };
 
   const ensureDemoTracksForFirstRun = async (options?: { preferDemoActive?: boolean }) => {
-    await seedDemoTracksIfNeeded().catch(() => ({ seeded: false, reason: "seed-failed" }));
-    await restoreDemoTracks().catch(() => ({ restored: 0, skipped: 0, repaired: 0, failed: 0 }));
+    await seedDemoTracksIfNeeded().catch((error) => {
+      console.error("[demo-seed]", {
+        event: "seed:swallowed-error",
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { seeded: false, reason: "seed-failed" };
+    });
+    await restoreDemoTracks().catch((error) => {
+      console.error("[demo-seed]", {
+        event: "restore:swallowed-error",
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { restored: 0, skipped: 0, repaired: 0, failed: 0 };
+    });
     const normalization = await normalizeDemoLibrary({ preferDemoActive: Boolean(options?.preferDemoActive) }).catch(() => ({
       normalized: false,
       removedTrackIds: [],
@@ -672,6 +708,12 @@ export default function App() {
     const officialDemoTracks = Object.values(latest.tracksById || {})
       .filter((track) => (track.demoId ? DEMO_TRACK_IDS.has(track.demoId) : false))
       .map((track) => ({ id: track.id, demoId: track.demoId }));
+    console.debug("[demo-seed]", {
+      event: "post-reconcile",
+      officialDemoTracks,
+      activePlaylistId: latest.activePlaylistId,
+      activePlaylistName: startingActivePlaylist?.name ?? null
+    });
     const hasDemo = demoTrackIds.length > 0;
     console.debug("[first-run] startup reconcile begin", {
       preferDemoActive: Boolean(options?.preferDemoActive),
@@ -1313,6 +1355,9 @@ export default function App() {
           localStorage.removeItem(LOOP_MODE_KEY);
           localStorage.removeItem(HAS_IMPORTED_KEY);
           localStorage.removeItem(HAS_ONBOARDED_KEY);
+          localStorage.removeItem(PLAYER_COMPACT_HINT_SEEN_KEY);
+          localStorage.removeItem(PLAYER_VIBE_HINT_SEEN_KEY);
+          localStorage.removeItem(PLAYER_DIM_HINT_SEEN_KEY);
           localStorage.removeItem(GRATITUDE_ENTRIES_KEY);
           localStorage.removeItem(GRATITUDE_LAST_PROMPT_KEY);
           localStorage.setItem(GRATITUDE_SETTINGS_KEY, JSON.stringify(DEFAULT_GRATITUDE_SETTINGS));
@@ -1332,6 +1377,9 @@ export default function App() {
         setLoopByTrack({});
         setLoopModeByTrack({});
         setHasOnboarded(false);
+        setHasSeenPlayerCompactHint(false);
+        setHasSeenPlayerVibeHint(false);
+        setHasSeenPlayerDimHint(false);
         setIsEmptyWelcomeDismissed(false);
         setShowOpenState(false);
         setOverlayPage(null);
@@ -1362,6 +1410,7 @@ export default function App() {
         return;
       }
       if (type === "polyplay:config-imported") {
+        exitFreshUserOnboardingState();
         syncPlayerStateFromStorage();
         void refreshTracks();
       }
@@ -1534,6 +1583,20 @@ export default function App() {
       // Ignore localStorage failures.
     }
     dismissOpenState();
+  };
+
+  const exitFreshUserOnboardingState = () => {
+    try {
+      localStorage.setItem(HAS_IMPORTED_KEY, "true");
+      localStorage.setItem(HAS_ONBOARDED_KEY, "true");
+      localStorage.setItem(OPEN_STATE_SEEN_KEY, "1");
+    } catch {
+      // Ignore localStorage failures.
+    }
+    setHasOnboarded(true);
+    setQuickTourPhase(null);
+    setIsEmptyWelcomeDismissed(true);
+    setShowOpenState(false);
   };
 
   useEffect(() => {
@@ -2418,12 +2481,43 @@ export default function App() {
     }
   };
 
+  const markPlayerCompactHintSeen = () => {
+    if (hasSeenPlayerCompactHint) return;
+    setHasSeenPlayerCompactHint(true);
+    try {
+      localStorage.setItem(PLAYER_COMPACT_HINT_SEEN_KEY, "true");
+    } catch {
+      // Ignore non-critical onboarding persistence failures.
+    }
+  };
+
+  const markPlayerVibeHintSeen = () => {
+    if (hasSeenPlayerVibeHint) return;
+    setHasSeenPlayerVibeHint(true);
+    try {
+      localStorage.setItem(PLAYER_VIBE_HINT_SEEN_KEY, "true");
+    } catch {
+      // Ignore non-critical onboarding persistence failures.
+    }
+  };
+
+  const markPlayerDimHintSeen = () => {
+    if (hasSeenPlayerDimHint) return;
+    setHasSeenPlayerDimHint(true);
+    try {
+      localStorage.setItem(PLAYER_DIM_HINT_SEEN_KEY, "true");
+    } catch {
+      // Ignore non-critical onboarding persistence failures.
+    }
+  };
+
   const onLoadUniverseFile = async (file: File | null) => {
     if (!file) return;
     try {
       setImportSummary(null);
       setShowMissingIds(false);
       const summary = await importFullBackup(file);
+      exitFreshUserOnboardingState();
       window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
       syncPlayerStateFromStorage();
       await refreshTracks();
@@ -2829,8 +2923,6 @@ export default function App() {
           noveltyMode={noveltyMode}
           onToggleShuffle={toggleShuffle}
           onToggleRepeatTrack={toggleRepeatTrack}
-          onCycleDimMode={cycleDimMode}
-          onCycleNoveltyMode={cycleNoveltyMode}
           onVinylScratch={playVinylScratch}
           onSetLoopRange={setLoopRange}
           onSetLoop={setLoopFromCurrentWithExpand}
@@ -2838,8 +2930,22 @@ export default function App() {
           onClearLoop={clearLoopWithCompactRestore}
           onOpenFullscreen={openFullscreenFromPlaybarArt}
           showFullscreenHintCue={!hasSeenFullscreenArtHint}
+          showCompactHintCue={!hasSeenPlayerCompactHint}
+          showVibeHintCue={!hasSeenPlayerVibeHint}
+          showDimHintCue={!hasSeenPlayerDimHint}
           isCompact={isPlayerCompact}
-          onToggleCompact={() => setIsPlayerCompact((prev) => !prev)}
+          onToggleCompact={() => {
+            setIsPlayerCompact((prev) => !prev);
+            markPlayerCompactHintSeen();
+          }}
+          onCycleNoveltyMode={() => {
+            cycleNoveltyMode();
+            markPlayerVibeHintSeen();
+          }}
+          onCycleDimMode={() => {
+            cycleDimMode();
+            markPlayerDimHintSeen();
+          }}
         />
       )}
 

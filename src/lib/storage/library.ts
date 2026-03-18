@@ -10,6 +10,9 @@ export type TrackRecord = {
   audioKey: string | null;
   artKey: string | null;
   artVideoKey?: string | null;
+  bundledAudioUrl?: string | null;
+  bundledArtUrl?: string | null;
+  bundledArtVideoUrl?: string | null;
   audioBytes?: number;
   artworkBytes?: number;
   posterBytes?: number;
@@ -72,6 +75,9 @@ export function migrateLibraryIfNeeded(input: unknown): LibraryState {
       audioKey: t.audioKey || null,
       artKey: t.artKey || null,
       artVideoKey: t.artVideoKey || null,
+      bundledAudioUrl: typeof t.bundledAudioUrl === "string" ? t.bundledAudioUrl : null,
+      bundledArtUrl: typeof t.bundledArtUrl === "string" ? t.bundledArtUrl : null,
+      bundledArtVideoUrl: typeof t.bundledArtVideoUrl === "string" ? t.bundledArtVideoUrl : null,
       audioBytes: Number.isFinite(t.audioBytes) ? Number(t.audioBytes) : undefined,
       artworkBytes: Number.isFinite(t.artworkBytes) ? Number(t.artworkBytes) : undefined,
       posterBytes: Number.isFinite(t.posterBytes) ? Number(t.posterBytes) : undefined,

@@ -17,6 +17,9 @@ export type DbTrackRecord = {
   audioKey?: string | null;
   artKey?: string | null;
   artVideoKey?: string | null;
+  bundledAudioUrl?: string | null;
+  bundledArtUrl?: string | null;
+  bundledArtVideoUrl?: string | null;
   audioBytes?: number;
   artworkBytes?: number;
   posterBytes?: number;
@@ -231,9 +234,9 @@ async function toTrack(record: TrackRecord): Promise<Track> {
     record.artVideoKey ? getBlob(record.artVideoKey) : Promise.resolve(null)
   ]);
 
-  const audioUrl = await getMediaUrl(effectiveAudioKey);
-  const artUrl = await getMediaUrl(record.artKey);
-  const artVideoUrl = await getMediaUrl(record.artVideoKey);
+  const audioUrl = record.bundledAudioUrl || (await getMediaUrl(effectiveAudioKey));
+  const artUrl = record.bundledArtUrl || (await getMediaUrl(record.artKey));
+  const artVideoUrl = record.bundledArtVideoUrl || (await getMediaUrl(record.artVideoKey));
 
   return {
     id: record.id,
@@ -248,8 +251,11 @@ async function toTrack(record: TrackRecord): Promise<Track> {
     audioBlob: audioBlob ?? undefined,
     artBlob: artBlob ?? undefined,
     persistedId: record.id,
-    missingAudio: Boolean(effectiveAudioKey) && !audioBlob,
-    missingArt: (Boolean(record.artKey) && !artBlob) || (Boolean(record.artVideoKey) && !artVideoBlob),
+    missingAudio: !record.bundledAudioUrl && Boolean(effectiveAudioKey) && !audioBlob,
+    missingArt:
+      !record.bundledArtUrl &&
+      !record.bundledArtVideoUrl &&
+      ((Boolean(record.artKey) && !artBlob) || (Boolean(record.artVideoKey) && !artVideoBlob)),
     artworkSource: record.artworkSource === "auto" ? "auto" : "user"
   } satisfies Track;
 }
@@ -297,14 +303,20 @@ export async function getTrackRowsFromDb(): Promise<DbTrackRecord[]> {
         audioKey: record.audioKey,
         artKey: record.artKey,
         artVideoKey: record.artVideoKey || null,
+        bundledAudioUrl: record.bundledAudioUrl || null,
+        bundledArtUrl: record.bundledArtUrl || null,
+        bundledArtVideoUrl: record.bundledArtVideoUrl || null,
         audioBytes: record.audioBytes,
         artworkBytes: record.artworkBytes,
         posterBytes: record.posterBytes,
         artworkSource: record.artworkSource === "auto" ? "auto" : "user",
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
-        missingAudio: Boolean(record.audioKey) && !audioBlob,
-        missingArt: (Boolean(record.artKey) && !artBlob) || (Boolean(record.artVideoKey) && !artVideoBlob)
+        missingAudio: !record.bundledAudioUrl && Boolean(record.audioKey) && !audioBlob,
+        missingArt:
+          !record.bundledArtUrl &&
+          !record.bundledArtVideoUrl &&
+          ((Boolean(record.artKey) && !artBlob) || (Boolean(record.artVideoKey) && !artVideoBlob))
       } satisfies DbTrackRecord;
     })
   );
@@ -313,19 +325,27 @@ export async function getTrackRowsFromDb(): Promise<DbTrackRecord[]> {
 }
 
 export async function addTrackToDb(params: {
+  trackId?: string;
   demoId?: string | null;
   isDemo?: boolean;
+  targetPlaylistId?: string | null;
   title: string;
   sub?: string;
   audio: Blob;
   artPoster?: Blob | null;
   artVideo?: Blob | null;
 }): Promise<void> {
+  console.debug("[demo-seed]", {
+    event: "db-write:start",
+    trackId: params.trackId?.trim() || null,
+    demoId: params.demoId || null,
+    targetPlaylistId: params.targetPlaylistId || null
+  });
   await maybeMigrateLegacyTracks();
   await initDB();
 
   const ts = now();
-  const trackId = makeId();
+  const trackId = params.trackId?.trim() || makeId();
   const audioKey = makeId();
   let artKey: string | null = null;
   let artVideoKey: string | null = null;
@@ -383,13 +403,37 @@ export async function addTrackToDb(params: {
     updatedAt: ts
   };
 
-  const playlist = library.activePlaylistId ? library.playlistsById[library.activePlaylistId] : undefined;
+  const playlistId = params.targetPlaylistId && library.playlistsById[params.targetPlaylistId]
+    ? params.targetPlaylistId
+    : library.activePlaylistId;
+  const playlist = playlistId ? library.playlistsById[playlistId] : undefined;
   if (playlist) {
-    playlist.trackIds.unshift(trackId);
+    playlist.trackIds = [trackId, ...(playlist.trackIds || []).filter((id) => id !== trackId)];
     playlist.updatedAt = ts;
   }
 
-  saveLibrary(library);
+  try {
+    saveLibrary(library);
+    console.debug("[demo-seed]", {
+      event: "db-write:success",
+      trackId,
+      demoId: params.demoId || null,
+      targetPlaylistId: playlistId || null,
+      demoTrackExists: Boolean(library.tracksById["first-run-demo"]),
+      demoPlaylistTrackIds: Array.isArray(library.playlistsById[params.targetPlaylistId || ""]?.trackIds)
+        ? [...library.playlistsById[params.targetPlaylistId || ""]!.trackIds]
+        : []
+    });
+  } catch (error) {
+    console.error("[demo-seed]", {
+      event: "db-write:failure",
+      trackId,
+      demoId: params.demoId || null,
+      targetPlaylistId: playlistId || null,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
+  }
 }
 
 export async function saveAuraToDb(trackId: string, aura: number): Promise<void> {
