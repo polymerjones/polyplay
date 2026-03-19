@@ -34,6 +34,8 @@ type Props = {
     active: boolean,
     options?: { persist?: boolean; editing?: boolean }
   ) => void;
+  onLoopDragStart?: () => void;
+  onLoopDragCommit?: (start: number) => void;
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
   onClearLoop: () => void;
@@ -63,6 +65,8 @@ export function FullscreenPlayer({
   onCycleNoveltyMode,
   onVinylScratch,
   onSetLoopRange,
+  onLoopDragStart,
+  onLoopDragCommit,
   onSetLoop,
   onToggleLoopMode,
   onClearLoop,
@@ -258,8 +262,11 @@ export function FullscreenPlayer({
         <div
           className={`fullscreen-player-shell__art ${hasArtworkVideo ? "has-video" : ""}`}
           ref={artRef}
-          style={artStyle}
+          style={hasArtworkVideo ? undefined : artStyle}
         >
+          {hasArtworkVideo && !isArtworkVideoReady && (
+            <div className="fullscreen-player-shell__art-poster" style={artStyle} aria-hidden="true" />
+          )}
           {shouldAnimateGenerated && <canvas ref={canvasRef} className="fullscreen-player-shell__art-canvas" />}
           {hasArtworkVideo && (
             <video
@@ -324,6 +331,8 @@ export function FullscreenPlayer({
             loopRegion={loopRegion}
             onSeek={onSeek}
             onSetLoopRange={onSetLoopRange}
+            onLoopDragStart={onLoopDragStart}
+            onLoopDragCommit={onLoopDragCommit}
             enableAuraPulse={false}
           />
         )}

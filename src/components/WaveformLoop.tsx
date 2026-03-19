@@ -15,6 +15,8 @@ type Props = {
     active: boolean,
     options?: { persist?: boolean; editing?: boolean }
   ) => void;
+  onLoopDragStart?: () => void;
+  onLoopDragCommit?: (start: number) => void;
   enableAuraPulse?: boolean;
 };
 
@@ -30,6 +32,8 @@ export function WaveformLoop({
   loopRegion,
   onSeek,
   onSetLoopRange,
+  onLoopDragStart,
+  onLoopDragCommit,
   enableAuraPulse = true
 }: Props) {
   const waveRef = useRef<HTMLDivElement | null>(null);
@@ -209,6 +213,7 @@ export function WaveformLoop({
       const snapshot = dragSnapshotRef.current;
       if (snapshot) {
         onSetLoopRange(snapshot.start, snapshot.end, true, { persist: true, editing: false });
+        onLoopDragCommit?.(snapshot.start);
       }
       dragSnapshotRef.current = null;
       setDraggingHandle(null);
@@ -264,6 +269,7 @@ export function WaveformLoop({
               event.preventDefault();
               event.stopPropagation();
               dragSnapshotRef.current = { start: safeStart, end: safeEnd };
+              onLoopDragStart?.();
               setDraggingHandle("start");
             }}
           />
@@ -275,6 +281,7 @@ export function WaveformLoop({
               event.preventDefault();
               event.stopPropagation();
               dragSnapshotRef.current = { start: safeStart, end: safeEnd };
+              onLoopDragStart?.();
               setDraggingHandle("end");
             }}
           />

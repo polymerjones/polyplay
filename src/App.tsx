@@ -474,6 +474,8 @@ export default function App() {
   const gratitudeTypingTimeoutRef = useRef<number | null>(null);
   const journalToastTimeoutRef = useRef<number | null>(null);
   const vaultToastTimeoutRef = useRef<number | null>(null);
+  const loopDragResumeTimeoutRef = useRef<number | null>(null);
+  const loopDragWasPlayingRef = useRef(false);
   const lastUiCurrentTimeCommitAtRef = useRef(0);
   const lastUiCurrentTimeValueRef = useRef(0);
   const gratitudeEvaluatedRef = useRef(false);
@@ -1533,9 +1535,54 @@ export default function App() {
     setCurrentTime(safeNextTime);
   };
 
+  const clearLoopDragResumeTimeout = () => {
+    if (loopDragResumeTimeoutRef.current !== null) {
+      window.clearTimeout(loopDragResumeTimeoutRef.current);
+      loopDragResumeTimeoutRef.current = null;
+    }
+  };
+
+  const pauseForLoopDrag = () => {
+    const audio = audioRef.current;
+    clearLoopDragResumeTimeout();
+    if (!audio) {
+      loopDragWasPlayingRef.current = false;
+      return;
+    }
+    loopDragWasPlayingRef.current = !audio.paused;
+    if (!audio.paused) {
+      logAudioDebug("pause() called", { reason: "loop-drag-start" });
+      audio.pause();
+    }
+  };
+
+  const resumeAfterLoopDrag = (start: number) => {
+    const audio = audioRef.current;
+    const shouldResume = loopDragWasPlayingRef.current;
+    loopDragWasPlayingRef.current = false;
+    clearLoopDragResumeTimeout();
+    if (!audio) return;
+
+    const effectiveDuration = getSafeDuration(duration) || getSafeDuration(audio.duration);
+    const safeStart = Math.max(0, Math.min(effectiveDuration, start));
+    audio.currentTime = safeStart;
+    setCurrentTime(safeStart);
+
+    if (!shouldResume) return;
+
+    loopDragResumeTimeoutRef.current = window.setTimeout(() => {
+      loopDragResumeTimeoutRef.current = null;
+      void ensurePlaybackGainRouting(true);
+      logAudioDebug("play() called", { reason: "loop-drag-end" });
+      void audio.play().catch(() => setIsPlaying(false));
+    }, 90);
+  };
+
   useEffect(() => {
     lastUiCurrentTimeValueRef.current = currentTime;
   }, [currentTime]);
+
+  useEffect(() => () => clearLoopDragResumeTimeout(), []);
 
   useEffect(() => {
     if (!isPristineDemoLibraryState) return;
@@ -3115,6 +3162,8 @@ export default function App() {
           onCycleNoveltyMode={cycleNoveltyMode}
           onVinylScratch={playVinylScratch}
           onSetLoopRange={setLoopRange}
+          onLoopDragStart={pauseForLoopDrag}
+          onLoopDragCommit={resumeAfterLoopDrag}
           onSetLoop={setLoopFromCurrent}
           onToggleLoopMode={toggleLoopMode}
           onClearLoop={clearLoop}
