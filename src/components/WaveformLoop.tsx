@@ -89,78 +89,103 @@ export function WaveformLoop({
   }, [track?.id, track?.audioBlob]);
 
   useEffect(() => {
-    const drawTo = (canvas: HTMLCanvasElement | null, alpha = 1) => {
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-      const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const width = rect.width;
-      const height = rect.height;
-      const minBarWidth = 1.2;
-      const gap = 1.2;
-      const maxBarsByWidth = Math.max(24, Math.floor((width + gap) / (minBarWidth + gap)));
-      const bars = Math.max(1, Math.min(peaks.length, maxBarsByWidth));
-      const barWidth = Math.max(0.8, (width - gap * (bars - 1)) / bars);
-      const progress = duration > 0 ? Math.max(0, Math.min(1, currentTime / duration)) : 0;
-      const loopStartRatio = duration > 0 ? safeStart / duration : 0;
-      const loopEndRatio = duration > 0 ? safeEnd / duration : 0;
-      ctx.clearRect(0, 0, width, height);
+    const width = rect.width;
+    const height = rect.height;
+    const minBarWidth = 1.2;
+    const gap = 1.2;
+    const maxBarsByWidth = Math.max(24, Math.floor((width + gap) / (minBarWidth + gap)));
+    const bars = Math.max(1, Math.min(peaks.length, maxBarsByWidth));
+    const barWidth = Math.max(0.8, (width - gap * (bars - 1)) / bars);
+    const loopStartRatio = duration > 0 ? safeStart / duration : 0;
+    const loopEndRatio = duration > 0 ? safeEnd / duration : 0;
+    ctx.clearRect(0, 0, width, height);
 
-      const grad = ctx.createLinearGradient(0, 0, width, 0);
-      if (isLightTheme) {
-        grad.addColorStop(0, `rgba(162, 98, 128, ${0.92 * alpha})`);
-        grad.addColorStop(1, `rgba(207, 111, 130, ${0.94 * alpha})`);
-      } else {
-        grad.addColorStop(0, `rgba(125, 224, 255, ${0.95 * alpha})`);
-        grad.addColorStop(1, `rgba(255, 128, 200, ${0.9 * alpha})`);
-      }
+    for (let i = 0; i < bars; i += 1) {
+      const peakIndex = bars > 1 ? Math.round((i / (bars - 1)) * (peaks.length - 1)) : 0;
+      const magnitude = peaks[peakIndex] ?? 0.3;
+      const h = Math.max(4, magnitude * height * 0.98);
+      const x = i * (barWidth + gap);
+      const centerRatio = Math.max(0, Math.min(1, (x + barWidth * 0.5) / Math.max(1, width)));
+      const y = (height - h) / 2;
+      const inLoop = loopRegion.active && hasLoopRange && centerRatio >= loopStartRatio && centerRatio <= loopEndRatio;
 
-      for (let i = 0; i < bars; i += 1) {
-        const peakIndex = bars > 1 ? Math.round((i / (bars - 1)) * (peaks.length - 1)) : 0;
-        const magnitude = peaks[peakIndex] ?? 0.3;
-        const h = Math.max(4, magnitude * height * 0.98);
-        const x = i * (barWidth + gap);
-        const centerRatio = Math.max(0, Math.min(1, (x + barWidth * 0.5) / Math.max(1, width)));
-        const y = (height - h) / 2;
+      ctx.fillStyle = inLoop
+        ? isLightTheme
+          ? "rgba(180, 86, 118, 0.96)"
+          : "rgba(255, 214, 92, 0.95)"
+        : isLightTheme
+          ? "rgba(141, 101, 124, 0.4)"
+          : "rgba(120, 70, 180, 0.55)";
 
-        const inLoop = loopRegion.active && hasLoopRange && centerRatio >= loopStartRatio && centerRatio <= loopEndRatio;
+      ctx.fillRect(x, y, barWidth, h);
+    }
+  }, [duration, hasLoopRange, isLightTheme, loopRegion.active, peaks, safeEnd, safeStart]);
 
-        if (inLoop) {
-          ctx.fillStyle = isLightTheme
-            ? `rgba(180, 86, 118, ${0.96 * alpha})`
-            : `rgba(255, 214, 92, ${0.95 * alpha})`;
-        } else {
-          ctx.fillStyle = centerRatio <= progress
-            ? grad
-            : isLightTheme
-              ? `rgba(141, 101, 124, ${0.4 * alpha})`
-              : `rgba(120, 70, 180, ${0.55 * alpha})`;
-        }
+  useEffect(() => {
+    const canvas = decorCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-        ctx.fillRect(x, y, barWidth, h);
-      }
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const playheadX = progress * width;
-      const glow = isPlaying ? 7 : 5;
-      ctx.fillStyle = isLightTheme
-        ? `rgba(207, 111, 130, ${0.28 * alpha})`
-        : `rgba(255, 65, 186, ${0.42 * alpha})`;
-      ctx.fillRect(playheadX - glow / 2, 0, glow, height);
-      ctx.fillStyle = isLightTheme
-        ? `rgba(91, 46, 68, ${0.9 * alpha})`
-        : `rgba(255, 180, 235, ${0.95 * alpha})`;
-      ctx.fillRect(playheadX - 1, 0, 2, height);
-    };
+    const width = rect.width;
+    const height = rect.height;
+    const minBarWidth = 1.2;
+    const gap = 1.2;
+    const maxBarsByWidth = Math.max(24, Math.floor((width + gap) / (minBarWidth + gap)));
+    const bars = Math.max(1, Math.min(peaks.length, maxBarsByWidth));
+    const barWidth = Math.max(0.8, (width - gap * (bars - 1)) / bars);
+    const progress = duration > 0 ? Math.max(0, Math.min(1, currentTime / duration)) : 0;
+    ctx.clearRect(0, 0, width, height);
 
-    drawTo(canvasRef.current, 1);
-    drawTo(decorCanvasRef.current, 0.42);
-  }, [currentTime, duration, hasLoopRange, isLightTheme, isPlaying, loopRegion.active, peaks, safeEnd, safeStart]);
+    const grad = ctx.createLinearGradient(0, 0, width, 0);
+    if (isLightTheme) {
+      grad.addColorStop(0, "rgba(162, 98, 128, 0.92)");
+      grad.addColorStop(1, "rgba(207, 111, 130, 0.94)");
+    } else {
+      grad.addColorStop(0, "rgba(125, 224, 255, 0.95)");
+      grad.addColorStop(1, "rgba(255, 128, 200, 0.9)");
+    }
+
+    for (let i = 0; i < bars; i += 1) {
+      const peakIndex = bars > 1 ? Math.round((i / (bars - 1)) * (peaks.length - 1)) : 0;
+      const magnitude = peaks[peakIndex] ?? 0.3;
+      const h = Math.max(4, magnitude * height * 0.98);
+      const x = i * (barWidth + gap);
+      const centerRatio = Math.max(0, Math.min(1, (x + barWidth * 0.5) / Math.max(1, width)));
+      if (centerRatio > progress) continue;
+      const y = (height - h) / 2;
+      ctx.fillStyle = grad;
+      ctx.fillRect(x, y, barWidth, h);
+    }
+
+    const playheadX = progress * width;
+    const glow = isPlaying ? 7 : 5;
+    ctx.fillStyle = isLightTheme
+      ? "rgba(207, 111, 130, 0.28)"
+      : "rgba(255, 65, 186, 0.42)";
+    ctx.fillRect(playheadX - glow / 2, 0, glow, height);
+    ctx.fillStyle = isLightTheme
+      ? "rgba(91, 46, 68, 0.9)"
+      : "rgba(255, 180, 235, 0.95)";
+    ctx.fillRect(playheadX - 1, 0, 2, height);
+  }, [currentTime, duration, isLightTheme, isPlaying, peaks]);
 
   useEffect(() => {
     if (!draggingHandle) return;
@@ -226,6 +251,9 @@ export function WaveformLoop({
         onContextMenu={(event) => event.preventDefault()}
       >
         <canvas ref={canvasRef} className={`pc-wave__canvas ${track ? "is-ready" : "is-loading"}`} />
+        <div className="pc-wave__decor" aria-hidden="true">
+          <canvas ref={decorCanvasRef} className={`pc-wave__canvas ${track ? "is-ready" : "is-loading"}`} />
+        </div>
         <div className="pc-wave__loop-overlay" aria-hidden="true">
           <div className="pc-wave__loop-range" style={{ left: `${startPct}%`, width: `${Math.max(0, endPct - startPct)}%` }} />
           <button
@@ -251,9 +279,6 @@ export function WaveformLoop({
             }}
           />
         </div>
-      </div>
-      <div className="pc-wave__decor" aria-hidden="true">
-        <canvas ref={decorCanvasRef} className={`pc-wave__canvas ${track ? "is-ready" : "is-loading"}`} />
       </div>
     </>
   );

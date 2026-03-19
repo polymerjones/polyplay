@@ -33,6 +33,40 @@ html[data-theme="light"] {
   --pc-shadow-sm: 0 8px 18px rgba(126, 84, 108, 0.12);
 }
 
+html[data-theme="light"] .pc-btn,
+html[data-theme="light"] .pc-transport-btn {
+  border-color: rgba(176, 92, 118, 0.3);
+  background: rgba(255, 248, 251, 0.96);
+  color: #5a3249;
+  box-shadow:
+    0 8px 18px rgba(126, 84, 108, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.44);
+}
+
+html[data-theme="light"] .pc-btn--icon,
+html[data-theme="light"] .pc-transport-btn--md,
+html[data-theme="light"] .pc-transport-btn--sm {
+  background: rgba(255, 250, 252, 0.98);
+}
+
+html[data-theme="light"] .pc-btn--primary,
+html[data-theme="light"] .pc-transport-btn--active,
+html[data-theme="light"] .pc-btn--toggle.is-active,
+html[data-theme="light"] .pc-dim-btn.is-active,
+html[data-theme="light"] .pc-novelty-btn.is-active,
+html[data-theme="light"] .mini-player-bar__aura-toggle {
+  border-color: rgba(120, 54, 78, 0.28);
+  color: #fff8fb;
+  box-shadow:
+    0 12px 24px rgba(140, 76, 101, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+html[data-theme="light"] .pc-btn--sm:not(.pc-btn--primary):not(.pc-btn--toggle.is-active):not(.pc-dim-btn.is-active):not(.pc-novelty-btn.is-active) {
+  background: rgba(255, 247, 250, 0.94);
+  color: #60384f;
+}
+
 .pc-btn {
   border: 1px solid var(--pc-color-border);
   border-radius: var(--pc-radius-md);
@@ -554,10 +588,12 @@ html[data-theme="light"] .mini-player-bar::before {
 }
 
 html[data-theme="light"] .mini-player-bar__compact-toggle {
-  border-color: rgba(207, 111, 130, 0.24);
-  background: rgba(255, 245, 249, 0.9);
-  color: #5f3550;
-  box-shadow: 0 6px 14px rgba(126, 84, 108, 0.12);
+  border-color: rgba(176, 92, 118, 0.3);
+  background: rgba(255, 249, 251, 0.96);
+  color: #5a3249;
+  box-shadow:
+    0 8px 18px rgba(126, 84, 108, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
 }
 
 .mini-player-bar__header-actions {
@@ -593,6 +629,15 @@ html[data-theme="light"] .mini-player-bar__compact-toggle {
   letter-spacing: 0.2px;
   padding: 0 10px;
   box-shadow: 0 0 12px rgba(164, 112, 255, 0.32);
+}
+
+html[data-theme="light"] .mini-player-bar__loop-clear {
+  border-color: rgba(180, 114, 67, 0.36);
+  background: rgba(255, 244, 226, 0.96);
+  color: #84502c;
+  box-shadow:
+    0 8px 18px rgba(145, 96, 52, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .mini-player-bar.is-compact .playerExpanded {
@@ -979,7 +1024,9 @@ html[data-theme="light"] .pc-wave__loop-handle::after {
 }
 
 .pc-wave__decor {
-  display: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
 .player-controls.is-aura-pulse .pc-progress {
