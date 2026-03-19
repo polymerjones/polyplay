@@ -31,6 +31,7 @@ type Props = {
   onAuraUp?: () => void;
   showAuraInline?: boolean;
   onSkip?: (delta: number) => void;
+  enableAuraPulse?: boolean;
 };
 
 function clampTime(value: number, duration: number): number {
@@ -63,7 +64,8 @@ export function PlayerControls({
   onVinylScratch,
   onAuraUp,
   showAuraInline = true,
-  onSkip
+  onSkip,
+  enableAuraPulse = true
 }: Props) {
   const rootRef = useRef<HTMLElement | null>(null);
   const shuffleFxCooldownRef = useRef(0);
@@ -75,6 +77,7 @@ export function PlayerControls({
   void onToggleLoopMode;
 
   useEffect(() => {
+    if (!enableAuraPulse) return;
     const onAuraTrigger = () => {
       const root = rootRef.current;
       if (!root) return;
@@ -84,7 +87,7 @@ export function PlayerControls({
     };
     window.addEventListener("polyplay:aura-trigger", onAuraTrigger);
     return () => window.removeEventListener("polyplay:aura-trigger", onAuraTrigger);
-  }, []);
+  }, [enableAuraPulse]);
 
   useEffect(() => {
     return () => {

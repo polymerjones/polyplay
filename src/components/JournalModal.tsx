@@ -36,6 +36,7 @@ const JOURNAL_BG_TOGGLE_KEY = "polyplay_journalBgToggle_v1";
 const JOURNAL_VERSE_INDEX_KEY = "polyplay_journalVerseIndex_v1";
 const JOURNAL_LOOP_START_SEC = 0.08;
 const JOURNAL_LOOP_END_GUARD_SEC = 0.06;
+const JOURNAL_ENTRY_DOUBLE_TAP_WINDOW_MS = 150;
 
 const JOURNAL_BACKGROUNDS: JournalBackground[] = [
   { id: "1", src: "/clouds1.mov" },
@@ -546,7 +547,7 @@ export function JournalModal({ open, onClose }: Props) {
       toggleExpandedEntry(entry.id);
       pendingEntryTapTimeoutRef.current = null;
       pendingEntryTapIdRef.current = null;
-    }, 220);
+    }, JOURNAL_ENTRY_DOUBLE_TAP_WINDOW_MS);
   };
 
   const releaseEditResolutionLock = () => {

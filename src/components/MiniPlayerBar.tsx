@@ -28,7 +28,12 @@ type Props = {
   onCycleDimMode: () => void;
   onCycleNoveltyMode: () => void;
   onVinylScratch: () => void;
-  onSetLoopRange: (start: number, end: number, active: boolean) => void;
+  onSetLoopRange: (
+    start: number,
+    end: number,
+    active: boolean,
+    options?: { persist?: boolean; editing?: boolean }
+  ) => void;
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
   onClearLoop: () => void;

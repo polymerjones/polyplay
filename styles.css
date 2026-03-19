@@ -32,6 +32,36 @@ html[data-theme="light"] {
   --glow-intensity: 0.95;
 }
 
+html[data-theme="light"] .topbar {
+  background:
+    radial-gradient(112% 148% at 14% -8%, rgba(255, 223, 235, 0.98) 0%, rgba(251, 229, 239, 0.94) 42%, rgba(245, 221, 234, 0.92) 100%);
+  border: 1px solid rgba(207, 111, 130, 0.18);
+  box-shadow:
+    0 14px 30px rgba(126, 84, 108, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
+html[data-theme="light"] .topbar::before {
+  opacity: 0.14;
+  background: repeating-linear-gradient(
+    120deg,
+    rgba(207, 111, 130, 0.14) 0,
+    rgba(207, 111, 130, 0.14) 2px,
+    transparent 2px,
+    transparent 26px
+  );
+  mix-blend-mode: multiply;
+}
+
+html[data-theme="light"] .topbar-title {
+  color: #4f2940;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+html[data-theme="light"] .hint {
+  color: rgba(96, 58, 80, 0.76);
+}
+
 html[data-theme="dark"] {
   --color-bg-primary: #070b12;
   --color-bg-secondary: #111827;
@@ -4559,12 +4589,38 @@ body::after {
   margin-top: 8px;
 }
 
+.frame-video-shell {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+
 .frame-video {
   width: 100%;
   max-width: 420px;
+  display: block;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: #0b0f14;
+}
+
+.frame-video-toggle {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(9, 13, 22, 0.72);
+  color: #f7fbff;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  line-height: 1;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(6px);
+  -webkit-tap-highlight-color: transparent;
 }
 
 .frame-slider {
@@ -4803,15 +4859,35 @@ body.nuke-flash::after {
 }
 
 .topbar-title {
+  display: grid;
+  justify-items: center;
   text-align: center;
   font-size: clamp(16px, 2.1vw, 26px);
   letter-spacing: 0.2px;
   font-weight: 700;
   color: #eef3ff;
   text-shadow: 0 2px 10px rgba(8, 12, 22, 0.45);
+  line-height: 1.05;
+}
+
+.topbar-title__main,
+.topbar-title__sub {
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.topbar-title__main {
+  font-size: inherit;
+}
+
+.topbar-title__sub {
+  margin-top: 3px;
+  font-size: clamp(10px, 1vw, 12px);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  opacity: 0.78;
 }
 
 .topbar--two-tier .brand-logo {
@@ -4906,11 +4982,17 @@ body.nuke-flash::after {
 }
 
 .playlist-selector__action {
+  border: 1px solid rgba(192, 168, 255, 0.28);
   border-radius: 14px;
+  background: rgba(47, 32, 74, 0.72);
+  color: #f4edff;
   padding: 10px 14px;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
+  box-shadow:
+    0 8px 18px rgba(20, 12, 36, 0.24),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .playlist-selector__tutorial-tip {

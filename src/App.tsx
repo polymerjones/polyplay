@@ -98,15 +98,20 @@ const FULLSCREEN_ART_HINT_SEEN_KEY = "polyplay_hasSeenFullscreenArtHint_v1";
 const PLAYER_COMPACT_HINT_SEEN_KEY = "polyplay_hasSeenPlayerCompactHint_v1";
 const PLAYER_VIBE_HINT_SEEN_KEY = "polyplay_hasSeenPlayerVibeHint_v1";
 const PLAYER_DIM_HINT_SEEN_KEY = "polyplay_hasSeenPlayerDimHint_v1";
+const NEW_PLAYLIST_HINT_SEEN_KEY = "polyplay_hasSeenNewPlaylistHint_v1";
+const UPLOAD_HINT_SEEN_KEY = "polyplay_hasSeenUploadHint_v1";
 const APP_STATE_KEY = "polyplay_app_state_v1";
 const SCRATCH_SFX_PATHS = ["/hyper-notif.wav#s1", "/hyper-notif.wav#s2", "/hyper-notif.wav#s3"];
 const SAFE_TAP_BASE_SIZE = 120;
 const SAFE_TAP_MAX_SIZE = 420;
 const SAFE_TAP_MAX_ACTIVE = 12;
 const SAFE_TAP_SPAWN_THROTTLE_MS = 40;
+const UI_CURRENT_TIME_THROTTLE_MS = 80;
+const UI_CURRENT_TIME_MIN_DELTA_SEC = 0.08;
 const FX_ENABLED_KEY = "polyplay_fxEnabled_v1";
 const FX_MODE_KEY = "polyplay_fxMode_v1";
 const FX_QUALITY_KEY = "polyplay_fxQuality_v1";
+const IOS_NOW_PLAYING_APP_TITLE = "PolyPlay Audio";
 const THEME_PACK_AURA_COLORS: Record<CustomThemeSlot, string> = {
   crimson: "#cf6f82",
   teal: "#42c7c4",
@@ -336,7 +341,8 @@ export default function App() {
   const isIOS =
     typeof navigator !== "undefined" &&
     /iPad|iPhone|iPod/.test(navigator.userAgent);
-  const headerTitle = "Polyplay v1.0.0";
+  const headerTitle = "PolyPlay Audio";
+  const headerVersion = "v1.0.0";
   const [hasOnboarded, setHasOnboarded] = useState<boolean>(() => {
     try {
       return localStorage.getItem(HAS_ONBOARDED_KEY) === "true";
@@ -425,6 +431,20 @@ export default function App() {
       return false;
     }
   });
+  const [hasSeenNewPlaylistHint, setHasSeenNewPlaylistHint] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(NEW_PLAYLIST_HINT_SEEN_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [hasSeenUploadHint, setHasSeenUploadHint] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(UPLOAD_HINT_SEEN_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
   const [isCreatePlaylistModalOpen, setIsCreatePlaylistModalOpen] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [isPlaylistRequired, setIsPlaylistRequired] = useState(false);
@@ -454,6 +474,8 @@ export default function App() {
   const gratitudeTypingTimeoutRef = useRef<number | null>(null);
   const journalToastTimeoutRef = useRef<number | null>(null);
   const vaultToastTimeoutRef = useRef<number | null>(null);
+  const lastUiCurrentTimeCommitAtRef = useRef(0);
+  const lastUiCurrentTimeValueRef = useRef(0);
   const gratitudeEvaluatedRef = useRef(false);
   const safeTapSeqRef = useRef(0);
   const safeTapHeatRef = useRef(0);
@@ -947,8 +969,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    document.title = APP_TITLE;
-  }, []);
+    document.title = isIOS ? IOS_NOW_PLAYING_APP_TITLE : APP_TITLE;
+  }, [isIOS]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1042,6 +1064,7 @@ export default function App() {
 
   useEffect(() => {
     try {
+      if (Object.values(loopByTrack).some((loop) => loop?.editing)) return;
       localStorage.setItem(LOOP_REGION_KEY, JSON.stringify(loopByTrack));
     } catch {
       // Ignore localStorage failures.
@@ -1050,11 +1073,12 @@ export default function App() {
 
   useEffect(() => {
     try {
+      if (Object.values(loopByTrack).some((loop) => loop?.editing)) return;
       localStorage.setItem(LOOP_MODE_KEY, JSON.stringify(loopModeByTrack));
     } catch {
       // Ignore localStorage failures.
     }
-  }, [loopModeByTrack]);
+  }, [loopByTrack, loopModeByTrack]);
 
   useEffect(() => {
     try {
@@ -1361,6 +1385,8 @@ export default function App() {
           localStorage.removeItem(PLAYER_COMPACT_HINT_SEEN_KEY);
           localStorage.removeItem(PLAYER_VIBE_HINT_SEEN_KEY);
           localStorage.removeItem(PLAYER_DIM_HINT_SEEN_KEY);
+          localStorage.removeItem(NEW_PLAYLIST_HINT_SEEN_KEY);
+          localStorage.removeItem(UPLOAD_HINT_SEEN_KEY);
           localStorage.removeItem(GRATITUDE_ENTRIES_KEY);
           localStorage.removeItem(GRATITUDE_LAST_PROMPT_KEY);
           localStorage.setItem(GRATITUDE_SETTINGS_KEY, JSON.stringify(DEFAULT_GRATITUDE_SETTINGS));
@@ -1381,6 +1407,8 @@ export default function App() {
         setLoopModeByTrack({});
         setHasOnboarded(false);
         setHasSeenPlayerCompactHint(false);
+        setHasSeenNewPlaylistHint(false);
+        setHasSeenUploadHint(false);
         setHasSeenPlayerVibeHint(false);
         setHasSeenPlayerDimHint(false);
         setIsEmptyWelcomeDismissed(false);
@@ -1491,6 +1519,23 @@ export default function App() {
   }, [quickTourPhase]);
   const canCreatePolyplaylist = newPlaylistName.trim().length > 0;
   const currentAudioUrl = currentTrack?.audioUrl ?? null;
+
+  const commitUiCurrentTime = (nextTime: number, options?: { force?: boolean }) => {
+    const safeNextTime = Number.isFinite(nextTime) ? Math.max(0, nextTime) : 0;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const elapsed = now - lastUiCurrentTimeCommitAtRef.current;
+    const delta = Math.abs(safeNextTime - lastUiCurrentTimeValueRef.current);
+    if (!options?.force && elapsed < UI_CURRENT_TIME_THROTTLE_MS && delta < UI_CURRENT_TIME_MIN_DELTA_SEC) {
+      return;
+    }
+    lastUiCurrentTimeCommitAtRef.current = now;
+    lastUiCurrentTimeValueRef.current = safeNextTime;
+    setCurrentTime(safeNextTime);
+  };
+
+  useEffect(() => {
+    lastUiCurrentTimeValueRef.current = currentTime;
+  }, [currentTime]);
 
   useEffect(() => {
     if (!isPristineDemoLibraryState) return;
@@ -1772,11 +1817,11 @@ export default function App() {
       if (currentLoopMode === "region" && loopRegion && loopRegion.end > loopRegion.start) {
         if (nextTime >= loopRegion.end || nextTime < loopRegion.start) {
           audio.currentTime = loopRegion.start;
-          setCurrentTime(loopRegion.start);
+          commitUiCurrentTime(loopRegion.start, { force: true });
           return;
         }
       }
-      setCurrentTime(nextTime);
+      commitUiCurrentTime(nextTime);
     };
 
     const syncDuration = () => {
@@ -1978,11 +2023,18 @@ export default function App() {
 
   const skip = (delta: number) => seekTo((audioRef.current?.currentTime || 0) + delta);
 
-  const setLoopRange = (start: number, end: number, active: boolean) => {
+  const setLoopRange = (
+    start: number,
+    end: number,
+    active: boolean,
+    options?: { persist?: boolean; editing?: boolean }
+  ) => {
     if (!currentTrackId) return;
     const audio = audioRef.current;
     const effectiveDuration = getSafeDuration(duration) || getSafeDuration(audio?.duration || 0);
     if (effectiveDuration <= 0) return;
+    const shouldPersist = options?.persist !== false;
+    const isEditing = options?.editing === true;
     const safeStart = Math.max(0, Math.min(effectiveDuration, start));
     const safeEnd = Math.max(safeStart + 0.1, Math.min(effectiveDuration, end));
     if (active) {
@@ -1993,13 +2045,17 @@ export default function App() {
     }
     setLoopByTrack((prev) => ({
       ...prev,
-      [currentTrackId]: { start: safeStart, end: safeEnd, active: true, editing: false }
+      [currentTrackId]: { start: safeStart, end: safeEnd, active: true, editing: isEditing }
     }));
-    setLoopModeByTrack((prev) => ({
-      ...prev,
-      [currentTrackId]: active ? "region" : "off"
-    }));
-    markActivePlaylistDirty();
+    setLoopModeByTrack((prev) => {
+      const nextMode: LoopMode = active ? "region" : "off";
+      if (prev[currentTrackId] === nextMode) return prev;
+      return {
+        ...prev,
+        [currentTrackId]: nextMode
+      };
+    });
+    if (shouldPersist) markActivePlaylistDirty();
   };
 
   const setLoopFromCurrent = () => {
@@ -2485,7 +2541,7 @@ export default function App() {
       clearActivePlaylistDirty();
       setVaultStatus(
         saveMode === "shared"
-          ? `Share sheet opened for ${filename}.`
+          ? "Vault backup ready to share."
           : saveMode === "save-dialog"
             ? `Saved to selected location: ${filename}.`
             : saveMode === "opened-preview"
@@ -2561,6 +2617,31 @@ export default function App() {
     } catch {
       // Ignore non-critical onboarding persistence failures.
     }
+  };
+
+  const markNewPlaylistHintSeen = () => {
+    if (hasSeenNewPlaylistHint) return;
+    setHasSeenNewPlaylistHint(true);
+    try {
+      localStorage.setItem(NEW_PLAYLIST_HINT_SEEN_KEY, "true");
+    } catch {
+      // Ignore non-critical onboarding persistence failures.
+    }
+  };
+
+  const markUploadHintSeen = () => {
+    if (hasSeenUploadHint) return;
+    setHasSeenUploadHint(true);
+    try {
+      localStorage.setItem(UPLOAD_HINT_SEEN_KEY, "true");
+    } catch {
+      // Ignore non-critical onboarding persistence failures.
+    }
+  };
+
+  const openUploadPanel = () => {
+    markUploadHintSeen();
+    openSettingsPanel("upload");
   };
 
   const onLoadUniverseFile = async (file: File | null) => {
@@ -2651,9 +2732,11 @@ export default function App() {
   };
 
   const activeThemeSelection = getThemeSelection(themeMode, customThemeSlot);
-  const showHeaderUploadButton = derivedQuickTourPhase !== "upload-track";
+  const showHeaderUploadButton = true;
   const isPreTourState = isInitialDemoFirstRunState && quickTourPhase === null;
   const isCreatePlaylistGuidanceActive = quickTourPhase === "create-playlist";
+  const shouldShowNewPlaylistHint = isCreatePlaylistGuidanceActive && !hasSeenNewPlaylistHint;
+  const shouldShowUploadHint = derivedQuickTourPhase === "upload-track" && !hasSeenUploadHint;
   const shouldHighlightQuickTourStart = isPreTourState;
   const shouldHighlightWelcomeUpload = derivedQuickTourPhase === "upload-track";
   const welcomePhase = isCreatePlaylistGuidanceActive
@@ -2744,7 +2827,10 @@ export default function App() {
             <div className="brand">
               <img className="brand-logo" src={logo} alt="Polyplay logo" />
             </div>
-            <div className="topbar-title">{headerTitle}</div>
+            <div className="topbar-title">
+              <span className="topbar-title__main">{headerTitle}</span>
+              <span className="topbar-title__sub">{headerVersion}</span>
+            </div>
             <div className="topbar-primary-actions">
               <button
                 type="button"
@@ -2758,10 +2844,12 @@ export default function App() {
               {showHeaderUploadButton && (
                 <button
                   type="button"
-                  className="upload-link nav-action-btn"
+                  className={`upload-link nav-action-btn onboarding-action ${
+                    shouldShowUploadHint ? "guided-cta is-onboarding-target" : ""
+                  }`.trim()}
                   aria-label="Upload tracks"
                   title="Upload"
-                  onClick={() => openSettingsPanel("upload")}
+                  onClick={() => openUploadPanel()}
                 >
                   Upload
                 </button>
@@ -2876,18 +2964,21 @@ export default function App() {
               <div className="playlist-selector__action-wrap">
                 <button
                   type="button"
-                  className={`playlist-selector__action guided-cta onboarding-action ${
-                    isCreatePlaylistGuidanceActive ? "is-onboarding-target" : ""
+                  className={`playlist-selector__action onboarding-action ${
+                    shouldShowNewPlaylistHint ? "guided-cta is-onboarding-target" : ""
                   }`.trim()}
                   onClick={(event) => {
-                    if (isCreatePlaylistGuidanceActive) triggerOnboardingSparkle(event);
+                    if (shouldShowNewPlaylistHint) {
+                      triggerOnboardingSparkle(event);
+                      markNewPlaylistHintSeen();
+                    }
                     setNewPlaylistName("");
                     setIsCreatePlaylistModalOpen(true);
                   }}
                 >
                   New
                 </button>
-                {isCreatePlaylistGuidanceActive && (
+                {shouldShowNewPlaylistHint && (
                   <div className="playlist-selector__tutorial-tip onboarding-tooltip" role="note">
                     Start by creating a new Polyplaylist.
                   </div>
@@ -2919,7 +3010,7 @@ export default function App() {
           <EmptyLibraryWelcome
             phase={welcomePhase}
             onStartQuickTour={() => setQuickTourPhase("create-playlist")}
-            onUploadFirstTrack={() => openSettingsPanel("upload")}
+            onUploadFirstTrack={() => openUploadPanel()}
             onPrimaryButtonClick={triggerOnboardingSparkle}
             primaryButtonLabel={welcomePhase === "pre-tour" ? "Start Quick Tour" : "Upload your first track"}
             bodyText={

@@ -28,7 +28,12 @@ type Props = {
   onCycleDimMode: () => void;
   onCycleNoveltyMode: () => void;
   onVinylScratch: () => void;
-  onSetLoopRange: (start: number, end: number, active: boolean) => void;
+  onSetLoopRange: (
+    start: number,
+    end: number,
+    active: boolean,
+    options?: { persist?: boolean; editing?: boolean }
+  ) => void;
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
   onClearLoop: () => void;
@@ -76,10 +81,19 @@ export function FullscreenPlayer({
   const shouldAnimateGenerated = track.artworkSource === "auto" && !hasArtworkVideo;
   const showLoopEditor = loopMode === "region" && loopRegion.active;
   const [peaks, setPeaks] = useState<number[]>(() => fallbackPeaks(120));
+  const [isArtworkVideoReady, setIsArtworkVideoReady] = useState(false);
+
+  useEffect(() => {
+    setIsArtworkVideoReady(false);
+  }, [track.artVideoUrl, track.id]);
 
   useEffect(() => {
     const currentVideo = artworkVideoRef.current;
     if (!currentVideo) return;
+    const markReady = () => setIsArtworkVideoReady(true);
+    if (currentVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      setIsArtworkVideoReady(true);
+    }
     const prev = (window as Window & { __polyplayActiveArtworkVideo?: HTMLVideoElement | null })
       .__polyplayActiveArtworkVideo;
     if (prev && prev !== currentVideo) {
@@ -99,9 +113,13 @@ export function FullscreenPlayer({
       }
       void currentVideo.play().catch(() => undefined);
     };
+    currentVideo.addEventListener("loadeddata", markReady);
+    currentVideo.addEventListener("canplay", markReady);
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
+      currentVideo.removeEventListener("loadeddata", markReady);
+      currentVideo.removeEventListener("canplay", markReady);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       try {
         currentVideo.pause();
@@ -247,12 +265,13 @@ export function FullscreenPlayer({
             <video
               key={track.artVideoUrl}
               ref={artworkVideoRef}
-              className="fullscreen-player-shell__art-video"
+              className={`fullscreen-player-shell__art-video ${isArtworkVideoReady ? "is-ready" : ""}`.trim()}
               src={track.artVideoUrl}
               muted
               loop
               autoPlay
               playsInline
+              preload="auto"
             />
           )}
         </div>
@@ -293,6 +312,7 @@ export function FullscreenPlayer({
             onAuraUp();
           }}
           onSkip={onSkip}
+          enableAuraPulse={false}
         />
 
         {showLoopEditor && (
@@ -304,6 +324,7 @@ export function FullscreenPlayer({
             loopRegion={loopRegion}
             onSeek={onSeek}
             onSetLoopRange={onSetLoopRange}
+            enableAuraPulse={false}
           />
         )}
 

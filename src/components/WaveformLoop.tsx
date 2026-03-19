@@ -9,7 +9,13 @@ type Props = {
   isPlaying: boolean;
   loopRegion: LoopRegion;
   onSeek: (seconds: number) => void;
-  onSetLoopRange: (start: number, end: number, active: boolean) => void;
+  onSetLoopRange: (
+    start: number,
+    end: number,
+    active: boolean,
+    options?: { persist?: boolean; editing?: boolean }
+  ) => void;
+  enableAuraPulse?: boolean;
 };
 
 type Handle = "start" | "end";
@@ -23,14 +29,18 @@ export function WaveformLoop({
   isPlaying,
   loopRegion,
   onSeek,
-  onSetLoopRange
+  onSetLoopRange,
+  enableAuraPulse = true
 }: Props) {
   const waveRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const decorCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const dragSnapshotRef = useRef<{ start: number; end: number } | null>(null);
 
   const [peaks, setPeaks] = useState<number[]>(() => fallbackPeaks());
   const [draggingHandle, setDraggingHandle] = useState<Handle | null>(null);
+  const isLightTheme =
+    typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "light";
 
   const hasDuration = duration > 0;
   const safeStart = useMemo(
@@ -103,8 +113,13 @@ export function WaveformLoop({
       ctx.clearRect(0, 0, width, height);
 
       const grad = ctx.createLinearGradient(0, 0, width, 0);
-      grad.addColorStop(0, `rgba(125, 224, 255, ${0.95 * alpha})`);
-      grad.addColorStop(1, `rgba(255, 128, 200, ${0.9 * alpha})`);
+      if (isLightTheme) {
+        grad.addColorStop(0, `rgba(162, 98, 128, ${0.92 * alpha})`);
+        grad.addColorStop(1, `rgba(207, 111, 130, ${0.94 * alpha})`);
+      } else {
+        grad.addColorStop(0, `rgba(125, 224, 255, ${0.95 * alpha})`);
+        grad.addColorStop(1, `rgba(255, 128, 200, ${0.9 * alpha})`);
+      }
 
       for (let i = 0; i < bars; i += 1) {
         const peakIndex = bars > 1 ? Math.round((i / (bars - 1)) * (peaks.length - 1)) : 0;
@@ -116,23 +131,36 @@ export function WaveformLoop({
 
         const inLoop = loopRegion.active && hasLoopRange && centerRatio >= loopStartRatio && centerRatio <= loopEndRatio;
 
-        if (inLoop) ctx.fillStyle = `rgba(255, 214, 92, ${0.95 * alpha})`;
-        else ctx.fillStyle = centerRatio <= progress ? grad : `rgba(120, 70, 180, ${0.55 * alpha})`;
+        if (inLoop) {
+          ctx.fillStyle = isLightTheme
+            ? `rgba(180, 86, 118, ${0.96 * alpha})`
+            : `rgba(255, 214, 92, ${0.95 * alpha})`;
+        } else {
+          ctx.fillStyle = centerRatio <= progress
+            ? grad
+            : isLightTheme
+              ? `rgba(141, 101, 124, ${0.4 * alpha})`
+              : `rgba(120, 70, 180, ${0.55 * alpha})`;
+        }
 
         ctx.fillRect(x, y, barWidth, h);
       }
 
       const playheadX = progress * width;
       const glow = isPlaying ? 7 : 5;
-      ctx.fillStyle = `rgba(255, 65, 186, ${0.42 * alpha})`;
+      ctx.fillStyle = isLightTheme
+        ? `rgba(207, 111, 130, ${0.28 * alpha})`
+        : `rgba(255, 65, 186, ${0.42 * alpha})`;
       ctx.fillRect(playheadX - glow / 2, 0, glow, height);
-      ctx.fillStyle = `rgba(255, 180, 235, ${0.95 * alpha})`;
+      ctx.fillStyle = isLightTheme
+        ? `rgba(91, 46, 68, ${0.9 * alpha})`
+        : `rgba(255, 180, 235, ${0.95 * alpha})`;
       ctx.fillRect(playheadX - 1, 0, 2, height);
     };
 
     drawTo(canvasRef.current, 1);
     drawTo(decorCanvasRef.current, 0.42);
-  }, [currentTime, duration, hasLoopRange, isPlaying, loopRegion.active, peaks, safeEnd, safeStart]);
+  }, [currentTime, duration, hasLoopRange, isLightTheme, isPlaying, loopRegion.active, peaks, safeEnd, safeStart]);
 
   useEffect(() => {
     if (!draggingHandle) return;
@@ -141,11 +169,25 @@ export function WaveformLoop({
       if (!hasDuration) return;
       event.preventDefault();
       const seconds = secondsFromClientX(event.clientX);
-      if (draggingHandle === "start") onSetLoopRange(Math.min(seconds, safeEnd - MIN_LOOP_SECONDS), safeEnd, true);
-      else onSetLoopRange(safeStart, Math.max(seconds, safeStart + MIN_LOOP_SECONDS), true);
+      if (draggingHandle === "start") {
+        const nextStart = Math.min(seconds, safeEnd - MIN_LOOP_SECONDS);
+        dragSnapshotRef.current = { start: nextStart, end: safeEnd };
+        onSetLoopRange(nextStart, safeEnd, true, { persist: false, editing: true });
+      } else {
+        const nextEnd = Math.max(seconds, safeStart + MIN_LOOP_SECONDS);
+        dragSnapshotRef.current = { start: safeStart, end: nextEnd };
+        onSetLoopRange(safeStart, nextEnd, true, { persist: false, editing: true });
+      }
     };
 
-    const onPointerUp = () => setDraggingHandle(null);
+    const onPointerUp = () => {
+      const snapshot = dragSnapshotRef.current;
+      if (snapshot) {
+        onSetLoopRange(snapshot.start, snapshot.end, true, { persist: true, editing: false });
+      }
+      dragSnapshotRef.current = null;
+      setDraggingHandle(null);
+    };
 
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
@@ -156,6 +198,7 @@ export function WaveformLoop({
   }, [draggingHandle, hasDuration, onSetLoopRange, safeEnd, safeStart]);
 
   useEffect(() => {
+    if (!enableAuraPulse) return;
     const onAuraTrigger = () => {
       const wave = waveRef.current;
       if (!wave) return;
@@ -165,7 +208,7 @@ export function WaveformLoop({
     };
     window.addEventListener("polyplay:aura-trigger", onAuraTrigger);
     return () => window.removeEventListener("polyplay:aura-trigger", onAuraTrigger);
-  }, []);
+  }, [enableAuraPulse]);
 
   return (
     <>
@@ -192,6 +235,7 @@ export function WaveformLoop({
             onPointerDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
+              dragSnapshotRef.current = { start: safeStart, end: safeEnd };
               setDraggingHandle("start");
             }}
           />
@@ -202,6 +246,7 @@ export function WaveformLoop({
             onPointerDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
+              dragSnapshotRef.current = { start: safeStart, end: safeEnd };
               setDraggingHandle("end");
             }}
           />

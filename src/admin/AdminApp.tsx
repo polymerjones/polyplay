@@ -169,6 +169,7 @@ export function AdminApp() {
   const [uploadArtDuration, setUploadArtDuration] = useState(0);
   const [uploadArtFrameTime, setUploadArtFrameTime] = useState(0);
   const [uploadArtPosterBlob, setUploadArtPosterBlob] = useState<Blob | null>(null);
+  const [isUploadPreviewPlaying, setIsUploadPreviewPlaying] = useState(false);
 
   const [selectedArtworkTrackId, setSelectedArtworkTrackId] = useState<string>("");
   const [selectedArtworkFile, setSelectedArtworkFile] = useState<File | null>(null);
@@ -176,6 +177,7 @@ export function AdminApp() {
   const [selectedArtDuration, setSelectedArtDuration] = useState(0);
   const [selectedArtFrameTime, setSelectedArtFrameTime] = useState(0);
   const [selectedArtPosterBlob, setSelectedArtPosterBlob] = useState<Blob | null>(null);
+  const [isSelectedPreviewPlaying, setIsSelectedPreviewPlaying] = useState(false);
 
   const [selectedAudioTrackId, setSelectedAudioTrackId] = useState<string>("");
   const [selectedAudioFile, setSelectedAudioFile] = useState<File | null>(null);
@@ -571,6 +573,19 @@ export function AdminApp() {
     } catch {
       // Ignore transient media seek failures.
     }
+  };
+
+  const togglePreviewPlayback = async (video: HTMLVideoElement | null) => {
+    if (!video) return;
+    if (video.paused) {
+      try {
+        await video.play();
+      } catch {
+        // Ignore transient playback failures in preview mode.
+      }
+      return;
+    }
+    video.pause();
   };
 
   const runAudioLaneTransfer = async (file: File) => {
@@ -1421,22 +1436,34 @@ export function AdminApp() {
             {uploadArtPreviewUrl && (
               <div className="video-frame-picker">
                 <label className="text-xs text-slate-300">Poster frame for static artwork</label>
-                <video
-                  ref={uploadPreviewVideoRef}
-                  className="frame-video"
-                  src={uploadArtPreviewUrl}
-                  muted
-                  playsInline
-                  controls
-                  preload="metadata"
-                  onLoadedMetadata={(event) => {
-                    const duration = Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0;
-                    const frameTime = getDefaultVideoFrameTime(duration);
-                    setUploadArtDuration(duration);
-                    setUploadArtFrameTime(frameTime);
-                    seekPreviewVideo(event.currentTarget, frameTime);
-                  }}
-                />
+                <div className="frame-video-shell">
+                  <video
+                    ref={uploadPreviewVideoRef}
+                    className="frame-video"
+                    src={uploadArtPreviewUrl}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    onLoadedMetadata={(event) => {
+                      const duration = Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0;
+                      const frameTime = getDefaultVideoFrameTime(duration);
+                      setUploadArtDuration(duration);
+                      setUploadArtFrameTime(frameTime);
+                      seekPreviewVideo(event.currentTarget, frameTime);
+                    }}
+                    onPlay={() => setIsUploadPreviewPlaying(true)}
+                    onPause={() => setIsUploadPreviewPlaying(false)}
+                    onEnded={() => setIsUploadPreviewPlaying(false)}
+                  />
+                  <button
+                    type="button"
+                    className="frame-video-toggle"
+                    aria-label={isUploadPreviewPlaying ? "Pause artwork preview" : "Play artwork preview"}
+                    onClick={() => void togglePreviewPlayback(uploadPreviewVideoRef.current)}
+                  >
+                    {isUploadPreviewPlaying ? "❚❚" : "▶"}
+                  </button>
+                </div>
                 <input
                   className="frame-slider"
                   type="range"
@@ -1492,22 +1519,34 @@ export function AdminApp() {
               {selectedArtPreviewUrl && (
                 <div className="video-frame-picker">
                   <label className="text-xs text-slate-300">Poster frame for static artwork</label>
-                  <video
-                    ref={selectedPreviewVideoRef}
-                    className="frame-video"
-                    src={selectedArtPreviewUrl}
-                    muted
-                    playsInline
-                    controls
-                    preload="metadata"
-                    onLoadedMetadata={(event) => {
-                      const duration = Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0;
-                      const frameTime = getDefaultVideoFrameTime(duration);
-                      setSelectedArtDuration(duration);
-                      setSelectedArtFrameTime(frameTime);
-                      seekPreviewVideo(event.currentTarget, frameTime);
-                    }}
-                  />
+                  <div className="frame-video-shell">
+                    <video
+                      ref={selectedPreviewVideoRef}
+                      className="frame-video"
+                      src={selectedArtPreviewUrl}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      onLoadedMetadata={(event) => {
+                        const duration = Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0;
+                        const frameTime = getDefaultVideoFrameTime(duration);
+                        setSelectedArtDuration(duration);
+                        setSelectedArtFrameTime(frameTime);
+                        seekPreviewVideo(event.currentTarget, frameTime);
+                      }}
+                      onPlay={() => setIsSelectedPreviewPlaying(true)}
+                      onPause={() => setIsSelectedPreviewPlaying(false)}
+                      onEnded={() => setIsSelectedPreviewPlaying(false)}
+                    />
+                    <button
+                      type="button"
+                      className="frame-video-toggle"
+                      aria-label={isSelectedPreviewPlaying ? "Pause artwork preview" : "Play artwork preview"}
+                      onClick={() => void togglePreviewPlayback(selectedPreviewVideoRef.current)}
+                    >
+                      {isSelectedPreviewPlaying ? "❚❚" : "▶"}
+                    </button>
+                  </div>
                   <input
                     className="frame-slider"
                     type="range"
