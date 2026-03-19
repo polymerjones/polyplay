@@ -35,6 +35,8 @@ const FULL_BACKUP_VERSION = 1;
 const POLYPLAYLIST_ROOT = "polyplaylist";
 const POLYPLAYLIST_VERSION = 1;
 const CANONICAL_DEMO_TRACK_IDS = new Set(["first-run-demo", "first-run-demo-1", "first-run-demo-2"]);
+const DEMO_PLAYLIST_ID = "polyplaylist-demo";
+const DEMO_PLAYLIST_NAME = "demo playlist";
 
 export type LoopRegion = {
   start: number;
@@ -102,6 +104,44 @@ export type ExportFullBackupResult = {
   estimatedBytes: number;
   trackCount: number;
 };
+
+function isBuiltInDemoTrack(track: Pick<TrackRecord, "isDemo" | "demoId"> | null | undefined): boolean {
+  if (!track) return false;
+  return Boolean(track.isDemo) || (track.demoId ? CANONICAL_DEMO_TRACK_IDS.has(track.demoId) : false);
+}
+
+function sanitizeLibraryForFullBackup(library: LibraryState): LibraryState {
+  const tracksById = Object.fromEntries(
+    Object.entries(library.tracksById || {}).filter(([, track]) => !isBuiltInDemoTrack(track))
+  );
+
+  const playlistsById = Object.fromEntries(
+    Object.entries(library.playlistsById || {})
+      .filter(([playlistId, playlist]) => {
+        const normalizedName = (playlist.name || "").trim().toLowerCase();
+        return playlistId !== DEMO_PLAYLIST_ID && normalizedName !== DEMO_PLAYLIST_NAME;
+      })
+      .map(([playlistId, playlist]) => [
+        playlistId,
+        {
+          ...playlist,
+          trackIds: (playlist.trackIds || []).filter((trackId) => Boolean(tracksById[trackId]))
+        }
+      ])
+  );
+
+  const activePlaylistId =
+    library.activePlaylistId && playlistsById[library.activePlaylistId]
+      ? library.activePlaylistId
+      : Object.keys(playlistsById)[0] ?? null;
+
+  return {
+    ...library,
+    tracksById,
+    playlistsById,
+    activePlaylistId
+  };
+}
 
 export function countNonDemoTracksForFullBackup(library: LibraryState): number {
   return Object.values(library.tracksById || {}).filter(
@@ -344,7 +384,7 @@ function nextPolyplaylistIndexFromNames(names: string[]): number {
 }
 
 export function buildConfigSnapshot(): PolyplayConfig {
-  const library = loadLibrary();
+  const library = sanitizeLibraryForFullBackup(loadLibrary());
   const { loopByTrack, loopModeByTrack } = readLoopState();
 
   const tracks: TrackConfigEntry[] = Object.values(library.tracksById)
@@ -1101,7 +1141,7 @@ async function buildTrackMediaEntries(
 export async function exportFullBackup(
   onProgress?: (progress: BackupProgress) => void
 ): Promise<ExportFullBackupResult> {
-  const library = loadLibrary();
+  const library = sanitizeLibraryForFullBackup(loadLibrary());
   const config = buildConfigSnapshot();
   const gratitudeEntries = safeJsonParse<GratitudeEntry[]>(localStorage.getItem(GRATITUDE_ENTRIES_KEY), []);
   const allTracks = Object.values(library.tracksById);
@@ -1421,7 +1461,9 @@ export async function importFullBackup(file: File): Promise<ImportFullBackupResu
 
   const decoder = new TextDecoder();
   const importedConfig = parseConfigImportText(decoder.decode(configEntry));
-  const importedLibrary = normalizeImportedLibrary(JSON.parse(decoder.decode(libraryEntry)) as unknown);
+  const importedLibrary = sanitizeLibraryForFullBackup(
+    normalizeImportedLibrary(JSON.parse(decoder.decode(libraryEntry)) as unknown)
+  );
 
   let restoredMediaFiles = 0;
   const restoredTracks: Record<string, TrackRecord> = {};

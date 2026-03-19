@@ -240,7 +240,7 @@ export function FullscreenPlayer({
         <div
           className={`fullscreen-player-shell__art ${hasArtworkVideo ? "has-video" : ""}`}
           ref={artRef}
-          style={hasArtworkVideo ? undefined : artStyle}
+          style={artStyle}
         >
           {shouldAnimateGenerated && <canvas ref={canvasRef} className="fullscreen-player-shell__art-canvas" />}
           {hasArtworkVideo && (

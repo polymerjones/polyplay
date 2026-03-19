@@ -432,6 +432,9 @@ export default function App() {
   const [quickTourPhase, setQuickTourPhase] = useState<QuickTourPhase>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playbackAudioContextRef = useRef<AudioContext | null>(null);
+  const playbackSourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const playbackGainNodeRef = useRef<GainNode | null>(null);
   const scratchPlayersRef = useRef<HTMLAudioElement[]>([]);
   const activeScratchRef = useRef<HTMLAudioElement | null>(null);
   const importUniverseInputRef = useRef<HTMLInputElement | null>(null);
@@ -1655,18 +1658,62 @@ export default function App() {
 
   const applyDimMode = (audio: HTMLAudioElement | null, mode: DimMode) => {
     if (!audio) return;
+    const targetVolume = mode === "mute" ? 0 : mode === "dim" ? 0.15 : 1;
+    const gainNode = playbackGainNodeRef.current;
+    if (gainNode) {
+      audio.muted = false;
+      audio.volume = 1;
+      gainNode.gain.value = targetVolume;
+      return;
+    }
     if (mode === "mute") {
       audio.muted = true;
+      audio.volume = 1;
       return;
     }
     audio.muted = false;
-    audio.volume = mode === "dim" ? 0.12 : 1;
+    audio.volume = targetVolume;
   };
 
   const getDimAudioState = (mode: DimMode): { muted: boolean; volume: number } => {
     if (mode === "mute") return { muted: true, volume: 0 };
-    if (mode === "dim") return { muted: false, volume: 0.12 };
+    if (mode === "dim") return { muted: false, volume: 0.15 };
     return { muted: false, volume: 1 };
+  };
+
+  const ensurePlaybackGainRouting = async (resumeContext = false) => {
+    if (!isIOS) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+    const Ctx =
+      typeof window !== "undefined"
+        ? window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+        : undefined;
+    if (!Ctx) return;
+    try {
+      let ctx = playbackAudioContextRef.current;
+      let gain = playbackGainNodeRef.current;
+      if (!ctx) {
+        ctx = new Ctx();
+        playbackAudioContextRef.current = ctx;
+      }
+      if (!gain) {
+        gain = ctx.createGain();
+        gain.connect(ctx.destination);
+        playbackGainNodeRef.current = gain;
+      }
+      if (!playbackSourceNodeRef.current) {
+        const source = ctx.createMediaElementSource(audio);
+        source.connect(gain);
+        playbackSourceNodeRef.current = source;
+      }
+      if (resumeContext && ctx.state === "suspended") {
+        await ctx.resume();
+      }
+      applyDimMode(audio, dimMode);
+    } catch {
+      // Fall back to element volume on platforms that reject media-element routing.
+    }
   };
 
   useEffect(() => {
@@ -1845,6 +1892,9 @@ export default function App() {
     dismissOpenState();
     const selectedTrack = tracks.find((track) => track.id === trackId) ?? null;
     const canPlay = Boolean(selectedTrack?.audioUrl) && !selectedTrack?.missingAudio;
+    if (autoPlay && canPlay) {
+      void ensurePlaybackGainRouting(true);
+    }
     const audio = audioRef.current;
 
     if (trackId === currentTrackId) {
@@ -1900,6 +1950,7 @@ export default function App() {
 
     if (audio.paused) {
       try {
+        await ensurePlaybackGainRouting(true);
         const effectiveDuration = getSafeDuration(duration) || getSafeDuration(audio.duration);
         if (effectiveDuration > 0 && audio.currentTime >= Math.max(0, effectiveDuration - 0.05)) {
           audio.currentTime = 0;
@@ -2065,6 +2116,7 @@ export default function App() {
   };
 
   const cycleDimMode = () => {
+    void ensurePlaybackGainRouting(true);
     setDimMode((prev) => {
       const next: DimMode = prev === "normal" ? "dim" : prev === "dim" ? "mute" : "normal";
       try {
