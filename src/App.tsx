@@ -199,6 +199,11 @@ function easeOutQuad(value: number): number {
   return 1 - (1 - clamped) * (1 - clamped);
 }
 
+function normalizeDimModeForPlatform(mode: DimMode, isIOS: boolean): DimMode {
+  if (isIOS && mode === "dim") return "normal";
+  return mode;
+}
+
 function isCoarsePointer(): boolean {
   return (
     typeof window !== "undefined" &&
@@ -476,6 +481,9 @@ export default function App() {
   const vaultToastTimeoutRef = useRef<number | null>(null);
   const loopDragResumeTimeoutRef = useRef<number | null>(null);
   const loopDragWasPlayingRef = useRef(false);
+  const playbackResyncInFlightRef = useRef(false);
+  const playbackResyncTimeoutRef = useRef<number | null>(null);
+  const lastPlaybackResyncAtRef = useRef(0);
   const lastUiCurrentTimeCommitAtRef = useRef(0);
   const lastUiCurrentTimeValueRef = useRef(0);
   const gratitudeEvaluatedRef = useRef(false);
@@ -1188,7 +1196,7 @@ export default function App() {
       setIsRepeatTrackEnabled(localStorage.getItem(REPEAT_TRACK_KEY) === "true");
       const savedDimMode = localStorage.getItem(DIM_MODE_KEY);
       if (savedDimMode === "normal" || savedDimMode === "dim" || savedDimMode === "mute") {
-        setDimMode(savedDimMode);
+        setDimMode(normalizeDimModeForPlatform(savedDimMode, isIOS));
       }
       const savedNoveltyMode = localStorage.getItem(NOVELTY_MODE_KEY);
       if (savedNoveltyMode === "normal" || savedNoveltyMode === "dim" || savedNoveltyMode === "mute") {
@@ -1748,17 +1756,44 @@ export default function App() {
     audio.loop = currentLoopMode === "track" || (isRepeatTrackEnabled && currentLoopMode !== "region");
   }, [currentLoopMode, isRepeatTrackEnabled]);
 
+  const teardownPlaybackGainRouting = async () => {
+    const source = playbackSourceNodeRef.current;
+    const gain = playbackGainNodeRef.current;
+    const ctx = playbackAudioContextRef.current;
+    playbackSourceNodeRef.current = null;
+    playbackGainNodeRef.current = null;
+    playbackAudioContextRef.current = null;
+    try {
+      source?.disconnect();
+    } catch {
+      // Ignore disconnect failures.
+    }
+    try {
+      gain?.disconnect();
+    } catch {
+      // Ignore disconnect failures.
+    }
+    try {
+      if (ctx && ctx.state !== "closed") {
+        await ctx.close();
+      }
+    } catch {
+      // Ignore close failures.
+    }
+  };
+
   const applyDimMode = (audio: HTMLAudioElement | null, mode: DimMode) => {
     if (!audio) return;
-    const targetVolume = mode === "mute" ? 0 : mode === "dim" ? 0.15 : 1;
+    const effectiveMode = normalizeDimModeForPlatform(mode, isIOS);
+    const targetVolume = effectiveMode === "mute" ? 0 : effectiveMode === "dim" ? 0.15 : 1;
     const gainNode = playbackGainNodeRef.current;
-    if (gainNode) {
+    if (gainNode && !isIOS) {
       audio.muted = false;
       audio.volume = 1;
       gainNode.gain.value = targetVolume;
       return;
     }
-    if (mode === "mute") {
+    if (effectiveMode === "mute") {
       audio.muted = true;
       audio.volume = 1;
       return;
@@ -1773,40 +1808,130 @@ export default function App() {
     return { muted: false, volume: 1 };
   };
 
-  const ensurePlaybackGainRouting = async (resumeContext = false) => {
-    if (!isIOS) return;
+  const ensurePlaybackGainRouting = async (_resumeContext = false) => {
     const audio = audioRef.current;
-    if (!audio) return;
-    const Ctx =
-      typeof window !== "undefined"
-        ? window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-        : undefined;
-    if (!Ctx) return;
-    try {
-      let ctx = playbackAudioContextRef.current;
-      let gain = playbackGainNodeRef.current;
-      if (!ctx) {
-        ctx = new Ctx();
-        playbackAudioContextRef.current = ctx;
-      }
-      if (!gain) {
-        gain = ctx.createGain();
-        gain.connect(ctx.destination);
-        playbackGainNodeRef.current = gain;
-      }
-      if (!playbackSourceNodeRef.current) {
-        const source = ctx.createMediaElementSource(audio);
-        source.connect(gain);
-        playbackSourceNodeRef.current = source;
-      }
-      if (resumeContext && ctx.state === "suspended") {
-        await ctx.resume();
+    if (!audio) return false;
+    if (isIOS) {
+      if (playbackSourceNodeRef.current || playbackGainNodeRef.current || playbackAudioContextRef.current) {
+        await teardownPlaybackGainRouting();
       }
       applyDimMode(audio, dimMode);
-    } catch {
-      // Fall back to element volume on platforms that reject media-element routing.
+      return true;
+    }
+    applyDimMode(audio, dimMode);
+    return true;
+  };
+
+  const resyncPlaybackAfterInterruption = async (
+    reason: "visibility-return" | "window-focus" | "vault-save-return" | "vault-import-return"
+  ) => {
+    if (playbackResyncInFlightRef.current) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    playbackResyncInFlightRef.current = true;
+    try {
+      const hasTrackSource = Boolean(currentTrack?.audioUrl && audioSrcRef.current);
+      const nextDuration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+      const nextTime = Number.isFinite(audio.currentTime) ? Math.max(0, audio.currentTime) : 0;
+      setDuration(nextDuration);
+      commitUiCurrentTime(nextTime, { force: true });
+
+      if (!hasTrackSource) {
+        setIsPlaying(false);
+        logAudioDebug("resync:inactive", { reason, paused: audio.paused, currentTime: nextTime });
+        return;
+      }
+
+      const elementPlaying = !audio.paused && !audio.ended;
+      let routingReady = true;
+      if (isIOS) {
+        routingReady = await ensurePlaybackGainRouting(elementPlaying);
+      }
+
+      if (elementPlaying && isIOS) {
+        if (!routingReady) {
+          logAudioDebug("resync:routing-unavailable", { reason, currentTime: nextTime });
+          audio.pause();
+          setIsPlaying(false);
+          return;
+        }
+        try {
+          logAudioDebug("play() called", { reason: `resync-${reason}` });
+          await audio.play();
+          logAudioDebug("play() resolved", { reason: `resync-${reason}` });
+        } catch (error) {
+          logAudioDebug("play() rejected", { reason: `resync-${reason}`, error: String(error) });
+          audio.pause();
+          setIsPlaying(false);
+          return;
+        }
+      }
+
+      const syncedTime = Number.isFinite(audio.currentTime) ? Math.max(0, audio.currentTime) : nextTime;
+      commitUiCurrentTime(syncedTime, { force: true });
+      setIsPlaying(!audio.paused && !audio.ended && (!isIOS || routingReady));
+      lastPlaybackResyncAtRef.current = typeof performance !== "undefined" ? performance.now() : Date.now();
+      logAudioDebug("resync:complete", {
+        reason,
+        paused: audio.paused,
+        currentTime: syncedTime,
+        routingReady
+      });
+    } finally {
+      playbackResyncInFlightRef.current = false;
     }
   };
+
+  const schedulePlaybackResync = (
+    reason: "visibility-return" | "window-focus" | "vault-save-return" | "vault-import-return"
+  ) => {
+    if (
+      (reason === "visibility-return" || reason === "window-focus") &&
+      typeof document !== "undefined" &&
+      document.hidden
+    ) {
+      return;
+    }
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (reason === "window-focus" && now - lastPlaybackResyncAtRef.current < 500) {
+      return;
+    }
+    if (playbackResyncTimeoutRef.current !== null) {
+      window.clearTimeout(playbackResyncTimeoutRef.current);
+    }
+    const delayMs = reason === "visibility-return" || reason === "window-focus" ? 180 : 0;
+    playbackResyncTimeoutRef.current = window.setTimeout(() => {
+      playbackResyncTimeoutRef.current = null;
+      void resyncPlaybackAfterInterruption(reason);
+    }, delayMs);
+  };
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.hidden) return;
+      schedulePlaybackResync("visibility-return");
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [currentTrack?.audioUrl, isIOS]);
+
+  useEffect(() => {
+    const onWindowFocus = () => {
+      schedulePlaybackResync("window-focus");
+    };
+    window.addEventListener("focus", onWindowFocus);
+    return () => window.removeEventListener("focus", onWindowFocus);
+  }, [currentTrack?.audioUrl, isIOS]);
+
+  useEffect(() => {
+    return () => {
+      if (playbackResyncTimeoutRef.current !== null) {
+        window.clearTimeout(playbackResyncTimeoutRef.current);
+        playbackResyncTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const players = SCRATCH_SFX_PATHS.map((src) => {
@@ -2221,7 +2346,15 @@ export default function App() {
   const cycleDimMode = () => {
     void ensurePlaybackGainRouting(true);
     setDimMode((prev) => {
-      const next: DimMode = prev === "normal" ? "dim" : prev === "dim" ? "mute" : "normal";
+      const next: DimMode = isIOS
+        ? prev === "mute"
+          ? "normal"
+          : "mute"
+        : prev === "normal"
+          ? "dim"
+          : prev === "dim"
+            ? "mute"
+            : "normal";
       try {
         localStorage.setItem(DIM_MODE_KEY, next);
       } catch {
@@ -2596,9 +2729,11 @@ export default function App() {
               : `Download started for ${filename}.`,
         "success"
       );
+      schedulePlaybackResync("vault-save-return");
       return true;
     } catch (error) {
       setVaultStatus(`Save Universe failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+      schedulePlaybackResync("vault-save-return");
       return false;
     }
   };
@@ -2710,6 +2845,8 @@ export default function App() {
     } catch (error) {
       setImportSummary(null);
       setVaultStatus(`Load Universe failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+    } finally {
+      schedulePlaybackResync("vault-import-return");
     }
   };
 
@@ -3110,6 +3247,7 @@ export default function App() {
           shuffleEnabled={isShuffleEnabled}
           repeatTrackEnabled={isRepeatTrackEnabled}
           dimMode={dimMode}
+          dimControlSkipsSoftDim={isIOS}
           noveltyMode={noveltyMode}
           onToggleShuffle={toggleShuffle}
           onToggleRepeatTrack={toggleRepeatTrack}
@@ -3155,6 +3293,7 @@ export default function App() {
           shuffleEnabled={isShuffleEnabled}
           repeatTrackEnabled={isRepeatTrackEnabled}
           dimMode={dimMode}
+          dimControlSkipsSoftDim={isIOS}
           noveltyMode={noveltyMode}
           onToggleShuffle={toggleShuffle}
           onToggleRepeatTrack={toggleRepeatTrack}

@@ -15,6 +15,7 @@ type Props = {
   loopRegion: LoopRegion;
   loopMode: LoopMode;
   dimMode: "normal" | "dim" | "mute";
+  dimControlSkipsSoftDim?: boolean;
   noveltyMode: "normal" | "dim" | "mute";
   onClose: () => void;
   onPrev: () => void;
@@ -51,6 +52,7 @@ export function FullscreenPlayer({
   loopRegion,
   loopMode,
   dimMode,
+  dimControlSkipsSoftDim = false,
   noveltyMode,
   onClose,
   onPrev,
@@ -299,6 +301,7 @@ export function FullscreenPlayer({
           duration={duration}
           loopMode={loopMode}
           dimMode={dimMode}
+          dimControlSkipsSoftDim={dimControlSkipsSoftDim}
           noveltyMode={noveltyMode}
           onPrev={onPrev}
           onPlayPause={onPlayPause}

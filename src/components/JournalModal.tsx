@@ -40,7 +40,7 @@ const JOURNAL_ENTRY_DOUBLE_TAP_WINDOW_MS = 150;
 
 const JOURNAL_BACKGROUNDS: JournalBackground[] = [
   { id: "1", src: "/clouds1.mov" },
-  { id: "2", src: "/clouds2waudio.mov?v=20260307" }
+  { id: "2", src: "/demo/clouds2replaced.mp4" }
 ];
 
 const DEFAULT_JOURNAL_VERSES = [
@@ -196,6 +196,7 @@ export function JournalModal({ open, onClose }: Props) {
   const [miniToast, setMiniToast] = useState<string | null>(null);
   const [verseFxActive, setVerseFxActive] = useState(false);
   const [verseFxBurstKey, setVerseFxBurstKey] = useState(0);
+  const [pendingImportPayload, setPendingImportPayload] = useState<GratitudeBackupImportPayload | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const activeEditEntryRef = useRef<HTMLElement | null>(null);
@@ -206,15 +207,18 @@ export function JournalModal({ open, onClose }: Props) {
   const deleteTimerRef = useRef<number | null>(null);
   const verseFxTimerRef = useRef<number | null>(null);
   const verseFxRafRef = useRef<number | null>(null);
+  const suspendBackgroundPlaybackRef = useRef(false);
 
   useEffect(() => {
     if (!open) return;
+    suspendBackgroundPlaybackRef.current = false;
     setEntries(listEntries());
     setEditingEntryId(null);
     setExpandedEntryId(null);
     setIsComposerOpen(false);
     setNewEntryText("");
     setDraftText("");
+    setPendingImportPayload(null);
   }, [open]);
 
   useEffect(() => {
@@ -364,6 +368,11 @@ export function JournalModal({ open, onClose }: Props) {
           discardEditedEntry();
           return;
         }
+        if (pendingImportPayload) {
+          event.preventDefault();
+          setPendingImportPayload(null);
+          return;
+        }
         onClose();
         return;
       }
@@ -388,7 +397,7 @@ export function JournalModal({ open, onClose }: Props) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose, isComposerOpen, editingEntryId]);
+  }, [open, onClose, isComposerOpen, editingEntryId, pendingImportPayload]);
 
   useEffect(() => {
     if (!miniToast) return;
@@ -463,6 +472,7 @@ export function JournalModal({ open, onClose }: Props) {
     const video = backgroundVideoRef.current;
     if (!video || !open) return;
     video.muted = true;
+    video.defaultMuted = true;
     video.volume = 0;
     video.load();
     const jumpToSafeStart = () => {
@@ -490,6 +500,7 @@ export function JournalModal({ open, onClose }: Props) {
         video.pause();
         return;
       }
+      if (suspendBackgroundPlaybackRef.current) return;
       void video.play().catch(() => undefined);
     };
     video.addEventListener("loadedmetadata", jumpToSafeStart);
@@ -499,7 +510,9 @@ export function JournalModal({ open, onClose }: Props) {
     if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
       setIsVideoReady(true);
     }
-    void video.play().catch(() => undefined);
+    if (!suspendBackgroundPlaybackRef.current) {
+      void video.play().catch(() => undefined);
+    }
     return () => {
       video.pause();
       video.removeEventListener("loadedmetadata", jumpToSafeStart);
@@ -588,6 +601,13 @@ export function JournalModal({ open, onClose }: Props) {
     exitEditMode();
     releaseEditResolutionLock();
     return true;
+  };
+
+  const applyImportedPayload = (payload: GratitudeBackupImportPayload) => {
+    saveGratitudeSettings(payload.settings);
+    localStorage.setItem(GRATITUDE_ENTRIES_KEY, JSON.stringify(payload.entries));
+    setEntries(listEntries());
+    setMiniToast(`Backup imported (${payload.entries.length} entries)`);
   };
 
   return (
@@ -697,7 +717,11 @@ export function JournalModal({ open, onClose }: Props) {
               <button
                 type="button"
                 className="journal-modal__export"
-                onClick={() => importInputRef.current?.click()}
+                onClick={() => {
+                  suspendBackgroundPlaybackRef.current = true;
+                  backgroundVideoRef.current?.pause();
+                  importInputRef.current?.click();
+                }}
               >
                 Import Backup
               </button>
@@ -724,21 +748,51 @@ export function JournalModal({ open, onClose }: Props) {
                   }
                   const hasExisting = entries.length > 0;
                   if (hasExisting) {
-                    const confirmed = window.confirm(
-                      "Import Backup will replace your current Gratitude Journal entries on this device. Continue?"
-                    );
-                    if (!confirmed) return;
+                    setPendingImportPayload(payload);
+                    return;
                   }
-                  saveGratitudeSettings(payload.settings);
-                  localStorage.setItem(GRATITUDE_ENTRIES_KEY, JSON.stringify(payload.entries));
-                  setEntries(listEntries());
-                  setMiniToast(`Backup imported (${payload.entries.length} entries)`);
+                  applyImportedPayload(payload);
                 } catch {
                   setMiniToast("Import failed");
                 }
               })();
             }}
           />
+          {pendingImportPayload && (
+            <div
+              className="journal-confirm"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Confirm gratitude import overwrite"
+              onClick={(event) => {
+                if (event.target === event.currentTarget) setPendingImportPayload(null);
+              }}
+            >
+              <div className="journal-confirm__card">
+                <h4>Overwrite Gratitude Journal?</h4>
+                <p>Import Backup will replace your current Gratitude Journal entries on this device.</p>
+                <div className="journal-confirm__actions">
+                  <button
+                    type="button"
+                    className="journal-confirm__btn journal-confirm__btn--ghost"
+                    onClick={() => setPendingImportPayload(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="journal-confirm__btn journal-confirm__btn--danger"
+                    onClick={() => {
+                      applyImportedPayload(pendingImportPayload);
+                      setPendingImportPayload(null);
+                    }}
+                  >
+                    Overwrite
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="journalControlRow">
             <div className={`journalVerseCard ${verseFxActive ? "is-verse-flash" : ""}`.trim()}>
               <strong>Verse</strong>

@@ -14,6 +14,7 @@ type Props = {
   loopRegion: LoopRegion;
   loopMode: LoopMode;
   dimMode: "normal" | "dim" | "mute";
+  dimControlSkipsSoftDim?: boolean;
   noveltyMode: "normal" | "dim" | "mute";
   onPrev: () => void;
   onPlayPause: () => void;
@@ -54,6 +55,7 @@ export function MiniPlayerBar({
   loopRegion,
   loopMode,
   dimMode,
+  dimControlSkipsSoftDim = false,
   noveltyMode,
   onPrev,
   onPlayPause,
@@ -169,6 +171,7 @@ export function MiniPlayerBar({
         duration={duration}
         loopMode={loopMode}
         dimMode={dimMode}
+        dimControlSkipsSoftDim={dimControlSkipsSoftDim}
         noveltyMode={noveltyMode}
         onPrev={onPrev}
         onPlayPause={onPlayPause}
