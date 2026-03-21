@@ -7,6 +7,7 @@ import type { MouseEvent } from "react";
 type Props = {
   variant: "mini" | "fullscreen";
   dimMode: "normal" | "dim" | "mute";
+  dimControlSkipsSoftDim?: boolean;
   noveltyMode: "normal" | "dim" | "mute";
   isPlaying: boolean;
   currentTime: number;
@@ -41,6 +42,7 @@ function clampTime(value: number, duration: number): number {
 export function PlayerControls({
   variant,
   dimMode,
+  dimControlSkipsSoftDim = false,
   noveltyMode,
   isPlaying,
   currentTime,
@@ -73,6 +75,7 @@ export function PlayerControls({
   const [shuffleAnimState, setShuffleAnimState] = useState<"on" | "off" | null>(null);
   const safeDuration = Math.max(0, duration || 0);
   const safeCurrent = clampTime(currentTime, safeDuration);
+  const isMuteOnlyDimControl = dimControlSkipsSoftDim;
   void onVinylScratch;
   void onToggleLoopMode;
 
@@ -242,14 +245,18 @@ export function PlayerControls({
           }`.trim()}
           onClick={onCycleDimMode}
           aria-label={
-            dimMode === "normal"
-              ? "Brightness: dim control (currently normal)"
-              : dimMode === "dim"
-                ? "Brightness: dim active"
-                : "Brightness: mute active"
+            isMuteOnlyDimControl
+              ? dimMode === "mute"
+                ? "Sound: mute active"
+                : "Sound: mute control (currently normal)"
+              : dimMode === "normal"
+                ? "Brightness: dim control (currently normal)"
+                : dimMode === "dim"
+                  ? "Brightness: dim active"
+                  : "Brightness: mute active"
           }
         >
-          {dimMode === "mute" ? "MUTE" : "DIM"}
+          {dimMode === "mute" || isMuteOnlyDimControl ? "MUTE" : "DIM"}
         </button>
         <button
           type="button"

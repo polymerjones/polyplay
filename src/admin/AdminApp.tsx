@@ -81,6 +81,19 @@ const THEME_PACK_AURA_COLORS: Record<"crimson" | "teal" | "amber", string> = {
   amber: "#f0b35b"
 };
 type ThemeSelection = "dark" | "light" | "amber" | "teal" | "crimson";
+type AdminConfirmState =
+  | {
+      kind: "delete-playlist";
+      playlist: PlaylistRow;
+    }
+  | {
+      kind: "remove-track";
+      trackId: string;
+      message: string;
+    }
+  | {
+      kind: "remove-demo-tracks";
+    };
 
 function normalizeAuraColor(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -199,6 +212,7 @@ export function AdminApp() {
   const [editingPlaylistId, setEditingPlaylistId] = useState<string | null>(null);
   const [editingPlaylistName, setEditingPlaylistName] = useState("");
   const [playlistBusyId, setPlaylistBusyId] = useState<string | null>(null);
+  const [confirmState, setConfirmState] = useState<AdminConfirmState | null>(null);
   const [sortLargestFirst, setSortLargestFirst] = useState(true);
   const uploadPreviewVideoRef = useRef<HTMLVideoElement | null>(null);
   const selectedPreviewVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -806,18 +820,12 @@ export function AdminApp() {
     }
   };
 
-  const onRemoveTrack = async () => {
-    if (!selectedRemoveTrackId) {
-      setStatus("Select a track to remove.");
-      return;
-    }
-
-    if (!window.confirm("Remove this track?")) return;
+  const removeTrackWithStatus = async (trackId: string) => {
     setStatus("Removing track...");
     try {
-      setRemovingTrackIds((prev) => (prev.includes(selectedRemoveTrackId) ? prev : [...prev, selectedRemoveTrackId]));
+      setRemovingTrackIds((prev) => (prev.includes(trackId) ? prev : [...prev, trackId]));
       await new Promise((resolve) => window.setTimeout(resolve, 170));
-      await removeTrackFromDb(selectedRemoveTrackId);
+      await removeTrackFromDb(trackId);
       setStatus("Track removed.");
       await refreshTracks();
       await refreshStorage();
@@ -825,8 +833,20 @@ export function AdminApp() {
     } catch {
       setStatus("Track remove failed.");
     } finally {
-      setRemovingTrackIds((prev) => prev.filter((id) => id !== selectedRemoveTrackId));
+      setRemovingTrackIds((prev) => prev.filter((id) => id !== trackId));
     }
+  };
+
+  const onRemoveTrack = async () => {
+    if (!selectedRemoveTrackId) {
+      setStatus("Select a track to remove.");
+      return;
+    }
+    setConfirmState({
+      kind: "remove-track",
+      trackId: selectedRemoveTrackId,
+      message: "Remove this track?"
+    });
   };
 
   const onResetAura = async () => {
@@ -1188,7 +1208,6 @@ export function AdminApp() {
   };
 
   const onRemoveDemoTracks = async () => {
-    if (!window.confirm("Remove all demo tracks?")) return;
     try {
       const removed = await removeDemoTracksInDb();
       setStatus(`Removed ${removed} demo track${removed === 1 ? "" : "s"}.`);
@@ -1286,7 +1305,6 @@ export function AdminApp() {
   };
 
   const onDeletePlaylist = async (playlist: PlaylistRow) => {
-    if (!window.confirm(`Delete "${playlist.name}"? Tracks only in this playlist will also be removed.`)) return;
     setPlaylistBusyId(playlist.id);
     const previousPlaylists = playlists.slice();
     setPlaylists((prev) => prev.filter((item) => item.id !== playlist.id));
@@ -1308,6 +1326,23 @@ export function AdminApp() {
       setStatus(`Playlist delete failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setPlaylistBusyId(null);
+    }
+  };
+
+  const confirmCurrentAction = async () => {
+    const current = confirmState;
+    if (!current) return;
+    setConfirmState(null);
+    if (current.kind === "delete-playlist") {
+      await onDeletePlaylist(current.playlist);
+      return;
+    }
+    if (current.kind === "remove-track") {
+      await removeTrackWithStatus(current.trackId);
+      return;
+    }
+    if (current.kind === "remove-demo-tracks") {
+      await onRemoveDemoTracks();
     }
   };
 
@@ -1792,7 +1827,7 @@ export function AdminApp() {
                   )}
                   <Button
                     variant="danger"
-                    onClick={() => void onDeletePlaylist(playlist)}
+                    onClick={() => setConfirmState({ kind: "delete-playlist", playlist })}
                     disabled={playlists.length <= 1 || Boolean(playlistBusyId)}
                   >
                     Delete
@@ -2112,21 +2147,12 @@ export function AdminApp() {
               </div>
               <Button
                 variant="danger"
-                onClick={async () => {
-                  if (!window.confirm(`Remove "${row.title}" to free storage?`)) return;
-                  setRemovingTrackIds((prev) => (prev.includes(row.id) ? prev : [...prev, row.id]));
-                  try {
-                    await new Promise((resolve) => window.setTimeout(resolve, 170));
-                    await removeTrackFromDb(row.id);
-                    await refreshTracks();
-                    await refreshStorage();
-                    emitLibraryUpdated();
-                    setStatus("Track removed.");
-                  } catch {
-                    setStatus("Track remove failed.");
-                  } finally {
-                    setRemovingTrackIds((prev) => prev.filter((id) => id !== row.id));
-                  }
+                onClick={() => {
+                  setConfirmState({
+                    kind: "remove-track",
+                    trackId: row.id,
+                    message: `Remove "${row.title}" to free storage?`
+                  });
                 }}
               >
                 Remove
@@ -2144,7 +2170,7 @@ export function AdminApp() {
             <Button variant="secondary" onClick={onRestoreDemoTracks}>
               Restore Demo Tracks
             </Button>
-            <Button variant="danger" onClick={onRemoveDemoTracks}>
+            <Button variant="danger" onClick={() => setConfirmState({ kind: "remove-demo-tracks" })}>
               Remove Demo Tracks
             </Button>
           </div>
@@ -2213,6 +2239,46 @@ export function AdminApp() {
               )}
               <Button variant="secondary" onClick={() => setInfoModal(null)}>
                 OK
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
+      {confirmState && (
+        <section
+          className="admin-nuke-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirmation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setConfirmState(null);
+          }}
+        >
+          <div className="admin-nuke-modal__card">
+            <h3 className="admin-nuke-modal__title">
+              {confirmState.kind === "delete-playlist"
+                ? "Delete Playlist?"
+                : confirmState.kind === "remove-demo-tracks"
+                  ? "Remove Demo Tracks?"
+                  : "Remove Track?"}
+            </h3>
+            <p className="admin-nuke-modal__sub">
+              {confirmState.kind === "delete-playlist"
+                ? `Delete "${confirmState.playlist.name}"? Tracks only in this playlist will also be removed.`
+                : confirmState.kind === "remove-demo-tracks"
+                  ? "Remove all demo tracks?"
+                  : confirmState.message}
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button variant="secondary" onClick={() => setConfirmState(null)} disabled={Boolean(playlistBusyId)}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => void confirmCurrentAction()}
+                disabled={Boolean(playlistBusyId)}
+              >
+                {confirmState.kind === "remove-demo-tracks" ? "Remove" : "Delete"}
               </Button>
             </div>
           </div>

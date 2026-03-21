@@ -3875,6 +3875,71 @@ body.mute-freeze .track-backdrop {
   z-index: 130;
 }
 
+.journal-confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(8, 10, 16, 0.44);
+  backdrop-filter: blur(6px);
+}
+
+.journal-confirm__card {
+  width: min(420px, 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(230, 193, 255, 0.22);
+  background:
+    linear-gradient(180deg, rgba(23, 16, 36, 0.96), rgba(18, 13, 28, 0.94));
+  box-shadow:
+    0 18px 36px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  padding: 18px 18px 16px;
+}
+
+.journal-confirm__card h4 {
+  margin: 0 0 8px;
+  color: #f6edff;
+  font-size: 18px;
+}
+
+.journal-confirm__card p {
+  margin: 0;
+  color: rgba(236, 225, 255, 0.82);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.journal-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.journal-confirm__btn {
+  min-width: 104px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 0 14px;
+}
+
+.journal-confirm__btn--ghost {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f3ecff;
+}
+
+.journal-confirm__btn--danger {
+  border-color: rgba(216, 176, 255, 0.4);
+  background: linear-gradient(135deg, rgba(143, 91, 226, 0.96), rgba(101, 59, 194, 0.96));
+  color: #fff8ff;
+  box-shadow: 0 0 18px rgba(150, 94, 245, 0.24);
+}
+
 .fx-toast {
   position: fixed;
   right: 14px;
