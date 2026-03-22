@@ -1,12 +1,14 @@
 # Polyplay Codex Handoff - March 21, 2026
 
 ## Current branch
-`march21fixes`
+`main`
 
 ## Merge status
 - The iPhone playback stabilization work from `ios-playback-simplify` has already been merged into `main`
 - `origin/main` was pushed successfully at commit `7b0b36f`
 - `march21fixes` was created after that merge as the next working branch
+- The release-polish work from `march21fixes` has now also been merged into `main`
+- `origin/main` was later pushed successfully at commit `48406d9`
 
 ## What was just completed
 
@@ -36,6 +38,16 @@
 - Journal background now uses the silent replacement asset:
   - `/demo/clouds2replaced.mp4`
 - Light-mode player icon contrast was improved
+
+### Additional March 21 release-polish work now merged
+- Settings/admin `Contact Polymer Jones` CTA now reuses the app's amber highlighted/onboarding CTA treatment
+- Settings/admin contact CTA was made reliably reachable/tappable in the iframe/modal flow
+- Fullscreen light-theme text contrast was tightened for:
+  - title
+  - metadata line
+  - seek-bar time labels
+- See:
+  - [`docs/3-21-26-ui-polish-discoveries.md`](/Users/paulfisher/Polyplay/docs/3-21-26-ui-polish-discoveries.md)
 
 ## Files most relevant to the current playback architecture
 - [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx)
@@ -88,9 +100,10 @@ Read first:
 - docs/polyplay-product-summary.md
 - docs/3-18-26-release-discoveries.md
 - docs/3-21-26-codex-handoff.md
+- docs/3-21-26-ui-polish-discoveries.md
 
 Branch:
-- march21fixes
+- main
 
 Constraints:
 - inspect first before editing
@@ -108,3 +121,5 @@ Constraints:
 - iPhone Gratitude import overwrite flow
 - Admin destructive confirms
 - Desktop sanity pass for playback, DIM, and light-mode controls
+- Settings/admin contact CTA reachability on iPhone
+- Fullscreen light-theme readability for title, metadata, and slider time labels
