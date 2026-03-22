@@ -30,12 +30,14 @@ function downloadBlobFile(blob: Blob, filename: string): void {
 }
 
 function openBlobPreview(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
+  const previewFile =
+    typeof File !== "undefined" ? new File([blob], filename, { type: blob.type || "application/octet-stream" }) : blob;
+  const url = URL.createObjectURL(previewFile);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.target = "_blank";
   anchor.rel = "noopener noreferrer";
-  anchor.download = filename;
+  anchor.setAttribute("aria-label", `Open preview for ${filename}`);
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
