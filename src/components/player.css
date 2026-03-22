@@ -1350,13 +1350,21 @@ html[data-theme="light"] .fullscreen-player-shell__art {
 }
 
 html[data-theme="light"] .fullscreen-player-shell__meta h2 {
-  color: #4f2940;
+  color: #fff4fb;
+  text-shadow:
+    0 2px 10px rgba(34, 10, 22, 0.32),
+    0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .fullscreen-player-shell__meta p {
   margin: 4px 0 0;
   color: var(--pc-color-muted);
   font-size: clamp(13px, 2.7vw, 18px);
+}
+
+html[data-theme="light"] .fullscreen-player-shell__meta p {
+  color: rgba(255, 239, 247, 0.94);
+  text-shadow: 0 2px 8px rgba(34, 10, 22, 0.26);
 }
 
 body.perf-lite .fullscreen-player-shell {
@@ -1551,9 +1559,11 @@ body.perf-lite .fullscreen-player-shell__art-canvas.is-aura-flash-canvas {
     gap: 4px;
   }
 
-  .player-controls--fullscreen .pc-time {
-    font-size: 11px;
-  }
+.player-controls--fullscreen .pc-time {
+  font-size: 11px;
+  color: rgba(255, 244, 250, 0.96);
+  text-shadow: 0 1px 6px rgba(28, 10, 20, 0.32);
+}
 
   .player-controls--fullscreen .pc-row {
     flex-wrap: wrap;

@@ -80,6 +80,7 @@ const THEME_PACK_AURA_COLORS: Record<"crimson" | "teal" | "amber", string> = {
   teal: "#42c7c4",
   amber: "#f0b35b"
 };
+const CONTACT_POLYMER_JONES_URL = "https://www.paulfishermedia.com/";
 type ThemeSelection = "dark" | "light" | "amber" | "teal" | "crimson";
 type AdminConfirmState =
   | {
@@ -1396,7 +1397,7 @@ export function AdminApp() {
 
   return (
     <div
-      className={`admin-v1 touch-clean mx-auto min-h-screen w-full max-w-5xl px-3 pb-5 pt-3 sm:px-4 ${
+      className={`admin-v1 touch-clean mx-auto min-h-screen w-full max-w-5xl px-3 pb-[max(112px,calc(env(safe-area-inset-bottom,0px)+88px))] pt-3 sm:px-4 ${
         isNukePromptOpen ? "admin-v1--nuke-arming" : ""
       }`.trim()}
     >
@@ -2197,6 +2198,16 @@ export function AdminApp() {
       <p className="mt-3 rounded-xl border border-slate-300/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-200">
         {status || "Ready."}
       </p>
+      <div className="sticky bottom-3 z-10 mt-4 flex justify-center pb-[calc(env(safe-area-inset-bottom,0px)+8px)] pt-2">
+        <a
+          href={CONTACT_POLYMER_JONES_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="guided-cta onboarding-action is-onboarding-target inline-flex min-h-[44px] min-w-[220px] items-center justify-center rounded-xl px-5 py-2 text-sm font-semibold shadow-[0_10px_24px_rgba(20,10,3,0.28),0_0_28px_rgba(240,179,91,0.18)] backdrop-blur-sm"
+        >
+          Contact Polymer Jones
+        </a>
+      </div>
       {laneToast && (
         <div className="admin-lane-toast" role="status" aria-live="polite">
           {laneToast}
