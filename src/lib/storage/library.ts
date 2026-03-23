@@ -68,7 +68,7 @@ export function migrateLibraryIfNeeded(input: unknown): LibraryState {
       demoId: typeof t.demoId === "string" ? t.demoId : null,
       isDemo: Boolean(t.isDemo),
       title: (t.title || "").trim() || "Untitled",
-      sub: t.sub ?? "Uploaded",
+      sub: t.sub === "Uploaded" ? "Imported" : (t.sub ?? "Imported"),
       artist: t.artist ?? null,
       duration: Number.isFinite(t.duration) ? Number(t.duration) : null,
       aura: Math.max(0, Math.min(10, Math.round(Number(t.aura ?? 0)))),

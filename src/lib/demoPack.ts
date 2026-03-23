@@ -9,7 +9,7 @@ const MAX_DEMO_ASSET_BYTES = 30 * 1024 * 1024;
 export const DEMO_PACK_V1 = [
   {
     demoId: "welcome-demo",
-    title: "Welcome to Polyplay",
+    title: "Welcome to PolyPlay",
     audioUrl: "/demos/welcome-audio.mp3",
     artworkVideoUrl: "/demos/welcome-art.mp4",
     isDemo: true

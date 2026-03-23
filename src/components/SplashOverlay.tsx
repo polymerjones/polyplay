@@ -92,7 +92,7 @@ export function SplashOverlay({ isDismissing, onClose, onSkip }: Props) {
       className={`splash-overlay ${isDismissing ? "is-dismissing" : ""}`.trim()}
       role="dialog"
       aria-modal="true"
-      aria-label="Polyplay splash"
+      aria-label="PolyPlay splash"
       onPointerDown={(event) => {
         const target = event.target as HTMLElement | null;
         if (!target) return;

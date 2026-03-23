@@ -14,7 +14,7 @@ const LEGACY_DEMO_IDS = new Set(["first-run-demo-1", "first-run-demo-2"]);
 const DEMO_TRACKS = [
   {
     demoId: "first-run-demo",
-    title: "Welcome to Polyplay v1",
+    title: "Welcome to PolyPlay v1",
     audioUrl: demoAudioAssetUrl,
     artworkUrl: demoStillAssetUrl,
     artworkVideoUrl: demoArtAssetUrl
