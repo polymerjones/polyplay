@@ -52,6 +52,7 @@ type Spark = {
   ttl: number;
   age: number;
   alpha: number;
+  hue: number;
 };
 
 const TAP_WINDOW_MS = 1200;
@@ -71,6 +72,39 @@ function weightedHue(): number {
   if (roll < 0.73) return rand(300, 334);
   if (roll < 0.88) return rand(198, 226);
   return rand(34, 48);
+}
+
+function rgbToHue(rgb: [number, number, number], fallback: number): number {
+  const [rRaw, gRaw, bRaw] = rgb;
+  const r = rRaw / 255;
+  const g = gRaw / 255;
+  const b = bRaw / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  if (delta < 0.001) return fallback;
+
+  let hue = 0;
+  if (max === r) hue = ((g - b) / delta) % 6;
+  else if (max === g) hue = (b - r) / delta + 2;
+  else hue = (r - g) / delta + 4;
+
+  const degrees = hue * 60;
+  return degrees >= 0 ? degrees : degrees + 360;
+}
+
+function themedHue(tokens: ThemeTokens): number {
+  const roll = Math.random();
+  const auraHue = rgbToHue(tokens.auraRgb, 282);
+  const accentHue = rgbToHue(tokens.accentRgb, 216);
+  if (roll < 0.74) return rand(auraHue - 8, auraHue + 8);
+  if (roll < 0.92) return rand(accentHue - 10, accentHue + 10);
+  return weightedHue();
+}
+
+function auraHue(tokens: ThemeTokens): number {
+  const hue = rgbToHue(tokens.auraRgb, 282);
+  return rand(hue - 5, hue + 5);
 }
 
 function parseRgb(input: string, fallback: [number, number, number]): [number, number, number] {
@@ -206,7 +240,7 @@ class AmbientFxEngine {
       if (hit) {
         hit.popping = true;
         hit.age = Math.max(0, hit.ttl - 120);
-        this.spawnSparks(x, y, 8);
+        this.spawnSparks(x, y, 8, auraHue(this.themeTokens));
         this.playPopSound(now);
       } else {
         this.spawnPopBubble(x, y, intensity);
@@ -346,9 +380,10 @@ class AmbientFxEngine {
           bubble.y,
           bubble.r
         );
-        gradient.addColorStop(0, `hsla(${bubble.hue} 100% 95% / ${alpha * 0.88})`);
-        gradient.addColorStop(0.55, `hsla(${bubble.hue} 96% 78% / ${alpha * 0.68})`);
-        gradient.addColorStop(1, `hsla(${bubble.hue} 92% 54% / 0)`);
+        gradient.addColorStop(0, `hsla(${bubble.hue} 100% 98% / ${alpha * 0.98})`);
+        gradient.addColorStop(0.48, `hsla(${bubble.hue} 100% 88% / ${alpha * 0.82})`);
+        gradient.addColorStop(0.78, `hsla(${bubble.hue} 96% 72% / ${alpha * 0.34})`);
+        gradient.addColorStop(1, `hsla(${bubble.hue} 92% 60% / 0)`);
         this.ctx.fillStyle = gradient;
         this.ctx.beginPath();
         this.ctx.arc(bubble.x, bubble.y, bubble.r, 0, Math.PI * 2);
@@ -366,12 +401,12 @@ class AmbientFxEngine {
 
         this.ctx.beginPath();
         this.ctx.arc(bubble.x, bubble.y, radius, 0, Math.PI * 2);
-        this.ctx.fillStyle = `rgba(255,255,255,${baseAlpha * 0.12})`;
+        this.ctx.fillStyle = `hsla(${bubble.hue} 100% 96% / ${baseAlpha * 0.18})`;
         this.ctx.fill();
 
         this.ctx.beginPath();
         this.ctx.arc(bubble.x, bubble.y, radius, 0, Math.PI * 2);
-        this.ctx.strokeStyle = `rgba(255,255,255,${baseAlpha * 0.66})`;
+        this.ctx.strokeStyle = `hsla(${bubble.hue} 100% 90% / ${baseAlpha * 0.9})`;
         this.ctx.lineWidth = 1.2;
         this.ctx.stroke();
       }
@@ -398,7 +433,7 @@ class AmbientFxEngine {
           0,
           Math.PI * 2
         );
-        this.ctx.fillStyle = `hsla(${splat.hue} 94% 72% / ${splat.alpha * life * depthAlpha})`;
+        this.ctx.fillStyle = `hsla(${splat.hue} 100% 78% / ${splat.alpha * life * depthAlpha})`;
         this.ctx.fill();
         this.ctx.restore();
       }
@@ -409,7 +444,7 @@ class AmbientFxEngine {
       const life = 1 - spark.age / spark.ttl;
       this.ctx.beginPath();
       this.ctx.arc(spark.x, spark.y, 1.8, 0, Math.PI * 2);
-      this.ctx.fillStyle = `rgba(255,255,255,${spark.alpha * life})`;
+      this.ctx.fillStyle = `hsla(${spark.hue} 100% 88% / ${spark.alpha * life})`;
       this.ctx.fill();
     }
   }
@@ -512,7 +547,8 @@ class AmbientFxEngine {
       vy: 0,
       ttl: 0,
       age: 0,
-      alpha: 0
+      alpha: 0,
+      hue: 0
     };
   }
 
@@ -527,9 +563,9 @@ class AmbientFxEngine {
     bubble.y = y;
     bubble.vx = rand(-0.35, 0.35);
     bubble.vy = rand(-0.28, 0.1);
-    bubble.r = rand(14, 34) * (1 + intensity * 0.28);
-    bubble.hue = weightedHue();
-    bubble.alpha = rand(0.24, 0.4) * this.themeTokens.glowIntensity;
+    bubble.r = rand(14, 34) * (1 + intensity * 0.28 + (this.themeTokens.glowIntensity - 1) * 0.16);
+    bubble.hue = Math.random() < 0.84 ? auraHue(this.themeTokens) : themedHue(this.themeTokens);
+    bubble.alpha = rand(0.32, 0.52) * this.themeTokens.glowIntensity;
     bubble.ttl = rand(8000, 26000);
     bubble.age = 0;
     bubble.popping = false;
@@ -542,9 +578,9 @@ class AmbientFxEngine {
     bubble.y = y;
     bubble.vx = rand(-0.26, 0.26);
     bubble.vy = rand(-0.04, 0.12);
-    bubble.r = rand(16, 36) * (1 + intensity * 0.2);
-    bubble.hue = 220;
-    bubble.alpha = rand(0.3, 0.48);
+    bubble.r = rand(16, 36) * (1 + intensity * 0.2 + (this.themeTokens.glowIntensity - 1) * 0.12);
+    bubble.hue = auraHue(this.themeTokens);
+    bubble.alpha = rand(0.34, 0.56) * Math.min(1.3, this.themeTokens.glowIntensity);
     bubble.ttl = rand(18000, 46000);
     bubble.age = 0;
     bubble.popping = false;
@@ -569,14 +605,14 @@ class AmbientFxEngine {
     splat.rx = baseRadius * eccentricity;
     splat.ry = baseRadius / eccentricity;
     splat.rot = angle + rand(-0.55, 0.55);
-    splat.alpha = rand(0.2, 0.4);
+    splat.alpha = rand(0.24, 0.46) * Math.min(1.2, this.themeTokens.glowIntensity);
     splat.ttl = this.resolvedQuality === "lite" ? rand(10000, 18000) : rand(12000, 30000);
     splat.age = 0;
-    splat.hue = weightedHue();
+    splat.hue = Math.random() < 0.9 ? auraHue(this.themeTokens) : themedHue(this.themeTokens);
     this.splatters.push(splat);
   }
 
-  private spawnSparks(x: number, y: number, count: number): void {
+  private spawnSparks(x: number, y: number, count: number, hue: number): void {
     for (let i = 0; i < count; i += 1) {
       const angle = (i / count) * Math.PI * 2;
       const speed = rand(0.5, 1.8);
@@ -588,6 +624,7 @@ class AmbientFxEngine {
       spark.ttl = rand(220, 480);
       spark.age = 0;
       spark.alpha = rand(0.48, 0.9);
+      spark.hue = rand(hue - 6, hue + 6);
       this.sparks.push(spark);
     }
   }

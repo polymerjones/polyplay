@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import type { Track } from "../types";
 
 type Props = {
@@ -10,6 +10,7 @@ type Props = {
 };
 
 export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: Props) {
+  const thumbRef = useRef<HTMLDivElement | null>(null);
   const rowFallbackArtwork =
     "radial-gradient(140px 120px at 22% 18%, rgba(150,108,244,.52), rgba(150,108,244,0) 62%), radial-gradient(160px 130px at 84% 82%, rgba(88,176,255,.34), rgba(88,176,255,0) 64%), linear-gradient(145deg, #1a2133, #0f1522)";
   const artStyle = track.artUrl
@@ -17,6 +18,21 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
     : ({ backgroundImage: track.artGrad || rowFallbackArtwork } as CSSProperties);
   const auraLevel = Math.max(0, Math.min(1, track.aura / 10));
   const hasAura = track.aura > 0;
+
+  useEffect(() => {
+    const onAuraArtHit = (event: Event) => {
+      const custom = event as CustomEvent<{ trackId?: string }>;
+      if (custom.detail?.trackId !== track.id) return;
+      const thumb = thumbRef.current;
+      if (!thumb) return;
+      thumb.classList.remove("is-aura-flash");
+      void thumb.offsetWidth;
+      thumb.classList.add("is-aura-flash");
+    };
+
+    window.addEventListener("polyplay:aura-art-hit", onAuraArtHit as EventListener);
+    return () => window.removeEventListener("polyplay:aura-art-hit", onAuraArtHit as EventListener);
+  }, [track.id]);
 
   return (
     <article
@@ -32,7 +48,7 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
         onClick={() => onSelectTrack(track.id)}
         aria-label={`Play ${track.title}`}
       >
-        <div className="trackRow__thumb" style={artStyle} />
+        <div ref={thumbRef} className="trackRow__thumb" style={artStyle} />
         <div className="trackRow__artBadges" aria-hidden="true">
           {track.isDemo && <div className="track-art-badge track-art-badge--row track-art-badge--demo">DEMO</div>}
           {track.artworkSource === "auto" && <div className="track-art-badge track-art-badge--row track-art-badge--auto">AUTO ART</div>}
