@@ -42,6 +42,12 @@ import {
   normalizeLibrary,
   setLibrary
 } from "./lib/library";
+import {
+  clearIosNowPlaying,
+  setIosNowPlayingItem,
+  updateIosNowPlayingPlaybackState
+} from "./lib/iosNowPlaying";
+import { syncMediaSessionItem, syncMediaSessionPlaybackState } from "./lib/mediaSession";
 import { revokeAllMediaUrls } from "./lib/player/media";
 import {
   createPlaylistInLibrary,
@@ -486,6 +492,13 @@ export default function App() {
   const lastPlaybackResyncAtRef = useRef(0);
   const lastUiCurrentTimeCommitAtRef = useRef(0);
   const lastUiCurrentTimeValueRef = useRef(0);
+  const nowPlayingItemSyncSeqRef = useRef(0);
+  const lastNowPlayingPlaybackSyncRef = useRef<{
+    trackId: string | null;
+    elapsedTime: number;
+    duration: number;
+    isPlaying: boolean;
+  } | null>(null);
   const gratitudeEvaluatedRef = useRef(false);
   const safeTapSeqRef = useRef(0);
   const safeTapHeatRef = useRef(0);
@@ -1530,6 +1543,84 @@ export default function App() {
   const canCreatePolyplaylist = newPlaylistName.trim().length > 0;
   const currentAudioUrl = currentTrack?.audioUrl ?? null;
 
+  useEffect(() => {
+    const rootStyle = document.documentElement.style;
+    const auraLevel = clamp01((currentTrack?.aura ?? 0) / 10);
+    rootStyle.setProperty("--fx-aura-level", auraLevel.toFixed(2));
+    rootStyle.setProperty("--glow-intensity", (1 + auraLevel * 0.55).toFixed(2));
+    return () => {
+      rootStyle.removeProperty("--fx-aura-level");
+      rootStyle.removeProperty("--glow-intensity");
+    };
+  }, [currentTrack?.id, currentTrack?.aura]);
+
+  useEffect(() => {
+    let cancelled = false;
+    nowPlayingItemSyncSeqRef.current += 1;
+    const syncSeq = nowPlayingItemSyncSeqRef.current;
+
+    if (!currentTrack?.audioUrl || currentTrack.missingAudio) {
+      lastNowPlayingPlaybackSyncRef.current = null;
+      void clearIosNowPlaying();
+      void syncMediaSessionItem(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const syncNowPlayingItem = async () => {
+      if (cancelled || nowPlayingItemSyncSeqRef.current !== syncSeq) return;
+
+      await setIosNowPlayingItem({
+        title: currentTrack.title || "Untitled",
+        subtitle: IOS_NOW_PLAYING_APP_TITLE
+      });
+      await syncMediaSessionItem(currentTrack);
+    };
+
+    void syncNowPlayingItem();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    currentTrack?.id,
+    currentTrack?.title,
+    currentTrack?.sub,
+    currentTrack?.artBlob,
+    currentTrack?.artUrl,
+    currentTrack?.audioUrl,
+    currentTrack?.missingAudio
+  ]);
+
+  useEffect(() => {
+    if (!currentTrack?.audioUrl || currentTrack.missingAudio) {
+      lastNowPlayingPlaybackSyncRef.current = null;
+      syncMediaSessionPlaybackState({ elapsedTime: 0, duration: 0, isPlaying: false });
+      return;
+    }
+
+    const nextState = {
+      trackId: currentTrack.id,
+      elapsedTime: Number.isFinite(currentTime) ? Math.max(0, currentTime) : 0,
+      duration: Number.isFinite(duration) ? Math.max(0, duration) : 0,
+      isPlaying
+    };
+    const previousState = lastNowPlayingPlaybackSyncRef.current;
+    const shouldSync =
+      !previousState ||
+      previousState.trackId !== nextState.trackId ||
+      previousState.isPlaying !== nextState.isPlaying ||
+      Math.abs(previousState.duration - nextState.duration) >= 0.5 ||
+      Math.abs(previousState.elapsedTime - nextState.elapsedTime) >= 0.9;
+
+    if (!shouldSync) return;
+
+    lastNowPlayingPlaybackSyncRef.current = nextState;
+    void updateIosNowPlayingPlaybackState(nextState);
+    syncMediaSessionPlaybackState(nextState);
+  }, [currentTrack?.id, currentTrack?.audioUrl, currentTrack?.missingAudio, currentTime, duration, isPlaying]);
+
   const commitUiCurrentTime = (nextTime: number, options?: { force?: boolean }) => {
     const safeNextTime = Number.isFinite(nextTime) ? Math.max(0, nextTime) : 0;
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -2100,6 +2191,7 @@ export default function App() {
   };
 
   const triggerAuraPulseForTrack = (trackId: string) => {
+    window.dispatchEvent(new CustomEvent("polyplay:aura-art-hit", { detail: { trackId } }));
     if (!currentTrackId || currentTrackId !== trackId) return;
     window.dispatchEvent(new CustomEvent("polyplay:aura-trigger"));
   };
@@ -2917,6 +3009,7 @@ export default function App() {
   };
 
   const activeThemeSelection = getThemeSelection(themeMode, customThemeSlot);
+  const fxThemeRefreshKey = `${themeMode}:${customThemeSlot}:${auraColor ?? "default"}:${currentTrack?.id ?? "none"}:${currentTrack?.aura ?? 0}`;
   const showHeaderUploadButton = true;
   const isPreTourState = isInitialDemoFirstRunState && quickTourPhase === null;
   const isCreatePlaylistGuidanceActive = quickTourPhase === "create-playlist";
@@ -2940,6 +3033,7 @@ export default function App() {
             mode={fxMode}
             quality={fxQuality}
             reducedMotion={fxReducedMotion}
+            themeRefreshKey={fxThemeRefreshKey}
           />
           <div
             className={`track-backdrop ${currentTrack?.artUrl || currentTrack?.artGrad ? "is-visible" : ""}`.trim()}

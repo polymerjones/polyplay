@@ -18,6 +18,7 @@ type Props = {
   mode: AmbientFxMode;
   quality: AmbientFxQuality;
   reducedMotion: boolean;
+  themeRefreshKey?: string;
 };
 
 function isCoarsePointer(): boolean {
@@ -29,7 +30,7 @@ function isCoarsePointer(): boolean {
 }
 
 export const AmbientFxCanvas = forwardRef<AmbientFxCanvasHandle, Props>(function AmbientFxCanvas(
-  { allowed, mode, quality, reducedMotion },
+  { allowed, mode, quality, reducedMotion, themeRefreshKey = "" },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -85,7 +86,7 @@ export const AmbientFxCanvas = forwardRef<AmbientFxCanvasHandle, Props>(function
     const engine = engineRef.current;
     if (!engine) return;
     engine.setThemeTokens(readThemeTokensFromCss());
-  }, [mode, quality, reducedMotion]);
+  }, [mode, quality, reducedMotion, themeRefreshKey]);
 
   useEffect(() => {
     const engine = engineRef.current;

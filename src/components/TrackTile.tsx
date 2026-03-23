@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
 import type { Track } from "../types";
 
@@ -12,9 +12,25 @@ type Props = {
 
 export function TrackTile({ track, trackId, active, onSelectTrack, onAuraUp }: Props) {
   const [artFailed, setArtFailed] = useState(false);
+  const coverRef = useRef<HTMLDivElement | null>(null);
   const artSrc = !artFailed && track.artUrl ? track.artUrl : DEFAULT_ARTWORK_URL;
   const isFallback = artSrc === DEFAULT_ARTWORK_URL;
   const auraLevel = Math.max(0, Math.min(1, (track.aura || 0) / 10));
+
+  useEffect(() => {
+    const onAuraArtHit = (event: Event) => {
+      const custom = event as CustomEvent<{ trackId?: string }>;
+      if (custom.detail?.trackId !== trackId) return;
+      const cover = coverRef.current;
+      if (!cover) return;
+      cover.classList.remove("is-aura-flash");
+      void cover.offsetWidth;
+      cover.classList.add("is-aura-flash");
+    };
+
+    window.addEventListener("polyplay:aura-art-hit", onAuraArtHit as EventListener);
+    return () => window.removeEventListener("polyplay:aura-art-hit", onAuraArtHit as EventListener);
+  }, [trackId]);
 
   return (
     <article
@@ -29,7 +45,7 @@ export function TrackTile({ track, trackId, active, onSelectTrack, onAuraUp }: P
         onClick={() => onSelectTrack(trackId)}
         aria-label={`Play ${track.title}`}
       >
-        <div className={`ytm-cover ${isFallback ? "is-fallback" : ""}`.trim()} aria-hidden="true">
+        <div ref={coverRef} className={`ytm-cover ${isFallback ? "is-fallback" : ""}`.trim()} aria-hidden="true">
           <img
             className="ytm-cover-media"
             src={artSrc}

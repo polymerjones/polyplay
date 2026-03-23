@@ -74,6 +74,11 @@ export function WaveformLoop({
   useEffect(() => {
     let canceled = false;
 
+    if (track?.waveformPeaks?.length) {
+      setPeaks(track.waveformPeaks);
+      return;
+    }
+
     if (!track?.audioBlob) {
       setPeaks(fallbackPeaks());
       return;
@@ -90,7 +95,7 @@ export function WaveformLoop({
     return () => {
       canceled = true;
     };
-  }, [track?.id, track?.audioBlob]);
+  }, [track?.id, track?.audioBlob, track?.waveformPeaks]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

@@ -321,6 +321,7 @@ body.theme-dark .rowAuraGlow {
 }
 
 .trackRow__thumb {
+  position: relative;
   width: 62px;
   height: 62px;
   min-width: 62px;
@@ -331,6 +332,25 @@ body.theme-dark .rowAuraGlow {
   overflow: hidden;
   -webkit-user-drag: none;
   user-drag: none;
+}
+
+.trackRow__thumb::after {
+  content: "";
+  position: absolute;
+  inset: -18%;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(circle at 30% 18%, rgba(var(--aura-rgb, 188, 132, 255), calc(0.88 + var(--fx-aura-level, 0) * 0.18)), rgba(var(--aura-rgb, 188, 132, 255), 0) 34%),
+    radial-gradient(circle at 76% 82%, rgba(var(--aura-rgb, 188, 132, 255), calc(0.76 + var(--fx-aura-level, 0) * 0.2)), rgba(var(--aura-rgb, 188, 132, 255), 0) 46%);
+}
+
+.trackRow__thumb.is-aura-flash {
+  animation: pc-art-cinematic-flash 520ms ease-out;
+}
+
+.trackRow__thumb.is-aura-flash::after {
+  animation: pc-art-cinematic-overlay 520ms ease-out;
 }
 
 .trackRow__metaHit {

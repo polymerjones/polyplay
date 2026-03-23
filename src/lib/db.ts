@@ -1,4 +1,5 @@
 import type { Track } from "../types";
+import { DEMO_WAVEFORM_PEAKS_BY_ID } from "../assets/demo/demoPeaks";
 import { generateWaveformArtwork } from "./artwork/waveformArtwork";
 import { generateVideoPoster } from "./artwork/videoPoster";
 import { getMediaUrl, revokeAllMediaUrls, revokeMediaUrl } from "./player/media";
@@ -245,6 +246,8 @@ async function toTrack(record: TrackRecord): Promise<Track> {
     title: record.title,
     sub: record.sub || "Uploaded",
     aura: clampAura(record.aura),
+    waveformPeaks:
+      DEMO_WAVEFORM_PEAKS_BY_ID[record.demoId ?? ""] || DEMO_WAVEFORM_PEAKS_BY_ID[record.id] || undefined,
     audioUrl,
     artUrl,
     artVideoUrl,

@@ -509,8 +509,8 @@ html[data-theme="light"] .mini-player-bar::before {
   pointer-events: none;
   opacity: 0;
   background:
-    radial-gradient(circle at 28% 18%, rgba(var(--aura-rgb, 188, 132, 255), 0.86), rgba(var(--aura-rgb, 188, 132, 255), 0) 36%),
-    radial-gradient(circle at 74% 78%, rgba(var(--aura-rgb, 188, 132, 255), 0.74), rgba(var(--aura-rgb, 188, 132, 255), 0) 44%);
+    radial-gradient(circle at 28% 18%, rgba(var(--aura-rgb, 188, 132, 255), calc(0.82 + var(--fx-aura-level, 0) * 0.16)), rgba(var(--aura-rgb, 188, 132, 255), 0) 36%),
+    radial-gradient(circle at 74% 78%, rgba(var(--aura-rgb, 188, 132, 255), calc(0.7 + var(--fx-aura-level, 0) * 0.18)), rgba(var(--aura-rgb, 188, 132, 255), 0) 44%);
 }
 
 .mini-player-bar__art.is-aura-flash {
@@ -1088,10 +1088,10 @@ html[data-theme="light"] .pc-wave__loop-handle::after {
     filter: brightness(1) saturate(1);
   }
   28% {
-    filter: brightness(1.46) saturate(1.58) hue-rotate(-9deg);
+    filter: brightness(calc(1.42 + var(--fx-aura-level, 0) * 0.46)) saturate(calc(1.56 + var(--fx-aura-level, 0) * 0.34)) hue-rotate(calc(-7deg - var(--fx-aura-level, 0) * 5deg));
     box-shadow:
-      0 0 24px rgba(var(--aura-rgb, 188, 132, 255), 0.48),
-      0 0 42px rgba(var(--aura-rgb, 188, 132, 255), 0.36);
+      0 0 calc(22px + var(--fx-aura-level, 0) * 18px) rgba(var(--aura-rgb, 188, 132, 255), calc(0.44 + var(--fx-aura-level, 0) * 0.22)),
+      0 0 calc(40px + var(--fx-aura-level, 0) * 28px) rgba(var(--aura-rgb, 188, 132, 255), calc(0.32 + var(--fx-aura-level, 0) * 0.22));
   }
   100% {
     filter: brightness(1) saturate(1);
@@ -1287,8 +1287,8 @@ html[data-theme="light"] .fullscreen-player-shell__art {
   pointer-events: none;
   opacity: 0;
   background:
-    radial-gradient(circle at 30% 18%, rgba(var(--aura-rgb, 188, 132, 255), 0.92), rgba(var(--aura-rgb, 188, 132, 255), 0) 34%),
-    radial-gradient(circle at 76% 82%, rgba(var(--aura-rgb, 188, 132, 255), 0.8), rgba(var(--aura-rgb, 188, 132, 255), 0) 46%);
+    radial-gradient(circle at 30% 18%, rgba(var(--aura-rgb, 188, 132, 255), calc(0.88 + var(--fx-aura-level, 0) * 0.18)), rgba(var(--aura-rgb, 188, 132, 255), 0) 34%),
+    radial-gradient(circle at 76% 82%, rgba(var(--aura-rgb, 188, 132, 255), calc(0.76 + var(--fx-aura-level, 0) * 0.2)), rgba(var(--aura-rgb, 188, 132, 255), 0) 46%);
 }
 
 .fullscreen-player-shell__art.is-aura-flash {
@@ -1304,7 +1304,7 @@ html[data-theme="light"] .fullscreen-player-shell__art {
     filter: brightness(1) saturate(1);
   }
   22% {
-    filter: brightness(1.5) saturate(1.55) hue-rotate(-8deg);
+    filter: brightness(calc(1.46 + var(--fx-aura-level, 0) * 0.52)) saturate(calc(1.52 + var(--fx-aura-level, 0) * 0.4)) hue-rotate(calc(-8deg - var(--fx-aura-level, 0) * 6deg));
   }
   100% {
     filter: brightness(1) saturate(1);
@@ -1314,15 +1314,15 @@ html[data-theme="light"] .fullscreen-player-shell__art {
 @keyframes pc-art-cinematic-overlay {
   0% {
     opacity: 0;
-    transform: scale(0.86);
+    transform: scale(calc(0.86 - var(--fx-aura-level, 0) * 0.04));
   }
   24% {
-    opacity: 0.92;
-    transform: scale(1);
+    opacity: calc(0.9 + var(--fx-aura-level, 0) * 0.1);
+    transform: scale(calc(1 + var(--fx-aura-level, 0) * 0.04));
   }
   100% {
     opacity: 0;
-    transform: scale(1.12);
+    transform: scale(calc(1.12 + var(--fx-aura-level, 0) * 0.1));
   }
 }
 
@@ -1332,8 +1332,8 @@ html[data-theme="light"] .fullscreen-player-shell__art {
     filter: brightness(1) saturate(1);
   }
   28% {
-    opacity: 0.96;
-    filter: brightness(1.24) saturate(1.35) hue-rotate(-8deg);
+    opacity: calc(0.9 + var(--fx-aura-level, 0) * 0.12);
+    filter: brightness(calc(1.22 + var(--fx-aura-level, 0) * 0.36)) saturate(calc(1.32 + var(--fx-aura-level, 0) * 0.28)) hue-rotate(calc(-8deg - var(--fx-aura-level, 0) * 5deg));
   }
   100% {
     opacity: 0.74;

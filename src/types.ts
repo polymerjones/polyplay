@@ -7,6 +7,7 @@ export type Track = {
   title: string;
   sub?: string;
   aura: number;
+  waveformPeaks?: number[];
   audioUrl?: string;
   artUrl?: string;
   artVideoUrl?: string;

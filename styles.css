@@ -5592,6 +5592,18 @@ body.nuke-flash::after {
   z-index: 2;
 }
 
+.ytm-cover::before {
+  content: "";
+  position: absolute;
+  inset: -18%;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(circle at 30% 18%, rgba(var(--aura-rgb, 188, 132, 255), calc(0.88 + var(--fx-aura-level, 0) * 0.18)), rgba(var(--aura-rgb, 188, 132, 255), 0) 34%),
+    radial-gradient(circle at 76% 82%, rgba(var(--aura-rgb, 188, 132, 255), calc(0.76 + var(--fx-aura-level, 0) * 0.2)), rgba(var(--aura-rgb, 188, 132, 255), 0) 46%);
+  z-index: 2;
+}
+
 body.theme-custom.theme-custom-crimson .ytm-cover {
   background:
     radial-gradient(circle at 20% 20%, rgba(188, 88, 126, 0.48), rgba(188, 88, 126, 0) 58%),
@@ -5622,6 +5634,14 @@ body.theme-custom.theme-custom-amber .ytm-cover {
   -webkit-user-drag: none;
   user-drag: none;
   pointer-events: none;
+}
+
+.ytm-cover.is-aura-flash {
+  animation: pc-art-cinematic-flash 520ms ease-out;
+}
+
+.ytm-cover.is-aura-flash::before {
+  animation: pc-art-cinematic-overlay 520ms ease-out;
 }
 
 .ytm-cover.is-fallback::after {
