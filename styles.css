@@ -269,6 +269,8 @@ main,
   display: flex;
   align-items: center;
   gap: 10px;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .brand-logo {
@@ -284,6 +286,8 @@ main,
   color: var(--muted);
   font-size: 14px;
   grid-column: 1 / -1;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .gear-link,
@@ -3623,10 +3627,10 @@ body.mute-freeze .track-backdrop {
   overscroll-behavior: contain;
   touch-action: pan-y;
   padding-right: 4px;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   min-height: 0;
-  align-content: start;
 }
 
 .journal-modal__empty {
@@ -3647,6 +3651,7 @@ body.mute-freeze .track-backdrop {
 .journal-entry {
   position: relative;
   overflow: hidden;
+  flex-shrink: 0;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: linear-gradient(145deg, rgba(16, 21, 33, 0.64), rgba(13, 18, 28, 0.52));
@@ -3778,6 +3783,17 @@ body.mute-freeze .track-backdrop {
 
 .journal-entry.is-editing {
   cursor: default;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  overflow: hidden;
+  transform: none;
+  height: auto;
+}
+
+.journal-entry.is-editing:hover {
+  transform: none;
 }
 
 .journal-modal__list.is-edit-mode .journal-entry.is-edit-blocked {
@@ -3793,7 +3809,9 @@ body.mute-freeze .track-backdrop {
 
 .journal-entry__editor {
   margin-top: 8px;
+  display: block;
   width: 100%;
+  box-sizing: border-box;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   background: rgba(14, 19, 30, 0.82);
@@ -3810,6 +3828,11 @@ body.mute-freeze .track-backdrop {
   outline: none;
   border-color: rgba(216, 184, 255, 0.72);
   box-shadow: 0 0 0 1px rgba(216, 184, 255, 0.46), 0 0 20px rgba(182, 140, 255, 0.22);
+}
+
+.journal-entry.is-editing .journal-entry__editor {
+  margin-top: 0;
+  resize: none;
 }
 
 .journal-modal__card.is-writing::before {
@@ -3849,6 +3872,11 @@ body.mute-freeze .track-backdrop {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.journal-entry.is-editing .journal-entry__editor-actions {
+  margin-top: 0;
+  flex-wrap: wrap;
 }
 
 .journal-entry__save {
@@ -4933,6 +4961,8 @@ body.nuke-flash::after {
   color: #eef3ff;
   text-shadow: 0 2px 10px rgba(8, 12, 22, 0.45);
   line-height: 1.05;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .topbar-title__main,

@@ -62,7 +62,7 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
       >
         <div className="trackRow__meta">
           <div className="trackRow__title">{track.title}</div>
-          <div className="trackRow__sub">{track.sub || "Uploaded"}</div>
+          <div className="trackRow__sub">{track.sub || "Imported"}</div>
           <div className="trackRow__aura">Aura {track.aura}/10</div>
         </div>
       </button>

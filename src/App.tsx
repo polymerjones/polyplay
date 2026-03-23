@@ -2763,7 +2763,7 @@ export default function App() {
           suggestedName: filename,
           types: [
             {
-              description: options?.description || "Polyplay Backup",
+              description: options?.description || "PolyPlay Backup",
               accept: options?.accept || { "application/octet-stream": [".zip"] }
             }
           ]
@@ -2792,7 +2792,7 @@ export default function App() {
       const nonDemoTrackCount = countNonDemoTracksForFullBackup(library);
       if (nonDemoTrackCount < MIN_FULL_BACKUP_USER_TRACKS) {
         setVaultStatus(
-          `Add at least ${MIN_FULL_BACKUP_USER_TRACKS} uploaded track before saving a Universe backup.`,
+          `Add at least ${MIN_FULL_BACKUP_USER_TRACKS} imported track before saving a Universe backup.`,
           "error"
         );
         return false;
@@ -2800,7 +2800,7 @@ export default function App() {
       const payload = await exportFullBackup();
       const filename = getFullBackupFilename();
       const saveMode = await saveBlobWithBestEffort(payload.blob, filename, {
-        description: "Polyplay Universe Backup",
+        description: "PolyPlay Universe Backup",
         accept: { "application/zip": [".zip"] }
       });
       const stamp = new Date().toISOString();
@@ -3104,7 +3104,7 @@ export default function App() {
         <header className="topbar topbar--two-tier">
           <div className="topbar-tier topbar-tier--primary">
             <div className="brand">
-              <img className="brand-logo" src={logo} alt="Polyplay logo" />
+              <img className="brand-logo" src={logo} alt="PolyPlay logo" />
             </div>
             <div className="topbar-title">
               <span className="topbar-title__main">{headerTitle}</span>
@@ -3126,11 +3126,11 @@ export default function App() {
                   className={`upload-link nav-action-btn onboarding-action ${
                     shouldShowUploadHint ? "guided-cta is-onboarding-target" : ""
                   }`.trim()}
-                  aria-label="Upload tracks"
-                  title="Upload"
+                  aria-label="Import tracks"
+                  title="Import"
                   onClick={() => openUploadPanel()}
                 >
-                  Upload
+                  Import
                 </button>
               )}
             </div>
@@ -3209,7 +3209,7 @@ export default function App() {
             </button>
           </div>
           <div className="hint">
-            {hasTracks ? "Tap tiles to play • Tap playbar art for fullscreen" : "Create/select a playlist, then upload tracks."}
+            {hasTracks ? "Tap tiles to play • Tap playbar art for fullscreen" : "Create/select a playlist, then import tracks."}
           </div>
         </header>
 
@@ -3277,7 +3277,7 @@ export default function App() {
             >
               ✕
             </button>
-            <div className="open-state-card__title">{`Welcome to Polyplay Beta ${APP_VERSION}`}</div>
+            <div className="open-state-card__title">{`Welcome to PolyPlay ${APP_VERSION}`}</div>
             <p className="open-state-card__body">Tap a tile to start playback, then use Loop modes from the player bar.</p>
             <button type="button" className="open-state-card__dismiss" onClick={dismissOpenState}>
               Start Listening
@@ -3291,12 +3291,12 @@ export default function App() {
             onStartQuickTour={() => setQuickTourPhase("create-playlist")}
             onUploadFirstTrack={() => openUploadPanel()}
             onPrimaryButtonClick={triggerOnboardingSparkle}
-            primaryButtonLabel={welcomePhase === "pre-tour" ? "Start Quick Tour" : "Upload your first track"}
+            primaryButtonLabel={welcomePhase === "pre-tour" ? "Start Quick Tour" : "Import your first track"}
             bodyText={
               welcomePhase === "create-playlist"
                 ? "Create your first Polyplaylist to get started."
                 : welcomePhase === "upload-track"
-                  ? "Now upload your first track."
+                  ? "Now import your first track."
                   : "Take a quick tour to create your first Polyplaylist and add your own music."
             }
             primaryButtonClassName={
@@ -3553,7 +3553,7 @@ export default function App() {
               </div>
               <div className="vault-helper-block">
                 <p className="vault-helper">
-                  Vault backups contain your personal playlists, media links, and journal entries.
+                  Vault backups contain your personal playlists, imported media, and journal entries.
                 </p>
                 <p className="vault-helper">Only restore backups you trust.</p>
               </div>
@@ -3594,7 +3594,7 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <p className="vault-status vault-status--meta">Full backup includes library metadata and bundled media available in this browser.</p>
+              <p className="vault-status vault-status--meta">Full backup includes library metadata and media currently stored in this browser.</p>
               {importSummary && (
                 <div className="vault-import-summary">
                   <div>Updated tracks: {importSummary.updatedTrackCount}</div>

@@ -19,8 +19,8 @@ const tips = [
     body: "Use Prev/Next to change tracks and Play/Pause to control playback."
   },
   {
-    title: "Uploads",
-    body: "Open Admin to upload tracks, replace media, and manage your playlist."
+    title: "Imports",
+    body: "Open Admin to import tracks, replace media, and manage your playlist."
   }
 ];
 
@@ -31,12 +31,12 @@ export function HelpApp() {
         <div className="flex min-w-0 items-center gap-3">
           <img
             src={logo}
-            alt="Polyplay logo"
+            alt="PolyPlay logo"
             className="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-300/20"
           />
           <div className="min-w-0">
             <h1 className="truncate text-lg font-semibold text-slate-100">Help and Tips</h1>
-            <p className="truncate text-xs text-slate-400">How to use Polyplay</p>
+            <p className="truncate text-xs text-slate-400">How to use PolyPlay</p>
           </div>
         </div>
 

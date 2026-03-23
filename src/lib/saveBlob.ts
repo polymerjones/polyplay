@@ -84,7 +84,7 @@ export async function saveBlobWithBestEffort(
         suggestedName: filename,
         types: [
           {
-            description: options?.description || "Polyplay Export",
+            description: options?.description || "PolyPlay Export",
             accept: options?.accept || { "application/octet-stream": [".bin"] }
           }
         ]

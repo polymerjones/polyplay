@@ -80,7 +80,8 @@ const THEME_PACK_AURA_COLORS: Record<"crimson" | "teal" | "amber", string> = {
   teal: "#42c7c4",
   amber: "#f0b35b"
 };
-const CONTACT_POLYMER_JONES_URL = "https://www.paulfishermedia.com/";
+const PRIVACY_POLICY_URL = "/privacy-policy.html";
+const TERMS_AND_CONDITIONS_URL = "/terms-and-conditions.html";
 type ThemeSelection = "dark" | "light" | "amber" | "teal" | "crimson";
 type AdminConfirmState =
   | {
@@ -614,7 +615,7 @@ export function AdminApp() {
       if (!selectedTransferTrackId || audioTransferMode === "create") {
         await addTrackToDb({
           title: titleFromFilename(file.name),
-          sub: "Uploaded",
+          sub: "Imported",
           audio: file
         });
         setStatus("New track created from Audio Track lane.");
@@ -708,13 +709,13 @@ export function AdminApp() {
     }
 
     const derivedTitle = uploadTitle.trim() || titleFromFilename(uploadAudio.name);
-    setStatus("Uploading...");
+    setStatus("Importing...");
 
     try {
       const artwork = await buildArtworkPayload(uploadArt, uploadArtPosterBlob, uploadArtFrameTime);
       await addTrackToDb({
         title: derivedTitle,
-        sub: "Uploaded",
+        sub: "Imported",
         audio: uploadAudio,
         artPoster: artwork.artPoster,
         artVideo: artwork.artVideo
@@ -725,13 +726,13 @@ export function AdminApp() {
       setUploadArtworkFile(null);
       setStatus(
         artwork.posterCaptureFailed
-          ? "Upload complete. Video artwork added (poster frame unavailable on this browser)."
-          : "Upload complete."
+          ? "Import complete. Video artwork added (poster frame unavailable on this browser)."
+          : "Import complete."
       );
       showUploadSuccessNotice(
         artwork.posterCaptureFailed
-          ? "Upload complete. Video artwork added."
-          : "Upload complete."
+          ? "Import complete. Video artwork added."
+          : "Import complete."
       );
       await refreshTracks();
       await refreshStorage();
@@ -740,12 +741,12 @@ export function AdminApp() {
       if (isStorageCapError(error)) {
         setInfoModal({
           title: "Storage Almost Full",
-          message: "Storage is almost full. Manage storage to free space before uploading.",
+          message: "Storage is almost full. Manage storage to free space before importing.",
           openManageStorage: true
         });
         return;
       }
-      setStatus("Upload failed.");
+      setStatus("Import failed.");
     }
   };
 
@@ -1058,7 +1059,7 @@ export function AdminApp() {
       const blob = new Blob([content], { type: "application/json;charset=utf-8" });
       const filename = getConfigExportFilename();
       const saveMode = await saveBlobWithBestEffort(blob, filename, {
-        description: "Polyplay Config",
+        description: "PolyPlay Config",
         accept: { "application/json": [".json"] }
       });
       setStatus(
@@ -1107,7 +1108,7 @@ export function AdminApp() {
       });
       const filename = getFullBackupFilename();
       const saveMode = await saveBlobWithBestEffort(result.blob, filename, {
-        description: "Polyplay Full Backup",
+        description: "PolyPlay Full Backup",
         accept: { "application/zip": [".zip"] }
       });
       setStatus(
@@ -1410,13 +1411,13 @@ export function AdminApp() {
         <div className="flex min-w-0 items-center gap-2">
           <img
             src={logo}
-            alt="Polyplay logo"
+            alt="PolyPlay logo"
             className="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-300/20"
           />
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold text-slate-100">Polyplay Admin</h1>
+            <h1 className="truncate text-lg font-semibold text-slate-100">PolyPlay Admin</h1>
             <p className="truncate text-xs text-slate-400">
-              {adminMode === "upload" ? "Upload Track" : "Manage Library"}
+              {adminMode === "upload" ? "Import Track" : "Manage Library"}
             </p>
           </div>
         </div>
@@ -1440,7 +1441,7 @@ export function AdminApp() {
       <section className={`admin-v1-section grid gap-3 ${showManageSections ? "lg:grid-cols-2" : ""}`.trim()}>
         {showUploadTrackSection && (
         <form onSubmit={onUpload} className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
-          <h2 className="mb-2 text-base font-semibold text-slate-100">Upload Track</h2>
+          <h2 className="mb-2 text-base font-semibold text-slate-100">Import Track</h2>
           <div className="admin-v1-fields admin-upload-stack grid gap-2">
             <label className="grid gap-1 text-sm text-slate-300">
               Title
@@ -1453,7 +1454,7 @@ export function AdminApp() {
 
             <TransferLaneDropZone
               label="Audio (.wav/.mp3)"
-              tooltip="Fallback uploader for direct track creation."
+              tooltip="Fallback importer for direct track creation."
               iconType="audio"
               accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,.wav,.mp3,.m4a,.aac,.mp4"
               selectedFileName={uploadAudio?.name}
@@ -1462,7 +1463,7 @@ export function AdminApp() {
 
             <TransferLaneDropZone
               label="Artwork (image, mp4, or mov, optional)"
-              tooltip="Fallback artwork picker for manual upload flow."
+              tooltip="Fallback artwork picker for manual import flow."
               iconType="artwork"
               accept="image/*,video/mp4,video/quicktime,.mov"
               selectedFileName={uploadArt?.name}
@@ -1518,7 +1519,7 @@ export function AdminApp() {
             )}
 
             <Button variant="primary" type="submit" className="admin-upload-submit">
-              Upload
+              Import
             </Button>
           </div>
         </form>
@@ -2199,14 +2200,24 @@ export function AdminApp() {
         {status || "Ready."}
       </p>
       <div className="sticky bottom-3 z-10 mt-4 flex justify-center pb-[calc(env(safe-area-inset-bottom,0px)+8px)] pt-2">
-        <a
-          href={CONTACT_POLYMER_JONES_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="guided-cta onboarding-action is-onboarding-target inline-flex min-h-[44px] min-w-[220px] items-center justify-center rounded-xl px-5 py-2 text-sm font-semibold shadow-[0_10px_24px_rgba(20,10,3,0.28),0_0_28px_rgba(240,179,91,0.18)] backdrop-blur-sm"
-        >
-          Contact Polymer Jones
-        </a>
+        <div className="flex flex-wrap items-center justify-center gap-2 rounded-xl border border-slate-300/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 backdrop-blur-sm">
+          <a
+            href={PRIVACY_POLICY_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg px-3 py-2 font-medium text-slate-100 underline decoration-slate-400/60 underline-offset-4"
+          >
+            Privacy Policy
+          </a>
+          <a
+            href={TERMS_AND_CONDITIONS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg px-3 py-2 font-medium text-slate-100 underline decoration-slate-400/60 underline-offset-4"
+          >
+            Terms & Conditions
+          </a>
+        </div>
       </div>
       {laneToast && (
         <div className="admin-lane-toast" role="status" aria-live="polite">

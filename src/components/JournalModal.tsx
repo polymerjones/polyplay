@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import { getGratitudeBackupFilename, serializeGratitudeJson } from "../lib/backup";
 import {
   DEFAULT_GRATITUDE_SETTINGS,
@@ -36,7 +36,7 @@ const JOURNAL_BG_TOGGLE_KEY = "polyplay_journalBgToggle_v1";
 const JOURNAL_VERSE_INDEX_KEY = "polyplay_journalVerseIndex_v1";
 const JOURNAL_LOOP_START_SEC = 0.08;
 const JOURNAL_LOOP_END_GUARD_SEC = 0.06;
-const JOURNAL_ENTRY_DOUBLE_TAP_WINDOW_MS = 150;
+const JOURNAL_EDGE_CLOSE_PX = 56;
 
 const JOURNAL_BACKGROUNDS: JournalBackground[] = [
   { id: "1", src: "/clouds1.mov" },
@@ -88,6 +88,17 @@ function shouldUseLightJournalFx(): boolean {
 function isCompactJournalEditingViewport(): boolean {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
   return window.matchMedia("(max-width: 520px)").matches;
+}
+
+function isNearJournalDismissEdge(event: MouseEvent<HTMLElement>): boolean {
+  if (typeof window === "undefined") return false;
+  const { clientX, clientY } = event;
+  return (
+    clientX <= JOURNAL_EDGE_CLOSE_PX ||
+    clientY <= JOURNAL_EDGE_CLOSE_PX ||
+    clientX >= window.innerWidth - JOURNAL_EDGE_CLOSE_PX ||
+    clientY >= window.innerHeight - JOURNAL_EDGE_CLOSE_PX
+  );
 }
 
 function createSparkles(count: number): Sparkle[] {
@@ -201,9 +212,8 @@ export function JournalModal({ open, onClose }: Props) {
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const activeEditEntryRef = useRef<HTMLElement | null>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const activeEditActionsRef = useRef<HTMLDivElement | null>(null);
   const isResolvingEditRef = useRef(false);
-  const pendingEntryTapTimeoutRef = useRef<number | null>(null);
-  const pendingEntryTapIdRef = useRef<string | null>(null);
   const deleteTimerRef = useRef<number | null>(null);
   const verseFxTimerRef = useRef<number | null>(null);
   const verseFxRafRef = useRef<number | null>(null);
@@ -261,18 +271,30 @@ export function JournalModal({ open, onClose }: Props) {
     const scrollActiveEntryIntoComfortableView = () => {
       const list = entryListRef.current;
       const entry = activeEditEntryRef.current;
+      const actions = activeEditActionsRef.current;
       if (!list || !entry) return;
 
       const listRect = list.getBoundingClientRect();
       const entryRect = entry.getBoundingClientRect();
+      const actionsRect = actions?.getBoundingClientRect() ?? null;
       const isCompact = isCompactJournalEditingViewport();
       const topInset = isCompact ? 22 : 18;
-      const targetTop = list.scrollTop + (entryRect.top - listRect.top) - topInset;
+      const bottomInset = isCompact ? 20 : 18;
+      const entryTop = list.scrollTop + (entryRect.top - listRect.top);
+      const entryBottom = list.scrollTop + ((actionsRect?.bottom ?? entryRect.bottom) - listRect.top);
+      const visibleTop = list.scrollTop + topInset;
+      const visibleBottom = list.scrollTop + list.clientHeight - bottomInset;
+      let nextTop = list.scrollTop;
 
-      const nextTop = Math.max(0, targetTop);
+      if (entryTop < visibleTop) {
+        nextTop = Math.max(0, entryTop - topInset);
+      } else if (entryBottom > visibleBottom) {
+        nextTop = Math.max(0, entryBottom - list.clientHeight + bottomInset);
+      }
+
       if (isCompact) {
         list.scrollTop = nextTop;
-      } else {
+      } else if (Math.abs(nextTop - list.scrollTop) > 1) {
         list.scrollTo({
           top: nextTop,
           behavior: "smooth"
@@ -415,9 +437,6 @@ export function JournalModal({ open, onClose }: Props) {
 
   useEffect(() => {
     return () => {
-      if (pendingEntryTapTimeoutRef.current !== null) {
-        window.clearTimeout(pendingEntryTapTimeoutRef.current);
-      }
       if (deleteTimerRef.current !== null) {
         window.clearTimeout(deleteTimerRef.current);
       }
@@ -526,20 +545,11 @@ export function JournalModal({ open, onClose }: Props) {
 
   const canSaveNewEntry = newEntryText.trim().length > 0;
 
-  const clearPendingEntryTap = () => {
-    if (pendingEntryTapTimeoutRef.current !== null) {
-      window.clearTimeout(pendingEntryTapTimeoutRef.current);
-      pendingEntryTapTimeoutRef.current = null;
-    }
-    pendingEntryTapIdRef.current = null;
-  };
-
   const toggleExpandedEntry = (entryId: string) => {
     setExpandedEntryId((prev) => (prev === entryId ? null : entryId));
   };
 
   const startEditingEntry = (entry: GratitudeEntry) => {
-    clearPendingEntryTap();
     setEditingEntryId(entry.id);
     setExpandedEntryId(entry.id);
     setIsComposerOpen(false);
@@ -548,19 +558,11 @@ export function JournalModal({ open, onClose }: Props) {
 
   const handleEntryTap = (entry: GratitudeEntry) => {
     if (editingEntryId && editingEntryId !== entry.id) return;
-    const pendingId = pendingEntryTapIdRef.current;
-    if (pendingEntryTapTimeoutRef.current !== null && pendingId === entry.id) {
-      clearPendingEntryTap();
+    if (expandedEntryId === entry.id) {
       if (!editingEntryId) startEditingEntry(entry);
       return;
     }
-    clearPendingEntryTap();
-    pendingEntryTapIdRef.current = entry.id;
-    pendingEntryTapTimeoutRef.current = window.setTimeout(() => {
-      toggleExpandedEntry(entry.id);
-      pendingEntryTapTimeoutRef.current = null;
-      pendingEntryTapIdRef.current = null;
-    }, JOURNAL_ENTRY_DOUBLE_TAP_WINDOW_MS);
+    toggleExpandedEntry(entry.id);
   };
 
   const releaseEditResolutionLock = () => {
@@ -617,7 +619,7 @@ export function JournalModal({ open, onClose }: Props) {
       aria-modal="true"
       aria-label="Gratitude Journal"
       onClick={(event) => {
-        if (event.target === event.currentTarget && editingEntryId === null) onClose();
+        if (event.target === event.currentTarget && editingEntryId === null && isNearJournalDismissEdge(event)) onClose();
       }}
     >
       <video
@@ -673,12 +675,7 @@ export function JournalModal({ open, onClose }: Props) {
           ))}
         </div>
       )}
-      <div
-        className="journalUI"
-        onClick={(event) => {
-          if (event.target === event.currentTarget && editingEntryId === null) onClose();
-        }}
-      >
+      <div className="journalUI">
         <div className={`journal-modal__card journalGlassPanel ${isWritingActive ? "is-writing" : ""}`.trim()} ref={cardRef}>
           <div className="journalRim" aria-hidden="true" />
           <div className="journal-modal__head">
@@ -920,7 +917,7 @@ export function JournalModal({ open, onClose }: Props) {
                   const isAnotherEntryBlocked = editingEntryId !== null && !isEditing;
                   const isDeleting = deletingEntryId === entry.id;
                   const isExpanded = isEditing || expandedEntryId === entry.id;
-                  const helperText = isEditing ? null : isExpanded ? "Double tap to edit" : "Tap to expand";
+                  const helperText = isEditing ? null : isExpanded ? "Tap to edit" : "Tap to expand";
                   return (
                     <article
                       key={entry.id}
@@ -1016,7 +1013,7 @@ export function JournalModal({ open, onClose }: Props) {
                         }}
                         rows={4}
                       />
-                      <div className="journal-entry__editor-actions">
+                      <div ref={isEditing ? activeEditActionsRef : null} className="journal-entry__editor-actions">
                         <button
                           type="button"
                           className="journal-entry__save"

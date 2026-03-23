@@ -636,6 +636,8 @@ body.theme-dark .rowAuraGlow {
   font-weight: 800;
   letter-spacing: 0.5px;
   text-shadow: 0 0 18px rgba(172, 126, 255, 0.36);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .splash-overlay__skip {

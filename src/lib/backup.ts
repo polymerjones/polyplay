@@ -1421,10 +1421,9 @@ export async function importPolyplaylist(file: File): Promise<ImportPolyplaylist
   };
 }
 
-async function clearAllStoredBlobs(): Promise<void> {
-  const stats = await listBlobStats();
-  for (const stat of stats) {
-    await deleteBlob(stat.key);
+async function clearStoredBlobs(blobKeys: string[]): Promise<void> {
+  for (const key of blobKeys) {
+    await deleteBlob(key).catch(() => undefined);
   }
 }
 
@@ -1467,44 +1466,52 @@ export async function importFullBackup(file: File): Promise<ImportFullBackupResu
 
   let restoredMediaFiles = 0;
   const restoredTracks: Record<string, TrackRecord> = {};
+  const existingBlobKeys = (await listBlobStats()).map((stat) => stat.key);
+  const stagedBlobKeys: string[] = [];
 
-  await clearAllStoredBlobs();
+  try {
+    for (const [trackId, track] of Object.entries(importedLibrary.tracksById)) {
+      const nextTrack = sanitizeTrackForRestore(track);
 
-  for (const [trackId, track] of Object.entries(importedLibrary.tracksById)) {
-    const nextTrack = sanitizeTrackForRestore(track);
+      const audioEntry = findEntryByPrefix(zipEntries, `${BACKUP_ROOT}/media/${trackId}/audio.`);
+      if (audioEntry) {
+        const blob = new Blob([uint8ToArrayBuffer(audioEntry.data)], { type: getMimeFromPath(audioEntry.path) });
+        const key = makeBlobKey();
+        await putBlob(key, blob, { type: "audio" });
+        stagedBlobKeys.push(key);
+        nextTrack.audioKey = key;
+        nextTrack.audioBytes = blob.size;
+        restoredMediaFiles += 1;
+      }
 
-    const audioEntry = findEntryByPrefix(zipEntries, `${BACKUP_ROOT}/media/${trackId}/audio.`);
-    if (audioEntry) {
-      const blob = new Blob([uint8ToArrayBuffer(audioEntry.data)], { type: getMimeFromPath(audioEntry.path) });
-      const key = makeBlobKey();
-      await putBlob(key, blob, { type: "audio" });
-      nextTrack.audioKey = key;
-      nextTrack.audioBytes = blob.size;
-      restoredMediaFiles += 1;
+      const artEntry = findEntryByPrefix(zipEntries, `${BACKUP_ROOT}/media/${trackId}/artwork.`);
+      if (artEntry) {
+        const blob = new Blob([uint8ToArrayBuffer(artEntry.data)], { type: getMimeFromPath(artEntry.path) });
+        const key = makeBlobKey();
+        await putBlob(key, blob, { type: "image" });
+        stagedBlobKeys.push(key);
+        nextTrack.artKey = key;
+        nextTrack.posterBytes = blob.size;
+        nextTrack.artworkBytes = (nextTrack.artworkBytes ?? 0) + blob.size;
+        restoredMediaFiles += 1;
+      }
+
+      const artVideoEntry = findEntryByPrefix(zipEntries, `${BACKUP_ROOT}/media/${trackId}/artwork-video.`);
+      if (artVideoEntry) {
+        const blob = new Blob([uint8ToArrayBuffer(artVideoEntry.data)], { type: getMimeFromPath(artVideoEntry.path) });
+        const key = makeBlobKey();
+        await putBlob(key, blob, { type: "video" });
+        stagedBlobKeys.push(key);
+        nextTrack.artVideoKey = key;
+        nextTrack.artworkBytes = (nextTrack.artworkBytes ?? 0) + blob.size;
+        restoredMediaFiles += 1;
+      }
+
+      restoredTracks[trackId] = nextTrack;
     }
-
-    const artEntry = findEntryByPrefix(zipEntries, `${BACKUP_ROOT}/media/${trackId}/artwork.`);
-    if (artEntry) {
-      const blob = new Blob([uint8ToArrayBuffer(artEntry.data)], { type: getMimeFromPath(artEntry.path) });
-      const key = makeBlobKey();
-      await putBlob(key, blob, { type: "image" });
-      nextTrack.artKey = key;
-      nextTrack.posterBytes = blob.size;
-      nextTrack.artworkBytes = (nextTrack.artworkBytes ?? 0) + blob.size;
-      restoredMediaFiles += 1;
-    }
-
-    const artVideoEntry = findEntryByPrefix(zipEntries, `${BACKUP_ROOT}/media/${trackId}/artwork-video.`);
-    if (artVideoEntry) {
-      const blob = new Blob([uint8ToArrayBuffer(artVideoEntry.data)], { type: getMimeFromPath(artVideoEntry.path) });
-      const key = makeBlobKey();
-      await putBlob(key, blob, { type: "video" });
-      nextTrack.artVideoKey = key;
-      nextTrack.artworkBytes = (nextTrack.artworkBytes ?? 0) + blob.size;
-      restoredMediaFiles += 1;
-    }
-
-    restoredTracks[trackId] = nextTrack;
+  } catch (error) {
+    await clearStoredBlobs(stagedBlobKeys);
+    throw error;
   }
 
   const restoredLibrary = createEmptyLibrary();
@@ -1538,6 +1545,12 @@ export async function importFullBackup(file: File): Promise<ImportFullBackupResu
       // Ignore malformed gratitude payload.
     }
   }
+
+  const restoredBlobKeys = new Set(
+    Object.values(restoredTracks).flatMap((track) => [track.audioKey, track.artKey, track.artVideoKey]).filter(Boolean) as string[]
+  );
+  const obsoleteBlobKeys = existingBlobKeys.filter((key) => !restoredBlobKeys.has(key));
+  await clearStoredBlobs(obsoleteBlobKeys);
 
   return {
     restoredTracks: Object.keys(restoredTracks).length,

@@ -18,9 +18,9 @@ export function EmptyLibraryWelcome({
   onStartQuickTour,
   onUploadFirstTrack,
   onPrimaryButtonClick,
-  primaryButtonLabel = "Upload your first track",
+  primaryButtonLabel = "Import your first track",
   primaryButtonClassName,
-  bodyText = "Start by uploading your first track. Once you add music, aura controls and loop tools unlock.",
+  bodyText = "Start by importing your first track. Once you add music, aura controls and loop tools unlock.",
   onClose
 }: Props) {
   const showPrimaryButton = phase === "pre-tour" || phase === "upload-track";
@@ -31,7 +31,7 @@ export function EmptyLibraryWelcome({
       <button type="button" className="empty-library-card__close" aria-label="Close welcome" onClick={onClose}>
         ✕
       </button>
-      <h2 className="empty-library-card__title">Hey new person! Welcome to Polyplay.</h2>
+      <h2 className="empty-library-card__title">Hey new person! Welcome to PolyPlay.</h2>
       <p className="empty-library-card__body">{bodyText}</p>
       {showPrimaryButton && (
         <div className="empty-library-card__actions">
