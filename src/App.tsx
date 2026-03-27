@@ -104,6 +104,7 @@ const FULLSCREEN_ART_HINT_SEEN_KEY = "polyplay_hasSeenFullscreenArtHint_v1";
 const PLAYER_COMPACT_HINT_SEEN_KEY = "polyplay_hasSeenPlayerCompactHint_v1";
 const PLAYER_VIBE_HINT_SEEN_KEY = "polyplay_hasSeenPlayerVibeHint_v1";
 const PLAYER_DIM_HINT_SEEN_KEY = "polyplay_hasSeenPlayerDimHint_v1";
+const LAYOUT_TOGGLE_HINT_SEEN_KEY = "polyplay_hasSeenLayoutToggleHint_v1";
 const NEW_PLAYLIST_HINT_SEEN_KEY = "polyplay_hasSeenNewPlaylistHint_v1";
 const UPLOAD_HINT_SEEN_KEY = "polyplay_hasSeenUploadHint_v1";
 const APP_STATE_KEY = "polyplay_app_state_v1";
@@ -352,6 +353,7 @@ export default function App() {
   const isIOS =
     typeof navigator !== "undefined" &&
     /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const splashSkipLabel = isIOS ? "Double Tap to Skip" : "Double Click to Skip";
   const headerTitle = "PolyPlay Audio";
   const headerVersion = "v1.0.0";
   const [hasOnboarded, setHasOnboarded] = useState<boolean>(() => {
@@ -384,6 +386,7 @@ export default function App() {
   });
   const [showImportWarning, setShowImportWarning] = useState(false);
   const [vaultToast, setVaultToastState] = useState<{ message: string; tone: VaultToastTone } | null>(null);
+  const [vaultImportCloseCountdownMs, setVaultImportCloseCountdownMs] = useState<number | null>(null);
   const [importSummary, setImportSummary] = useState<{
     playlistName: string;
     updatedTrackCount: number;
@@ -442,6 +445,13 @@ export default function App() {
       return false;
     }
   });
+  const [hasSeenLayoutToggleHint, setHasSeenLayoutToggleHint] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(LAYOUT_TOGGLE_HINT_SEEN_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
   const [hasSeenNewPlaylistHint, setHasSeenNewPlaylistHint] = useState<boolean>(() => {
     try {
       return localStorage.getItem(NEW_PLAYLIST_HINT_SEEN_KEY) === "true";
@@ -485,6 +495,8 @@ export default function App() {
   const gratitudeTypingTimeoutRef = useRef<number | null>(null);
   const journalToastTimeoutRef = useRef<number | null>(null);
   const vaultToastTimeoutRef = useRef<number | null>(null);
+  const vaultImportCloseTimeoutRef = useRef<number | null>(null);
+  const vaultImportCloseIntervalRef = useRef<number | null>(null);
   const loopDragResumeTimeoutRef = useRef<number | null>(null);
   const loopDragWasPlayingRef = useRef(false);
   const playbackResyncInFlightRef = useRef(false);
@@ -492,6 +504,7 @@ export default function App() {
   const lastPlaybackResyncAtRef = useRef(0);
   const lastUiCurrentTimeCommitAtRef = useRef(0);
   const lastUiCurrentTimeValueRef = useRef(0);
+  const currentTrackIdRef = useRef<string | null>(null);
   const nowPlayingItemSyncSeqRef = useRef(0);
   const lastNowPlayingPlaybackSyncRef = useRef<{
     trackId: string | null;
@@ -513,6 +526,10 @@ export default function App() {
   const activePlaylistId = runtimeLibrary?.activePlaylistId ?? null;
   const activePlaylistName =
     (activePlaylistId && runtimeLibrary?.playlistsById?.[activePlaylistId]?.name) || "None";
+
+  useEffect(() => {
+    currentTrackIdRef.current = currentTrackId;
+  }, [currentTrackId]);
 
   const markActivePlaylistDirty = () => {
     setIsActivePlaylistDirty(true);
@@ -595,6 +612,14 @@ export default function App() {
       setAuraColor(normalizeAuraColor(localStorage.getItem(AURA_COLOR_KEY)));
       setIsShuffleEnabled(localStorage.getItem(SHUFFLE_ENABLED_KEY) === "true");
       setIsRepeatTrackEnabled(localStorage.getItem(REPEAT_TRACK_KEY) === "true");
+      const savedDimMode = localStorage.getItem(DIM_MODE_KEY);
+      if (savedDimMode === "normal" || savedDimMode === "dim" || savedDimMode === "mute") {
+        setDimMode(normalizeDimModeForPlatform(savedDimMode, isIOS));
+      }
+      const savedNoveltyMode = localStorage.getItem(NOVELTY_MODE_KEY);
+      if (savedNoveltyMode === "normal" || savedNoveltyMode === "dim" || savedNoveltyMode === "mute") {
+        setNoveltyMode(savedNoveltyMode);
+      }
       setLoopByTrack(parseLoopByTrack(localStorage.getItem(LOOP_REGION_KEY)));
       setLoopModeByTrack(parseLoopModeByTrack(localStorage.getItem(LOOP_MODE_KEY)));
       setGratitudeSettings(loadGratitudeSettings());
@@ -732,7 +757,7 @@ export default function App() {
       });
       return { seeded: false, reason: "seed-failed" };
     });
-    await restoreDemoTracks().catch((error) => {
+    await restoreDemoTracks({ preferDemoActive: Boolean(options?.preferDemoActive) }).catch((error) => {
       console.error("[demo-seed]", {
         event: "restore:swallowed-error",
         error: error instanceof Error ? error.message : String(error)
@@ -965,6 +990,7 @@ export default function App() {
         window.clearTimeout(vaultToastTimeoutRef.current);
         vaultToastTimeoutRef.current = null;
       }
+      clearVaultImportSuccessCountdown();
       revokeAllMediaUrls();
     };
   }, []);
@@ -989,6 +1015,41 @@ export default function App() {
       setVaultToastState((current) => (current?.message === message ? null : current));
       vaultToastTimeoutRef.current = null;
     }, tone === "error" ? 5400 : 3800);
+  };
+
+  const clearVaultImportSuccessCountdown = () => {
+    if (vaultImportCloseTimeoutRef.current !== null) {
+      window.clearTimeout(vaultImportCloseTimeoutRef.current);
+      vaultImportCloseTimeoutRef.current = null;
+    }
+    if (vaultImportCloseIntervalRef.current !== null) {
+      window.clearInterval(vaultImportCloseIntervalRef.current);
+      vaultImportCloseIntervalRef.current = null;
+    }
+    setVaultImportCloseCountdownMs(null);
+  };
+
+  const closeVaultOverlay = () => {
+    clearVaultImportSuccessCountdown();
+    setShowImportWarning(false);
+    setOverlayPage(null);
+  };
+
+  const startVaultImportSuccessCountdown = () => {
+    clearVaultImportSuccessCountdown();
+    const startedAt = Date.now();
+    const totalMs = 2000;
+    setVaultImportCloseCountdownMs(totalMs);
+    vaultImportCloseIntervalRef.current = window.setInterval(() => {
+      const remaining = Math.max(0, totalMs - (Date.now() - startedAt));
+      setVaultImportCloseCountdownMs(remaining);
+    }, 100);
+    vaultImportCloseTimeoutRef.current = window.setTimeout(() => {
+      clearVaultImportSuccessCountdown();
+      setShowImportWarning(false);
+      setOverlayPage((current) => (current === "vault" ? null : current));
+      pulseAuraAfterVaultClose();
+    }, totalMs);
   };
 
   useEffect(() => {
@@ -1408,6 +1469,7 @@ export default function App() {
           localStorage.removeItem(PLAYER_COMPACT_HINT_SEEN_KEY);
           localStorage.removeItem(PLAYER_VIBE_HINT_SEEN_KEY);
           localStorage.removeItem(PLAYER_DIM_HINT_SEEN_KEY);
+          localStorage.removeItem(LAYOUT_TOGGLE_HINT_SEEN_KEY);
           localStorage.removeItem(NEW_PLAYLIST_HINT_SEEN_KEY);
           localStorage.removeItem(UPLOAD_HINT_SEEN_KEY);
           localStorage.removeItem(GRATITUDE_ENTRIES_KEY);
@@ -1430,6 +1492,7 @@ export default function App() {
         setLoopModeByTrack({});
         setHasOnboarded(false);
         setHasSeenPlayerCompactHint(false);
+        setHasSeenLayoutToggleHint(false);
         setHasSeenNewPlaylistHint(false);
         setHasSeenUploadHint(false);
         setHasSeenPlayerVibeHint(false);
@@ -2196,6 +2259,16 @@ export default function App() {
     window.dispatchEvent(new CustomEvent("polyplay:aura-trigger"));
   };
 
+  const pulseAuraAfterVaultClose = () => {
+    const trackId = currentTrackIdRef.current;
+    if (!trackId) return;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        triggerAuraPulseForTrack(trackId);
+      });
+    });
+  };
+
   const playTrack = (trackId: string, autoPlay = true) => {
     logAudioDebug("playTrack() called", { trackId, autoPlay });
     dismissOpenState();
@@ -2395,6 +2468,16 @@ export default function App() {
     if (returnToCompactAfterClearRef.current) {
       setIsPlayerCompact(true);
       returnToCompactAfterClearRef.current = false;
+    }
+  };
+
+  const markLayoutToggleHintSeen = () => {
+    if (hasSeenLayoutToggleHint) return;
+    setHasSeenLayoutToggleHint(true);
+    try {
+      localStorage.setItem(LAYOUT_TOGGLE_HINT_SEEN_KEY, "true");
+    } catch {
+      // Ignore non-critical onboarding persistence failures.
     }
   };
 
@@ -2925,6 +3008,13 @@ export default function App() {
       setImportSummary(null);
       setShowMissingIds(false);
       const summary = await importFullBackup(file);
+      teardownCurrentAudio();
+      pendingAutoPlayRef.current = false;
+      revokeAllMediaUrls();
+      setCurrentTrackId(null);
+      setCurrentTime(0);
+      setDuration(0);
+      setIsPlaying(false);
       exitFreshUserOnboardingState();
       window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
       syncPlayerStateFromStorage();
@@ -2935,7 +3025,9 @@ export default function App() {
         `Universe loaded. Restored ${summary.restoredTracks} tracks and ${summary.restoredMediaFiles} media files.`,
         "success"
       );
+      startVaultImportSuccessCountdown();
     } catch (error) {
+      clearVaultImportSuccessCountdown();
       setImportSummary(null);
       setVaultStatus(`Load Universe failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
     } finally {
@@ -2964,6 +3056,11 @@ export default function App() {
     if (overlayPage !== "vault") return;
     void refreshVaultInspector();
   }, [overlayPage, runtimeLibrary]);
+
+  useEffect(() => {
+    if (overlayPage === "vault") return;
+    clearVaultImportSuccessCountdown();
+  }, [overlayPage]);
 
   const isAnyModalOpen = Boolean(
     overlayPage || isTipsOpen || isJournalOpen || isGratitudeOpen || showSplash || isFullscreenPlayerOpen || isCreatePlaylistModalOpen
@@ -3015,6 +3112,7 @@ export default function App() {
   const isCreatePlaylistGuidanceActive = quickTourPhase === "create-playlist";
   const shouldShowNewPlaylistHint = isCreatePlaylistGuidanceActive && !hasSeenNewPlaylistHint;
   const shouldShowUploadHint = derivedQuickTourPhase === "upload-track" && !hasSeenUploadHint;
+  const shouldShowLayoutToggleHint = !hasSeenLayoutToggleHint;
   const shouldHighlightQuickTourStart = isPreTourState;
   const shouldHighlightWelcomeUpload = derivedQuickTourPhase === "upload-track";
   const welcomePhase = isCreatePlaylistGuidanceActive
@@ -3118,7 +3216,12 @@ export default function App() {
                 title="Admin"
                 onClick={() => openSettingsPanel("manage")}
               >
-                ⚙
+                <span className="gear-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" className="gear-icon-svg">
+                    <path d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Z" />
+                    <path d="M10.6 2.9h2.8l.5 2.2c.5.14.96.33 1.4.58l1.9-1.2 2 2-1.2 1.9c.25.44.44.9.58 1.4l2.2.5v2.8l-2.2.5c-.14.5-.33.96-.58 1.4l1.2 1.9-2 2-1.9-1.2c-.44.25-.9.44-1.4.58l-.5 2.2h-2.8l-.5-2.2a7.1 7.1 0 0 1-1.4-.58l-1.9 1.2-2-2 1.2-1.9a7.1 7.1 0 0 1-.58-1.4l-2.2-.5v-2.8l2.2-.5c.14-.5.33-.96.58-1.4l-1.2-1.9 2-2 1.9 1.2c.44-.25.9-.44 1.4-.58l.5-2.2Z" />
+                  </svg>
+                </span>
               </button>
               {showHeaderUploadButton && (
                 <button
@@ -3146,7 +3249,30 @@ export default function App() {
               onClick={(event) => cycleTheme(event)}
             >
               <span className="theme-switch__icon" aria-hidden="true">
-                {themeMode === "light" ? "☀" : themeMode === "dark" ? "◑" : "✦"}
+                <svg viewBox="0 0 24 24" className="theme-switch-svg">
+                  {themeMode === "light" ? (
+                    <>
+                      <circle cx="12" cy="12" r="4.2" className="theme-switch-core" />
+                      <path
+                        d="M12 2.5v3.1M12 18.4v3.1M21.5 12h-3.1M5.6 12H2.5M18.7 5.3l-2.2 2.2M7.5 16.5l-2.2 2.2M18.7 18.7l-2.2-2.2M7.5 7.5 5.3 5.3"
+                        className="theme-switch-ray"
+                      />
+                    </>
+                  ) : themeMode === "dark" ? (
+                    <path
+                      d="M14.9 2.6a8.9 8.9 0 1 0 6.5 14.8A9.5 9.5 0 0 1 14.9 2.6Z"
+                      className="theme-switch-core"
+                    />
+                  ) : (
+                    <>
+                      <path
+                        d="M12 3.2 13.9 8l5.1.4-3.9 3.1 1.3 5-4.4-2.7-4.4 2.7 1.3-5L5 8.4 10.1 8 12 3.2Z"
+                        className="theme-switch-core"
+                      />
+                      <circle cx="18.2" cy="6.2" r="1.4" className="theme-switch-spark" />
+                    </>
+                  )}
+                </svg>
               </span>
             </button>
             <button
@@ -3199,9 +3325,15 @@ export default function App() {
             <PolyOracleOrb />
             <button
               type="button"
-              className="layout-link nav-action-btn"
+              className={`layout-link nav-action-btn onboarding-action ${shouldShowLayoutToggleHint ? "has-onboarding-hint" : ""}`.trim()}
               aria-label={`Switch to ${layoutMode === "grid" ? "list" : "grid"} layout`}
-              onClick={toggleLayoutMode}
+              onClick={(event) => {
+                if (shouldShowLayoutToggleHint) {
+                  triggerOnboardingSparkle(event);
+                  markLayoutToggleHintSeen();
+                }
+                toggleLayoutMode();
+              }}
             >
               <span className="layout-icon" aria-hidden="true">
                 {layoutMode === "grid" ? "≡" : "▦"}
@@ -3505,15 +3637,24 @@ export default function App() {
                 type="button"
                 className="app-overlay-close"
                 aria-label="Close vault"
-                onClick={() => {
-                  setShowImportWarning(false);
-                  setOverlayPage(null);
-                }}
+                onClick={closeVaultOverlay}
               >
                 ✕
               </button>
             </div>
             <div className="vault-body">
+              {vaultImportCloseCountdownMs !== null && (
+                <div className="vault-success-countdown" role="status" aria-live="polite">
+                  <h3 className="vault-success-countdown__title">Vault imported successfully</h3>
+                  <p className="vault-success-countdown__sub">Closing in</p>
+                  <div className="vault-success-countdown__count">
+                    {Math.max(1, Math.ceil(vaultImportCloseCountdownMs / 1000))}...
+                  </div>
+                  <button type="button" className="vault-btn vault-btn--ghost" onClick={closeVaultOverlay}>
+                    Close now
+                  </button>
+                </div>
+              )}
               <div className="vault-summary">
                 <div>
                   <span className="vault-summary__label">Active Playlist</span>
@@ -3553,7 +3694,7 @@ export default function App() {
               </div>
               <div className="vault-helper-block">
                 <p className="vault-helper">
-                  Vault backups contain your personal playlists, imported media, and journal entries.
+                  Vault backups contain your personal playlists, imported media, and app settings.
                 </p>
                 <p className="vault-helper">Only restore backups you trust.</p>
               </div>
@@ -3642,6 +3783,7 @@ export default function App() {
           isDismissing={isSplashDismissing}
           onClose={() => finishSplash(false)}
           onSkip={(skipEveryTime) => finishSplash(skipEveryTime)}
+          skipLabel={splashSkipLabel}
         />
       )}
       <JournalModal open={isJournalOpen} onClose={() => setIsJournalOpen(false)} />

@@ -6,9 +6,10 @@ type Props = {
   isDismissing: boolean;
   onClose: () => void;
   onSkip: (skipEveryTime: boolean) => void;
+  skipLabel?: string;
 };
 
-export function SplashOverlay({ isDismissing, onClose, onSkip }: Props) {
+export function SplashOverlay({ isDismissing, onClose, onSkip, skipLabel = "Skip" }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const completedRef = useRef(false);
   const lastTapAtRef = useRef(0);
@@ -72,14 +73,15 @@ export function SplashOverlay({ isDismissing, onClose, onSkip }: Props) {
     }
   };
 
-  const enableSound = async () => {
+  const toggleSound = async () => {
     const video = videoRef.current;
     if (!video) return;
+    const nextEnabled = !soundEnabled;
     try {
-      video.muted = false;
-      video.volume = 1;
+      video.muted = !nextEnabled;
+      if (nextEnabled) video.volume = 1;
       await video.play();
-      setSoundEnabled(true);
+      setSoundEnabled(nextEnabled);
       setNeedsUserStart(false);
     } catch {
       video.muted = true;
@@ -135,13 +137,30 @@ export function SplashOverlay({ isDismissing, onClose, onSkip }: Props) {
         ✕
       </button>
       <button type="button" className="splash-overlay__skip" onClick={skipOnce}>
-        Skip
+        {skipLabel}
       </button>
-      {!soundEnabled && (
-        <button type="button" className="splash-overlay__sound" onClick={() => void enableSound()}>
-          Tap for sound
-        </button>
-      )}
+      <button
+        type="button"
+        className={`splash-overlay__sound ${soundEnabled ? "is-enabled" : "is-muted"}`.trim()}
+        aria-label={soundEnabled ? "Mute splash sound" : "Unmute splash sound"}
+        aria-pressed={soundEnabled}
+        title={soundEnabled ? "Mute splash sound" : "Unmute splash sound"}
+        onClick={() => void toggleSound()}
+      >
+        <span className="splash-overlay__sound-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" className="splash-overlay__sound-svg">
+            <path d="M5 14h3.5l4.5 4V6L8.5 10H5z" />
+            {soundEnabled ? (
+              <>
+                <path d="M16 9.2a4.2 4.2 0 0 1 0 5.6" />
+                <path d="M18.7 6.8a7.6 7.6 0 0 1 0 10.4" />
+              </>
+            ) : (
+              <path d="m16 8 5 8M21 8l-5 8" />
+            )}
+          </svg>
+        </span>
+      </button>
       {needsUserStart && (
         <div className="splash-overlay__tap-wrap">
           <button type="button" className="splash-overlay__tap" onClick={() => void startFromTap()}>

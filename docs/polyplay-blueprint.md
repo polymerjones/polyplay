@@ -203,7 +203,7 @@ On `ended`, behavior is:
 
 #### Vault export/import
 
-The vault overlay can export a full backup or import one. The import flow checks whether the current playlist is marked dirty and may warn the user before continuing. Import restores metadata, media blobs, and gratitude data, then refreshes library state in the runtime app.
+The vault overlay can export a full backup or import one. The import flow checks whether the current playlist is marked dirty and may warn the user before continuing. Import restores metadata, media blobs, and app/config state, then refreshes library state in the runtime app.
 
 #### Gratitude prompt and journal flow
 
@@ -690,7 +690,6 @@ The vault system exports and imports a full local backup of the user environment
 The full backup ZIP includes:
 
 - `config.json`
-- `gratitude.json`
 - `library.json`
 - `manifest.json`
 - per-track media files under `polyplay-backup/media/...`
@@ -699,7 +698,6 @@ The manifest explicitly contains:
 
 - app version
 - config snapshot
-- gratitude entries
 - normalized library state
 
 `buildConfigSnapshot()` includes:

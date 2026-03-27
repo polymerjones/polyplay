@@ -453,9 +453,11 @@ main,
 }
 
 .theme-switch__icon {
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .theme-switch.is-anim-on {
@@ -556,6 +558,27 @@ main,
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
+}
+
+.theme-switch-core {
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.theme-switch-ray {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.theme-switch-spark {
+  fill: currentColor;
+  opacity: 0.88;
 }
 
 .theme-switch-knob {
@@ -871,6 +894,45 @@ main,
   flex-wrap: wrap;
 }
 
+.vault-success-countdown {
+  width: min(360px, 100%);
+  justify-self: center;
+  display: grid;
+  gap: 10px;
+  text-align: center;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 255, 202, 0.5);
+  background:
+    radial-gradient(circle at 18% 16%, rgba(151, 255, 213, 0.24), transparent 34%),
+    radial-gradient(circle at 82% 18%, rgba(124, 233, 180, 0.14), transparent 40%),
+    linear-gradient(165deg, rgba(18, 62, 46, 0.96), rgba(10, 28, 22, 0.98));
+  box-shadow:
+    0 0 34px rgba(58, 198, 136, 0.34),
+    0 22px 44px rgba(0, 0, 0, 0.34);
+  padding: 16px 14px;
+}
+
+.vault-success-countdown__title {
+  margin: 0;
+  color: #effff7;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.vault-success-countdown__sub {
+  margin: 0;
+  color: rgba(223, 255, 239, 0.86);
+  font-size: 13px;
+}
+
+.vault-success-countdown__count {
+  color: #e8fff2;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  text-shadow: 0 0 18px rgba(138, 255, 197, 0.24);
+}
+
 .vault-status {
   margin: 0;
   color: rgba(215, 235, 255, 0.88);
@@ -1146,12 +1208,29 @@ body.gratitude-reactive .track-backdrop {
 
 .gear-icon,
 .back-icon {
-  font-size: 18px;
-  line-height: 1;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .back-icon {
   font-size: 32px;
+}
+
+.gear-icon-svg {
+  width: 19px;
+  height: 19px;
+  display: block;
+}
+
+.gear-icon-svg path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: miter;
 }
 
 .track-grid {
@@ -5058,6 +5137,16 @@ body.nuke-flash::after {
   color: #f7fbff;
   padding: 8px 10px;
   font-size: 13px;
+}
+
+html[data-theme="light"] .playlist-selector select {
+  border-color: rgba(207, 111, 130, 0.18);
+  background:
+    radial-gradient(120% 160% at 12% -10%, rgba(255, 223, 235, 0.97) 0%, rgba(251, 229, 239, 0.94) 42%, rgba(245, 221, 234, 0.92) 100%);
+  color: #4f2940;
+  box-shadow:
+    0 8px 18px rgba(126, 84, 108, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
 }
 
 .playlist-selector__controls {

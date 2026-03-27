@@ -24,6 +24,8 @@ const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
 const AURA_COLOR_KEY = "polyplay_auraColor_v1";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
+const DIM_MODE_KEY = "polyplay_dimMode_v1";
+const NOVELTY_MODE_KEY = "polyplay_noveltyMode_v1";
 const HAS_IMPORTED_KEY = "polyplay_hasImported";
 const LOOP_REGION_KEY = "polyplay_loopByTrack";
 const LOOP_MODE_KEY = "polyplay_loopModeByTrack";
@@ -69,6 +71,8 @@ export type PolyplayConfig = {
     layoutMode: "grid" | "list";
     shuffleEnabled: boolean;
     repeatTrackEnabled: boolean;
+    dimMode: "normal" | "dim" | "mute";
+    noveltyMode: "normal" | "dim" | "mute";
   };
   flags: {
     hasImported: boolean;
@@ -84,7 +88,6 @@ export type FullBackupManifest = {
   createdAt: string;
   config: PolyplayConfig;
   library: LibraryState;
-  gratitude: GratitudeEntry[];
 };
 
 export type ImportConfigSummary = {
@@ -316,6 +319,10 @@ function asBoolean(value: unknown): boolean {
   return value === true || value === "true";
 }
 
+function asDimMode(value: unknown): "normal" | "dim" | "mute" {
+  return value === "dim" || value === "mute" ? value : "normal";
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -340,6 +347,7 @@ function extFromMime(mime: string, fallback: string): string {
   const normalized = (mime || "").toLowerCase();
   if (normalized.includes("mpeg")) return "mp3";
   if (normalized.includes("wav")) return "wav";
+  if (normalized.includes("m4a")) return "m4a";
   if (normalized.includes("mp4") && normalized.startsWith("audio/")) return "m4a";
   if (normalized.includes("aac")) return "aac";
   if (normalized.includes("flac")) return "flac";
@@ -350,6 +358,73 @@ function extFromMime(mime: string, fallback: string): string {
   if (normalized.includes("quicktime")) return "mov";
   if (normalized.includes("mp4") && normalized.startsWith("video/")) return "mp4";
   return fallback;
+}
+
+function bytesStartWith(bytes: Uint8Array, pattern: number[], offset = 0): boolean {
+  if (offset + pattern.length > bytes.length) return false;
+  for (let index = 0; index < pattern.length; index += 1) {
+    if (bytes[offset + index] !== pattern[index]) return false;
+  }
+  return true;
+}
+
+function asciiFromBytes(bytes: Uint8Array, start: number, length: number): string {
+  if (start + length > bytes.length) return "";
+  let value = "";
+  for (let index = start; index < start + length; index += 1) {
+    value += String.fromCharCode(bytes[index]);
+  }
+  return value;
+}
+
+function isAdtsAac(bytes: Uint8Array): boolean {
+  if (bytes.length < 7) return false;
+  return bytes[0] === 0xff && (bytes[1] & 0xf6) === 0xf0;
+}
+
+function isMp3Frame(bytes: Uint8Array): boolean {
+  if (bytes.length < 4) return false;
+  if (bytes[0] !== 0xff || (bytes[1] & 0xe0) !== 0xe0) return false;
+  const layerBits = (bytes[1] >> 1) & 0x3;
+  const bitrateBits = (bytes[2] >> 4) & 0xf;
+  const sampleRateBits = (bytes[2] >> 2) & 0x3;
+  return layerBits !== 0 && bitrateBits !== 0xf && sampleRateBits !== 0x3;
+}
+
+function inferMimeFromBytes(
+  bytes: Uint8Array,
+  kind: "audio" | "artwork" | "video"
+): string | null {
+  if (kind === "artwork") {
+    if (bytesStartWith(bytes, [0x89, 0x50, 0x4e, 0x47])) return "image/png";
+    if (bytesStartWith(bytes, [0xff, 0xd8, 0xff])) return "image/jpeg";
+    if (asciiFromBytes(bytes, 0, 4) === "RIFF" && asciiFromBytes(bytes, 8, 4) === "WEBP") return "image/webp";
+    return null;
+  }
+
+  if (asciiFromBytes(bytes, 0, 3) === "ID3") return "audio/mpeg";
+  if (isAdtsAac(bytes)) return "audio/aac";
+  if (isMp3Frame(bytes)) return "audio/mpeg";
+  if (asciiFromBytes(bytes, 0, 4) === "fLaC") return "audio/flac";
+  if (asciiFromBytes(bytes, 0, 4) === "OggS") return "audio/ogg";
+  if (asciiFromBytes(bytes, 0, 4) === "RIFF" && asciiFromBytes(bytes, 8, 4) === "WAVE") return "audio/wav";
+  if (asciiFromBytes(bytes, 4, 4) === "ftyp") {
+    const brand = asciiFromBytes(bytes, 8, 4).toLowerCase();
+    if (brand === "qt  ") return "video/quicktime";
+    return kind === "video" ? "video/mp4" : "audio/mp4";
+  }
+
+  return null;
+}
+
+function resolveBackupMediaMime(
+  blob: Blob,
+  bytes: Uint8Array,
+  kind: "audio" | "artwork" | "video"
+): string | null {
+  const normalized = (blob.type || "").trim().toLowerCase();
+  if (normalized) return normalized;
+  return inferMimeFromBytes(bytes, kind);
 }
 
 function makeBlobKey(): string {
@@ -410,7 +485,9 @@ export function buildConfigSnapshot(): PolyplayConfig {
       auraColor: asAuraColor(localStorage.getItem(AURA_COLOR_KEY)),
       layoutMode: asLayout(localStorage.getItem(LAYOUT_MODE_KEY)),
       shuffleEnabled: asBoolean(localStorage.getItem(SHUFFLE_ENABLED_KEY)),
-      repeatTrackEnabled: asBoolean(localStorage.getItem(REPEAT_TRACK_KEY))
+      repeatTrackEnabled: asBoolean(localStorage.getItem(REPEAT_TRACK_KEY)),
+      dimMode: asDimMode(localStorage.getItem(DIM_MODE_KEY)),
+      noveltyMode: asDimMode(localStorage.getItem(NOVELTY_MODE_KEY))
     },
     flags: {
       hasImported: asBoolean(localStorage.getItem(HAS_IMPORTED_KEY))
@@ -482,7 +559,9 @@ function normalizeImportedConfig(input: unknown): PolyplayConfig {
     auraColor: null,
     layoutMode: "grid",
     shuffleEnabled: false,
-    repeatTrackEnabled: false
+    repeatTrackEnabled: false,
+    dimMode: "normal",
+    noveltyMode: "normal"
   };
 
   const gratitude = value.gratitude ?? DEFAULT_GRATITUDE_SETTINGS;
@@ -529,7 +608,9 @@ function normalizeImportedConfig(input: unknown): PolyplayConfig {
       auraColor: asAuraColor(settings.auraColor),
       layoutMode: asLayout(settings.layoutMode),
       shuffleEnabled: asBoolean(settings.shuffleEnabled),
-      repeatTrackEnabled: asBoolean(settings.repeatTrackEnabled)
+      repeatTrackEnabled: asBoolean(settings.repeatTrackEnabled),
+      dimMode: asDimMode(settings.dimMode),
+      noveltyMode: asDimMode(settings.noveltyMode)
     },
     flags: {
       hasImported: asBoolean(value.flags?.hasImported)
@@ -564,6 +645,8 @@ export function applyImportedConfig(config: PolyplayConfig): ImportConfigSummary
   localStorage.setItem(LAYOUT_MODE_KEY, config.settings.layoutMode);
   localStorage.setItem(SHUFFLE_ENABLED_KEY, config.settings.shuffleEnabled ? "true" : "false");
   localStorage.setItem(REPEAT_TRACK_KEY, config.settings.repeatTrackEnabled ? "true" : "false");
+  localStorage.setItem(DIM_MODE_KEY, asDimMode(config.settings.dimMode));
+  localStorage.setItem(NOVELTY_MODE_KEY, asDimMode(config.settings.noveltyMode));
   localStorage.setItem(HAS_IMPORTED_KEY, config.flags.hasImported ? "true" : "false");
   saveGratitudeSettings(config.gratitude);
 
@@ -1109,7 +1192,8 @@ async function buildTrackMediaEntries(
       const blob = await getBlob(key);
       if (!blob) return;
       const bytes = await blobToBytes(blob);
-      const ext = extFromMime(blob.type || "", fallbackExt);
+      const resolvedMime = resolveBackupMediaMime(blob, bytes, kind);
+      const ext = extFromMime(resolvedMime || "", fallbackExt);
       const filename =
         kind === "audio"
           ? `audio.${ext}`
@@ -1143,7 +1227,6 @@ export async function exportFullBackup(
 ): Promise<ExportFullBackupResult> {
   const library = sanitizeLibraryForFullBackup(loadLibrary());
   const config = buildConfigSnapshot();
-  const gratitudeEntries = safeJsonParse<GratitudeEntry[]>(localStorage.getItem(GRATITUDE_ENTRIES_KEY), []);
   const allTracks = Object.values(library.tracksById);
 
   const { entries: mediaEntries, mediaBytes } = await buildTrackMediaEntries(
@@ -1156,10 +1239,6 @@ export async function exportFullBackup(
     {
       path: `${BACKUP_ROOT}/config.json`,
       bytes: new TextEncoder().encode(serializeConfig(config))
-    },
-    {
-      path: `${BACKUP_ROOT}/gratitude.json`,
-      bytes: new TextEncoder().encode(serializeGratitudeJson())
     },
     {
       path: `${BACKUP_ROOT}/library.json`,
@@ -1175,7 +1254,6 @@ export async function exportFullBackup(
             appVersion: APP_VERSION,
             createdAt: nowIso(),
             config,
-            gratitude: gratitudeEntries,
             library: migrateLibraryIfNeeded(library)
           } satisfies FullBackupManifest,
           null,
@@ -1452,7 +1530,6 @@ export async function importFullBackup(file: File): Promise<ImportFullBackupResu
 
   const configEntry = zipEntries.get(`${BACKUP_ROOT}/config.json`);
   const libraryEntry = zipEntries.get(`${BACKUP_ROOT}/library.json`);
-  const gratitudeEntry = zipEntries.get(`${BACKUP_ROOT}/gratitude.json`);
 
   if (!configEntry || !libraryEntry) {
     throw new Error("Backup zip is missing config/library files.");
@@ -1530,21 +1607,6 @@ export async function importFullBackup(file: File): Promise<ImportFullBackupResu
 
   saveLibrary(restoredLibrary);
   const summary = applyImportedConfig(importedConfig);
-
-  if (gratitudeEntry) {
-    try {
-      const gratitudePayload = JSON.parse(decoder.decode(gratitudeEntry)) as {
-        settings?: GratitudeSettings;
-        entries?: GratitudeEntry[];
-      };
-      if (gratitudePayload.settings) saveGratitudeSettings(gratitudePayload.settings);
-      if (Array.isArray(gratitudePayload.entries)) {
-        localStorage.setItem(GRATITUDE_ENTRIES_KEY, JSON.stringify(gratitudePayload.entries));
-      }
-    } catch {
-      // Ignore malformed gratitude payload.
-    }
-  }
 
   const restoredBlobKeys = new Set(
     Object.values(restoredTracks).flatMap((track) => [track.audioKey, track.artKey, track.artVideoKey]).filter(Boolean) as string[]

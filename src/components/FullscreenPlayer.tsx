@@ -79,6 +79,7 @@ export function FullscreenPlayer({
   const artRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const artworkVideoRef = useRef<HTMLVideoElement | null>(null);
+  const isPlayingRef = useRef(isPlaying);
   const lastAuraFlashAtRef = useRef(0);
   const artStyle = track.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
@@ -92,6 +93,10 @@ export function FullscreenPlayer({
   useEffect(() => {
     setIsArtworkVideoReady(false);
   }, [track.artVideoUrl, track.id]);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
 
   useEffect(() => {
     const currentVideo = artworkVideoRef.current;
@@ -117,6 +122,7 @@ export function FullscreenPlayer({
         currentVideo.pause();
         return;
       }
+      if (!isPlayingRef.current) return;
       void currentVideo.play().catch(() => undefined);
     };
     currentVideo.addEventListener("loadeddata", markReady);
@@ -140,6 +146,16 @@ export function FullscreenPlayer({
       }
     };
   }, [track.artVideoUrl]);
+
+  useEffect(() => {
+    const currentVideo = artworkVideoRef.current;
+    if (!currentVideo) return;
+    if (document.hidden || !isPlaying) {
+      currentVideo.pause();
+      return;
+    }
+    void currentVideo.play().catch(() => undefined);
+  }, [isPlaying, track.artVideoUrl]);
 
   useEffect(() => {
     let canceled = false;

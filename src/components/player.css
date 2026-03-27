@@ -537,7 +537,8 @@ html[data-theme="light"] .mini-player-bar::before {
 }
 
 .pc-btn.has-onboarding-hint,
-.mini-player-bar__compact-toggle.has-onboarding-hint {
+.mini-player-bar__compact-toggle.has-onboarding-hint,
+.layout-link.has-onboarding-hint {
   position: relative;
   box-shadow:
     0 0 0 1px rgba(244, 185, 101, 0.48),
@@ -546,7 +547,8 @@ html[data-theme="light"] .mini-player-bar::before {
 }
 
 .pc-btn.has-onboarding-hint::after,
-.mini-player-bar__compact-toggle.has-onboarding-hint::after {
+.mini-player-bar__compact-toggle.has-onboarding-hint::after,
+.layout-link.has-onboarding-hint::after {
   content: "";
   position: absolute;
   inset: -18%;

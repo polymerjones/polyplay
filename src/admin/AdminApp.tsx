@@ -5,16 +5,18 @@ import { GratitudeEntriesModal } from "./GratitudeEntriesModal";
 import { GratitudeHubPanel } from "./GratitudeHubPanel";
 import {
   addTrackToDb,
+  clearPlaylistInDb,
   createPlaylistInDb,
   deletePlaylistInDb,
   getStorageUsageSummary,
   getPlaylistsFromDb,
   getTrackStorageRows,
   getTrackRowsFromDb,
+  IMPORT_REQUIRES_PLAYLIST_MESSAGE,
+  hardResetLibraryInDb,
   isStorageCapError,
   removeDemoTracksInDb,
   removeTrackFromDb,
-  hardResetLibraryInDb,
   renamePlaylistInDb,
   renameTrackInDb,
   replaceAudioInDb,
@@ -610,6 +612,14 @@ export function AdminApp() {
       setLaneToast("That’s artwork — drop it in Artwork.");
       return;
     }
+    if ((!selectedTransferTrackId || audioTransferMode === "create") && playlists.length === 0) {
+      setInfoModal({
+        title: "Create a Playlist First",
+        message: IMPORT_REQUIRES_PLAYLIST_MESSAGE,
+        openManageStorage: false
+      });
+      return;
+    }
     setIsAudioLaneBusy(true);
     try {
       if (!selectedTransferTrackId || audioTransferMode === "create") {
@@ -632,6 +642,12 @@ export function AdminApp() {
           title: "Storage Almost Full",
           message: "Storage is almost full. Manage storage to free space before this transfer.",
           openManageStorage: true
+        });
+      } else if (error instanceof Error && error.message === IMPORT_REQUIRES_PLAYLIST_MESSAGE) {
+        setInfoModal({
+          title: "Create a Playlist First",
+          message: error.message,
+          openManageStorage: false
         });
       } else {
         setStatus("Audio transfer failed.");
@@ -707,6 +723,14 @@ export function AdminApp() {
       setStatus("Select a track file (.wav, .mp3, .m4a, or .mp4).");
       return;
     }
+    if (playlists.length === 0) {
+      setInfoModal({
+        title: "Create a Playlist First",
+        message: IMPORT_REQUIRES_PLAYLIST_MESSAGE,
+        openManageStorage: false
+      });
+      return;
+    }
 
     const derivedTitle = uploadTitle.trim() || titleFromFilename(uploadAudio.name);
     setStatus("Importing...");
@@ -743,6 +767,14 @@ export function AdminApp() {
           title: "Storage Almost Full",
           message: "Storage is almost full. Manage storage to free space before importing.",
           openManageStorage: true
+        });
+        return;
+      }
+      if (error instanceof Error && error.message === IMPORT_REQUIRES_PLAYLIST_MESSAGE) {
+        setInfoModal({
+          title: "Create a Playlist First",
+          message: error.message,
+          openManageStorage: false
         });
         return;
       }
@@ -867,24 +899,15 @@ export function AdminApp() {
   const runNuke = async () => {
     if (isNukeRunning) return;
     setIsNukeRunning(true);
-    if (window.parent && window.parent !== window) {
-      try {
-        window.parent.postMessage({ type: "polyplay:nuke-request" }, window.location.origin);
-        setStatus("Nuking app data...");
-        window.setTimeout(() => {
-          void refreshTracks();
-        }, 1000);
-      } catch {
-        setStatus("Nuke request failed.");
-      }
-      setIsNukeRunning(false);
-      return;
-    }
-
-    setStatus("Resetting library...");
     try {
-      await hardResetLibraryInDb();
-      setStatus("Library reset complete.");
+      const activePlaylist = playlists.find((playlist) => playlist.isActive);
+      if (!activePlaylist) throw new Error("No active playlist");
+      const result = await clearPlaylistInDb(activePlaylist.id);
+      setStatus(
+        result.deletedTracks > 0
+          ? `Playlist cleared. Removed ${result.deletedTracks} unshared track${result.deletedTracks === 1 ? "" : "s"}.`
+          : "Playlist cleared."
+      );
       await refreshTracks();
       await refreshStorage();
       await refreshPlaylists();
@@ -940,7 +963,7 @@ export function AdminApp() {
     setStatus("Running factory reset...");
     try {
       await hardResetLibraryInDb();
-      await restoreDemoTracks();
+      await restoreDemoTracks({ preferDemoActive: true });
       localStorage.setItem(THEME_MODE_KEY, "dark");
       localStorage.setItem(CUSTOM_THEME_SLOT_KEY, "crimson");
       localStorage.removeItem(AURA_COLOR_KEY);
@@ -1223,7 +1246,7 @@ export function AdminApp() {
 
   const onRestoreDemoTracks = async () => {
     try {
-      const result = await restoreDemoTracks();
+      const result = await restoreDemoTracks({ preferDemoActive: true });
       setStatus(
         result.failed > 0 && result.restored === 0
           ? `Restore failed for ${result.failed} demo track${result.failed === 1 ? "" : "s"}.`
@@ -2229,7 +2252,7 @@ export function AdminApp() {
         <section className="admin-nuke-modal" role="dialog" aria-modal="true" aria-label="Nuke countdown">
           <div className="admin-nuke-modal__card">
             <h3 className="admin-nuke-modal__title">Nuke Playlist Armed</h3>
-            <p className="admin-nuke-modal__sub">Clearing all tracks in</p>
+            <p className="admin-nuke-modal__sub">Clearing the current playlist in</p>
             <div className="admin-nuke-modal__count">{(nukeCountdownMs / 1000).toFixed(1)}s</div>
             <Button variant="secondary" onClick={abortNuke}>
               Abort

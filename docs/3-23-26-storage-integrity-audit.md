@@ -133,7 +133,7 @@ Full Vault export:
 - loads the current sanitized library
 - reads stored media blobs from IndexedDB
 - writes those bytes into the ZIP under `polyplay-backup/media/...`
-- includes config, gratitude data, and library metadata JSON
+- includes config and library metadata JSON
 
 Relevant code:
 
@@ -145,7 +145,7 @@ Full Vault import:
 
 - reads the selected ZIP with `file.arrayBuffer()`
 - parses entries from that ZIP
-- loads `config.json`, `library.json`, and optional `gratitude.json`
+- loads `config.json` and `library.json`
 - creates fresh `Blob`s from ZIP media entries
 - writes those fresh blobs into IndexedDB with fresh keys
 - rebuilds the restored library using those new keys

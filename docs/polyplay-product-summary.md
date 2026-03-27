@@ -85,7 +85,6 @@ Vault creates a ZIP backup that includes:
 - Aura settings
 - Light mode settings
 - Saved loops
-- Journal data
 - Other app data needed to restore the user’s environment
 
 This ZIP can be imported into a factory-reset install of the app.
@@ -114,7 +113,7 @@ Within the Gratitude Journal, users can:
 - Edit entries
 - Delete entries
 
-Journal entries are also included in Vault backup, and the journal has its own dedicated export/import support as well.
+The journal has its own dedicated export/import support separate from Vault.
 
 It is also worth noting that audio playback continues uninterrupted if the user navigates into the Gratitude Journal while listening.
 

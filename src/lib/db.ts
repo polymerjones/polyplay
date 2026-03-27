@@ -31,6 +31,8 @@ export type DbTrackRecord = {
   artworkSource?: "auto" | "user";
 };
 
+export const IMPORT_REQUIRES_PLAYLIST_MESSAGE = "Create a playlist before importing tracks.";
+
 type LegacyDbTrackRecord = {
   id: number;
   title?: string;
@@ -410,6 +412,9 @@ export async function addTrackToDb(params: {
     ? params.targetPlaylistId
     : library.activePlaylistId;
   const playlist = playlistId ? library.playlistsById[playlistId] : undefined;
+  if (!playlist && !params.isDemo) {
+    throw new Error(IMPORT_REQUIRES_PLAYLIST_MESSAGE);
+  }
   if (playlist) {
     playlist.trackIds = [trackId, ...(playlist.trackIds || []).filter((id) => id !== trackId)];
     playlist.updatedAt = ts;
@@ -685,6 +690,11 @@ export type DeletePlaylistResult = {
   deletedTracks: number;
 };
 
+export type ClearPlaylistResult = {
+  clearedPlaylistId: string;
+  deletedTracks: number;
+};
+
 function ensureAtLeastOnePlaylist(library: LibraryState): void {
   const playlistIds = Object.keys(library.playlistsById);
   if (!library.activePlaylistId || !library.playlistsById[library.activePlaylistId]) {
@@ -804,6 +814,39 @@ export async function deletePlaylistInDb(playlistId: string): Promise<DeletePlay
   saveLibrary(library);
   return {
     nextActivePlaylistId: library.activePlaylistId,
+    deletedTracks
+  };
+}
+
+export async function clearPlaylistInDb(playlistId: string): Promise<ClearPlaylistResult> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const playlist = library.playlistsById[playlistId];
+  if (!playlist) throw new Error("Playlist not found");
+
+  const uniqueTrackIds = playlist.trackIds.filter((trackId, index, array) => Boolean(library.tracksById[trackId]) && array.indexOf(trackId) === index);
+  playlist.trackIds = [];
+  playlist.updatedAt = now();
+
+  const refs = countTrackReferences(library.playlistsById);
+  let deletedTracks = 0;
+  for (const trackId of uniqueTrackIds) {
+    if (refs.has(trackId)) continue;
+    const track = library.tracksById[trackId];
+    if (!track) continue;
+    const keys = [track.audioKey, track.artKey, track.artVideoKey].filter(Boolean) as string[];
+    for (const key of keys) {
+      await deleteBlob(key);
+      revokeMediaUrl(key);
+    }
+    delete library.tracksById[trackId];
+    deletedTracks += 1;
+  }
+
+  library.activePlaylistId = playlistId;
+  saveLibrary(library);
+  return {
+    clearedPlaylistId: playlistId,
     deletedTracks
   };
 }

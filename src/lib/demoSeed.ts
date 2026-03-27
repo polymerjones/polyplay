@@ -182,8 +182,12 @@ async function deleteTrackArtifacts(track: TrackRecord): Promise<void> {
   }
 }
 
-function upsertBuiltInDemoTrack(library: LibraryState, demo: (typeof DEMO_TRACKS)[number]): LibraryState {
-  const next = ensureDemoPlaylist(library, true);
+function upsertBuiltInDemoTrack(
+  library: LibraryState,
+  demo: (typeof DEMO_TRACKS)[number],
+  options?: { preferDemoActive?: boolean }
+): LibraryState {
+  const next = ensureDemoPlaylist(library, Boolean(options?.preferDemoActive));
   const current = next.tracksById[demo.demoId];
   const ts = Date.now();
   next.tracksById[demo.demoId] = {
@@ -436,7 +440,9 @@ export async function seedDemoTracksIfNeeded(): Promise<{ seeded: boolean; reaso
   return installed > 0 ? { seeded: true, reason: "seeded-first-run" } : { seeded: false, reason: "no-demo-installed" };
 }
 
-export async function restoreDemoTracks(): Promise<{ restored: number; skipped: number; repaired: number; failed: number }> {
+export async function restoreDemoTracks(
+  options?: { preferDemoActive?: boolean }
+): Promise<{ restored: number; skipped: number; repaired: number; failed: number }> {
   logDemoSeed("restore:start");
   logDemoSeed("restore:resolved-assets", {
     demoAudioAssetUrl,
@@ -444,8 +450,9 @@ export async function restoreDemoTracks(): Promise<{ restored: number; skipped: 
     demoAudioAssetUrlValid: typeof demoAudioAssetUrl === "string" && demoAudioAssetUrl.length > 0,
     demoArtAssetUrlValid: typeof demoArtAssetUrl === "string" && demoArtAssetUrl.length > 0
   });
+  const preferDemoActive = Boolean(options?.preferDemoActive);
   let library = await getLibrary();
-  library = ensureDemoPlaylist(library, true);
+  library = ensureDemoPlaylist(library, preferDemoActive);
   setLibrary(library);
 
   let restored = 0;
@@ -460,7 +467,7 @@ export async function restoreDemoTracks(): Promise<{ restored: number; skipped: 
     }
     try {
       logDemoSeed("restore:track:start", { demoId: demo.demoId, title: demo.title, strategy: "built-in-direct-url" });
-      const postWriteLibrary = upsertBuiltInDemoTrack(await getLibrary(), demo);
+      const postWriteLibrary = upsertBuiltInDemoTrack(await getLibrary(), demo, { preferDemoActive });
       restored += 1;
       const demoPlaylist = postWriteLibrary.playlistsById[DEMO_PLAYLIST_ID];
       logDemoSeed("restore:post-write-library", {
@@ -481,7 +488,7 @@ export async function restoreDemoTracks(): Promise<{ restored: number; skipped: 
 
   const postLibrary = await getLibrary();
   const repaired = await ensureDemoPostersIfMissing(postLibrary).catch(() => 0);
-  const normalized = await normalizeDemoLibrary({ preferDemoActive: true });
+  const normalized = await normalizeDemoLibrary({ preferDemoActive });
   const latest = await getLibrary();
   const reattached = ensureDemoPlaylistAttachment(latest);
   if (reattached) setLibrary(latest);
