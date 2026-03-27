@@ -31,6 +31,18 @@ export function GratitudePrompt({
   const [isTextareaFocused, setIsTextareaFocused] = useState(false);
 
   useEffect(() => {
+    if (!open) {
+      setText("");
+      setPulseMode(null);
+      setIsTextareaFocused(false);
+      return;
+    }
+    setText("");
+    setPulseMode(null);
+    setIsTextareaFocused(false);
+  }, [open]);
+
+  useEffect(() => {
     if (!open || !allowAutofocus) return;
     const raf = window.requestAnimationFrame(() => {
       textareaRef.current?.focus();
@@ -59,6 +71,7 @@ export function GratitudePrompt({
 
   const onContinue = () => {
     onPersist({ text, doNotSaveText, doNotPromptAgain });
+    setText("");
     const prefersReducedMotion =
       typeof window !== "undefined" &&
       typeof window.matchMedia === "function" &&
