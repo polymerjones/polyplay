@@ -177,6 +177,7 @@ function formatBytes(bytes: number): string {
 }
 
 export function AdminApp() {
+  const [isInitialHydrationPending, setIsInitialHydrationPending] = useState(true);
   const [tracks, setTracks] = useState<DbTrackRecord[]>([]);
   const [status, setStatus] = useState("");
   const [uploadTitle, setUploadTitle] = useState("");
@@ -330,9 +331,15 @@ export function AdminApp() {
   };
 
   useEffect(() => {
-    void refreshTracks();
-    void refreshStorage();
-    void refreshPlaylists();
+    let cancelled = false;
+    void (async () => {
+      await Promise.allSettled([refreshTracks(), refreshStorage(), refreshPlaylists()]);
+      if (cancelled) return;
+      setIsInitialHydrationPending(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -1421,7 +1428,7 @@ export function AdminApp() {
 
   return (
     <div
-      className={`admin-v1 touch-clean mx-auto min-h-screen w-full max-w-5xl px-3 pb-[max(112px,calc(env(safe-area-inset-bottom,0px)+88px))] pt-3 sm:px-4 ${
+      className={`admin-v1 touch-clean mx-auto w-full max-w-5xl px-3 pt-3 sm:px-4 ${
         isNukePromptOpen ? "admin-v1--nuke-arming" : ""
       }`.trim()}
     >
@@ -1461,6 +1468,18 @@ export function AdminApp() {
         </div>
       </header>
 
+      {isInitialHydrationPending ? (
+        <section className="admin-v1-card min-h-[420px] rounded-2xl border border-slate-300/20 bg-slate-900/70 p-4">
+          <div className="flex min-h-[388px] flex-col items-center justify-center gap-3 text-center">
+            <div className="text-lg font-semibold text-slate-100">Loading PolyPlay Admin…</div>
+            <p className="max-w-md text-sm text-slate-400">
+              Restoring tracks, playlists, and storage details before showing settings.
+            </p>
+          </div>
+        </section>
+      ) : (
+      <>
+      <div className="admin-content">
       <section className={`admin-v1-section grid gap-3 ${showManageSections ? "lg:grid-cols-2" : ""}`.trim()}>
         {showUploadTrackSection && (
         <form onSubmit={onUpload} className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
@@ -2222,7 +2241,7 @@ export function AdminApp() {
       <p className="mt-3 rounded-xl border border-slate-300/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-200">
         {status || "Ready."}
       </p>
-      <div className="sticky bottom-3 z-10 mt-4 flex justify-center pb-[calc(env(safe-area-inset-bottom,0px)+8px)] pt-2">
+      <div className="mt-4 flex justify-center pb-[calc(env(safe-area-inset-bottom,0px)+8px)] pt-2">
         <div className="flex flex-wrap items-center justify-center gap-2 rounded-xl border border-slate-300/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 backdrop-blur-sm">
           <a
             href={PRIVACY_POLICY_URL}
@@ -2242,6 +2261,9 @@ export function AdminApp() {
           </a>
         </div>
       </div>
+      </div>
+      </>
+      )}
       {laneToast && (
         <div className="admin-lane-toast" role="status" aria-live="polite">
           {laneToast}

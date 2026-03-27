@@ -2,6 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
+html.admin-frame-html,
+body.admin-frame-body,
+body.admin-frame-body #admin-root {
+  height: 100%;
+  min-height: 100%;
+}
+
+body.admin-frame-body {
+  overflow: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body.admin-frame-body #admin-root {
+  overflow: hidden;
+}
+
+.admin-v1 {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.admin-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: max(112px, calc(env(safe-area-inset-bottom, 0px) + 88px));
+}
+
+.admin-content > :first-child {
+  margin-top: 0;
+}
+
+body.admin-frame-body .admin-content {
+  overflow-x: hidden;
+}
+
 .tile-hit {
   border: 0;
   background: transparent;
@@ -1462,6 +1504,9 @@ body.theme-dark .admin-v1 textarea {
 .app-overlay-card {
   width: 100%;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   border-radius: 16px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1498,7 +1543,8 @@ body.theme-dark .admin-v1 textarea {
 .app-overlay-frame {
   border: 0;
   width: 100%;
-  height: calc(100% - 52px);
+  flex: 1 1 auto;
+  min-height: 0;
   display: block;
   background: #0b0f14;
 }
@@ -1526,7 +1572,8 @@ body.theme-dark .admin-v1 textarea {
   }
 
   .app-overlay-frame {
-    height: calc(100% - 50px);
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .controls {
