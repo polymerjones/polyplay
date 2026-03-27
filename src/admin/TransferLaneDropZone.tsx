@@ -9,6 +9,7 @@ type Props = {
   selectedFileName?: string;
   disabled?: boolean;
   busy?: boolean;
+  armed?: boolean;
   onFileSelected: (file: File | null) => void | Promise<void>;
 };
 
@@ -21,12 +22,14 @@ export function TransferLaneDropZone({
   selectedFileName,
   disabled = false,
   busy = false,
+  armed,
   onFileSelected
 }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isTooltipOpen, setIsTooltipOpen] = useState(false);
   const [hasSeenTipPulse, setHasSeenTipPulse] = useState(false);
+  const isArmed = Boolean(armed ?? selectedFileName);
 
   useEffect(() => {
     try {
@@ -96,7 +99,7 @@ export function TransferLaneDropZone({
       {hint && <div className="transfer-lane__hint">{hint}</div>}
       <button
         type="button"
-        className={`transfer-lane__zone ${isDragOver ? "is-drag-over" : ""}`.trim()}
+        className={`transfer-lane__zone ${isDragOver ? "is-drag-over" : ""} ${isArmed ? "is-armed" : ""}`.trim()}
         onClick={pick}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}

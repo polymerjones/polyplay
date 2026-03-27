@@ -74,6 +74,26 @@
   - its local `text` state was never reset across close/reopen
 - A narrow local fix was applied but is currently **uncommitted**
 
+### Settings / Admin iframe sizing
+
+- The post-Vault Settings/Admin blow-up was confirmed to be a live iframe/layout bug, not a bad imported Vault payload
+- Root cause:
+  - an earlier iframe/root sizing problem did exist:
+    - the iframe document lacked a proper `html/body/#admin-root` height chain
+    - [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) used `min-h-screen`
+  - but iPhone runtime measurements later proved that was only a partial cause
+  - the actual failing contract was:
+    - `body` became the scroll owner inside the iframe
+    - `#admin-root` and `.admin-v1` expanded to full hydrated content height
+    - `.admin-content` also expanded to full content height instead of owning scroll
+  - the whole admin page therefore behaved like one giant long document inside the iframe after hydration
+- A narrow fix was applied:
+  - [`admin.html`](/Users/paulfisher/Polyplay/admin.html) now marks the iframe document explicitly
+  - [`src/index.css`](/Users/paulfisher/Polyplay/src/index.css) now gives the admin iframe document a real height chain and constrains the admin shell to iframe height
+  - [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) now wraps the hydrated admin sections in an inner `.admin-content` scroller
+  - the Privacy Policy / Terms & Conditions links were also returned to normal footer flow instead of staying sticky inside the new scroll area
+- This fix affects `both`, with the visible bug most pronounced on `iOS`
+
 ## Files most relevant to the current release state
 
 - [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx)
@@ -86,6 +106,8 @@
 - [`src/components/FullscreenPlayer.tsx`](/Users/paulfisher/Polyplay/src/components/FullscreenPlayer.tsx)
 - [`src/components/player.css`](/Users/paulfisher/Polyplay/src/components/player.css)
 - [`styles.css`](/Users/paulfisher/Polyplay/styles.css)
+- [`admin.html`](/Users/paulfisher/Polyplay/admin.html)
+- [`src/index.css`](/Users/paulfisher/Polyplay/src/index.css)
 
 ## Guardrails for the next Codex session
 
@@ -138,5 +160,7 @@ Constraints:
 ## Practical next steps
 
 1. Decide whether to commit the local gratitude prompt reset in [`src/components/GratitudePrompt.tsx`](/Users/paulfisher/Polyplay/src/components/GratitudePrompt.tsx).
-2. Do a final device sanity pass on the latest Xcode build.
+2. Do a final device sanity pass on the latest Xcode build:
+   - Settings/Admin should stay constrained to the iframe height after Vault import
+   - the legal links should sit at the footer instead of floating mid-content
 3. Use the App Store submission checklist in [`docs/3-27-26-ios-app-store-submission-checklist.md`](/Users/paulfisher/Polyplay/docs/3-27-26-ios-app-store-submission-checklist.md).

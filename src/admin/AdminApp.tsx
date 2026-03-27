@@ -1425,6 +1425,9 @@ export function AdminApp() {
   const showUploadTrackSection = adminMode === "upload";
   const showManageSections = adminMode !== "upload";
   const showBackupsSection = false;
+  const isImportArmed = Boolean(uploadAudio);
+  const isUpdateArtworkArmed = Boolean(selectedArtworkFile);
+  const isReplaceAudioArmed = Boolean(selectedAudioFile);
 
   return (
     <div
@@ -1500,6 +1503,7 @@ export function AdminApp() {
               iconType="audio"
               accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,.wav,.mp3,.m4a,.aac,.mp4"
               selectedFileName={uploadAudio?.name}
+              armed={Boolean(uploadAudio)}
               onFileSelected={(file) => void onPickUploadAudio(file)}
             />
 
@@ -1509,6 +1513,7 @@ export function AdminApp() {
               iconType="artwork"
               accept="image/*,video/mp4,video/quicktime,.mov"
               selectedFileName={uploadArt?.name}
+              armed={Boolean(uploadArt)}
               onFileSelected={(file) => void onPickUploadArtwork(file)}
               disabled={!uploadAudio}
             />
@@ -1560,7 +1565,11 @@ export function AdminApp() {
               </div>
             )}
 
-            <Button variant="primary" type="submit" className="admin-upload-submit">
+            <Button
+              variant="primary"
+              type="submit"
+              className={`admin-upload-submit ${isImportArmed ? "admin-action-armed" : ""}`.trim()}
+            >
               Import
             </Button>
           </div>
@@ -1589,12 +1598,13 @@ export function AdminApp() {
               <TransferLaneDropZone
                 label="New artwork file"
                 tooltip="Manual replace: choose artwork for the selected track."
-                iconType="artwork"
-                accept="image/*,video/mp4,video/quicktime,.mov"
-                selectedFileName={selectedArtworkFile?.name}
-                onFileSelected={(file) => void onPickSelectedArtwork(file)}
-                disabled={!hasTracks}
-              />
+              iconType="artwork"
+              accept="image/*,video/mp4,video/quicktime,.mov"
+              selectedFileName={selectedArtworkFile?.name}
+              armed={Boolean(selectedArtworkFile)}
+              onFileSelected={(file) => void onPickSelectedArtwork(file)}
+              disabled={!hasTracks}
+            />
               {selectedArtPreviewUrl && (
                 <div className="video-frame-picker">
                   <label className="text-xs text-slate-300">Poster frame for static artwork</label>
@@ -1642,7 +1652,12 @@ export function AdminApp() {
                   <div className="text-xs text-slate-400">Frame: {selectedArtFrameTime.toFixed(2)}s</div>
                 </div>
               )}
-              <Button variant="primary" onClick={onUpdateArtwork} disabled={!hasTracks}>
+              <Button
+                variant="primary"
+                onClick={onUpdateArtwork}
+                disabled={!hasTracks}
+                className={isUpdateArtworkArmed ? "admin-action-armed" : ""}
+              >
                 Update Artwork
               </Button>
             </label>
@@ -1664,13 +1679,19 @@ export function AdminApp() {
               <TransferLaneDropZone
                 label="Replacement audio file"
                 tooltip="Manual replace: choose new audio for the selected track."
-                iconType="audio"
-                accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,.wav,.mp3,.m4a,.aac,.mp4"
-                selectedFileName={selectedAudioFile?.name}
-                onFileSelected={(file) => void onPickSelectedAudio(file)}
+              iconType="audio"
+              accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,.wav,.mp3,.m4a,.aac,.mp4"
+              selectedFileName={selectedAudioFile?.name}
+              armed={Boolean(selectedAudioFile)}
+              onFileSelected={(file) => void onPickSelectedAudio(file)}
+              disabled={!hasTracks}
+            />
+              <Button
+                variant="primary"
+                onClick={onReplaceAudio}
                 disabled={!hasTracks}
-              />
-              <Button variant="primary" onClick={onReplaceAudio} disabled={!hasTracks}>
+                className={isReplaceAudioArmed ? "admin-action-armed" : ""}
+              >
                 Replace Audio
               </Button>
             </label>
