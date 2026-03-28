@@ -1905,7 +1905,7 @@ export function AdminApp() {
 
       <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3 playlist-manager">
         <div className="playlist-manager__head">
-          <h2 className="text-base font-semibold text-slate-100">Polyplaylist Manager</h2>
+          <h2 className="text-base font-semibold text-slate-100">PolyPlaylist Manager</h2>
           <p className="playlist-manager__sub">Switch galleries fast, rename cleanly, and keep imported packs organized.</p>
         </div>
         <div className="playlist-manager__create">
@@ -2058,6 +2058,11 @@ export function AdminApp() {
                   ? `Theme set to ${nextSlot}. Aura matched to pack.`
                   : `Theme set to ${nextMode === "dark" ? "Default (Dark)" : "Light"}.`
               );
+              showSuccessNotice(
+                nextMode === "custom"
+                  ? `Theme set to ${nextSlot}. Aura matched to pack.`
+                  : `Theme set to ${nextMode === "dark" ? "Default (Dark)" : "Light"}.`
+              );
             }}
           >
             <option value="dark">Default (Dark Mode)</option>
@@ -2104,6 +2109,7 @@ export function AdminApp() {
                     // Ignore postMessage failures.
                   }
                   setStatus(`Aura color applied: ${next}.`);
+                  showSuccessNotice(`Aura color applied: ${next}.`);
                 }}
               >
                 Save / Apply
@@ -2127,6 +2133,7 @@ export function AdminApp() {
                     // Ignore postMessage failures.
                   }
                   setStatus("Aura color reset to default.");
+                  showSuccessNotice("Aura color reset to default.");
                 }}
               >
                 Reset

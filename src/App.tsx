@@ -3609,7 +3609,7 @@ export default function App() {
                     {playlist.name}
                   </option>
                 ))}
-                <option value="__create__">Create new Polyplaylist…</option>
+                <option value="__create__">Create new PolyPlaylist…</option>
               </select>
               <div className="playlist-selector__action-wrap">
                 <button
@@ -3630,7 +3630,7 @@ export default function App() {
                 </button>
                 {shouldShowNewPlaylistHint && (
                   <div className="playlist-selector__tutorial-tip onboarding-tooltip" role="note">
-                    Start by creating a new Polyplaylist.
+                    Start by creating a new PolyPlaylist.
                   </div>
                 )}
               </div>
@@ -3665,10 +3665,10 @@ export default function App() {
             primaryButtonLabel={welcomePhase === "pre-tour" ? "Start Quick Tour" : "Import your first track"}
             bodyText={
               welcomePhase === "create-playlist"
-                ? "Create your first Polyplaylist to get started."
+                ? "Create your first PolyPlaylist to get started."
                 : welcomePhase === "upload-track"
                   ? "Now import your first track."
-                  : "Take a quick tour to create your first Polyplaylist and add your own music."
+                  : "Take a quick tour to create your first PolyPlaylist and add your own music."
             }
             primaryButtonClassName={
               shouldHighlightQuickTourStart || shouldHighlightWelcomeUpload ? "is-onboarding-target" : undefined
@@ -3782,17 +3782,17 @@ export default function App() {
       )}
 
       {isCreatePlaylistModalOpen && (
-        <section className="app-overlay" role="dialog" aria-modal="true" aria-label="Create Polyplaylist">
+        <section className="app-overlay" role="dialog" aria-modal="true" aria-label="Create PolyPlaylist">
           <div className="app-overlay-card playlist-create-card">
             <div className="app-overlay-head">
               <div className="app-overlay-title">
-                {isPlaylistRequired ? "Create your first Polyplaylist" : "Create a new Polyplaylist"}
+                {isPlaylistRequired ? "Create your first PolyPlaylist" : "Create a new PolyPlaylist"}
               </div>
               {!isPlaylistRequired && (
                 <button
                   type="button"
                   className="app-overlay-close"
-                  aria-label="Close create Polyplaylist"
+                  aria-label="Close create PolyPlaylist"
                   onClick={() => setIsCreatePlaylistModalOpen(false)}
                 >
                   ✕
@@ -3802,8 +3802,8 @@ export default function App() {
             <div className="playlist-create-body">
               <p className="playlist-create-copy">
                 {isPlaylistRequired
-                  ? "Create your first Polyplaylist to begin."
-                  : "Create a new Polyplaylist and set it active."}
+                  ? "Create your first PolyPlaylist to begin."
+                  : "Create a new PolyPlaylist and set it active."}
               </p>
               <input
                 type="text"
@@ -3816,7 +3816,7 @@ export default function App() {
                   if (!canCreatePolyplaylist) return;
                   void createPlaylist(newPlaylistName);
                 }}
-                placeholder="Polyplaylist name"
+                placeholder="PolyPlaylist name"
                 autoFocus
                 data-ui="true"
               />
@@ -3836,7 +3836,7 @@ export default function App() {
                   disabled={!canCreatePolyplaylist}
                   onClick={() => void createPlaylist(newPlaylistName)}
                 >
-                  Create Polyplaylist
+                  Create PolyPlaylist
                 </button>
               </div>
             </div>

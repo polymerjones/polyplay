@@ -1288,7 +1288,7 @@ function makeRecordId(): string {
 }
 
 function toUniquePlaylistName(library: LibraryState, desiredName: string): string {
-  const base = desiredName.trim() || "Imported Polyplaylist";
+  const base = desiredName.trim() || "Imported PolyPlaylist";
   const taken = new Set(Object.values(library.playlistsById).map((playlist) => playlist.name));
   if (!taken.has(base)) return base;
   let index = 2;
@@ -1304,7 +1304,7 @@ function normalizeImportedPolyplaylist(input: unknown): PolyplaylistManifest {
   if (!input || typeof input !== "object") throw new Error("Invalid polyplaylist manifest.");
   const value = input as Partial<PolyplaylistManifest>;
   if (value.kind !== "polyplaylist") throw new Error("Unsupported playlist package.");
-  const playlistName = (value.playlist?.name || "").trim() || "Imported Polyplaylist";
+  const playlistName = (value.playlist?.name || "").trim() || "Imported PolyPlaylist";
   const playlistTrackIds = Array.isArray(value.playlist?.trackIds)
     ? value.playlist.trackIds.filter((trackId): trackId is string => typeof trackId === "string")
     : [];
@@ -1387,7 +1387,7 @@ export async function exportPolyplaylist(
 
   onProgress?.({ done: 0, total: 1, label: "Building polyplaylist archive…" });
   const blob = await buildZip([manifestEntry, ...mediaEntries]);
-  onProgress?.({ done: 1, total: 1, label: "Polyplaylist ready." });
+  onProgress?.({ done: 1, total: 1, label: "PolyPlaylist ready." });
 
   return {
     blob,
@@ -1401,10 +1401,10 @@ export async function importPolyplaylist(file: File): Promise<ImportPolyplaylist
   const raw = await file.arrayBuffer();
   const zipEntries = parseZipEntries(raw);
   const manifestEntry = zipEntries.get(`${POLYPLAYLIST_ROOT}/manifest.json`);
-  if (!manifestEntry) throw new Error("Polyplaylist package is missing manifest.json.");
+  if (!manifestEntry) throw new Error("PolyPlaylist package is missing manifest.json.");
 
   const manifest = normalizeImportedPolyplaylist(JSON.parse(new TextDecoder().decode(manifestEntry)) as unknown);
-  if (!manifest.playlist.trackIds.length) throw new Error("Polyplaylist has no tracks.");
+  if (!manifest.playlist.trackIds.length) throw new Error("PolyPlaylist has no tracks.");
 
   const library = loadLibrary();
   const nowMs = Date.now();
@@ -1478,7 +1478,7 @@ export async function importPolyplaylist(file: File): Promise<ImportPolyplaylist
   }
 
   if (!importedTrackIds.length) {
-    throw new Error("Polyplaylist import failed: no tracks could be restored.");
+    throw new Error("PolyPlaylist import failed: no tracks could be restored.");
   }
 
   library.playlistsById[playlistId] = {
