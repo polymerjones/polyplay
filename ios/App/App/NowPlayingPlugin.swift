@@ -16,7 +16,6 @@ public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
     private var cachedTitle: String?
     private var cachedSubtitle: String?
     private var cachedArtworkDataUrl: String?
-    private var cachedArtworkUrl: String?
     private let appTitle = "PolyPlay Audio"
     private var remoteCommandsConfigured = false
 
@@ -85,9 +84,7 @@ public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
             }
 
             let artworkDataUrl = (call.getString("artworkDataUrl") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            let artworkUrl = (call.getString("artworkUrl") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             self.cachedArtworkDataUrl = artworkDataUrl.isEmpty ? nil : artworkDataUrl
-            self.cachedArtworkUrl = artworkUrl.isEmpty ? nil : artworkUrl
 
             if let artwork = self.resolveArtwork() {
                 info[MPMediaItemPropertyArtwork] = artwork
@@ -141,7 +138,6 @@ public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
             self.cachedTitle = nil
             self.cachedSubtitle = nil
             self.cachedArtworkDataUrl = nil
-            self.cachedArtworkUrl = nil
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             call.resolve()
         }
@@ -157,9 +153,6 @@ public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
         if let dataUrl = cachedArtworkDataUrl, let image = imageFromDataUrl(dataUrl) {
             return image
         }
-        if let urlString = cachedArtworkUrl, let image = imageFromUrl(urlString) {
-            return image
-        }
         return nil
     }
 
@@ -167,13 +160,6 @@ public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
         guard let commaIndex = dataUrl.firstIndex(of: ",") else { return nil }
         let base64Part = String(dataUrl[dataUrl.index(after: commaIndex)...])
         guard let data = Data(base64Encoded: base64Part, options: [.ignoreUnknownCharacters]) else { return nil }
-        return UIImage(data: data)
-    }
-
-    private func imageFromUrl(_ urlString: String) -> UIImage? {
-        let baseUrl = bridge?.webView?.url
-        guard let url = URL(string: urlString, relativeTo: baseUrl)?.absoluteURL else { return nil }
-        guard let data = try? Data(contentsOf: url) else { return nil }
         return UIImage(data: data)
     }
 }

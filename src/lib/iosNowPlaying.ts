@@ -3,7 +3,6 @@ type NowPlayingPlugin = {
     title: string;
     subtitle?: string;
     artworkDataUrl?: string;
-    artworkUrl?: string;
   }): Promise<void>;
   updatePlaybackState(options: {
     elapsedTime: number;
@@ -66,6 +65,40 @@ async function rasterizeArtworkBlob(blob: Blob): Promise<Blob> {
   }
 }
 
+async function loadImageFromUrl(url: string): Promise<HTMLImageElement> {
+  const image = new Image();
+  image.crossOrigin = "anonymous";
+  image.decoding = "async";
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("Unable to load artwork image"));
+    image.src = url;
+  });
+  return image;
+}
+
+async function imageToJpegDataUrl(image: CanvasImageSource): Promise<string> {
+  let width = 512;
+  let height = 512;
+  if (image instanceof HTMLImageElement) {
+    const sourceWidth = Math.max(1, image.naturalWidth || image.width || 1);
+    const sourceHeight = Math.max(1, image.naturalHeight || image.height || 1);
+    const scale = Math.min(1, 512 / Math.max(sourceWidth, sourceHeight));
+    width = Math.max(1, Math.round(sourceWidth * scale));
+    height = Math.max(1, Math.round(sourceHeight * scale));
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { alpha: false });
+  if (!ctx) throw new Error("Unable to create artwork canvas");
+  ctx.fillStyle = "#000000";
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL("image/jpeg", 0.82);
+}
+
 function getNowPlayingPlugin(): NowPlayingPlugin | null {
   if (nowPlayingPluginCache !== undefined) return nowPlayingPluginCache;
   if (typeof window === "undefined") return null;
@@ -98,19 +131,21 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
   const cached = artworkDataUrlCache.get(blob);
   if (cached) return cached;
   const preparedBlob = await rasterizeArtworkBlob(blob).catch(() => blob);
+  const objectUrl = URL.createObjectURL(preparedBlob);
+  try {
+    const image = await loadImageFromUrl(objectUrl);
+    const dataUrl = await imageToJpegDataUrl(image);
+    artworkDataUrlCache.set(blob, dataUrl);
+    return dataUrl;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
 
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") resolve(reader.result);
-      else reject(new Error("Unable to read artwork blob as data URL"));
-    };
-    reader.onerror = () => reject(reader.error ?? new Error("Unable to read artwork blob"));
-    reader.readAsDataURL(preparedBlob);
-  });
-
-  artworkDataUrlCache.set(blob, dataUrl);
-  return dataUrl;
+async function urlToDataUrl(url: string): Promise<string | undefined> {
+  if (!url) return undefined;
+  const image = await loadImageFromUrl(url);
+  return await imageToJpegDataUrl(image);
 }
 
 export async function setIosNowPlayingItem(options: {
@@ -121,12 +156,13 @@ export async function setIosNowPlayingItem(options: {
 }): Promise<void> {
   const plugin = getNowPlayingPlugin();
   if (!plugin) return;
-  const artworkDataUrl = options.artBlob ? await blobToDataUrl(options.artBlob) : undefined;
+  const artworkDataUrl = options.artBlob
+    ? await blobToDataUrl(options.artBlob)
+    : (options.artUrl ? await urlToDataUrl(options.artUrl).catch(() => undefined) : undefined);
   await plugin.setNowPlayingItem({
     title: options.title,
     subtitle: options.subtitle,
-    artworkDataUrl,
-    artworkUrl: artworkDataUrl ? undefined : options.artUrl
+    artworkDataUrl
   });
 }
 
