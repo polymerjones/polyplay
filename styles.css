@@ -27,8 +27,8 @@ html[data-theme="light"] {
   --color-bg-primary: #f6f4fb;
   --color-bg-secondary: #f0ecfb;
   --color-text-primary: #191424;
-  --color-accent: #7d56e2;
-  --aura-rgb: 160, 102, 248;
+  --color-accent: #ff63c6;
+  --aura-rgb: 255, 99, 198;
   --glow-intensity: 0.95;
 }
 
