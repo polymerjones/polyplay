@@ -3247,6 +3247,7 @@ export default function App() {
   const isAnyModalOpen = Boolean(
     overlayPage || isTipsOpen || isJournalOpen || isGratitudeOpen || showSplash || isFullscreenPlayerOpen || isCreatePlaylistModalOpen
   );
+  // Collision prep exists in the bubble engine, but bubbles remain release-disabled here.
   const bubblesEnabled = false;
   const isMainPlayerView = !isAnyModalOpen;
   const fxAllowed = isMainPlayerView && !isNuking && fxEnabled && isPageVisible;
@@ -3255,26 +3256,53 @@ export default function App() {
   useEffect(() => {
     if (!fxAllowed) return;
 
+    const isFxBlockedAtPoint = (x: number, y: number, fallbackTarget: EventTarget | null): boolean => {
+      const pointTarget =
+        typeof document !== "undefined" && typeof document.elementFromPoint === "function"
+          ? document.elementFromPoint(x, y)
+          : null;
+      const candidate = pointTarget ?? (fallbackTarget instanceof Element ? fallbackTarget : null);
+      return Boolean(candidate?.closest(FX_INTERACTIVE_GUARD_SELECTORS));
+    };
+
     const onPointerDown = (event: PointerEvent) => {
       if (event.pointerType === "mouse" && event.button !== 0) return;
-      if (!(event.target instanceof Element)) return;
-      if (event.target.closest(FX_INTERACTIVE_GUARD_SELECTORS)) return;
+      if (isCoarsePointer()) return;
+      if (isFxBlockedAtPoint(event.clientX, event.clientY, event.target)) return;
       ambientFxRef.current?.onTap(event.clientX, event.clientY);
     };
 
-    const enablePointerMove = !isCoarsePointer();
     const onPointerMove = (event: PointerEvent) => {
       if (fxMode !== "gravity") return;
-      if (!(event.target instanceof Element)) return;
-      if (event.target.closest(FX_INTERACTIVE_GUARD_SELECTORS)) return;
+      if (isCoarsePointer()) return;
+      if (isFxBlockedAtPoint(event.clientX, event.clientY, event.target)) return;
       ambientFxRef.current?.onPointerMove(event.clientX, event.clientY);
     };
 
+    const onTouchStart = (event: TouchEvent) => {
+      const touch = event.changedTouches[0];
+      if (!touch) return;
+      if (isFxBlockedAtPoint(touch.clientX, touch.clientY, event.target)) return;
+      ambientFxRef.current?.onTap(touch.clientX, touch.clientY);
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      if (fxMode !== "gravity") return;
+      const touch = event.touches[0] ?? event.changedTouches[0];
+      if (!touch) return;
+      if (isFxBlockedAtPoint(touch.clientX, touch.clientY, event.target)) return;
+      ambientFxRef.current?.onPointerMove(touch.clientX, touch.clientY);
+    };
+
     document.addEventListener("pointerdown", onPointerDown, { passive: true });
-    if (enablePointerMove) document.addEventListener("pointermove", onPointerMove, { passive: true });
+    document.addEventListener("pointermove", onPointerMove, { passive: true });
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+    document.addEventListener("touchmove", onTouchMove, { passive: true });
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
-      if (enablePointerMove) document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("touchstart", onTouchStart);
+      document.removeEventListener("touchmove", onTouchMove);
     };
   }, [fxAllowed, fxMode]);
 
@@ -3323,7 +3351,7 @@ export default function App() {
                 : currentTrack?.artGrad || "none"
             }}
           />
-          <BubbleLayer enabled={bubblesEnabled} paused={!bubblesEnabled} onSpark={spawnSafeTapBurstAt} />
+          {bubblesEnabled && <BubbleLayer enabled paused={false} onSpark={spawnSafeTapBurstAt} />}
           {safeTapBursts.length > 0 && (
             <div className="safe-tap-layer">
               {safeTapBursts.map((burst) => (

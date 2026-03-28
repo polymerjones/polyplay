@@ -93,7 +93,7 @@ export function GratitudePrompt({
     <section className="gratitude-modal" role="dialog" aria-modal="true" aria-label="Gratitude prompt">
       <div
         className={`gratitude-modal__card ${pulseMode ? `is-pulse-${pulseMode}` : ""} ${
-          isTextareaFocused ? "is-typing" : ""
+          open || isTextareaFocused ? "is-typing" : ""
         }`.trim()}
       >
         <div className="gratitude-modal__clouds" aria-hidden="true" />

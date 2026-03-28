@@ -139,6 +139,7 @@ function isSupportedTrackFile(file: File | null): file is File {
   if (
     type.startsWith("audio/") ||
     type === "video/mp4" ||
+    type === "video/quicktime" ||
     type === "audio/mp4" ||
     type === "audio/x-m4a" ||
     type === "audio/aac"
@@ -150,7 +151,8 @@ function isSupportedTrackFile(file: File | null): file is File {
     name.endsWith(".mp3") ||
     name.endsWith(".m4a") ||
     name.endsWith(".aac") ||
-    name.endsWith(".mp4")
+    name.endsWith(".mp4") ||
+    name.endsWith(".mov")
   );
 }
 
@@ -788,7 +790,7 @@ export function AdminApp() {
   const onUpload = async (event: FormEvent) => {
     event.preventDefault();
     if (!isSupportedTrackFile(uploadAudio)) {
-      setStatus("Select a track file (.wav, .mp3, .m4a, or .mp4).");
+      setStatus("Select a track file (.wav, .mp3, .m4a, .mp4, or .mov).");
       return;
     }
     if (playlists.length === 0) {
@@ -960,7 +962,9 @@ export function AdminApp() {
     try {
       const updated = await resetAuraInDb();
       setStatus(`Aura reset for ${updated} track${updated === 1 ? "" : "s"}.`);
+      showSuccessNotice(`Aura reset for ${updated} track${updated === 1 ? "" : "s"}.`);
       await refreshTracks();
+      emitLibraryUpdated();
     } catch {
       setStatus("Aura reset failed.");
     }
@@ -1576,10 +1580,10 @@ export function AdminApp() {
             </label>
 
             <TransferLaneDropZone
-              label="Audio (.wav/.mp3)"
+              label="Audio (.wav/.mp3/.mov)"
               tooltip="Fallback importer for direct track creation."
               iconType="audio"
-              accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,.wav,.mp3,.m4a,.aac,.mp4"
+              accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,video/quicktime,.wav,.mp3,.m4a,.aac,.mp4,.mov"
               selectedFileName={uploadAudio?.name}
               armed={Boolean(uploadAudio)}
               onFileSelected={(file) => void onPickUploadAudio(file)}
@@ -1759,7 +1763,7 @@ export function AdminApp() {
                 label="Replacement audio file"
                 tooltip="Manual replace: choose new audio for the selected track."
                 iconType="audio"
-                accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,.wav,.mp3,.m4a,.aac,.mp4"
+                accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,video/quicktime,.wav,.mp3,.m4a,.aac,.mp4,.mov"
                 compact
                 selectedFileName={selectedAudioFile?.name}
                 armed={Boolean(selectedAudioFile)}
@@ -1843,7 +1847,7 @@ export function AdminApp() {
               label="Audio Track"
               tooltip="Drop audio files here to create a new track or replace the selected track’s audio."
               iconType="audio"
-              accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,.wav,.mp3,.m4a,.aac,.mp4"
+              accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,video/quicktime,.wav,.mp3,.m4a,.aac,.mp4,.mov"
               selectedFileName={audioTransferMode === "replace" ? selectedAudioFile?.name : uploadAudio?.name}
               busy={isAudioLaneBusy}
               onFileSelected={async (file) => {

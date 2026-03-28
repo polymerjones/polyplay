@@ -205,6 +205,7 @@ export function JournalModal({ open, onClose }: Props) {
   const [savedEntryId, setSavedEntryId] = useState<string | null>(null);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
   const [miniToast, setMiniToast] = useState<string | null>(null);
+  const [journalStatus, setJournalStatus] = useState<{ message: string; tone: "info" | "success" | "error" } | null>(null);
   const [verseFxActive, setVerseFxActive] = useState(false);
   const [verseFxBurstKey, setVerseFxBurstKey] = useState(0);
   const [pendingImportPayload, setPendingImportPayload] = useState<GratitudeBackupImportPayload | null>(null);
@@ -426,6 +427,13 @@ export function JournalModal({ open, onClose }: Props) {
     const timer = window.setTimeout(() => setMiniToast(null), 1200);
     return () => window.clearTimeout(timer);
   }, [miniToast]);
+
+  useEffect(() => {
+    if (!journalStatus) return;
+    const timeoutMs = journalStatus.tone === "info" ? 1600 : 2400;
+    const timer = window.setTimeout(() => setJournalStatus(null), timeoutMs);
+    return () => window.clearTimeout(timer);
+  }, [journalStatus]);
 
   useEffect(() => {
     try {
@@ -686,6 +694,7 @@ export function JournalModal({ open, onClose }: Props) {
                 className="journal-modal__export"
                 onClick={() => {
                   void (async () => {
+                    setJournalStatus({ message: "Preparing gratitude backup…", tone: "info" });
                     try {
                       const saveMode = await saveTextWithBestEffort(
                         serializeGratitudeJson(),
@@ -703,8 +712,18 @@ export function JournalModal({ open, onClose }: Props) {
                             ? "Backup opened for Share or Save to Files"
                             : "Backup saved"
                       );
+                      setJournalStatus({
+                        message:
+                          saveMode === "shared"
+                            ? "Gratitude backup ready to share."
+                            : saveMode === "opened-preview"
+                              ? "Backup ready for Share or Save to Files."
+                              : "Gratitude backup saved.",
+                        tone: "success"
+                      });
                     } catch {
                       setMiniToast("Backup failed");
+                      setJournalStatus({ message: "Gratitude backup failed.", tone: "error" });
                     }
                   })();
                 }}
@@ -715,6 +734,7 @@ export function JournalModal({ open, onClose }: Props) {
                 type="button"
                 className="journal-modal__export"
                 onClick={() => {
+                  setJournalStatus({ message: "Choose a gratitude backup to import…", tone: "info" });
                   suspendBackgroundPlaybackRef.current = true;
                   backgroundVideoRef.current?.pause();
                   importInputRef.current?.click();
@@ -738,6 +758,7 @@ export function JournalModal({ open, onClose }: Props) {
               if (!file) return;
               void (async () => {
                 try {
+                  setJournalStatus({ message: "Reading gratitude backup…", tone: "info" });
                   const content = await file.text();
                   const payload = parseGratitudeBackupImportText(content);
                   if (payload.entries.length === 0) {
@@ -745,12 +766,18 @@ export function JournalModal({ open, onClose }: Props) {
                   }
                   const hasExisting = entries.length > 0;
                   if (hasExisting) {
+                    setJournalStatus({ message: "Confirm overwrite to import backup.", tone: "info" });
                     setPendingImportPayload(payload);
                     return;
                   }
                   applyImportedPayload(payload);
+                  setJournalStatus({
+                    message: `Backup imported (${payload.entries.length} entr${payload.entries.length === 1 ? "y" : "ies"}).`,
+                    tone: "success"
+                  });
                 } catch {
                   setMiniToast("Import failed");
+                  setJournalStatus({ message: "Gratitude backup import failed.", tone: "error" });
                 }
               })();
             }}
@@ -781,6 +808,12 @@ export function JournalModal({ open, onClose }: Props) {
                     className="journal-confirm__btn journal-confirm__btn--danger"
                     onClick={() => {
                       applyImportedPayload(pendingImportPayload);
+                      setJournalStatus({
+                        message: `Backup imported (${pendingImportPayload.entries.length} entr${
+                          pendingImportPayload.entries.length === 1 ? "y" : "ies"
+                        }).`,
+                        tone: "success"
+                      });
                       setPendingImportPayload(null);
                     }}
                   >
@@ -1050,6 +1083,11 @@ export function JournalModal({ open, onClose }: Props) {
               )}
             </div>
           </div>
+          {journalStatus && (
+            <div className={`journal-modal__status journal-modal__status--${journalStatus.tone}`.trim()} role="status" aria-live="polite">
+              {journalStatus.message}
+            </div>
+          )}
           {miniToast && <div className="journal-modal__toast">{miniToast}</div>}
         </div>
       </div>
