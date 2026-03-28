@@ -35,6 +35,7 @@ body.admin-frame-body #admin-root {
 .admin-content {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -47,6 +48,22 @@ body.admin-frame-body #admin-root {
 
 body.admin-frame-body .admin-content {
   overflow-x: hidden;
+}
+
+.admin-v1-card,
+.admin-v1-fields,
+.admin-v1 label,
+.admin-v1 select,
+.admin-v1 input,
+.admin-v1 button {
+  min-width: 0;
+}
+
+.admin-v1 select,
+.admin-v1 input,
+.admin-v1 button {
+  width: 100%;
+  max-width: 100%;
 }
 
 .tile-hit {

@@ -121,13 +121,22 @@ function getThemeSelectionFromState(themeMode: string | null, slot: "crimson" | 
   return "dark";
 }
 
-function formatTrackLabel(track: DbTrackRecord): string {
+function truncateMiddle(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  const safeMax = Math.max(8, maxLength);
+  const head = Math.max(4, Math.ceil((safeMax - 1) * 0.7));
+  const tail = Math.max(3, safeMax - head - 1);
+  return `${value.slice(0, head)}…${value.slice(-tail)}`;
+}
+
+function formatTrackOptionLabel(track: DbTrackRecord): string {
   const shortId = track.id.slice(0, 8);
+  const title = truncateMiddle(track.title?.trim() || `Track ${shortId}`, 32);
   const missing = [track.missingAudio ? "Missing audio" : "", track.missingArt ? "Missing artwork" : ""]
     .filter(Boolean)
     .join(", ");
-  const suffix = missing ? ` • ${missing}` : "";
-  return `${track.title?.trim() || `Track ${shortId}`} (#${shortId})${suffix}`;
+  const suffix = missing ? ` • ${truncateMiddle(missing, 18)}` : "";
+  return `${title} (#${shortId})${suffix}`;
 }
 
 function isVideoArtwork(file: File | null): boolean {
@@ -304,7 +313,7 @@ export function AdminApp() {
   };
 
   const trackOptions = useMemo(
-    () => tracks.map((track) => ({ value: String(track.id), label: formatTrackLabel(track) })),
+    () => tracks.map((track) => ({ value: String(track.id), label: formatTrackOptionLabel(track) })),
     [tracks]
   );
 
