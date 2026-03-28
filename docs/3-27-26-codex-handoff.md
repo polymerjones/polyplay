@@ -1,5 +1,10 @@
 # Polyplay Codex Handoff - March 27, 2026
 
+## Note
+
+- A newer handoff now exists at [`docs/3-28-26-codex-handoff.md`](/Users/paulfisher/Polyplay/docs/3-28-26-codex-handoff.md).
+- Use that March 28 handoff as the current source of truth for the latest admin/layout fixes, release state, and outstanding local repo notes.
+
 ## Current branch
 `main`
 

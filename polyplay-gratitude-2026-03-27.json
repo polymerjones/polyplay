@@ -1,0 +1,45 @@
+{
+  "kind": "polyplay-gratitude",
+  "version": 1,
+  "appVersion": "v3.3",
+  "createdAt": "2026-03-27T17:21:34.453Z",
+  "settings": {
+    "enabled": true,
+    "frequency": "daily",
+    "doNotSaveText": false,
+    "doNotPromptAgain": false
+  },
+  "entries": [
+    {
+      "id": "27c55c3a-3de7-4e09-ad42-c5bbfaba4339",
+      "text": "Test\n\n\n\n\nMe\n\n\nNow daddy",
+      "verse": "I can do all things through Christ who strengthens me. — Philippians 4:13",
+      "createdAt": "2026-03-27T17:19:41.292Z",
+      "updatedAt": "2026-03-27T17:19:41.292Z",
+      "privateMode": false
+    },
+    {
+      "id": "4d1e7265-a035-446d-9be6-d7334465cef5",
+      "text": "Test\n\n\n\n\nMe\n\n\nNow daddy",
+      "verse": "I can do all things through Christ who strengthens me. — Philippians 4:13",
+      "createdAt": "2026-03-27T17:19:37.388Z",
+      "privateMode": false,
+      "updatedAt": "2026-03-27T17:19:37.388Z"
+    },
+    {
+      "id": "acff1922-1fd7-416d-badb-4be6b95a78ff",
+      "text": "Testing\n\n\n\n\nTesting",
+      "verse": "I can do all things through Christ who strengthens me. — Philippians 4:13",
+      "createdAt": "2026-03-27T17:19:21.061Z",
+      "privateMode": false,
+      "updatedAt": "2026-03-27T17:19:21.061Z"
+    },
+    {
+      "id": "a4cd7837-6d14-45ef-9314-65aeb2db7860",
+      "text": "My new kittens and Sarah's baby is a lovie sweet boy ☀️",
+      "createdAt": "2026-03-27T17:18:55.475Z",
+      "privateMode": false,
+      "updatedAt": "2026-03-27T17:18:55.475Z"
+    }
+  ]
+}

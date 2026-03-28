@@ -1907,8 +1907,8 @@ export default function App() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.loop = currentLoopMode === "track" || (isRepeatTrackEnabled && currentLoopMode !== "region");
-  }, [currentLoopMode, isRepeatTrackEnabled]);
+    audio.loop = currentLoopMode === "track";
+  }, [currentLoopMode]);
 
   const teardownPlaybackGainRouting = async () => {
     const source = playbackSourceNodeRef.current;
@@ -2169,12 +2169,14 @@ export default function App() {
       if (currentLoopMode === "region" && loopRegion && loopRegion.end > loopRegion.start) {
         audio.currentTime = loopRegion.start;
         setCurrentTime(loopRegion.start);
+        applyDimMode(audio, dimMode);
         void audio.play().catch(() => setIsPlaying(false));
         return;
       }
       if (isRepeatTrackEnabled && currentLoopMode === "off") {
         audio.currentTime = 0;
         setCurrentTime(0);
+        applyDimMode(audio, dimMode);
         void audio.play().catch(() => setIsPlaying(false));
         return;
       }
@@ -2229,7 +2231,7 @@ export default function App() {
       }
       detachListeners();
     };
-  }, [currentTrackId, loopByTrack, currentLoopMode, isRepeatTrackEnabled, isShuffleEnabled, tracks]);
+  }, [currentTrackId, loopByTrack, currentLoopMode, isRepeatTrackEnabled, isShuffleEnabled, tracks, dimMode]);
 
   const updateAura = async (trackId: string, delta: number) => {
     let nextAuraForDb: number | null = null;
@@ -2880,6 +2882,7 @@ export default function App() {
         );
         return false;
       }
+      setVaultStatus("Zipping backup now.");
       const payload = await exportFullBackup();
       const filename = getFullBackupFilename();
       const saveMode = await saveBlobWithBestEffort(payload.blob, filename, {
@@ -2901,7 +2904,7 @@ export default function App() {
           : saveMode === "save-dialog"
             ? `Saved to selected location: ${filename}.`
             : saveMode === "opened-preview"
-              ? `Backup opened for ${filename}. Use Share and Save to Files on iPhone.`
+              ? `Backup ready for ${filename}. Use Share and Save to Files on iPhone.`
               : `Download started for ${filename}.`,
         "success"
       );
