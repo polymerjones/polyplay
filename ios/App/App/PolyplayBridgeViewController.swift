@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Capacitor
 import UniformTypeIdentifiers
@@ -56,16 +57,20 @@ public class MediaImportPlugin: CAPPlugin, UIDocumentPickerDelegate {
             }
         }
 
-        do {
-            let imported = try copyImportedFileToTemp(sourceURL)
-            call.resolve([
-                "cancelled": false,
-                "path": imported.path,
-                "name": imported.name,
-                "mimeType": imported.mimeType
-            ])
-        } catch {
-            call.reject("Failed to import selected file.", nil, error)
+        importSelectedAudioFile(sourceURL) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let imported):
+                    call.resolve([
+                        "cancelled": false,
+                        "path": imported.path,
+                        "name": imported.name,
+                        "mimeType": imported.mimeType
+                    ])
+                case .failure(let error):
+                    call.reject("Failed to import selected file.", nil, error)
+                }
+            }
         }
     }
 
@@ -96,6 +101,97 @@ public class MediaImportPlugin: CAPPlugin, UIDocumentPickerDelegate {
 
         try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
         return (path: destinationURL.path, name: sourceURL.lastPathComponent, mimeType: mimeTypeForExtension(ext.lowercased()))
+    }
+
+    private func importSelectedAudioFile(
+        _ sourceURL: URL,
+        completion: @escaping (Result<(path: String, name: String, mimeType: String), Error>) -> Void
+    ) {
+        let ext = sourceURL.pathExtension.lowercased()
+        guard ext == "mov" || ext == "mp4" else {
+            do {
+                completion(.success(try copyImportedFileToTemp(sourceURL)))
+            } catch {
+                completion(.failure(error))
+            }
+            return
+        }
+
+        extractAudioToTemp(sourceURL, completion: completion)
+    }
+
+    private func extractAudioToTemp(
+        _ sourceURL: URL,
+        completion: @escaping (Result<(path: String, name: String, mimeType: String), Error>) -> Void
+    ) {
+        let asset = AVURLAsset(url: sourceURL)
+        let compatiblePresets = AVAssetExportSession.exportPresets(compatibleWith: asset)
+        guard compatiblePresets.contains(AVAssetExportPresetAppleM4A) else {
+            do {
+                completion(.success(try copyImportedFileToTemp(sourceURL)))
+            } catch {
+                completion(.failure(error))
+            }
+            return
+        }
+
+        guard let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else {
+            do {
+                completion(.success(try copyImportedFileToTemp(sourceURL)))
+            } catch {
+                completion(.failure(error))
+            }
+            return
+        }
+
+        do {
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("polyplay-imports", isDirectory: true)
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+            let baseName = sourceURL.deletingPathExtension().lastPathComponent.isEmpty
+                ? "import"
+                : sourceURL.deletingPathExtension().lastPathComponent
+            let fileName = "\(UUID().uuidString)-\(baseName).m4a"
+            let destinationURL = tempDir.appendingPathComponent(fileName)
+
+            if FileManager.default.fileExists(atPath: destinationURL.path) {
+                try FileManager.default.removeItem(at: destinationURL)
+            }
+
+            exporter.outputURL = destinationURL
+            exporter.outputFileType = .m4a
+            exporter.shouldOptimizeForNetworkUse = false
+            exporter.exportAsynchronously {
+                switch exporter.status {
+                case .completed:
+                    completion(.success((
+                        path: destinationURL.path,
+                        name: "\(baseName).m4a",
+                        mimeType: "audio/mp4"
+                    )))
+                case .failed:
+                    completion(.failure(exporter.error ?? NSError(
+                        domain: "MediaImportPlugin",
+                        code: 1,
+                        userInfo: [NSLocalizedDescriptionKey: "Audio extraction failed."]
+                    )))
+                case .cancelled:
+                    completion(.failure(NSError(
+                        domain: "MediaImportPlugin",
+                        code: 2,
+                        userInfo: [NSLocalizedDescriptionKey: "Audio extraction cancelled."]
+                    )))
+                default:
+                    completion(.failure(NSError(
+                        domain: "MediaImportPlugin",
+                        code: 3,
+                        userInfo: [NSLocalizedDescriptionKey: "Audio extraction did not complete."]
+                    )))
+                }
+            }
+        } catch {
+            completion(.failure(error))
+        }
     }
 
     private func mimeTypeForExtension(_ ext: String) -> String {

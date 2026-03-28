@@ -361,7 +361,7 @@ export default function App() {
     /iPad|iPhone|iPod/.test(navigator.userAgent);
   const splashSkipLabel = isIOS ? "Double Tap to Skip" : "Double Click to Skip";
   const headerTitle = "PolyPlay Audio";
-  const headerVersion = "v1.0.0";
+  const headerVersion = APP_VERSION;
   const [hasOnboarded, setHasOnboarded] = useState<boolean>(() => {
     try {
       return localStorage.getItem(HAS_ONBOARDED_KEY) === "true";
