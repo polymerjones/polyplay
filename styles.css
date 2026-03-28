@@ -81,21 +81,30 @@ html[data-theme="custom"] {
 }
 
 html[data-theme="custom"][data-theme-slot="crimson"] {
+  --color-bg-primary: #170d11;
+  --color-bg-secondary: #28131a;
+  --color-text-primary: #fdeef2;
   --color-accent: #cf6f82;
   --aura-rgb: 207, 111, 130;
-  --glow-intensity: 1.18;
+  --glow-intensity: 1.2;
 }
 
 html[data-theme="custom"][data-theme-slot="teal"] {
+  --color-bg-primary: #091517;
+  --color-bg-secondary: #102428;
+  --color-text-primary: #e8fbfa;
   --color-accent: #42c7c4;
   --aura-rgb: 66, 199, 196;
-  --glow-intensity: 1.2;
+  --glow-intensity: 1.22;
 }
 
 html[data-theme="custom"][data-theme-slot="amber"] {
+  --color-bg-primary: #161006;
+  --color-bg-secondary: #24180a;
+  --color-text-primary: #fff1d8;
   --color-accent: #f0b35b;
   --aura-rgb: 240, 179, 91;
-  --glow-intensity: 1.2;
+  --glow-intensity: 1.24;
 }
 
 * {
@@ -1085,18 +1094,29 @@ body.theme-dark::before {
 }
 
 body.theme-custom.theme-custom-crimson {
-  background: #181115;
+  background: #160d11;
   --theme-accent-rgb: 207, 111, 130;
 }
 
 body.theme-custom.theme-custom-teal {
-  background: #0d1c1e;
+  background: #09171a;
   --theme-accent-rgb: 66, 199, 196;
 }
 
 body.theme-custom.theme-custom-amber {
-  background: #1d160d;
+  background: #1a1208;
   --theme-accent-rgb: 240, 179, 91;
+}
+
+body.theme-custom.theme-custom-amber::before {
+  opacity: 0.34;
+  filter: saturate(1.14) brightness(0.96);
+  background:
+    radial-gradient(circle at 18% 16%, rgba(255, 205, 120, 0.18) 0 25px, transparent 26px),
+    radial-gradient(circle at 72% 28%, rgba(255, 188, 98, 0.15) 0 22px, transparent 23px),
+    radial-gradient(circle at 42% 72%, rgba(255, 228, 170, 0.12) 0 28px, transparent 29px),
+    repeating-radial-gradient(circle, rgba(255, 196, 102, 0.16) 0 1px, transparent 1px 6px);
+  background-size: 320px 320px, 280px 280px, 360px 360px, 240px 240px;
 }
 
 body.theme-custom::before {
@@ -1104,16 +1124,38 @@ body.theme-custom::before {
   filter: saturate(1.06);
 }
 
+body.theme-custom.theme-custom-crimson::before {
+  opacity: 0.33;
+  filter: saturate(1.12) brightness(0.98);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(232, 121, 150, 0.18) 0 25px, transparent 26px),
+    radial-gradient(circle at 74% 26%, rgba(201, 88, 124, 0.16) 0 22px, transparent 23px),
+    radial-gradient(circle at 40% 72%, rgba(255, 208, 220, 0.11) 0 28px, transparent 29px),
+    repeating-radial-gradient(circle, rgba(214, 104, 135, 0.14) 0 1px, transparent 1px 6px);
+  background-size: 320px 320px, 280px 280px, 360px 360px, 240px 240px;
+}
+
+body.theme-custom.theme-custom-teal::before {
+  opacity: 0.31;
+  filter: saturate(1.12) brightness(0.96);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(108, 231, 220, 0.16) 0 25px, transparent 26px),
+    radial-gradient(circle at 72% 24%, rgba(70, 192, 183, 0.15) 0 22px, transparent 23px),
+    radial-gradient(circle at 42% 74%, rgba(211, 255, 248, 0.1) 0 28px, transparent 29px),
+    repeating-radial-gradient(circle, rgba(79, 206, 196, 0.13) 0 1px, transparent 1px 6px);
+  background-size: 320px 320px, 280px 280px, 360px 360px, 240px 240px;
+}
+
 body.theme-custom.theme-custom-crimson .topbar {
-  background: radial-gradient(980px 360px at 26% -6%, rgba(155, 58, 95, 0.9) 0%, rgba(22, 12, 20, 0.95) 66%);
+  background: radial-gradient(980px 360px at 26% -6%, rgba(170, 64, 104, 0.94) 0%, rgba(24, 11, 18, 0.97) 64%);
 }
 
 body.theme-custom.theme-custom-teal .topbar {
-  background: radial-gradient(980px 360px at 26% -6%, rgba(34, 138, 132, 0.9) 0%, rgba(8, 22, 24, 0.95) 66%);
+  background: radial-gradient(980px 360px at 26% -6%, rgba(40, 154, 145, 0.94) 0%, rgba(7, 24, 25, 0.97) 64%);
 }
 
 body.theme-custom.theme-custom-amber .topbar {
-  background: radial-gradient(980px 360px at 26% -6%, rgba(173, 108, 34, 0.9) 0%, rgba(28, 20, 8, 0.95) 66%);
+  background: radial-gradient(980px 360px at 26% -6%, rgba(196, 126, 44, 0.94) 0%, rgba(34, 22, 8, 0.97) 62%);
 }
 
 body.theme-custom .topbar-tier--controls .fx-link,

@@ -9,6 +9,10 @@ type NowPlayingPlugin = {
     isPlaying: boolean;
   }): Promise<void>;
   clearNowPlaying(): Promise<void>;
+  addListener(
+    eventName: "remoteCommand",
+    listener: (event: { command?: "play" | "pause" | "togglePlayPause" | "previousTrack" | "nextTrack" }) => void
+  ): Promise<{ remove: () => Promise<void> }> | { remove: () => Promise<void> };
 };
 
 type CapacitorLike = {
@@ -84,4 +88,12 @@ export async function clearIosNowPlaying(): Promise<void> {
   const plugin = getNowPlayingPlugin();
   if (!plugin) return;
   await plugin.clearNowPlaying();
+}
+
+export async function addIosNowPlayingRemoteCommandListener(
+  listener: (event: { command?: "play" | "pause" | "togglePlayPause" | "previousTrack" | "nextTrack" }) => void
+): Promise<null | { remove: () => Promise<void> }> {
+  const plugin = getNowPlayingPlugin();
+  if (!plugin?.addListener) return null;
+  return await plugin.addListener("remoteCommand", listener);
 }

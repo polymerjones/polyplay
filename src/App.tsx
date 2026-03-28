@@ -43,11 +43,12 @@ import {
   setLibrary
 } from "./lib/library";
 import {
+  addIosNowPlayingRemoteCommandListener,
   clearIosNowPlaying,
   setIosNowPlayingItem,
   updateIosNowPlayingPlaybackState
 } from "./lib/iosNowPlaying";
-import { syncMediaSessionItem, syncMediaSessionPlaybackState } from "./lib/mediaSession";
+import { bindMediaSessionTransportActions, syncMediaSessionItem, syncMediaSessionPlaybackState } from "./lib/mediaSession";
 import { revokeAllMediaUrls } from "./lib/player/media";
 import {
   createPlaylistInLibrary,
@@ -2352,6 +2353,68 @@ export default function App() {
     }
   };
 
+  const resumeCurrentTrack = () => {
+    const audio = audioRef.current;
+    if (!audio || !audio.paused) return;
+    void togglePlayPause();
+  };
+
+  useEffect(() => {
+    const cleanupMediaSession = bindMediaSessionTransportActions({
+      onPlay: resumeCurrentTrack,
+      onPause: () => {
+        const audio = audioRef.current;
+        if (!audio || audio.paused) return;
+        audio.pause();
+      },
+      onTogglePlayPause: () => {
+        void togglePlayPause();
+      },
+      onPreviousTrack: playPrev,
+      onNextTrack: playNext
+    });
+
+    let isCancelled = false;
+    let listenerHandle: null | { remove: () => Promise<void> } = null;
+
+    void addIosNowPlayingRemoteCommandListener((event) => {
+      switch (event.command) {
+        case "play":
+          resumeCurrentTrack();
+          break;
+        case "togglePlayPause":
+          void togglePlayPause();
+          break;
+        case "pause": {
+          const audio = audioRef.current;
+          if (!audio || audio.paused) return;
+          audio.pause();
+          break;
+        }
+        case "previousTrack":
+          playPrev();
+          break;
+        case "nextTrack":
+          playNext();
+          break;
+        default:
+          break;
+      }
+    }).then((handle) => {
+      if (isCancelled) {
+        void handle?.remove();
+        return;
+      }
+      listenerHandle = handle;
+    });
+
+    return () => {
+      isCancelled = true;
+      cleanupMediaSession();
+      if (listenerHandle) void listenerHandle.remove();
+    };
+  }, [playNext, playPrev, resumeCurrentTrack, togglePlayPause]);
+
   const seekTo = (seconds: number) => {
     const audio = audioRef.current;
     if (!audio || !Number.isFinite(seconds)) return;
@@ -2795,24 +2858,47 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const openBlobPreview = (blob: Blob, filename: string) => {
+  const openBlobPreview = (blob: Blob, filename: string, targetWindow?: Window | null) => {
     const previewFile = typeof File !== "undefined" ? new File([blob], filename, { type: blob.type || "application/zip" }) : blob;
     const url = URL.createObjectURL(previewFile);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.target = "_blank";
-    anchor.rel = "noopener noreferrer";
-    anchor.setAttribute("aria-label", `Open preview for ${filename}`);
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
+    if (targetWindow && !targetWindow.closed) {
+      try {
+        targetWindow.location.href = url;
+      } catch {
+        targetWindow = null;
+      }
+    }
+    if (!targetWindow) {
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      anchor.setAttribute("aria-label", `Open preview for ${filename}`);
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    }
     window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
+  const openPendingPreviewWindow = () => {
+    if (!(isIOS || isStandalonePwa())) return null;
+    try {
+      const previewWindow = window.open("", "_blank");
+      if (!previewWindow) return null;
+      previewWindow.document.title = "Preparing backup";
+      previewWindow.document.body.innerHTML =
+        '<div style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;padding:24px;line-height:1.45;color:#111;background:#f6f1e8;">Preparing backup…</div>';
+      return previewWindow;
+    } catch {
+      return null;
+    }
   };
 
   const saveBlobWithBestEffort = async (
     blob: Blob,
     filename: string,
-    options?: { accept?: Record<string, string[]>; description?: string }
+    options?: { accept?: Record<string, string[]>; description?: string; previewWindow?: Window | null }
   ): Promise<"shared" | "save-dialog" | "downloaded" | "opened-preview"> => {
     const nav = navigator as Navigator & {
       canShare?: (data: { files?: File[] }) => boolean;
@@ -2863,7 +2949,7 @@ export default function App() {
     }
 
     if (isIOS || isStandalonePwa()) {
-      openBlobPreview(blob, filename);
+      openBlobPreview(blob, filename, options?.previewWindow);
       return "opened-preview";
     }
 
@@ -2871,7 +2957,7 @@ export default function App() {
     return "downloaded";
   };
 
-  const saveUniverseBackup = async (): Promise<boolean> => {
+  const saveUniverseBackup = async (previewWindow?: Window | null): Promise<boolean> => {
     try {
       const library = await getLibrary();
       const nonDemoTrackCount = countNonDemoTracksForFullBackup(library);
@@ -2887,7 +2973,8 @@ export default function App() {
       const filename = getFullBackupFilename();
       const saveMode = await saveBlobWithBestEffort(payload.blob, filename, {
         description: "PolyPlay Universe Backup",
-        accept: { "application/zip": [".zip"] }
+        accept: { "application/zip": [".zip"] },
+        previewWindow
       });
       const stamp = new Date().toISOString();
       setLastExportedAt(stamp);
@@ -2911,6 +2998,13 @@ export default function App() {
       schedulePlaybackResync("vault-save-return");
       return true;
     } catch (error) {
+      if (previewWindow && !previewWindow.closed) {
+        try {
+          previewWindow.close();
+        } catch {
+          // Ignore close failures.
+        }
+      }
       setVaultStatus(`Save Universe failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
       schedulePlaybackResync("vault-save-return");
       return false;
@@ -3677,7 +3771,14 @@ export default function App() {
               </div>
 
               <div className="vault-actions">
-                <button type="button" className="vault-btn vault-btn--primary" onClick={() => void saveUniverseBackup()}>
+                <button
+                  type="button"
+                  className="vault-btn vault-btn--primary"
+                  onClick={() => {
+                    const previewWindow = openPendingPreviewWindow();
+                    void saveUniverseBackup(previewWindow);
+                  }}
+                >
                   Export Full Backup
                 </button>
                 <button type="button" className="vault-btn vault-btn--secondary" onClick={onStartImportPolyplaylist}>

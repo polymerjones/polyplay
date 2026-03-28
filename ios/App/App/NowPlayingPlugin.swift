@@ -16,9 +16,52 @@ public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
     private var cachedTitle: String?
     private var cachedSubtitle: String?
     private let appTitle = "PolyPlay Audio"
+    private var remoteCommandsConfigured = false
+
+    public override func load() {
+        super.load()
+        configureRemoteCommandsIfNeeded()
+    }
+
+    private func configureRemoteCommandsIfNeeded() {
+        guard !remoteCommandsConfigured else { return }
+        remoteCommandsConfigured = true
+
+        let commandCenter = MPRemoteCommandCenter.shared()
+
+        commandCenter.playCommand.isEnabled = true
+        commandCenter.pauseCommand.isEnabled = true
+        commandCenter.togglePlayPauseCommand.isEnabled = true
+        commandCenter.previousTrackCommand.isEnabled = true
+        commandCenter.nextTrackCommand.isEnabled = true
+        commandCenter.skipBackwardCommand.isEnabled = false
+        commandCenter.skipForwardCommand.isEnabled = false
+
+        commandCenter.playCommand.addTarget { [weak self] _ in
+            self?.notifyListeners("remoteCommand", data: ["command": "play"])
+            return .success
+        }
+        commandCenter.pauseCommand.addTarget { [weak self] _ in
+            self?.notifyListeners("remoteCommand", data: ["command": "pause"])
+            return .success
+        }
+        commandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
+            self?.notifyListeners("remoteCommand", data: ["command": "togglePlayPause"])
+            return .success
+        }
+        commandCenter.previousTrackCommand.addTarget { [weak self] _ in
+            self?.notifyListeners("remoteCommand", data: ["command": "previousTrack"])
+            return .success
+        }
+        commandCenter.nextTrackCommand.addTarget { [weak self] _ in
+            self?.notifyListeners("remoteCommand", data: ["command": "nextTrack"])
+            return .success
+        }
+    }
 
     @objc func setNowPlayingItem(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
+            self.configureRemoteCommandsIfNeeded()
             let title = (call.getString("title") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !title.isEmpty else {
                 call.reject("title is required")
@@ -46,6 +89,7 @@ public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func updatePlaybackState(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
+            self.configureRemoteCommandsIfNeeded()
             var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
             let elapsedTime = max(0, call.getDouble("elapsedTime") ?? 0)
             let duration = max(0, call.getDouble("duration") ?? 0)

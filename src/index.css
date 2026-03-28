@@ -154,6 +154,30 @@ body.perf-lite .track-art-badge {
   isolation: isolate;
 }
 
+body.theme-custom.theme-custom-crimson .trackRow {
+  border: 1px solid rgba(255, 197, 216, 0.14);
+  background:
+    radial-gradient(circle at 18% 14%, rgba(214, 103, 140, 0.18), transparent 56%),
+    rgba(22, 11, 16, 0.8);
+  box-shadow: 0 12px 22px rgba(12, 6, 10, 0.3);
+}
+
+body.theme-custom.theme-custom-teal .trackRow {
+  border: 1px solid rgba(171, 255, 245, 0.14);
+  background:
+    radial-gradient(circle at 18% 14%, rgba(74, 204, 190, 0.16), transparent 56%),
+    rgba(8, 18, 19, 0.8);
+  box-shadow: 0 12px 22px rgba(4, 10, 11, 0.3);
+}
+
+body.theme-custom.theme-custom-amber .trackRow {
+  border: 1px solid rgba(255, 214, 156, 0.14);
+  background:
+    radial-gradient(circle at 18% 14%, rgba(235, 171, 78, 0.16), transparent 56%),
+    rgba(20, 14, 8, 0.8);
+  box-shadow: 0 12px 22px rgba(10, 8, 5, 0.3);
+}
+
 .trackRow,
 .trackRow * {
   -webkit-user-select: none;
@@ -260,18 +284,19 @@ body.theme-dark .rowAuraGlow {
 
 .track-art-badge {
   z-index: 3;
-  border: 1px solid rgba(215, 188, 255, 0.42);
+  border: 1px solid rgba(215, 188, 255, 0.28);
   border-radius: 999px;
-  background: rgba(60, 34, 104, 0.58);
-  color: #f8f1ff;
-  font-size: 9px;
+  background: rgba(34, 24, 52, 0.48);
+  color: rgba(248, 241, 255, 0.92);
+  font-size: 8px;
   font-weight: 800;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.22px;
   line-height: 1;
-  padding: 3px 7px;
-  backdrop-filter: blur(5px);
+  padding: 2px 6px;
+  backdrop-filter: blur(4px);
   pointer-events: none;
-  box-shadow: 0 4px 10px rgba(8, 10, 16, 0.28);
+  box-shadow: 0 3px 8px rgba(8, 10, 16, 0.22);
+  text-transform: uppercase;
 }
 
 .track-badges {
@@ -336,8 +361,8 @@ body.theme-dark .rowAuraGlow {
   display: inline-flex;
   align-items: center;
   max-width: none;
-  padding: 4px 8px;
-  font-size: 9px;
+  padding: 2px 5px;
+  font-size: 7px;
   line-height: 1;
   white-space: nowrap;
   overflow: visible;
@@ -357,9 +382,35 @@ body.theme-dark .rowAuraGlow {
 }
 
 .track-art-badge--auto {
-  border-color: rgba(255, 205, 128, 0.52);
-  background: linear-gradient(135deg, rgba(58, 34, 22, 0.82), rgba(93, 56, 26, 0.78));
-  color: #ffe3c2;
+  border-color: rgba(var(--aura-rgb, 188, 132, 255), 0.28);
+  background: linear-gradient(
+    135deg,
+    rgba(var(--aura-rgb, 188, 132, 255), 0.22),
+    rgba(18, 16, 28, 0.5)
+  );
+  color: rgba(248, 241, 255, 0.88);
+}
+
+.track-art-badge--auto::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  margin-right: 4px;
+  background: rgba(var(--aura-rgb, 188, 132, 255), 0.9);
+  box-shadow: 0 0 8px rgba(var(--aura-rgb, 188, 132, 255), 0.34);
+  flex: 0 0 auto;
+}
+
+.trackRow__artBadges .track-art-badge--auto {
+  background: rgba(18, 16, 28, 0.42);
+  color: rgba(244, 236, 252, 0.8);
+}
+
+.trackRow__artBadges .track-art-badge--auto::before {
+  width: 3px;
+  height: 3px;
+  margin-right: 3px;
 }
 
 .trackRow__thumb {
@@ -804,7 +855,7 @@ body.theme-dark .rowAuraGlow {
 .open-state-card {
   position: relative;
   margin: 0 0 12px;
-  padding: 12px 14px;
+  padding: 11px 13px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background:
@@ -832,16 +883,18 @@ body.theme-dark .rowAuraGlow {
 
 .open-state-card__title {
   color: #f4ebff;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.2px;
+  line-height: 1.15;
 }
 
 .open-state-card__body {
   margin: 6px 0 0;
   color: rgba(241, 234, 255, 0.86);
   font-size: 12px;
-  line-height: 1.35;
+  line-height: 1.28;
+  max-width: 42ch;
 }
 
 .open-state-card__dismiss {
@@ -861,10 +914,10 @@ body.theme-dark .rowAuraGlow {
   display: grid;
   align-content: start;
   justify-items: start;
-  gap: 8px;
+  gap: 6px;
   width: min(520px, 100%);
   margin: 4px auto 0;
-  padding: 14px 16px 13px;
+  padding: 12px 15px 12px;
   min-height: 0;
   border-radius: 20px;
   border: 1px solid rgba(255, 235, 202, 0.14);
@@ -909,19 +962,20 @@ body.theme-dark .rowAuraGlow {
   margin: 0;
   padding-right: 44px;
   color: #fff2d9;
-  font-size: clamp(20px, 3vw, 27px);
-  line-height: 1.06;
+  font-size: clamp(19px, 2.5vw, 25px);
+  line-height: 1.02;
   font-weight: 800;
   letter-spacing: -0.02em;
-  max-width: 17ch;
+  max-width: 19ch;
+  text-wrap: balance;
 }
 
 .empty-library-card__body {
   margin: 0;
   color: rgba(247, 235, 213, 0.86);
   font-size: 14px;
-  line-height: 1.38;
-  max-width: 35ch;
+  line-height: 1.3;
+  max-width: 38ch;
 }
 
 .empty-library-card__actions {
@@ -944,12 +998,12 @@ body.theme-dark .rowAuraGlow {
 }
 
 .empty-library-card--create-playlist .empty-library-card__body {
-  max-width: 31ch;
+  max-width: 34ch;
 }
 
 .empty-library-card--upload-track .empty-library-card__body,
 .empty-library-card--pre-tour .empty-library-card__body {
-  max-width: 34ch;
+  max-width: 36ch;
 }
 
 .empty-library-card__primary {

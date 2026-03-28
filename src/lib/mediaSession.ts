@@ -80,3 +80,50 @@ export function syncMediaSessionPlaybackState(options: {
     // Ignore unsupported/invalid position state errors.
   }
 }
+
+export function bindMediaSessionTransportActions(actions: {
+  onPlay: () => void;
+  onPause: () => void;
+  onTogglePlayPause: () => void;
+  onPreviousTrack: () => void;
+  onNextTrack: () => void;
+}): () => void {
+  const mediaSession = getMediaSession();
+  if (!mediaSession || typeof mediaSession.setActionHandler !== "function") return () => {};
+
+  const bindings: Array<[MediaSessionAction, MediaSessionActionHandler | null]> = [
+    ["play", () => actions.onPlay()],
+    ["pause", () => actions.onPause()],
+    ["previoustrack", () => actions.onPreviousTrack()],
+    ["nexttrack", () => actions.onNextTrack()]
+  ];
+
+  for (const [action, handler] of bindings) {
+    try {
+      mediaSession.setActionHandler(action, handler);
+    } catch {
+      // Ignore unsupported action handlers on this platform.
+    }
+  }
+
+  try {
+    mediaSession.setActionHandler("stop", () => actions.onPause());
+  } catch {
+    // Ignore unsupported action handlers on this platform.
+  }
+
+  return () => {
+    for (const [action] of bindings) {
+      try {
+        mediaSession.setActionHandler(action, null);
+      } catch {
+        // Ignore unsupported action handlers on cleanup.
+      }
+    }
+    try {
+      mediaSession.setActionHandler("stop", null);
+    } catch {
+      // Ignore unsupported action handlers on cleanup.
+    }
+  };
+}

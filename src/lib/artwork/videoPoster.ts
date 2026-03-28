@@ -83,6 +83,37 @@ function clampPosterTime(duration: number, requested?: number): number {
   return Math.max(0.05, Math.min(safeMax, preferred));
 }
 
+function isLikelyBlankPoster(ctx: CanvasRenderingContext2D, width: number, height: number): boolean {
+  try {
+    const sampleSize = 8;
+    const stepX = Math.max(1, Math.floor(width / sampleSize));
+    const stepY = Math.max(1, Math.floor(height / sampleSize));
+    let minLuma = 255;
+    let maxLuma = 0;
+    let totalAlpha = 0;
+    let samples = 0;
+
+    for (let y = Math.floor(stepY / 2); y < height; y += stepY) {
+      for (let x = Math.floor(stepX / 2); x < width; x += stepX) {
+        const data = ctx.getImageData(x, y, 1, 1).data;
+        const alpha = data[3];
+        const luma = 0.2126 * data[0] + 0.7152 * data[1] + 0.0722 * data[2];
+        minLuma = Math.min(minLuma, luma);
+        maxLuma = Math.max(maxLuma, luma);
+        totalAlpha += alpha;
+        samples += 1;
+      }
+    }
+
+    if (samples === 0) return true;
+    const averageAlpha = totalAlpha / samples;
+    const lumaSpread = maxLuma - minLuma;
+    return averageAlpha < 6 || lumaSpread < 10;
+  } catch {
+    return false;
+  }
+}
+
 async function seekVideo(video: HTMLVideoElement, timeSec: number): Promise<void> {
   if (Math.abs(video.currentTime - timeSec) < 0.04) return;
   await waitForEvent(video, "seeked", DEFAULT_SEEK_TIMEOUT_MS, () => {
@@ -164,7 +195,28 @@ export async function generateVideoPoster(file: Blob, options: PosterOptions = {
     canvas.height = height;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Could not create canvas context");
-    ctx.drawImage(video, 0, 0, width, height);
+
+    let captured = false;
+    for (const candidate of fallbackTimes) {
+      try {
+        await seekVideo(video, candidate);
+        if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+          await waitForEvent(video, "loadeddata", options.seekTimeoutMs ?? DEFAULT_SEEK_TIMEOUT_MS).catch(
+            () => undefined
+          );
+        }
+        ctx.clearRect(0, 0, width, height);
+        ctx.drawImage(video, 0, 0, width, height);
+        if (!isLikelyBlankPoster(ctx, width, height)) {
+          captured = true;
+          break;
+        }
+      } catch {
+        // Try next timestamp candidate.
+      }
+    }
+
+    if (!captured) throw new Error("Could not capture a usable poster frame");
 
     const webpBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.88));
     if (webpBlob && webpBlob.size > 0) return webpBlob;
