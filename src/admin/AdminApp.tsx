@@ -90,6 +90,7 @@ const PRIVACY_POLICY_URL = "/privacy-policy.html";
 const TERMS_AND_CONDITIONS_URL = "/terms-and-conditions.html";
 const CAN_USE_IOS_NATIVE_AUDIO_IMPORT = canUseIosNativeAudioImport();
 type ThemeSelection = "dark" | "light" | "amber" | "teal" | "crimson";
+type AdminHapticTone = "success" | "heavy";
 type AdminConfirmState =
   | {
       kind: "delete-playlist";
@@ -582,6 +583,16 @@ export function AdminApp() {
     }, 2600);
   };
 
+  const requestParentHaptic = (tone: AdminHapticTone) => {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:haptic", tone }, window.location.origin);
+      }
+    } catch {
+      // Ignore cross-document messaging failures.
+    }
+  };
+
   const notifyUserImported = () => {
     try {
       localStorage.setItem(HAS_IMPORTED_KEY, "true");
@@ -753,10 +764,12 @@ export function AdminApp() {
         });
         setStatus("New track created from Audio Track lane.");
         fireSuccessHaptic();
+        requestParentHaptic("success");
       } else {
         await replaceAudioInDb(selectedTransferTrackId, file);
         setStatus("Selected track audio replaced.");
         fireSuccessHaptic();
+        requestParentHaptic("success");
       }
       notifyUserImported();
       await refreshTracks();
@@ -812,6 +825,7 @@ export function AdminApp() {
       await refreshStorage();
       setStatus("Artwork applied from Artwork lane.");
       fireSuccessHaptic();
+      requestParentHaptic("success");
     } catch (error) {
       if (isStorageCapError(error)) {
         setInfoModal({
@@ -883,6 +897,7 @@ export function AdminApp() {
           : "Import complete."
       );
       fireSuccessHaptic();
+      requestParentHaptic("success");
       showSuccessNotice(
         artwork.posterCaptureFailed
           ? "Import complete. Video artwork added."
@@ -938,6 +953,7 @@ export function AdminApp() {
         : "Artwork updated.";
       setStatus(successMessage);
       fireSuccessHaptic();
+      requestParentHaptic("success");
       showSuccessNotice(successMessage);
       await refreshTracks();
       await refreshStorage();
@@ -975,6 +991,7 @@ export function AdminApp() {
       setSelectedAudioFile(null);
       setStatus("Audio replaced.");
       fireSuccessHaptic();
+      requestParentHaptic("success");
       showSuccessNotice("Audio replaced.");
       await refreshTracks();
       await refreshStorage();
@@ -999,6 +1016,7 @@ export function AdminApp() {
       await removeTrackFromDb(trackId);
       setStatus("Track removed.");
       fireHeavyHaptic();
+      requestParentHaptic("heavy");
       showSuccessNotice("Track removed.");
       await refreshTracks();
       await refreshStorage();
@@ -1030,6 +1048,7 @@ export function AdminApp() {
       const updated = await resetAuraInDb();
       setStatus(`Aura reset for ${updated} track${updated === 1 ? "" : "s"}.`);
       fireHeavyHaptic();
+      requestParentHaptic("heavy");
       showSuccessNotice(`Aura reset for ${updated} track${updated === 1 ? "" : "s"}.`);
       await refreshTracks();
       emitLibraryUpdated();
@@ -1138,6 +1157,7 @@ export function AdminApp() {
       }
       setStatus("Factory reset complete. Defaults and demo tracks restored.");
       fireHeavyHaptic();
+      requestParentHaptic("heavy");
     } catch {
       setStatus("Factory reset failed.");
     }
@@ -2141,6 +2161,7 @@ export function AdminApp() {
                   : `Theme set to ${nextMode === "dark" ? "Default (Dark)" : "Light"}.`
               );
               fireSuccessHaptic();
+              requestParentHaptic("success");
               showSuccessNotice(
                 nextMode === "custom"
                   ? `Theme set to ${nextSlot}. Aura matched to pack.`
@@ -2193,6 +2214,7 @@ export function AdminApp() {
                   }
                   setStatus(`Aura color applied: ${next}.`);
                   fireSuccessHaptic();
+                  requestParentHaptic("success");
                   showSuccessNotice(`Aura color applied: ${next}.`);
                 }}
               >

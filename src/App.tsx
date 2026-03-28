@@ -48,6 +48,7 @@ import {
   setIosNowPlayingItem,
   updateIosNowPlayingPlaybackState
 } from "./lib/iosNowPlaying";
+import { fireHeavyHaptic, fireSuccessHaptic } from "./lib/haptics";
 import { bindMediaSessionTransportActions, syncMediaSessionItem, syncMediaSessionPlaybackState } from "./lib/mediaSession";
 import { revokeAllMediaUrls } from "./lib/player/media";
 import { isDesktopSafari } from "./lib/platform";
@@ -1494,6 +1495,12 @@ export default function App() {
         } catch {
           // Ignore localStorage failures.
         }
+        return;
+      }
+      if (type === "polyplay:haptic") {
+        const tone = event.data?.tone;
+        if (tone === "heavy") fireHeavyHaptic();
+        else fireSuccessHaptic();
         return;
       }
       if (type === "polyplay:factory-reset") {
