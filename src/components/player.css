@@ -25,9 +25,9 @@ html[data-theme="light"] {
   --pc-color-border: rgba(207, 111, 130, 0.2);
   --pc-color-text: #4f2940;
   --pc-color-muted: rgba(96, 58, 80, 0.76);
-  --pc-color-primary: #cf6f82;
-  --pc-color-primary-strong: #b85d74;
-  --pc-color-primary-soft: rgba(207, 111, 130, 0.16);
+  --pc-color-primary: #ff63c6;
+  --pc-color-primary-strong: #d93aa2;
+  --pc-color-primary-soft: rgba(255, 99, 198, 0.18);
   --pc-color-track: rgba(126, 84, 108, 0.2);
   --pc-shadow-lg: 0 18px 40px rgba(126, 84, 108, 0.18);
   --pc-shadow-sm: 0 8px 18px rgba(126, 84, 108, 0.12);
@@ -53,22 +53,24 @@ html[data-theme="light"] .pc-transport-btn--sm {
 html[data-theme="light"] .pc-btn--primary,
 html[data-theme="light"] .pc-transport-btn--active,
 html[data-theme="light"] .pc-btn--toggle.is-active,
-html[data-theme="light"] .pc-dim-btn.is-active,
 html[data-theme="light"] .pc-novelty-btn.is-active,
 html[data-theme="light"] .mini-player-bar__aura-toggle {
-  border-color: rgba(120, 54, 78, 0.28);
-  color: #4f2d3d;
+  border-color: rgba(255, 124, 210, 0.42);
+  background:
+    radial-gradient(circle at 28% 20%, rgba(255, 238, 249, 0.96) 0%, rgba(255, 154, 220, 0.98) 38%, rgba(255, 99, 198, 0.96) 62%, rgba(217, 58, 162, 0.96) 100%);
+  color: #fff9fe;
   box-shadow:
-    0 12px 24px rgba(140, 76, 101, 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.18);
+    0 0 0 1px rgba(255, 170, 225, 0.2),
+    0 14px 28px rgba(214, 74, 161, 0.28),
+    inset 0 1px 0 rgba(255, 242, 251, 0.34);
+  text-shadow: 0 1px 0 rgba(151, 32, 104, 0.22);
 }
 
 html[data-theme="light"] .pc-btn--primary.pc-btn--icon .pc-icon {
-  color: #4f2d3d;
+  color: #fff9fe;
   filter:
-    drop-shadow(0 1px 0 rgba(255, 255, 255, 0.18))
-    drop-shadow(0 1px 2px rgba(91, 44, 64, 0.16));
+    drop-shadow(0 1px 0 rgba(255, 240, 250, 0.22))
+    drop-shadow(0 1px 2px rgba(156, 33, 110, 0.26));
 }
 
 html[data-theme="light"] .pc-btn--primary.pc-btn--icon .pc-icon--play::before {
@@ -82,8 +84,8 @@ html[data-theme="light"] .pc-transport-btn--active .pc-shuffle-icon,
 html[data-theme="light"] .pc-transport-btn--active .pc-repeat-icon,
 html[data-theme="light"] .pc-novelty-btn.is-active .pc-novelty-icon {
   filter:
-    drop-shadow(0 1px 0 rgba(255, 255, 255, 0.18))
-    drop-shadow(0 1px 2px rgba(91, 44, 64, 0.14));
+    drop-shadow(0 1px 0 rgba(255, 245, 251, 0.2))
+    drop-shadow(0 1px 2px rgba(156, 33, 110, 0.24));
 }
 
 html[data-theme="light"] .pc-btn--sm:not(.pc-btn--primary):not(.pc-btn--toggle.is-active):not(.pc-dim-btn.is-active):not(.pc-novelty-btn.is-active) {
