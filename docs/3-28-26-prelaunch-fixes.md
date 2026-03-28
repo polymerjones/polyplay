@@ -576,6 +576,149 @@ Suggested order:
 
 ---
 
+### 11. iPhone post-Vault Settings/Admin should not regress to the enlarged iframe layout
+**Status:** Fixed
+
+**Notes:**
+- This was a regression after the earlier iPhone iframe sizing fix had already shipped.
+- The trigger reappeared after a later desktop Safari Settings-height pass.
+
+**Problem:**
+- On iPhone, after importing a Vault and reopening Settings/Admin, the admin surface could appear enlarged again instead of staying constrained to the iframe viewport.
+
+**Repro:**
+- Import a full Vault on iPhone.
+- Let the Vault overlay close.
+- Open Settings/Admin.
+- The admin page could look blown up / oversized again, echoing the earlier iframe-layout bug.
+
+**Root cause:**
+- A later desktop-only layout pass was applied too broadly to the iframe path.
+- Specifically, the Settings overlay height override and reduced admin iframe bottom padding were made global instead of being limited to desktop widths.
+- That meant the iPhone iframe was no longer using exactly the previously proven mobile sizing contract.
+
+**What the code was doing before:**
+- [`src/index.css`](/Users/paulfisher/Polyplay/src/index.css) added:
+  - a global `.app-overlay--settings` override with taller top/bottom bounds
+  - a global `body.admin-frame-body .admin-content` bottom-padding reduction
+- Those changes were intended to help Safari desktop use more vertical space, but they also applied to the iPhone iframe context.
+
+**What we tried:**
+- Re-read the earlier iPhone admin/layout handoff and confirmed this was the same failure family, not a new Vault import data bug.
+- Compared the recent desktop Settings-height tweak against the earlier iframe fix and isolated the regression to the newly broadened CSS scope.
+
+**Why a failed attempt failed:**
+- The original desktop pass fixed the intended Safari desktop issue, but it was not safely scoped.
+- Because the iframe document is shared across platforms, a global override on that path leaks into iPhone too.
+
+**Final fix:**
+- Moved the newer Settings-height override and reduced iframe bottom-padding override behind a desktop media gate in [`src/index.css`](/Users/paulfisher/Polyplay/src/index.css).
+- iPhone now falls back to the earlier constrained iframe/mobile layout, while desktop keeps the taller Settings presentation.
+
+**How to avoid this later:**
+- Any iframe/layout tweak made for desktop Safari should be explicitly gated to desktop breakpoints before shipping.
+- When a bug already has a proven iPhone fix, treat later cross-cutting layout changes as potential regressions against that exact contract.
+
+---
+
+### 12. Light mode active controls and aura should use the intended neon-pink language
+**Status:** Fixed
+
+**Notes:**
+- This was a follow-up visual polish pass after the earlier light-mode mute/clarity work.
+- The issue was not with light mode overall, but with active playback accents still carrying older purple/gold leftovers.
+
+**Problem:**
+- In light mode, active playback controls and aura visuals were not reading as one coherent system.
+- Play/pause, repeat/shuffle, and aura-driven glows still showed older purple or gold carryover instead of the intended neon-pink light-theme treatment.
+
+**Repro:**
+- Switch to light mode.
+- Start playback and inspect the main play/pause button, repeat/shuffle state, mini-player aura button, and aura glow on tracks.
+- Compare those accents against the intended light-mode palette.
+
+**Root cause:**
+- Light mode still published older rose/purple accent tokens in some places and a purple `--aura-rgb` token at the global theme level.
+- That meant active controls and aura effects were partly following older defaults instead of the revised light-mode color direction.
+
+**What the code was doing before:**
+- [`src/components/player.css`](/Users/paulfisher/Polyplay/src/components/player.css) still used the older light-theme primary token family and active-state treatment.
+- [`styles.css`](/Users/paulfisher/Polyplay/styles.css) still exposed a purple light-mode aura token, so shared aura-driven visuals stayed violet even after other light-mode polish.
+
+**What we tried:**
+- Updated the light-theme player accent token family directly instead of trying to override one control at a time.
+- Swapped the shared light-mode aura token to neon pink so rows, tiles, waveform aura, and related aura-driven effects follow the same color family.
+
+**Why a failed attempt failed:**
+- No failed intermediate patch was kept.
+- The main lesson was that changing only one button class would not be enough because both player active states and shared aura effects were drawing from separate token layers.
+
+**Final fix:**
+- [`src/components/player.css`](/Users/paulfisher/Polyplay/src/components/player.css) now gives light mode a brighter neon-pink primary palette and applies it to active playback controls such as play/pause, repeat/shuffle, and other engaged playback toggles.
+- [`styles.css`](/Users/paulfisher/Polyplay/styles.css) now sets light mode `--aura-rgb` to a neon-pink value so aura glows and shared aura-driven visuals no longer fall back to purple.
+- `MUTE` was intentionally left on its stronger warning treatment so it still reads as a distinct caution state rather than blending into the playback tint.
+
+**How to avoid this later:**
+- When revising a theme palette, audit both:
+  - direct control styles
+  - shared global tokens like `--aura-rgb`
+- If a theme depends on a strong accent identity, keep playback-state styling and aura-state styling aligned instead of updating them separately.
+
+---
+
+### 13. Playback shortcut and FX/DIM cues needed follow-up polish
+**Status:** Fixed
+
+**Notes:**
+- This item covers the latest interaction/accessibility polish after the larger UI/theme pass.
+- The changes are small individually but important to overall feel.
+
+**Problem:**
+- Desktop users expected `Spacebar` to toggle play/pause instead of scrolling the page.
+- `DIM` felt slightly too quiet after the earlier reduction.
+- The main header `FX` button did not clearly show which canvas mode was active, unlike the more expressive state treatment already used elsewhere in the app.
+
+**Repro:**
+- On desktop, press `Space` while the player is visible and focus is not inside a form field: the page would scroll instead of toggling playback.
+- Toggle `DIM` and compare the perceived reduction against the intended “softened, but still usable” level.
+- Cycle the header `FX` button through `gravity`, `pop`, and `splatter`: the control stayed too visually generic for a multi-mode surface.
+
+**Root cause:**
+- No explicit desktop keyboard shortcut had been added for playback.
+- `DIM` volume was still set to the earlier lower value.
+- The header `FX` button only had a generic active style and did not expose per-mode visual differentiation.
+
+**What the code was doing before:**
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) handled `Escape` globally, but not desktop `Space` for playback.
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) still used `0.25` for `DIM` playback volume.
+- [`styles.css`](/Users/paulfisher/Polyplay/styles.css) styled `.fx-link` as a single active state regardless of whether the canvas mode was `gravity`, `pop`, or `splatter`.
+
+**What we tried:**
+- Extended the existing global keyboard handler rather than creating a separate shortcut system.
+- Raised `DIM` slightly instead of undoing the feature’s quieter intent.
+- Added mode-specific FX button classes and purple-family tint variants so the control signals mode without becoming theme-colored noise.
+
+**Why a failed attempt failed:**
+- No failed intermediate patch was kept.
+- The main lesson was that the FX button should communicate FX mode, not theme mode, so reusing theme-pack accents there would have made the signal less clear.
+
+**Final fix:**
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) now maps desktop `Spacebar` to play/pause and prevents page scroll, while explicitly ignoring editable fields, buttons, links, summaries, and iframe-focused contexts.
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) raises `DIM` playback volume from `0.25` to `0.30`.
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) adds mode-specific classes to the header FX button.
+- [`styles.css`](/Users/paulfisher/Polyplay/styles.css) now gives the header FX button distinct purple-family mode cues:
+  - `gravity`: cooler indigo-violet
+  - `pop`: brighter electric purple
+  - `splatter`: hotter magenta-purple
+- [`styles.css`](/Users/paulfisher/Polyplay/styles.css) also excludes `fx-link` from the custom-theme header overrides so those mode cues stay consistent across themes.
+
+**How to avoid this later:**
+- For desktop playback apps, keyboard transport shortcuts should be treated as first-class behavior, not optional polish.
+- When a button cycles through multiple internal modes, give it its own stable visual language instead of relying on one generic “active” state.
+- Keep warning-state controls like `MUTE` and softer-state controls like `DIM` intentionally distinct in both sound level and visual weight.
+
+---
+
 ## Notes / triage log
 
 ### General rules for this pass

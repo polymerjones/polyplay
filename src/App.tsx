@@ -3135,15 +3135,34 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName ?? "";
+      const isEditableTarget =
+        target instanceof HTMLInputElement ||
+        tagName === "TEXTAREA" ||
+        tagName === "SELECT" ||
+        target?.isContentEditable === true;
+      const isInteractiveTarget = Boolean(
+        target?.closest("button, a, summary, [role='button'], [role='link'], iframe")
+      );
+
       if (event.key === "Escape") {
         setIsFullscreenPlayerOpen(false);
         setOverlayPage(null);
         setIsTipsOpen(false);
+        return;
+      }
+
+      if (event.code === "Space") {
+        if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+        if (isEditableTarget || isInteractiveTarget) return;
+        event.preventDefault();
+        void togglePlayPause();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [togglePlayPause]);
 
   useEffect(() => {
     if (!overlayPage) return;
