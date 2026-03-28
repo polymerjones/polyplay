@@ -60,6 +60,7 @@ import {
   parseConfigImportText,
   serializeConfig
 } from "../lib/backup";
+import { canUseIosNativeAudioImport, pickIosNativeAudioFile } from "../lib/iosMediaImport";
 import { saveBlobWithBestEffort } from "../lib/saveBlob";
 import { titleFromFilename } from "../lib/title";
 import { Button } from "../components/button";
@@ -86,6 +87,7 @@ const THEME_PACK_AURA_COLORS: Record<"crimson" | "teal" | "amber", string> = {
 };
 const PRIVACY_POLICY_URL = "/privacy-policy.html";
 const TERMS_AND_CONDITIONS_URL = "/terms-and-conditions.html";
+const CAN_USE_IOS_NATIVE_AUDIO_IMPORT = canUseIosNativeAudioImport();
 type ThemeSelection = "dark" | "light" | "amber" | "teal" | "crimson";
 type AdminConfirmState =
   | {
@@ -594,6 +596,12 @@ export function AdminApp() {
     setUploadAudio(file);
   };
 
+  const onPickUploadAudioNative = async () => {
+    const file = await pickIosNativeAudioFile();
+    if (!file) return;
+    setUploadAudio(file);
+  };
+
   const onPickUploadArtwork = async (file: File | null) => {
     if (!file) {
       setUploadArtworkFile(null);
@@ -644,6 +652,12 @@ export function AdminApp() {
   };
 
   const onPickSelectedAudio = (file: File | null) => {
+    setSelectedAudioFile(file);
+  };
+
+  const onPickSelectedAudioNative = async () => {
+    const file = await pickIosNativeAudioFile();
+    if (!file) return;
     setSelectedAudioFile(file);
   };
 
@@ -1595,6 +1609,7 @@ export function AdminApp() {
               accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,.wav,.mp3,.m4a,.aac,.mp4,.mov"
               selectedFileName={uploadAudio?.name}
               armed={Boolean(uploadAudio)}
+              onPickRequest={CAN_USE_IOS_NATIVE_AUDIO_IMPORT ? () => void onPickUploadAudioNative() : undefined}
               onFileSelected={(file) => void onPickUploadAudio(file)}
             />
 
@@ -1776,6 +1791,7 @@ export function AdminApp() {
                 compact
                 selectedFileName={selectedAudioFile?.name}
                 armed={Boolean(selectedAudioFile)}
+                onPickRequest={CAN_USE_IOS_NATIVE_AUDIO_IMPORT ? () => void onPickSelectedAudioNative() : undefined}
                 onFileSelected={(file) => void onPickSelectedAudio(file)}
                 disabled={!hasTracks}
               />
@@ -1859,6 +1875,17 @@ export function AdminApp() {
               accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,.wav,.mp3,.m4a,.aac,.mp4,.mov"
               selectedFileName={audioTransferMode === "replace" ? selectedAudioFile?.name : uploadAudio?.name}
               busy={isAudioLaneBusy}
+              onPickRequest={
+                CAN_USE_IOS_NATIVE_AUDIO_IMPORT
+                  ? async () => {
+                      const file = await pickIosNativeAudioFile();
+                      if (!file) return;
+                      if (audioTransferMode === "replace") setSelectedAudioFile(file);
+                      else setUploadAudio(file);
+                      await runAudioLaneTransfer(file);
+                    }
+                  : undefined
+              }
               onFileSelected={async (file) => {
                 if (!file) return;
                 if (audioTransferMode === "replace") setSelectedAudioFile(file);
