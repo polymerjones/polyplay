@@ -719,6 +719,60 @@ Suggested order:
 
 ---
 
+### 14. iPhone Manage Library media tools should not push core controls offscreen
+**Status:** Fixed
+
+**Notes:**
+- This was discovered after the broader iframe regression was fixed.
+- The remaining issue was specific to the tall media-management sections inside `Manage Library`, not the whole Settings shell.
+
+**Problem:**
+- On iPhone, the `Track Operations` card in `Manage Library` was still too tall.
+- The `Update artwork` and `Replace audio` sections pushed `Remove track`, `Danger Zone`, and lower controls too far down the page.
+
+**Repro:**
+- Open Settings on iPhone.
+- Go to `Manage Library`.
+- Look at the `Track Operations` card with the media replace controls visible.
+- The stacked file drop zones consume too much vertical space and force excessive scrolling.
+
+**Root cause:**
+- The shared drop-zone component was sized generously for desktop and import workflows.
+- The manage-side replace flows were reusing that same tall presentation on iPhone, even though these are secondary maintenance actions in a much tighter vertical space.
+
+**What the code was doing before:**
+- [`src/admin/TransferLaneDropZone.tsx`](/Users/paulfisher/Polyplay/src/admin/TransferLaneDropZone.tsx) rendered the same full-height drop-zone presentation for both import and manage flows.
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) used the same large drop-zone treatment for `New artwork file` and `Replacement audio file` inside the `Track Operations` card.
+- [`styles.css`](/Users/paulfisher/Polyplay/styles.css) gave those zones roomy padding, large icon space, and generous copy spacing that worked better on desktop than on iPhone.
+
+**What we tried:**
+- Kept the import flow unchanged.
+- Added a compact variant only for the manage-side replace media drop zones.
+- Tightened the iPhone spacing inside the `Track Operations` card rather than shrinking the whole admin UI globally.
+
+**Why a failed attempt failed:**
+- No failed intermediate patch was kept.
+- The main lesson was that the import screen and the manage/maintenance screen do not need identical drop-zone proportions, especially on iPhone.
+
+**Final fix:**
+- [`src/admin/TransferLaneDropZone.tsx`](/Users/paulfisher/Polyplay/src/admin/TransferLaneDropZone.tsx) now supports a compact mode.
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) uses that compact drop-zone mode for:
+  - `New artwork file`
+  - `Replacement audio file`
+- [`styles.css`](/Users/paulfisher/Polyplay/styles.css) now gives compact manage-mode drop zones:
+  - reduced min-height
+  - tighter padding
+  - smaller icon footprint
+  - tighter policy copy
+  - tighter `Track Operations` spacing on narrow screens
+
+**How to avoid this later:**
+- Treat primary import flows and secondary maintenance flows as different layout problems.
+- On iPhone, maintenance cards should bias toward density and task completion over decorative breathing room.
+- Shared admin components should expose size variants instead of assuming one comfortable desktop-sized default.
+
+---
+
 ## Notes / triage log
 
 ### General rules for this pass

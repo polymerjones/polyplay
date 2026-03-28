@@ -1610,7 +1610,7 @@ export function AdminApp() {
         )}
 
         {showManageSections && (
-        <div className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
+        <div className="admin-v1-card admin-track-ops rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
           <h2 className="mb-2 text-base font-semibold text-slate-100">Track Operations</h2>
 
           <div className="admin-v1-fields grid gap-2">
@@ -1631,13 +1631,14 @@ export function AdminApp() {
               <TransferLaneDropZone
                 label="New artwork file"
                 tooltip="Manual replace: choose artwork for the selected track."
-              iconType="artwork"
-              accept="image/*,video/mp4,video/quicktime,.mov"
-              selectedFileName={selectedArtworkFile?.name}
-              armed={Boolean(selectedArtworkFile)}
-              onFileSelected={(file) => void onPickSelectedArtwork(file)}
-              disabled={!hasTracks}
-            />
+                iconType="artwork"
+                accept="image/*,video/mp4,video/quicktime,.mov"
+                compact
+                selectedFileName={selectedArtworkFile?.name}
+                armed={Boolean(selectedArtworkFile)}
+                onFileSelected={(file) => void onPickSelectedArtwork(file)}
+                disabled={!hasTracks}
+              />
               {selectedArtPreviewUrl && (
                 <div className="video-frame-picker">
                   <label className="text-xs text-slate-300">Poster frame for static artwork</label>
@@ -1712,13 +1713,14 @@ export function AdminApp() {
               <TransferLaneDropZone
                 label="Replacement audio file"
                 tooltip="Manual replace: choose new audio for the selected track."
-              iconType="audio"
-              accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,.wav,.mp3,.m4a,.aac,.mp4"
-              selectedFileName={selectedAudioFile?.name}
-              armed={Boolean(selectedAudioFile)}
-              onFileSelected={(file) => void onPickSelectedAudio(file)}
-              disabled={!hasTracks}
-            />
+                iconType="audio"
+                accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,.wav,.mp3,.m4a,.aac,.mp4"
+                compact
+                selectedFileName={selectedAudioFile?.name}
+                armed={Boolean(selectedAudioFile)}
+                onFileSelected={(file) => void onPickSelectedAudio(file)}
+                disabled={!hasTracks}
+              />
               <Button
                 variant="primary"
                 onClick={onReplaceAudio}

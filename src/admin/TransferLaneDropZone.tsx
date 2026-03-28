@@ -5,6 +5,7 @@ type Props = {
   accept: string;
   tooltip: string;
   iconType?: "audio" | "artwork";
+  compact?: boolean;
   hint?: string;
   selectedFileName?: string;
   disabled?: boolean;
@@ -18,6 +19,7 @@ export function TransferLaneDropZone({
   accept,
   tooltip,
   iconType,
+  compact = false,
   hint,
   selectedFileName,
   disabled = false,
@@ -75,7 +77,7 @@ export function TransferLaneDropZone({
   };
 
   return (
-    <div className={`transfer-lane ${iconType ? `transfer-lane--${iconType}` : ""}`.trim()}>
+    <div className={`transfer-lane ${iconType ? `transfer-lane--${iconType}` : ""} ${compact ? "transfer-lane--compact" : ""}`.trim()}>
       <div className="transfer-lane__head">
         <div className="transfer-lane__label">{label}</div>
         <button

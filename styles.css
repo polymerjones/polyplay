@@ -4233,12 +4233,35 @@ body.mute-freeze .track-backdrop {
     padding: 10px;
   }
 
+  .transfer-lane--compact .transfer-lane__zone {
+    min-height: 88px;
+    padding: 9px 10px;
+  }
+
+  .transfer-lane--compact .transfer-lane__icon-bg {
+    inset: 10px 10px 10px 64%;
+    opacity: 0.1;
+  }
+
   .transfer-lane__title {
     font-size: 0.78rem;
   }
 
   .transfer-lane__file {
     font-size: 0.72rem;
+  }
+
+  .transfer-lane--compact .transfer-lane__policy {
+    font-size: 0.6rem;
+    line-height: 1.16;
+  }
+
+  .admin-track-ops .admin-v1-fields {
+    gap: 6px !important;
+  }
+
+  .admin-track-ops label {
+    gap: 3px !important;
   }
 
   .transfer-lane__tooltip {
@@ -4769,6 +4792,25 @@ body.mute-freeze .track-backdrop {
 
 .transfer-lane__input {
   display: none;
+}
+
+.transfer-lane--compact .transfer-lane__zone {
+  min-height: 104px;
+  padding: 10px 12px;
+}
+
+.transfer-lane--compact .transfer-lane__icon-bg {
+  inset: 10px 12px 10px 60%;
+  opacity: 0.11;
+}
+
+.transfer-lane--compact .transfer-lane__icon-svg {
+  max-height: 68%;
+}
+
+.transfer-lane--compact .transfer-lane__policy {
+  font-size: 0.64rem;
+  line-height: 1.22;
 }
 
 @keyframes admin-armed-zone-pulse {
@@ -5304,6 +5346,9 @@ body.nuke-flash::after {
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .playlist-selector select {

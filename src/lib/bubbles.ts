@@ -21,6 +21,8 @@ export type Bubble = {
 
 const DESKTOP_MAX = 28;
 const MOBILE_MAX = 18;
+const DESKTOP_COLLISION_LIMIT = 24;
+const MOBILE_FAKE_COLLISION_LIMIT = 14;
 
 function rand(min: number, max: number): number {
   return min + Math.random() * (max - min);
@@ -81,6 +83,106 @@ export function getMaxBubbles(): number {
   return DESKTOP_MAX;
 }
 
+function isCoarsePointerDevice(): boolean {
+  return typeof window !== "undefined" && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+}
+
+function isReducedMotionContext(): boolean {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function resolveCollisionMode(): "desktop-real" | "mobile-fake" | "off" {
+  if (isReducedMotionContext()) return "off";
+  return isCoarsePointerDevice() ? "mobile-fake" : "desktop-real";
+}
+
+function clampVelocity(value: number, limit: number): number {
+  return Math.max(-limit, Math.min(limit, value));
+}
+
+function withWallBounce(bubble: Bubble, mult: number): Bubble {
+  let { x, y, vx, vy } = bubble;
+  const nextX = x + vx * mult;
+  const nextY = y + vy * mult;
+
+  if (nextX <= -8 || nextX >= 108) {
+    vx *= -0.92;
+    x = Math.max(-8, Math.min(108, nextX));
+  } else {
+    x = nextX;
+  }
+
+  if (nextY <= -10 || nextY >= 110) {
+    vy *= -0.9;
+    y = Math.max(-10, Math.min(110, nextY));
+  } else {
+    y = nextY;
+  }
+
+  return { ...bubble, x, y, vx, vy };
+}
+
+function applyFakeBubbleDeflection(next: Bubble[]): Bubble[] {
+  const movable = next.filter((bubble) => bubble.kind !== "fixed").slice(0, MOBILE_FAKE_COLLISION_LIMIT);
+  for (let i = 0; i < movable.length; i += 1) {
+    const a = movable[i];
+    if (!a) continue;
+    for (let j = i + 1; j < movable.length; j += 1) {
+      const b = movable[j];
+      if (!b) continue;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const distance = Math.hypot(dx, dy) || 0.001;
+      const interactionRadius = (a.size + b.size) * 0.18;
+      if (distance > interactionRadius) continue;
+      const force = (1 - distance / interactionRadius) * 0.035;
+      const nx = dx / distance;
+      const ny = dy / distance;
+      a.vx = clampVelocity(a.vx - nx * force, 0.34);
+      a.vy = clampVelocity(a.vy - ny * force, 0.34);
+      b.vx = clampVelocity(b.vx + nx * force, 0.34);
+      b.vy = clampVelocity(b.vy + ny * force, 0.34);
+    }
+  }
+  return next;
+}
+
+function applyRealBubbleCollisions(next: Bubble[]): Bubble[] {
+  const movable = next.filter((bubble) => bubble.kind !== "fixed").slice(0, DESKTOP_COLLISION_LIMIT);
+  for (let i = 0; i < movable.length; i += 1) {
+    const a = movable[i];
+    if (!a) continue;
+    for (let j = i + 1; j < movable.length; j += 1) {
+      const b = movable[j];
+      if (!b) continue;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const distance = Math.hypot(dx, dy) || 0.001;
+      const minDistance = (a.size + b.size) * 0.16;
+      if (distance >= minDistance) continue;
+      const nx = dx / distance;
+      const ny = dy / distance;
+      const overlap = minDistance - distance;
+      const separate = overlap * 0.5;
+
+      a.x -= nx * separate;
+      a.y -= ny * separate;
+      b.x += nx * separate;
+      b.y += ny * separate;
+
+      const relativeVelocity = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+      if (relativeVelocity > 0) continue;
+      const impulse = -relativeVelocity * 0.92;
+
+      a.vx = clampVelocity(a.vx - nx * impulse, 0.42);
+      a.vy = clampVelocity(a.vy - ny * impulse, 0.42);
+      b.vx = clampVelocity(b.vx + nx * impulse, 0.42);
+      b.vy = clampVelocity(b.vy + ny * impulse, 0.42);
+    }
+  }
+  return next;
+}
+
 export function spawnBubblesAt(current: Bubble[], x: number, y: number, intensity: number, now: number): Bubble[] {
   const spawnCount = intensity > 0.66 ? 3 : intensity > 0.28 ? 2 : 1;
   const next = current.slice();
@@ -135,7 +237,7 @@ export function applyMagnet(current: Bubble[], x: number, y: number, now: number
 export function stepBubbles(current: Bubble[], dtMs: number, now: number): Bubble[] {
   const dt = Math.min(48, Math.max(8, dtMs));
   const mult = dt / 16.7;
-  return current.map((bubble) => {
+  const stepped = current.map((bubble) => {
     if (bubble.kind === "fixed") return bubble;
     const magnetActive = bubble.magnetUntil > now;
     let vx = bubble.vx;
@@ -155,14 +257,14 @@ export function stepBubbles(current: Bubble[], dtMs: number, now: number): Bubbl
     vx *= 0.992;
     vy *= 0.992;
     const driftY = bubble.kind === "floater" ? -0.02 * mult : -0.012 * mult;
-    const nx = Math.max(-8, Math.min(108, bubble.x + vx * mult));
-    const ny = Math.max(-10, Math.min(110, bubble.y + (vy + driftY) * mult));
-    return {
+    return withWallBounce({
       ...bubble,
-      x: nx,
-      y: ny,
       vx,
-      vy
-    };
+      vy: vy + driftY
+    }, mult);
   });
+  const collisionMode = resolveCollisionMode();
+  if (collisionMode === "desktop-real") return applyRealBubbleCollisions(stepped);
+  if (collisionMode === "mobile-fake") return applyFakeBubbleDeflection(stepped);
+  return stepped;
 }
