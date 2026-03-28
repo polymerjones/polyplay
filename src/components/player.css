@@ -114,6 +114,18 @@ html[data-theme="light"] .pc-dim-btn.is-mute.has-onboarding-hint {
     pc-art-fullscreen-hint 2400ms ease-in-out infinite;
 }
 
+html[data-theme="light"] .pc-dim-btn.is-active:not(.is-mute) {
+  border-color: rgba(255, 196, 106, 0.38);
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255, 248, 223, 0.98) 0%, rgba(255, 226, 162, 0.96) 56%, rgba(244, 188, 106, 0.9) 100%);
+  color: #6a3d12;
+  box-shadow:
+    0 0 0 1px rgba(255, 224, 168, 0.34),
+    0 10px 22px rgba(226, 172, 94, 0.2),
+    inset 0 1px 0 rgba(255, 253, 243, 0.76);
+  text-shadow: 0 1px 0 rgba(255, 251, 240, 0.34);
+}
+
 html[data-theme="custom"][data-theme-slot="amber"] {
   --pc-color-surface: rgba(32, 20, 8, 0.84);
   --pc-color-surface-soft: rgba(23, 14, 6, 0.58);
@@ -126,6 +138,46 @@ html[data-theme="custom"][data-theme-slot="amber"] {
   --pc-color-track: rgba(255, 214, 156, 0.24);
   --pc-shadow-lg: 0 18px 42px rgba(16, 10, 3, 0.5);
   --pc-shadow-sm: 0 8px 18px rgba(12, 8, 3, 0.34);
+}
+
+html[data-theme="dark"] .pc-dim-btn.is-active:not(.is-mute) {
+  border-color: rgba(255, 220, 158, 0.34);
+  background: rgba(164, 116, 52, 0.26);
+  color: #fff1dc;
+  box-shadow:
+    0 0 0 1px rgba(255, 210, 140, 0.16),
+    0 10px 20px rgba(84, 52, 16, 0.22),
+    inset 0 1px 0 rgba(255, 241, 212, 0.08);
+}
+
+html[data-theme="custom"][data-theme-slot="crimson"] .pc-dim-btn.is-active:not(.is-mute) {
+  border-color: rgba(255, 206, 178, 0.28);
+  background: rgba(184, 125, 83, 0.24);
+  color: #fff0df;
+  box-shadow:
+    0 0 0 1px rgba(255, 208, 176, 0.14),
+    0 10px 20px rgba(92, 46, 30, 0.22),
+    inset 0 1px 0 rgba(255, 240, 229, 0.08);
+}
+
+html[data-theme="custom"][data-theme-slot="teal"] .pc-dim-btn.is-active:not(.is-mute) {
+  border-color: rgba(255, 220, 168, 0.28);
+  background: rgba(172, 130, 74, 0.22);
+  color: #fff1dd;
+  box-shadow:
+    0 0 0 1px rgba(255, 216, 165, 0.14),
+    0 10px 20px rgba(74, 56, 24, 0.22),
+    inset 0 1px 0 rgba(255, 245, 231, 0.08);
+}
+
+html[data-theme="custom"][data-theme-slot="amber"] .pc-dim-btn.is-active:not(.is-mute) {
+  border-color: rgba(255, 227, 170, 0.28);
+  background: rgba(212, 156, 79, 0.24);
+  color: #fff2dd;
+  box-shadow:
+    0 0 0 1px rgba(255, 225, 174, 0.14),
+    0 10px 20px rgba(102, 61, 15, 0.24),
+    inset 0 1px 0 rgba(255, 247, 233, 0.08);
 }
 
 html[data-theme="custom"][data-theme-slot="crimson"] {

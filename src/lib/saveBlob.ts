@@ -1,3 +1,5 @@
+import { isDesktopSafari } from "./platform";
+
 export type SaveBlobMode = "shared" | "save-dialog" | "downloaded" | "opened-preview";
 
 type SaveBlobOptions = {
@@ -54,7 +56,7 @@ export async function saveBlobWithBestEffort(
     share?: (data: { title?: string; text?: string; files?: File[] }) => Promise<void>;
   };
 
-  if (typeof nav.share === "function" && typeof File !== "undefined") {
+  if (!isDesktopSafari() && typeof nav.share === "function" && typeof File !== "undefined") {
     try {
       const file = new File([blob], filename, { type: blob.type || "application/octet-stream" });
       if (!nav.canShare || nav.canShare({ files: [file] })) {

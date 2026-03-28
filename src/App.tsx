@@ -50,6 +50,7 @@ import {
 } from "./lib/iosNowPlaying";
 import { bindMediaSessionTransportActions, syncMediaSessionItem, syncMediaSessionPlaybackState } from "./lib/mediaSession";
 import { revokeAllMediaUrls } from "./lib/player/media";
+import { isDesktopSafari } from "./lib/platform";
 import {
   createPlaylistInLibrary,
   ensureActivePlaylist,
@@ -1940,7 +1941,7 @@ export default function App() {
   const applyDimMode = (audio: HTMLAudioElement | null, mode: DimMode) => {
     if (!audio) return;
     const effectiveMode = normalizeDimModeForPlatform(mode, isIOS);
-    const targetVolume = effectiveMode === "mute" ? 0 : effectiveMode === "dim" ? 0.15 : 1;
+    const targetVolume = effectiveMode === "mute" ? 0 : effectiveMode === "dim" ? 0.25 : 1;
     const gainNode = playbackGainNodeRef.current;
     if (gainNode && !isIOS) {
       audio.muted = false;
@@ -1959,7 +1960,7 @@ export default function App() {
 
   const getDimAudioState = (mode: DimMode): { muted: boolean; volume: number } => {
     if (mode === "mute") return { muted: true, volume: 0 };
-    if (mode === "dim") return { muted: false, volume: 0.15 };
+    if (mode === "dim") return { muted: false, volume: 0.25 };
     return { muted: false, volume: 1 };
   };
 
@@ -2904,7 +2905,7 @@ export default function App() {
       canShare?: (data: { files?: File[] }) => boolean;
       share?: (data: { title?: string; text?: string; files?: File[] }) => Promise<void>;
     };
-    if (typeof nav.share === "function" && typeof File !== "undefined") {
+    if (!isDesktopSafari() && typeof nav.share === "function" && typeof File !== "undefined") {
       try {
         const file = new File([blob], filename, { type: blob.type || "application/zip" });
         if (!nav.canShare || nav.canShare({ files: [file] })) {

@@ -111,6 +111,14 @@ html[data-theme="custom"][data-theme-slot="amber"] {
   box-sizing: border-box;
 }
 
+button,
+select,
+summary {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 html,
 body {
   margin: 0;
@@ -5378,6 +5386,18 @@ html[data-theme="light"] .playlist-selector select {
   border-color: rgba(255, 145, 178, 0.32);
 }
 
+.upload-link,
+.fx-link,
+.theme-switch,
+.journal-link,
+.vault-btn,
+.playlist-selector__action,
+.pp-oracle-link {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 @media (min-width: 761px) {
   .playlist-selector {
     width: min(760px, calc(100% - 48px));
@@ -5763,8 +5783,8 @@ html[data-theme="light"] .playlist-selector select {
 .ytm-tile.is-active {
   box-shadow:
     0 10px 22px rgba(0, 0, 0, 0.26),
-    0 0 0 1px rgba(var(--aura-rgb, 188, 132, 255), 0.62),
-    0 0 22px rgba(var(--aura-rgb, 188, 132, 255), 0.34);
+    0 0 0 2px rgba(var(--aura-rgb, 188, 132, 255), 0.66),
+    0 0 28px rgba(var(--aura-rgb, 188, 132, 255), 0.4);
 }
 
 .ytm-tile.has-aura::before {
@@ -5784,14 +5804,14 @@ html[data-theme="light"] .playlist-selector select {
 .ytm-tile.has-aura {
   box-shadow:
     0 10px 22px rgba(0, 0, 0, 0.26),
-    0 0 0 1px rgba(var(--aura-rgb), calc(0.24 + (var(--tile-aura-level, 0) * 0.38))),
-    0 0 calc(14px + (var(--tile-aura-level, 0) * 28px)) rgba(var(--aura-rgb), calc(0.24 + (var(--tile-aura-level, 0) * 0.5)));
+    0 0 0 calc(1.5px + (var(--tile-aura-level, 0) * 1.1px)) rgba(var(--aura-rgb), calc(0.28 + (var(--tile-aura-level, 0) * 0.42))),
+    0 0 calc(18px + (var(--tile-aura-level, 0) * 32px)) rgba(var(--aura-rgb), calc(0.28 + (var(--tile-aura-level, 0) * 0.54)));
 }
 
 .ytm-tile.has-aura .ytm-tile-hit {
   box-shadow:
-    inset 0 0 0 calc(1px + (var(--tile-aura-level, 0) * 1.5px)) rgba(var(--aura-rgb), calc(0.3 + (var(--tile-aura-level, 0) * 0.4))),
-    inset 0 0 calc(12px + (var(--tile-aura-level, 0) * 14px)) rgba(var(--aura-rgb), calc(0.08 + (var(--tile-aura-level, 0) * 0.28)));
+    inset 0 0 0 calc(1.5px + (var(--tile-aura-level, 0) * 1.8px)) rgba(var(--aura-rgb), calc(0.34 + (var(--tile-aura-level, 0) * 0.42))),
+    inset 0 0 calc(14px + (var(--tile-aura-level, 0) * 16px)) rgba(var(--aura-rgb), calc(0.1 + (var(--tile-aura-level, 0) * 0.3)));
 }
 
 .ytm-tile.is-active::after {
@@ -5821,8 +5841,8 @@ html[data-theme="light"] .playlist-selector select {
   .ytm-tile.has-aura:hover {
     box-shadow:
       0 12px 24px rgba(0, 0, 0, 0.3),
-      0 0 0 calc(1px + (var(--tile-aura-level, 0) * 1px)) rgba(var(--aura-rgb), calc(0.26 + (var(--tile-aura-level, 0) * 0.4))),
-      0 0 calc(17px + (var(--tile-aura-level, 0) * 30px)) rgba(var(--aura-rgb), calc(0.24 + (var(--tile-aura-level, 0) * 0.48)));
+      0 0 0 calc(1.5px + (var(--tile-aura-level, 0) * 1.2px)) rgba(var(--aura-rgb), calc(0.3 + (var(--tile-aura-level, 0) * 0.42))),
+      0 0 calc(20px + (var(--tile-aura-level, 0) * 34px)) rgba(var(--aura-rgb), calc(0.28 + (var(--tile-aura-level, 0) * 0.5)));
   }
 }
 

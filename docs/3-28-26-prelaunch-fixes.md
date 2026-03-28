@@ -256,6 +256,9 @@ Suggested order:
 - The status copy remains explicit:
   - `Zipping backup now.`
   - then `Backup ready for ... Use Share and Save to Files on iPhone.`
+- Follow-up Safari desktop fix:
+  - desktop Safari was incorrectly eligible for the Web Share branch, which could surface the macOS share sheet instead of a straightforward local save/download path
+  - the save helper now skips `navigator.share()` on desktop Safari and prefers the normal save/download route there
 
 **How to avoid this later:**
 - Any browser flow that depends on opening a new tab/window, share sheet, or picker should preserve user activation if heavy async work happens first.

@@ -13,6 +13,14 @@ export function isIosSafari(): boolean {
   return isIOS && isWebKit && !isExcluded;
 }
 
+export function isDesktopSafari(): boolean {
+  const ua = getUserAgent();
+  const isMacDesktop = /Macintosh/.test(ua) && !(typeof document !== "undefined" && "ontouchend" in document);
+  const isWebKit = /WebKit/.test(ua);
+  const isExcluded = /Chrome|Chromium|CriOS|FxiOS|EdgiOS|OPR|Opera/.test(ua);
+  return isMacDesktop && isWebKit && !isExcluded;
+}
+
 export function isConstrainedMobileDevice(): boolean {
   if (isIosSafari()) return true;
   if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
