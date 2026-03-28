@@ -16,6 +16,12 @@ export function fireSuccessHaptic(): void {
   });
 }
 
+export function fireHeavyHaptic(): void {
+  void Haptics.impact({ style: ImpactStyle.Heavy }).catch(() => {
+    fallbackVibrate(26);
+  });
+}
+
 export function fireLightHaptic(): void {
   void Haptics.impact({ style: ImpactStyle.Light }).catch(() => {
     fallbackVibrate(12);

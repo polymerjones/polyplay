@@ -60,7 +60,7 @@ import {
   parseConfigImportText,
   serializeConfig
 } from "../lib/backup";
-import { fireSuccessHaptic } from "../lib/haptics";
+import { fireHeavyHaptic, fireSuccessHaptic } from "../lib/haptics";
 import { canUseIosNativeAudioImport, pickIosNativeAudioFile } from "../lib/iosMediaImport";
 import { saveBlobWithBestEffort } from "../lib/saveBlob";
 import { titleFromFilename } from "../lib/title";
@@ -218,6 +218,7 @@ export function AdminApp() {
   const [uploadArtPosterBlob, setUploadArtPosterBlob] = useState<Blob | null>(null);
   const [isUploadPreviewPlaying, setIsUploadPreviewPlaying] = useState(false);
   const uploadFormRef = useRef<HTMLFormElement | null>(null);
+  const uploadTitleInputRef = useRef<HTMLInputElement | null>(null);
 
   const [selectedArtworkTrackId, setSelectedArtworkTrackId] = useState<string>("");
   const [selectedArtworkFile, setSelectedArtworkFile] = useState<File | null>(null);
@@ -497,6 +498,19 @@ export function AdminApp() {
     const timer = window.setTimeout(() => setLaneToast(null), 2400);
     return () => window.clearTimeout(timer);
   }, [laneToast]);
+
+  useEffect(() => {
+    if (!uploadAudio) return;
+    if (typeof window === "undefined") return;
+    if (window.matchMedia?.("(pointer: coarse)").matches) return;
+    const input = uploadTitleInputRef.current;
+    if (!input) return;
+    const frame = window.requestAnimationFrame(() => {
+      input.focus();
+      input.select();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [uploadAudio]);
 
   useEffect(() => {
     if (!selectedTransferTrackId) {
@@ -970,6 +984,7 @@ export function AdminApp() {
       await new Promise((resolve) => window.setTimeout(resolve, 170));
       await removeTrackFromDb(trackId);
       setStatus("Track removed.");
+      fireHeavyHaptic();
       showSuccessNotice("Track removed.");
       await refreshTracks();
       await refreshStorage();
@@ -1000,6 +1015,7 @@ export function AdminApp() {
     try {
       const updated = await resetAuraInDb();
       setStatus(`Aura reset for ${updated} track${updated === 1 ? "" : "s"}.`);
+      fireHeavyHaptic();
       showSuccessNotice(`Aura reset for ${updated} track${updated === 1 ? "" : "s"}.`);
       await refreshTracks();
       emitLibraryUpdated();
@@ -1107,6 +1123,7 @@ export function AdminApp() {
         window.parent.postMessage({ type: "polyplay:factory-reset" }, window.location.origin);
       }
       setStatus("Factory reset complete. Defaults and demo tracks restored.");
+      fireHeavyHaptic();
     } catch {
       setStatus("Factory reset failed.");
     }
@@ -1612,6 +1629,7 @@ export function AdminApp() {
             <label className="grid gap-1 text-sm text-slate-300">
               Title
               <input
+                ref={uploadTitleInputRef}
                 value={uploadTitle}
                 onChange={(event) => setUploadTitle(event.currentTarget.value)}
                 className="admin-upload-input rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
