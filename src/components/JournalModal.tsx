@@ -11,6 +11,7 @@ import {
   type GratitudeSettings,
   updateEntry
 } from "../lib/gratitude";
+import { fireLightHaptic } from "../lib/haptics";
 import { saveTextWithBestEffort } from "../lib/saveBlob";
 
 type Props = {
@@ -867,6 +868,7 @@ export function JournalModal({ open, onClose }: Props) {
                 aria-label="Next verse"
                 onClick={() => {
                   setVerseIndex((prev) => (prev + 1) % Math.max(1, verses.length));
+                  fireLightHaptic();
                   triggerVerseFeedback();
                 }}
               >

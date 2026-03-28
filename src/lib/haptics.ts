@@ -22,6 +22,25 @@ export function fireHeavyHaptic(): void {
   });
 }
 
+export function fireAuraHaptic(level: number): void {
+  const clamped = Math.max(0, Math.min(10, Math.round(level)));
+  if (clamped >= 8) {
+    void Haptics.impact({ style: ImpactStyle.Heavy }).catch(() => {
+      fallbackVibrate(24);
+    });
+    return;
+  }
+  if (clamped >= 5) {
+    void Haptics.impact({ style: ImpactStyle.Medium }).catch(() => {
+      fallbackVibrate(18);
+    });
+    return;
+  }
+  void Haptics.impact({ style: ImpactStyle.Light }).catch(() => {
+    fallbackVibrate(12);
+  });
+}
+
 export function fireLightHaptic(): void {
   void Haptics.impact({ style: ImpactStyle.Light }).catch(() => {
     fallbackVibrate(12);

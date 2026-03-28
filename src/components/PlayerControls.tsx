@@ -289,7 +289,6 @@ export function PlayerControls({
             onClick={(event) => {
               const button = event.currentTarget;
               emitPinkSparkle(button, { sparks: 7, distance: 24, includeFlash: true });
-              if (navigator.vibrate) navigator.vibrate(12);
               onAuraUp();
             }}
           >

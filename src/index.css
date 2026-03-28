@@ -1548,8 +1548,42 @@ body.theme-dark .rowAuraGlow {
 }
 
 .admin-track-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   transition: opacity 180ms ease, transform 180ms ease, filter 180ms ease;
   will-change: opacity, transform;
+}
+
+.admin-track-row__main,
+.admin-track-row__title-wrap {
+  min-width: 0;
+}
+
+.admin-track-row__main {
+  flex: 1 1 280px;
+}
+
+.admin-track-row__title {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.admin-track-row__rename,
+.admin-track-row__remove {
+  flex: 0 0 auto;
+}
+
+.admin-track-row__edit {
+  min-width: 0;
+}
+
+.admin-track-row__edit-input {
+  min-width: min(220px, 100%);
+  flex: 1 1 240px;
+  width: min(100%, 420px);
 }
 
 .admin-track-row.is-removing {

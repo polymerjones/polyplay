@@ -48,7 +48,7 @@ import {
   setIosNowPlayingItem,
   updateIosNowPlayingPlaybackState
 } from "./lib/iosNowPlaying";
-import { fireHeavyHaptic, fireSuccessHaptic } from "./lib/haptics";
+import { fireAuraHaptic, fireHeavyHaptic, fireLightHaptic, fireSuccessHaptic } from "./lib/haptics";
 import { bindMediaSessionTransportActions, syncMediaSessionItem, syncMediaSessionPlaybackState } from "./lib/mediaSession";
 import { revokeAllMediaUrls } from "./lib/player/media";
 import { isDesktopSafari } from "./lib/platform";
@@ -2348,6 +2348,10 @@ export default function App() {
       })
     );
 
+    if (nextAuraForDb !== null && delta > 0) {
+      fireAuraHaptic(nextAuraForDb);
+    }
+
     if (persistedId !== null && nextAuraForDb !== null) {
       try {
         await saveAuraToDb(persistedId, nextAuraForDb);
@@ -2613,6 +2617,7 @@ export default function App() {
 
   const clearLoop = () => {
     if (!currentTrackId) return;
+    fireLightHaptic();
     setLoopByTrack((prev) => ({ ...prev, [currentTrackId]: EMPTY_LOOP }));
     setLoopModeByTrack((prev) => ({ ...prev, [currentTrackId]: "off" }));
     markActivePlaylistDirty();

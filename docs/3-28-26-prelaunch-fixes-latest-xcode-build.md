@@ -272,3 +272,360 @@
 **How to avoid this later:**
 - Do not make first-render visual systems depend on CSS variables that are themselves written in later effects when the same data already exists in React state.
 - For initialization-sensitive rendering paths, prefer passing resolved state directly instead of depending on DOM effect ordering.
+
+---
+
+### 25. iOS native audio document picker initially broke Xcode build because the new plugin file was not in the app target
+**Status:** Fixed
+
+**Problem:**
+- After adding the native iOS audio import picker, Xcode failed to build.
+
+**Repro:**
+- Pull the commit that added `MediaImportPlugin.swift`.
+- Build the iOS app in Xcode.
+- Observe a native compile failure around `MediaImportPlugin` usage from `PolyplayBridgeViewController.swift`.
+
+**Root cause:**
+- The new standalone Swift file was not actually compiled into the app target, so `PolyplayBridgeViewController.swift` referenced a symbol that Xcode did not know about.
+
+**What the code was doing before:**
+- `PolyplayBridgeViewController.swift` registered `MediaImportPlugin()`.
+- `MediaImportPlugin.swift` existed as a separate file, but target membership was not guaranteed by the repo state.
+
+**What we tried:**
+- Verified the failure with `xcodebuild`.
+- Moved the entire plugin implementation into [`ios/App/App/PolyplayBridgeViewController.swift`](/Users/paulfisher/Polyplay/ios/App/App/PolyplayBridgeViewController.swift).
+
+**Why that didn't work:**
+- No failed long-term patch was kept.
+- The important fix was to stop relying on Xcode target membership for a new loose Swift file.
+
+**Final fix:**
+- The media import plugin now lives in [`ios/App/App/PolyplayBridgeViewController.swift`](/Users/paulfisher/Polyplay/ios/App/App/PolyplayBridgeViewController.swift), alongside the registration call.
+- The separate [`ios/App/App/MediaImportPlugin.swift`](/Users/paulfisher/Polyplay/ios/App/App/MediaImportPlugin.swift) file was removed.
+
+**How to avoid this later:**
+- For small native bridge additions in this repo, prefer colocating them in already-targeted native files unless target membership is explicitly verified.
+
+---
+
+### 26. iOS audio import was storing full captured video files instead of extracted audio
+**Status:** Fixed
+
+**Problem:**
+- Using `.mov` / `.mp4` in the audio import flow kept the whole video blob, which is wasteful when the user only wants audio.
+
+**Repro:**
+- Use `Take Video` or pick an existing `.mov`/`.mp4` file through the audio import flow.
+- Import it as a track.
+- Observe that the original video container was being treated as the stored audio blob.
+
+**Root cause:**
+- The native picker returned the selected movie file as-is.
+- JS converted that file into a normal `File`.
+- DB import stored the blob directly with no extraction/transcode step.
+
+**What the code was doing before:**
+- [`ios/App/App/PolyplayBridgeViewController.swift`](/Users/paulfisher/Polyplay/ios/App/App/PolyplayBridgeViewController.swift) copied selected `.mov` / `.mp4` files to temp unchanged.
+- [`src/lib/iosMediaImport.ts`](/Users/paulfisher/Polyplay/src/lib/iosMediaImport.ts) fetched that temp file and handed it to the web app.
+- [`src/lib/db.ts`](/Users/paulfisher/Polyplay/src/lib/db.ts) stored the file as audio without container-specific optimization.
+
+**What we tried:**
+- Added native extraction for `.mov` / `.mp4` in the audio path using `AVAssetExportSession` and `.m4a` output.
+
+**Why that didn't work:**
+- No failed patch was retained.
+- The key decision was to do the conversion natively before JS storage, not after.
+
+**Final fix:**
+- [`ios/App/App/PolyplayBridgeViewController.swift`](/Users/paulfisher/Polyplay/ios/App/App/PolyplayBridgeViewController.swift) now extracts audio from video-container imports into `.m4a` for the audio-import path.
+- Existing pure audio files still pass through unchanged.
+
+**How to avoid this later:**
+- If a picker path semantically means "audio import," containerized video sources should be normalized to audio-only storage before they enter the app database.
+
+---
+
+### 27. Desktop and app header version text drifted because one header was hardcoded separately
+**Status:** Fixed
+
+**Problem:**
+- The desktop/browser title bar still showed the old `v3.3` copy while the app header showed `v1.0.0`.
+
+**Repro:**
+- Open the desktop app/web build.
+- Compare the browser/window title/header version strings.
+- Observe stale version text in one surface.
+
+**Root cause:**
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) had a hardcoded header version string.
+- [`src/config/version.ts`](/Users/paulfisher/Polyplay/src/config/version.ts) separately defined the shared app version.
+
+**What the code was doing before:**
+- Multiple user-facing version surfaces were not reading from the same source of truth.
+
+**What we tried:**
+- Rewired the app header to use `APP_VERSION`.
+- Updated the shared version config to the current launch version string.
+
+**Final fix:**
+- [`src/config/version.ts`](/Users/paulfisher/Polyplay/src/config/version.ts) is now the version source of truth.
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) header version now reads from that config instead of a local hardcoded literal.
+
+**How to avoid this later:**
+- Never hardcode release/version copy in multiple top-level surfaces.
+
+---
+
+### 28. iOS settings/manage library could still slide offscreen because long track labels widened controls
+**Status:** Fixed
+
+**Problem:**
+- Extremely long track labels caused the Settings iframe content to widen and drift offscreen on iPhone.
+
+**Repro:**
+- Open Settings on iPhone with long imported track names or long IDs visible in admin selectors.
+- Navigate to Manage Library.
+- Observe the panel exceed the viewport width.
+
+**Root cause:**
+- The admin track-operation selects allowed long selected-option text to dictate control width.
+- The admin iframe and card content needed stricter `min-width: 0` and width-clamp rules.
+
+**What the code was doing before:**
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) used long full labels for track operation selects.
+- [`src/index.css`](/Users/paulfisher/Polyplay/src/index.css) did not fully constrain those controls in the iPhone layout.
+
+**What we tried:**
+- Added truncated track-option labels for the operation selects.
+- Added width/min-width constraints to admin content/cards/selects.
+
+**Final fix:**
+- Track operation select labels are now middle-truncated in [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx).
+- [`src/index.css`](/Users/paulfisher/Polyplay/src/index.css) now clamps admin content width more aggressively.
+
+**How to avoid this later:**
+- On iOS iframe/admin surfaces, assume long labels will happen and clamp aggressively up front.
+
+---
+
+### 29. iOS audio browse could appear dead because the native audio picker path had silent failure cases
+**Status:** Fixed
+
+**Problem:**
+- Tapping audio browse on iPhone could do nothing, making the picker feel broken.
+
+**Repro:**
+- Fresh install.
+- Open `Import Track` or `Replace Audio`.
+- Tap the audio browse zone.
+- Observe no picker opening in some runs.
+
+**Root cause:**
+- The native audio picker bridge assumed the native path would always be available and readable.
+- If the bridge returned `null` or reading the imported temp path failed, the UI had no visible fallback.
+
+**What the code was doing before:**
+- [`src/admin/TransferLaneDropZone.tsx`](/Users/paulfisher/Polyplay/src/admin/TransferLaneDropZone.tsx) delegated fully to `onPickRequest` when present.
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) used the native picker path for iOS audio browse.
+- [`src/lib/iosMediaImport.ts`](/Users/paulfisher/Polyplay/src/lib/iosMediaImport.ts) returned `null` in some bridge-unavailable cases instead of preserving a web fallback path.
+
+**What we tried:**
+- Let the drop zone supply a fallback click handler to the native picker callback.
+- Made the native picker handlers fall back to the normal file input if native selection returns nothing or throws.
+- Relaxed path resolution in the JS bridge so missing `convertFileSrc` no longer causes an immediate silent no-op.
+
+**Final fix:**
+- [`src/admin/TransferLaneDropZone.tsx`](/Users/paulfisher/Polyplay/src/admin/TransferLaneDropZone.tsx) now passes a `fallbackPick()` function into `onPickRequest`.
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) uses that fallback in all iOS audio browse flows.
+- [`src/lib/iosMediaImport.ts`](/Users/paulfisher/Polyplay/src/lib/iosMediaImport.ts) now resolves a path even if `convertFileSrc` is unavailable.
+
+**How to avoid this later:**
+- Any native picker bridge must have a visible or functional fallback, never a silent no-op.
+
+---
+
+### 30. Admin-side haptics did not reliably fire because the settings UI lives in an iframe
+**Status:** Fixed
+
+**Problem:**
+- Haptics added for admin/settings actions did not appear to fire reliably on iPhone.
+
+**Repro:**
+- Trigger successful import/update/apply actions inside Settings/Admin on iPhone.
+- Observe no haptic feedback even though fullscreen/app-level haptics work.
+
+**Root cause:**
+- The admin UI runs inside an iframe-like embedded settings document.
+- Capacitor plugin calls are more reliable from the parent app window than from the embedded admin document.
+
+**What the code was doing before:**
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) called haptic helpers directly inside the admin document.
+
+**What we tried:**
+- Added a parent-window `postMessage` bridge for haptic requests.
+
+**Final fix:**
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) now posts `polyplay:haptic` messages for success/heavy admin feedback.
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) handles those messages and fires native haptics from the parent app window.
+
+**How to avoid this later:**
+- Native Capacitor plugin calls should be owned by the parent app window when the child UI is embedded in an admin/settings frame.
+
+---
+
+### 31. Desktop and iPhone import flow needed faster title-entry after audio selection
+**Status:** Fixed
+
+**Problem:**
+- The fastest import flow still required an extra tap into the title field after choosing audio.
+
+**Repro:**
+- Pick an audio source in `Import Track`.
+- Notice the user must manually activate the title input before typing.
+
+**Root cause:**
+- Audio selection and title editing were adjacent, but the title field did not automatically take focus after a successful audio arm.
+
+**What the code was doing before:**
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) only submitted on `Enter` if the title field was already active.
+- Earlier focus behavior was desktop-only before being widened.
+
+**What we tried:**
+- Added a title-input ref and focused it after `uploadAudio` becomes armed.
+- Later widened that same behavior to iPhone too with a short delay after picker close.
+
+**Final fix:**
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) now focuses/selects the title field shortly after an audio source is successfully armed on both desktop and iPhone.
+
+**How to avoid this later:**
+- In wizard-like import flows, move focus to the next required field automatically after a successful pick action.
+
+---
+
+### 32. Manage Storage rows still overflowed on iPhone even after track-option clamp fixes
+**Status:** Fixed
+
+**Problem:**
+- Long track titles could still push the `Manage Storage` section offscreen on iPhone.
+
+**Repro:**
+- Open `Manage Storage` on iPhone with a very long track title.
+- Observe that the title/action row can exceed the viewport width.
+
+**Root cause:**
+- The earlier fix only clamped select-option labels.
+- `Manage Storage` uses a separate flex row layout with title, rename button, metadata, and remove button.
+
+**What the code was doing before:**
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) rendered the storage row with a generic flex-wrap layout.
+- [`src/index.css`](/Users/paulfisher/Polyplay/src/index.css) did not give the title/edit column its own constrained flex basis.
+
+**What we tried:**
+- Split the storage row into named layout regions and added dedicated CSS.
+
+**Final fix:**
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) now gives Manage Storage rows dedicated classes for main/title/edit/remove zones.
+- [`src/index.css`](/Users/paulfisher/Polyplay/src/index.css) now constrains the title side with `min-width: 0`, gives the main content flexible width, and bounds the rename input.
+
+**How to avoid this later:**
+- Fix overflow by layout region, not only by truncating shared labels in unrelated controls.
+
+---
+
+### 33. Settings needed a top-hero swipe-down dismiss gesture without interfering with normal scrolling
+**Status:** Fixed
+
+**Problem:**
+- User wanted a swipe-down gesture to exit Settings, but only when started from the top PolyPlay Admin hero bar.
+
+**Repro:**
+- Open Settings on iPhone.
+- Swipe down from the hero header area.
+- Desired behavior: close settings.
+- Swipe lower in the page.
+- Desired behavior: regular scrolling, not close.
+
+**Root cause:**
+- Settings had close button and Escape support but no scoped touch-dismiss gesture.
+
+**What the code was doing before:**
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) only supported explicit close interactions.
+
+**What we tried:**
+- Added a hero-header-only downward swipe detector using distance, sideways-drift, and velocity thresholds.
+
+**Final fix:**
+- The PolyPlay Admin hero/header in [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) now listens for a hard swipe down and posts `polyplay:close-settings`.
+- The rest of the settings page remains normal scroll/touch territory.
+
+**How to avoid this later:**
+- Overlay gestures should be scoped to clear affordance regions when the underlying page still needs normal touch scrolling.
+
+---
+
+### 34. Journal Verse button and loop-clear controls needed haptic feedback
+**Status:** Fixed
+
+**Problem:**
+- The Gratitude Journal `Verse` button and loop-clear actions felt visually responsive but not tactile.
+
+**Repro:**
+- Open Gratitude Journal and tap `Verse`.
+- Clear an active loop from mini player or fullscreen/player controls.
+- Observe no dedicated haptic.
+
+**Root cause:**
+- Those actions had visual feedback but did not call the haptic helper layer.
+
+**What the code was doing before:**
+- [`src/components/JournalModal.tsx`](/Users/paulfisher/Polyplay/src/components/JournalModal.tsx) only triggered verse visual effects.
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) cleared loop state with no haptic.
+
+**What we tried:**
+- Added `fireLightHaptic()` to both paths.
+
+**Final fix:**
+- [`src/components/JournalModal.tsx`](/Users/paulfisher/Polyplay/src/components/JournalModal.tsx) now fires a light haptic on `Verse`.
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) now fires a light haptic from the shared `clearLoop()` path so all clear-loop buttons inherit it.
+
+**How to avoid this later:**
+- If a control has a distinct “mode change” meaning, route it through the shared haptic layer instead of leaving it purely visual.
+
+---
+
+### 35. Aura increase feedback needed to scale with aura level instead of using fixed buzzes
+**Status:** Fixed
+
+**Problem:**
+- `Aura +` used ad hoc fixed vibration in some controls and no incremental feedback tied to aura level.
+
+**Repro:**
+- Tap `Aura +` repeatedly across row, mini, fullscreen, and inline player surfaces.
+- Observe inconsistent or flat feedback rather than a stronger sense of progression.
+
+**Root cause:**
+- Some UI controls fired their own `navigator.vibrate(12)` calls.
+- Other aura paths had no dedicated escalation logic.
+- There was no single source of truth for aura haptics.
+
+**What the code was doing before:**
+- [`src/components/PlayerControls.tsx`](/Users/paulfisher/Polyplay/src/components/PlayerControls.tsx) and [`src/components/TrackRow.tsx`](/Users/paulfisher/Polyplay/src/components/TrackRow.tsx) used fixed lightweight vibration.
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) updated aura state without a haptic policy of its own.
+
+**What we tried:**
+- Added a dedicated `fireAuraHaptic(level)` helper in the shared haptics layer.
+- Fired it from the centralized `updateAura(...)` path after computing the next aura value.
+- Removed the old per-button fixed vibration calls to avoid double hits.
+
+**Final fix:**
+- [`src/lib/haptics.ts`](/Users/paulfisher/Polyplay/src/lib/haptics.ts) now exposes `fireAuraHaptic(level)`.
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) now triggers that helper from the shared aura update path.
+- Haptic strength now escalates by resulting aura level:
+  - `1-4` light
+  - `5-7` medium
+  - `8-10` heavy
+
+**How to avoid this later:**
+- State-dependent tactile feedback should be centralized in the state-change path, not duplicated across individual buttons.

@@ -207,6 +207,9 @@ function getPreferredCurrentTrackId(rows: DbTrackRecord[]): string {
 }
 
 export function AdminApp() {
+  const SETTINGS_HERO_SWIPE_CLOSE_DISTANCE_PX = 120;
+  const SETTINGS_HERO_SWIPE_CLOSE_MAX_SIDEWAYS_PX = 72;
+  const SETTINGS_HERO_SWIPE_CLOSE_MIN_VELOCITY = 0.38;
   const [isInitialHydrationPending, setIsInitialHydrationPending] = useState(true);
   const [tracks, setTracks] = useState<DbTrackRecord[]>([]);
   const [status, setStatus] = useState("");
@@ -296,7 +299,9 @@ export function AdminApp() {
   const [nukeCountdownMs, setNukeCountdownMs] = useState(2000);
   const [isNukeRunning, setIsNukeRunning] = useState(false);
   const nukeTimerRef = useRef<number | null>(null);
+  const nukeGenerationRef = useRef(0);
   const uploadSuccessNoticeTimeoutRef = useRef<number | null>(null);
+  const settingsHeroSwipeStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
   const manageStorageRef = useRef<HTMLElement | null>(null);
   const importConfigInputRef = useRef<HTMLInputElement | null>(null);
   const importBackupInputRef = useRef<HTMLInputElement | null>(null);
@@ -503,14 +508,13 @@ export function AdminApp() {
   useEffect(() => {
     if (!uploadAudio) return;
     if (typeof window === "undefined") return;
-    if (window.matchMedia?.("(pointer: coarse)").matches) return;
     const input = uploadTitleInputRef.current;
     if (!input) return;
-    const frame = window.requestAnimationFrame(() => {
+    const timer = window.setTimeout(() => {
       input.focus();
       input.select();
-    });
-    return () => window.cancelAnimationFrame(frame);
+    }, 80);
+    return () => window.clearTimeout(timer);
   }, [uploadAudio]);
 
   useEffect(() => {
@@ -552,6 +556,38 @@ export function AdminApp() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  const requestCloseSettings = () => {
+    if (window.parent === window) return;
+    try {
+      window.parent.postMessage({ type: "polyplay:close-settings" }, window.location.origin);
+    } catch {
+      // Ignore cross-document messaging failures.
+    }
+  };
+
+  const beginSettingsHeroSwipeDismiss = (touch: { clientX: number; clientY: number }) => {
+    settingsHeroSwipeStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      at: performance.now()
+    };
+  };
+
+  const endSettingsHeroSwipeDismiss = (touch: { clientX: number; clientY: number }) => {
+    const start = settingsHeroSwipeStartRef.current;
+    settingsHeroSwipeStartRef.current = null;
+    if (!start) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (dy <= 0) return;
+    if (Math.abs(dx) > SETTINGS_HERO_SWIPE_CLOSE_MAX_SIDEWAYS_PX) return;
+    const elapsedMs = Math.max(1, performance.now() - start.at);
+    const velocity = dy / elapsedMs;
+    if (dy >= SETTINGS_HERO_SWIPE_CLOSE_DISTANCE_PX || velocity >= SETTINGS_HERO_SWIPE_CLOSE_MIN_VELOCITY) {
+      requestCloseSettings();
+    }
+  };
 
   const notifyUploadSuccess = async () => {
     try {
@@ -1081,12 +1117,14 @@ export function AdminApp() {
 
   const onNuke = () => {
     if (!hasTracks || isNukeRunning || isNukePromptOpen) return;
+    nukeGenerationRef.current += 1;
     setNukeCountdownMs(2000);
     setIsNukePromptOpen(true);
     setStatus("Nuke armed. Abort within 2 seconds.");
   };
 
   const abortNuke = () => {
+    nukeGenerationRef.current += 1;
     if (nukeTimerRef.current !== null) {
       window.clearInterval(nukeTimerRef.current);
       nukeTimerRef.current = null;
@@ -1098,8 +1136,16 @@ export function AdminApp() {
 
   useEffect(() => {
     if (!isNukePromptOpen) return;
+    const generation = nukeGenerationRef.current;
     const startedAt = Date.now();
     nukeTimerRef.current = window.setInterval(() => {
+      if (generation !== nukeGenerationRef.current) {
+        if (nukeTimerRef.current !== null) {
+          window.clearInterval(nukeTimerRef.current);
+          nukeTimerRef.current = null;
+        }
+        return;
+      }
       const remaining = Math.max(0, 2000 - (Date.now() - startedAt));
       setNukeCountdownMs(remaining);
       if (remaining <= 0) {
@@ -1107,6 +1153,7 @@ export function AdminApp() {
           window.clearInterval(nukeTimerRef.current);
           nukeTimerRef.current = null;
         }
+        if (generation !== nukeGenerationRef.current) return;
         setIsNukePromptOpen(false);
         void runNuke();
       }
@@ -1596,7 +1643,24 @@ export function AdminApp() {
           {uploadSuccessNotice}
         </div>
       )}
-      <header className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-300/20 bg-slate-900/85 p-3 shadow-glow backdrop-blur">
+      <header
+        className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-300/20 bg-slate-900/85 p-3 shadow-glow backdrop-blur"
+        onTouchStart={(event) => {
+          if (event.touches.length !== 1) {
+            settingsHeroSwipeStartRef.current = null;
+            return;
+          }
+          beginSettingsHeroSwipeDismiss(event.touches[0]);
+        }}
+        onTouchEnd={(event) => {
+          const touch = event.changedTouches[0];
+          if (!touch) return;
+          endSettingsHeroSwipeDismiss(touch);
+        }}
+        onTouchCancel={() => {
+          settingsHeroSwipeStartRef.current = null;
+        }}
+      >
         <div className="flex min-w-0 items-center gap-2">
           <img
             src={logo}
@@ -2366,16 +2430,16 @@ export function AdminApp() {
           {visibleTrackStorageRows.slice(0, 20).map((row) => (
             <div
               key={`storage-${row.id}`}
-              className={`admin-track-row flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-300/15 bg-slate-900/55 px-3 py-2 ${
+              className={`admin-track-row rounded-xl border border-slate-300/15 bg-slate-900/55 px-3 py-2 ${
                 removingTrackIds.includes(row.id) ? "is-removing" : ""
               }`.trim()}
             >
-              <div className="min-w-0">
+              <div className="admin-track-row__main min-w-0">
                 {editingTrackId === row.id ? (
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="admin-track-row__edit flex flex-wrap items-center gap-2">
                     <input
                       type="text"
-                      className="min-w-[220px] rounded-lg border border-slate-300/25 bg-slate-950/85 px-2 py-1 text-sm font-semibold text-slate-100"
+                      className="admin-track-row__edit-input rounded-lg border border-slate-300/25 bg-slate-950/85 px-2 py-1 text-sm font-semibold text-slate-100"
                       value={editingTrackTitle}
                       autoFocus
                       onChange={(event) => setEditingTrackTitle(event.currentTarget.value)}
@@ -2398,11 +2462,11 @@ export function AdminApp() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    <div className="truncate text-sm font-semibold text-slate-100">{row.title}</div>
+                  <div className="admin-track-row__title-wrap flex items-center gap-2">
+                    <div className="admin-track-row__title truncate text-sm font-semibold text-slate-100">{row.title}</div>
                     <button
                       type="button"
-                      className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-300/20 bg-slate-800/70 px-2 text-xs font-semibold text-slate-100"
+                      className="admin-track-row__rename inline-flex h-7 items-center gap-1 rounded-md border border-slate-300/20 bg-slate-800/70 px-2 text-xs font-semibold text-slate-100"
                       title="Rename"
                       aria-label={`Rename ${row.title}`}
                       onClick={() => onStartTrackRename(row.id, row.title)}
@@ -2417,6 +2481,7 @@ export function AdminApp() {
                 </div>
               </div>
               <Button
+                className="admin-track-row__remove"
                 variant="danger"
                 onClick={() => {
                   setConfirmState({
