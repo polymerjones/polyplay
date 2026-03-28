@@ -507,6 +507,23 @@ export function AdminApp() {
     };
   }, [selectedArtPreviewUrl, uploadArtPreviewUrl]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (window.parent === window) return;
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        window.parent.postMessage({ type: "polyplay:close-settings" }, window.location.origin);
+      } catch {
+        // Ignore cross-document messaging failures.
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const notifyUploadSuccess = async () => {
     try {
       if (window.parent && window.parent !== window) {
