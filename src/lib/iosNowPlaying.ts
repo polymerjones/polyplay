@@ -33,6 +33,39 @@ declare global {
 let nowPlayingPluginCache: NowPlayingPlugin | null | undefined;
 const artworkDataUrlCache = new WeakMap<Blob, string>();
 
+async function rasterizeArtworkBlob(blob: Blob): Promise<Blob> {
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const image = new Image();
+    image.decoding = "async";
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Unable to decode artwork image"));
+      image.src = objectUrl;
+    });
+
+    const sourceWidth = Math.max(1, image.naturalWidth || image.width || 1);
+    const sourceHeight = Math.max(1, image.naturalHeight || image.height || 1);
+    const maxEdge = 512;
+    const scale = Math.min(1, maxEdge / Math.max(sourceWidth, sourceHeight));
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d", { alpha: false });
+    if (!ctx) return blob;
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(image, 0, 0, width, height);
+
+    const nextBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+    return nextBlob && nextBlob.size > 0 ? nextBlob : blob;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 function getNowPlayingPlugin(): NowPlayingPlugin | null {
   if (nowPlayingPluginCache !== undefined) return nowPlayingPluginCache;
   if (typeof window === "undefined") return null;
@@ -64,6 +97,7 @@ function getNowPlayingPlugin(): NowPlayingPlugin | null {
 async function blobToDataUrl(blob: Blob): Promise<string> {
   const cached = artworkDataUrlCache.get(blob);
   if (cached) return cached;
+  const preparedBlob = await rasterizeArtworkBlob(blob).catch(() => blob);
 
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -72,7 +106,7 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
       else reject(new Error("Unable to read artwork blob as data URL"));
     };
     reader.onerror = () => reject(reader.error ?? new Error("Unable to read artwork blob"));
-    reader.readAsDataURL(blob);
+    reader.readAsDataURL(preparedBlob);
   });
 
   artworkDataUrlCache.set(blob, dataUrl);

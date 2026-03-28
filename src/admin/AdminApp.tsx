@@ -29,6 +29,7 @@ import {
   type DbTrackRecord
 } from "../lib/db";
 import { generateVideoPoster } from "../lib/artwork/videoPoster";
+import { normalizeStillImage } from "../lib/artwork/normalizeStillImage";
 import { validateVideoArtworkFile } from "../lib/artwork/videoValidation";
 import { restoreDemoTracks } from "../lib/demoSeed";
 import {
@@ -754,7 +755,10 @@ export function AdminApp() {
     frameTimeSec?: number | null
   ): Promise<{ artPoster: Blob | null; artVideo: Blob | null; posterCaptureFailed: boolean }> => {
     if (!file) return { artPoster: null, artVideo: null, posterCaptureFailed: false };
-    if (!isVideoArtwork(file)) return { artPoster: file, artVideo: null, posterCaptureFailed: false };
+    if (!isVideoArtwork(file)) {
+      const normalizedPoster = await normalizeStillImage(file).catch(() => file);
+      return { artPoster: normalizedPoster, artVideo: null, posterCaptureFailed: false };
+    }
     let effectivePoster = posterBlob;
     if (!effectivePoster) {
       const requestedFrameTime =

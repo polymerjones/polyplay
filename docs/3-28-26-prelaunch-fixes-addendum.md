@@ -183,3 +183,7 @@
 **How to avoid this later:**
 - Treat browser `MediaSession` and native iOS Now Playing as separate metadata paths.
 - When auditing missing lock-screen / Dynamic Island art, verify explicitly whether `MPMediaItemPropertyArtwork` is being set natively.
+
+**Follow-up note:**
+- Device testing exposed an additional regression with oversized/HDR still images after the initial native-artwork fix.
+- That was addressed by normalizing imported still artwork before storage and shrinking the artwork payload sent through the iOS Now Playing bridge.

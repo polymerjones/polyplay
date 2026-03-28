@@ -960,6 +960,49 @@ Suggested order:
 
 ---
 
+### 19. Imported HDR/oversized still artwork should not stall iOS WebContent or break Now Playing art
+**Status:** Fixed
+
+**Notes:**
+- Device/Xcode testing after item 18 exposed a second issue: large imported still images, especially HDR-style iPhone photos, made the webview lag badly and could still prevent reliable Now Playing artwork display.
+- Xcode logs showed HDR/gain-map and IOSurface failures inside `WebContent`, which is consistent with oversized/high-dynamic-range image decoding pressure rather than an audio-only bug.
+
+**Problem:**
+- Large imported still artwork could make iOS playback/import flow feel laggy or nearly frozen, and the same assets were too heavy to send raw through the JS/native Now Playing bridge.
+
+**Repro:**
+- Import a track with a large still image from iPhone photo sources.
+- Observe lag or near-freeze in the webview after import.
+- Observe that Now Playing artwork can still fail if the bridge is fed the full original artwork payload.
+
+**Root cause:**
+- Still images were being stored in their original imported form.
+- The admin artwork path did not normalize large HDR-style photos before persistence.
+- The iOS Now Playing bridge also attempted to encode the full stored artwork blob, which was unnecessarily heavy for native lock-screen metadata.
+
+**What the code was doing before:**
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) passed non-video still images through unchanged into storage.
+- [`src/lib/iosNowPlaying.ts`](/Users/paulfisher/Polyplay/src/lib/iosNowPlaying.ts) converted the full `artBlob` to a data URL for native handoff.
+
+**What we tried:**
+- Normalized imported still artwork before storage.
+- Downscaled the iOS Now Playing artwork payload separately so the bridge only carries a small still-art version appropriate for lock-screen metadata.
+
+**Why a failed attempt failed:**
+- No failed intermediate patch was kept.
+- The key lesson was that “artwork support exists” is not enough on iOS if the payload remains too large or HDR-heavy for smooth WebContent/native handling.
+
+**Final fix:**
+- Added [`src/lib/artwork/normalizeStillImage.ts`](/Users/paulfisher/Polyplay/src/lib/artwork/normalizeStillImage.ts) to rasterize still images into a sane SDR JPEG with capped dimensions before storage.
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) now normalizes non-video artwork during import/update flows.
+- [`src/lib/iosNowPlaying.ts`](/Users/paulfisher/Polyplay/src/lib/iosNowPlaying.ts) now rasterizes and caps artwork to a much smaller JPEG before converting it to a data URL for the native Now Playing plugin.
+
+**How to avoid this later:**
+- Do not feed full-resolution phone photos directly into either long-lived app artwork storage or native metadata bridges on iOS.
+- Normalize user-supplied still art at ingestion time and separately cap any system-UI artwork payloads.
+
+---
+
 ## Notes / triage log
 
 ### General rules for this pass
@@ -974,6 +1017,7 @@ Suggested order:
 - Added item 16: persisted the player’s active track ID and used it to default Manage Library track selectors to the currently playing track.
 - Added item 17: made iOS fresh-track autoplay recover when the initial post-import play attempt loses the race with media readiness.
 - Added item 18: audited and fixed the native iOS Now Playing artwork path so still art is now sent into `MPNowPlayingInfoCenter`.
+- Added item 19: normalized imported still artwork and capped the iOS Now Playing artwork payload after device testing exposed HDR/oversized-image regressions.
 
 ---
 
