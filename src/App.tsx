@@ -1941,7 +1941,7 @@ export default function App() {
   const applyDimMode = (audio: HTMLAudioElement | null, mode: DimMode) => {
     if (!audio) return;
     const effectiveMode = normalizeDimModeForPlatform(mode, isIOS);
-    const targetVolume = effectiveMode === "mute" ? 0 : effectiveMode === "dim" ? 0.25 : 1;
+    const targetVolume = effectiveMode === "mute" ? 0 : effectiveMode === "dim" ? 0.3 : 1;
     const gainNode = playbackGainNodeRef.current;
     if (gainNode && !isIOS) {
       audio.muted = false;
@@ -1960,7 +1960,7 @@ export default function App() {
 
   const getDimAudioState = (mode: DimMode): { muted: boolean; volume: number } => {
     if (mode === "mute") return { muted: true, volume: 0 };
-    if (mode === "dim") return { muted: false, volume: 0.25 };
+    if (mode === "dim") return { muted: false, volume: 0.3 };
     return { muted: false, volume: 1 };
   };
 
@@ -3375,7 +3375,7 @@ export default function App() {
             </button>
             <button
               type="button"
-              className={`fx-link nav-action-btn header-icon-btn--hero ${fxEnabled ? "is-active" : ""}`.trim()}
+              className={`fx-link fx-link--${fxMode} nav-action-btn header-icon-btn--hero ${fxEnabled ? "is-active" : ""}`.trim()}
               aria-label={`Ambient FX mode: ${fxMode}`}
               title={`FX: ${fxMode}`}
               onClick={cycleFxMode}
@@ -3704,7 +3704,7 @@ export default function App() {
       )}
 
       {overlayPage === "settings" && (
-        <section className="app-overlay" role="dialog" aria-modal="true" aria-label="settings panel">
+        <section className="app-overlay app-overlay--settings" role="dialog" aria-modal="true" aria-label="settings panel">
           <div className="app-overlay-card">
             <div className="app-overlay-head">
               <div className="app-overlay-title">Settings</div>

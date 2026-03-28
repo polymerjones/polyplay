@@ -47,6 +47,7 @@ body.admin-frame-body #admin-root {
 
 body.admin-frame-body .admin-content {
   overflow-x: hidden;
+  padding-bottom: max(32px, calc(env(safe-area-inset-bottom, 0px) + 24px));
 }
 
 .tile-hit {
@@ -1577,6 +1578,11 @@ body.theme-dark .admin-v1 textarea {
   border-radius: 16px;
 }
 
+.app-overlay--settings {
+  top: 86px;
+  bottom: 88px;
+}
+
 .app-overlay-card {
   width: 100%;
   height: 100%;
@@ -1650,6 +1656,11 @@ body.theme-dark .admin-v1 textarea {
   .app-overlay-frame {
     flex: 1 1 auto;
     min-height: 0;
+  }
+
+  .app-overlay--settings {
+    top: 0;
+    bottom: 0;
   }
 
   .controls {
