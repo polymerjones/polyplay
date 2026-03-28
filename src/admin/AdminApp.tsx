@@ -188,6 +188,7 @@ export function AdminApp() {
   const [uploadArtFrameTime, setUploadArtFrameTime] = useState(0);
   const [uploadArtPosterBlob, setUploadArtPosterBlob] = useState<Blob | null>(null);
   const [isUploadPreviewPlaying, setIsUploadPreviewPlaying] = useState(false);
+  const uploadFormRef = useRef<HTMLFormElement | null>(null);
 
   const [selectedArtworkTrackId, setSelectedArtworkTrackId] = useState<string>("");
   const [selectedArtworkFile, setSelectedArtworkFile] = useState<File | null>(null);
@@ -348,15 +349,24 @@ export function AdminApp() {
   }, []);
 
   useEffect(() => {
-    const applyTheme = (next: "light" | "dark") => {
-      document.body.classList.toggle("theme-dark", next === "dark");
+    const applyTheme = (mode: string | null, slot: "crimson" | "teal" | "amber") => {
+      const nextMode = mode === "dark" || mode === "custom" ? mode : "light";
+      const root = document.documentElement;
+      root.setAttribute("data-theme", nextMode);
+      root.setAttribute("data-theme-slot", slot);
+      document.body.classList.toggle("theme-dark", nextMode === "dark");
+      document.body.classList.toggle("theme-custom", nextMode === "custom");
+      document.body.classList.toggle("theme-custom-crimson", nextMode === "custom" && slot === "crimson");
+      document.body.classList.toggle("theme-custom-teal", nextMode === "custom" && slot === "teal");
+      document.body.classList.toggle("theme-custom-amber", nextMode === "custom" && slot === "amber");
     };
     const saved = localStorage.getItem(THEME_MODE_KEY);
-    applyTheme(saved === "dark" ? "dark" : "light");
     try {
       const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
+      const safeSlot: "crimson" | "teal" | "amber" = slot === "teal" || slot === "amber" ? slot : "crimson";
+      applyTheme(saved, safeSlot);
       if (slot === "crimson" || slot === "teal" || slot === "amber") setCustomThemeSlot(slot);
-      setThemeSelection(getThemeSelectionFromState(localStorage.getItem(THEME_MODE_KEY), slot === "teal" || slot === "amber" ? slot : "crimson"));
+      setThemeSelection(getThemeSelectionFromState(localStorage.getItem(THEME_MODE_KEY), safeSlot));
       const savedAura = normalizeAuraColor(localStorage.getItem(AURA_COLOR_KEY));
       if (savedAura) {
         setAuraColor(savedAura);
@@ -368,7 +378,9 @@ export function AdminApp() {
 
     const onStorage = (event: StorageEvent) => {
       if (event.key === THEME_MODE_KEY) {
-        applyTheme(event.newValue === "dark" ? "dark" : "light");
+        const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
+        const safeSlot: "crimson" | "teal" | "amber" = slot === "teal" || slot === "amber" ? slot : "crimson";
+        applyTheme(event.newValue, safeSlot);
       }
       if (event.key === CUSTOM_THEME_SLOT_KEY) {
         const slot = event.newValue;
@@ -378,6 +390,7 @@ export function AdminApp() {
         const mode = localStorage.getItem(THEME_MODE_KEY);
         const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
         const safeSlot: "crimson" | "teal" | "amber" = slot === "teal" || slot === "amber" ? slot : "crimson";
+        applyTheme(mode, safeSlot);
         setThemeSelection(getThemeSelectionFromState(mode, safeSlot));
       }
       if (event.key === AURA_COLOR_KEY) {
@@ -396,13 +409,12 @@ export function AdminApp() {
       if (event.data?.type !== "polyplay:theme-changed") return;
       const mode = event.data?.themeMode;
       const slot = event.data?.customThemeSlot;
-      const next = mode === "dark" ? "dark" : "light";
-      applyTheme(next);
       const safeSlot: "crimson" | "teal" | "amber" = slot === "teal" || slot === "amber" || slot === "crimson"
         ? slot
         : (localStorage.getItem(CUSTOM_THEME_SLOT_KEY) === "teal" || localStorage.getItem(CUSTOM_THEME_SLOT_KEY) === "amber"
             ? (localStorage.getItem(CUSTOM_THEME_SLOT_KEY) as "teal" | "amber")
             : "crimson");
+      applyTheme(mode, safeSlot);
       setThemeSelection(getThemeSelectionFromState(mode, safeSlot));
       if (safeSlot) setCustomThemeSlot(safeSlot);
     };
@@ -412,6 +424,12 @@ export function AdminApp() {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("message", onMessage);
       document.body.classList.remove("theme-dark");
+      document.body.classList.remove("theme-custom");
+      document.body.classList.remove("theme-custom-crimson");
+      document.body.classList.remove("theme-custom-teal");
+      document.body.classList.remove("theme-custom-amber");
+      document.documentElement.removeAttribute("data-theme");
+      document.documentElement.removeAttribute("data-theme-slot");
     };
   }, []);
 
@@ -1485,7 +1503,22 @@ export function AdminApp() {
       <div className="admin-content">
       <section className={`admin-v1-section grid gap-3 ${showManageSections ? "lg:grid-cols-2" : ""}`.trim()}>
         {showUploadTrackSection && (
-        <form onSubmit={onUpload} className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
+        <form
+          ref={uploadFormRef}
+          onSubmit={onUpload}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            if (!uploadAudio) return;
+            if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+            const target = event.target as HTMLElement | null;
+            const tagName = target?.tagName ?? "";
+            if (tagName === "TEXTAREA" || tagName === "SELECT" || tagName === "BUTTON") return;
+            if (target instanceof HTMLInputElement && (target.type === "range" || target.type === "file")) return;
+            event.preventDefault();
+            uploadFormRef.current?.requestSubmit();
+          }}
+          className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3"
+        >
           <h2 className="mb-2 text-base font-semibold text-slate-100">Import Track</h2>
           <div className="admin-v1-fields admin-upload-stack grid gap-2">
             <label className="grid gap-1 text-sm text-slate-300">

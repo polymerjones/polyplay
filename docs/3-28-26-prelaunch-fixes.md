@@ -481,6 +481,101 @@ Suggested order:
 
 ---
 
+### 9. Desktop Admin import flow should allow Enter/Return to trigger Import
+**Status:** Fixed
+
+**Notes:**
+- On desktop, after choosing the audio file and optional artwork, pressing Enter/Return should behave like clicking `Import`.
+- This should help the manual import flow feel faster and more keyboard-friendly.
+
+**Problem:**
+- The desktop import form did not reliably treat Enter/Return as an import action unless focus happened to be in the right native submit context.
+
+**Repro:**
+- Open Settings/Admin in desktop mode on the Import Track page.
+- Choose an audio file and optionally artwork.
+- Press Enter/Return.
+- Expected behavior: same result as clicking `Import`.
+
+**Root cause:**
+- The form had a submit handler, but Enter behavior depended on which control currently owned focus.
+- That made the keyboard path inconsistent for the desktop import workflow.
+
+**What the code was doing before:**
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) used a normal form submit for Import, but did not add any explicit keyboard handling for the wider desktop flow.
+
+**What we tried:**
+- Added a form-level Enter/Return handler for the Import Track form.
+- Limited it to cases where the required audio file is already selected.
+- Excluded controls where Enter should not trigger import, such as buttons, selects, textareas, and the poster-frame range/file inputs.
+
+**Why that didn't work:**
+- No failed intermediate patch was kept.
+- The main requirement was just to make the existing form submit path easier to reach from the keyboard.
+
+**Final fix:**
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) now calls `requestSubmit()` on Enter/Return from the Import Track form when an audio file is loaded and the focused control is appropriate.
+- On desktop, pressing Enter/Return now behaves like clicking `Import` for the common import flow.
+
+**How to avoid this later:**
+- For form-driven admin workflows, verify both pointer and keyboard submission paths.
+- If a form’s primary action matters to speed, make Enter/Return behavior explicit instead of relying only on browser-default focus behavior.
+
+---
+
+### 10. Settings/Admin iframe should match the active theme mode on desktop
+**Status:** Fixed
+
+**Notes:**
+- Settings and Upload should visually match the currently selected theme mode instead of falling back to a mismatched iframe background.
+- Safari desktop also exposed the shell/layout mismatch more obviously.
+
+**Problem:**
+- The Settings/Admin iframe could render with a bright/default-looking background that did not match the active app theme.
+- On Safari desktop this read like a layout bug because the iframe shell looked disconnected from the themed parent UI.
+
+**Repro:**
+- Open Settings/Admin from the player while using a custom theme such as Teal or Amber.
+- Compare the parent shell and the iframe background on desktop, especially Safari desktop.
+
+**Root cause:**
+- The admin iframe was not applying the same theme state plumbing as the main app.
+- It only toggled `theme-dark` vs non-dark and never applied:
+  - `data-theme`
+  - `data-theme-slot`
+  - custom-theme body classes
+- That left the iframe using fallback/default theme tokens rather than the active theme pack.
+
+**What the code was doing before:**
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) partially synced theme state, but only for dark vs light behavior.
+- [`src/index.css`](/Users/paulfisher/Polyplay/src/index.css) had admin dark-theme styling, but no equivalent custom/light shell treatment for the iframe root.
+
+**What we tried:**
+- Synced the admin iframe to the same theme attributes and body classes the main app uses.
+- Added admin-shell background styling that respects the active theme tokens instead of assuming a single dark shell.
+
+**Why that didn't work:**
+- No failed intermediate patch was kept.
+- The main issue was incomplete theme propagation, not a complicated Safari-only rendering defect.
+
+**Final fix:**
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) now applies:
+  - `data-theme`
+  - `data-theme-slot`
+  - `theme-dark`
+  - `theme-custom`
+  - `theme-custom-crimson`
+  - `theme-custom-teal`
+  - `theme-custom-amber`
+- [`src/index.css`](/Users/paulfisher/Polyplay/src/index.css) now gives the admin iframe shell themed backgrounds for light/custom contexts instead of only dark mode.
+- Result: Settings/Admin and Upload now visually track the active theme mode on desktop, including Safari desktop.
+
+**How to avoid this later:**
+- Any iframe-hosted app surface should receive the full theme contract, not a reduced approximation.
+- When a page depends on global theme classes/attributes, keep iframe and parent theme plumbing aligned.
+
+---
+
 ## Notes / triage log
 
 ### General rules for this pass
