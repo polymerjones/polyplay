@@ -1569,8 +1569,9 @@ export function AdminApp() {
             if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
             const target = event.target as HTMLElement | null;
             const tagName = target?.tagName ?? "";
-            if (tagName === "TEXTAREA" || tagName === "SELECT" || tagName === "BUTTON") return;
+            if (tagName === "TEXTAREA" || tagName === "SELECT") return;
             if (target instanceof HTMLInputElement && (target.type === "range" || target.type === "file")) return;
+            if (target?.closest(".transfer-lane__tip-btn, .frame-video-toggle, .admin-upload-submit")) return;
             event.preventDefault();
             uploadFormRef.current?.requestSubmit();
           }}
