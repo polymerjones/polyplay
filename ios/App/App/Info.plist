@@ -24,6 +24,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>PolyPlay only uses the camera when you explicitly choose to capture media for import.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>PolyPlay only uses the microphone when you explicitly capture media that includes audio.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>PolyPlay needs photo library access so you can choose media to import into your library.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

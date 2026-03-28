@@ -32,6 +32,13 @@ export function TransferLaneDropZone({
   const [isTooltipOpen, setIsTooltipOpen] = useState(false);
   const [hasSeenTipPulse, setHasSeenTipPulse] = useState(false);
   const isArmed = Boolean(armed ?? selectedFileName);
+  const isIOS =
+    typeof navigator !== "undefined" &&
+    /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const effectiveAccept =
+    isIOS && iconType === "audio"
+      ? "audio/*,.wav,.mp3,.m4a,.aac"
+      : accept;
 
   useEffect(() => {
     try {
@@ -139,7 +146,7 @@ export function TransferLaneDropZone({
           )}
         </span>
       </button>
-      <input ref={inputRef} type="file" accept={accept} onChange={(event) => void onChange(event)} className="transfer-lane__input" />
+      <input ref={inputRef} type="file" accept={effectiveAccept} onChange={(event) => void onChange(event)} className="transfer-lane__input" />
     </div>
   );
 }
