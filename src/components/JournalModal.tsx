@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEve
 import { getGratitudeBackupFilename, serializeGratitudeJson } from "../lib/backup";
 import {
   DEFAULT_GRATITUDE_SETTINGS,
-  GRATITUDE_ENTRIES_KEY,
   createEntry,
   deleteEntry,
   listEntries,
+  replaceGratitudeEntries,
   saveGratitudeSettings,
   type GratitudeEntry,
   type GratitudeSettings,
@@ -430,10 +430,21 @@ export function JournalModal({ open, onClose }: Props) {
 
   useEffect(() => {
     if (!journalStatus) return;
-    const timeoutMs = journalStatus.tone === "info" ? 1600 : 2400;
+    const timeoutMs = journalStatus.tone === "info" ? 1800 : 3200;
     const timer = window.setTimeout(() => setJournalStatus(null), timeoutMs);
     return () => window.clearTimeout(timer);
   }, [journalStatus]);
+
+  useEffect(() => {
+    if (!open || !suspendBackgroundPlaybackRef.current) return;
+    const onWindowFocus = () => {
+      if (!suspendBackgroundPlaybackRef.current || pendingImportPayload) return;
+      suspendBackgroundPlaybackRef.current = false;
+      void backgroundVideoRef.current?.play().catch(() => undefined);
+    };
+    window.addEventListener("focus", onWindowFocus);
+    return () => window.removeEventListener("focus", onWindowFocus);
+  }, [open, pendingImportPayload]);
 
   useEffect(() => {
     try {
@@ -613,10 +624,29 @@ export function JournalModal({ open, onClose }: Props) {
     return true;
   };
 
+  const resumeBackgroundPlayback = () => {
+    suspendBackgroundPlaybackRef.current = false;
+    void backgroundVideoRef.current?.play().catch(() => undefined);
+  };
+
+  const resetImportUiState = () => {
+    setEditingEntryId(null);
+    setExpandedEntryId(null);
+    setIsComposerOpen(false);
+    setNewEntryText("");
+    setDraftText("");
+    setSavedEntryId(null);
+    setDeletingEntryId(null);
+    setPendingImportPayload(null);
+    setQuery("");
+  };
+
   const applyImportedPayload = (payload: GratitudeBackupImportPayload) => {
     saveGratitudeSettings(payload.settings);
-    localStorage.setItem(GRATITUDE_ENTRIES_KEY, JSON.stringify(payload.entries));
-    setEntries(listEntries());
+    const nextEntries = replaceGratitudeEntries(payload.entries);
+    resetImportUiState();
+    setEntries(nextEntries);
+    resumeBackgroundPlayback();
     setMiniToast(`Backup imported (${payload.entries.length} entries)`);
   };
 
@@ -705,13 +735,6 @@ export function JournalModal({ open, onClose }: Props) {
                           accept: { "application/json": [".json"] }
                         }
                       );
-                      setMiniToast(
-                        saveMode === "shared"
-                          ? "Backup ready to share"
-                          : saveMode === "opened-preview"
-                            ? "Backup opened for Share or Save to Files"
-                            : "Backup saved"
-                      );
                       setJournalStatus({
                         message:
                           saveMode === "shared"
@@ -722,7 +745,6 @@ export function JournalModal({ open, onClose }: Props) {
                         tone: "success"
                       });
                     } catch {
-                      setMiniToast("Backup failed");
                       setJournalStatus({ message: "Gratitude backup failed.", tone: "error" });
                     }
                   })();
@@ -776,6 +798,7 @@ export function JournalModal({ open, onClose }: Props) {
                     tone: "success"
                   });
                 } catch {
+                  resumeBackgroundPlayback();
                   setMiniToast("Import failed");
                   setJournalStatus({ message: "Gratitude backup import failed.", tone: "error" });
                 }
@@ -799,7 +822,10 @@ export function JournalModal({ open, onClose }: Props) {
                   <button
                     type="button"
                     className="journal-confirm__btn journal-confirm__btn--ghost"
-                    onClick={() => setPendingImportPayload(null)}
+                    onClick={() => {
+                      setPendingImportPayload(null);
+                      resumeBackgroundPlayback();
+                    }}
                   >
                     Cancel
                   </button>

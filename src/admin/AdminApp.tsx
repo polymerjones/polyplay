@@ -675,8 +675,12 @@ export function AdminApp() {
 
   const runAudioLaneTransfer = async (file: File) => {
     const mime = file.type.toLowerCase();
-    if (mime.startsWith("image/") || mime.startsWith("video/")) {
+    if (mime.startsWith("image/")) {
       setLaneToast("That’s artwork — drop it in Artwork.");
+      return;
+    }
+    if (!isSupportedTrackFile(file)) {
+      setLaneToast("That file type is not supported for audio import.");
       return;
     }
     if ((!selectedTransferTrackId || audioTransferMode === "create") && playlists.length === 0) {
@@ -900,6 +904,10 @@ export function AdminApp() {
     }
     if (!selectedAudioFile) {
       setStatus("Select a replacement audio file.");
+      return;
+    }
+    if (!isSupportedTrackFile(selectedAudioFile)) {
+      setStatus("Select a supported replacement audio file (.wav, .mp3, .m4a, .mp4, or .mov).");
       return;
     }
 
@@ -1583,7 +1591,7 @@ export function AdminApp() {
               label="Audio (.wav/.mp3/.mov)"
               tooltip="Fallback importer for direct track creation."
               iconType="audio"
-              accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,video/quicktime,.wav,.mp3,.m4a,.aac,.mp4,.mov"
+              accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,.wav,.mp3,.m4a,.aac,.mp4,.mov"
               selectedFileName={uploadAudio?.name}
               armed={Boolean(uploadAudio)}
               onFileSelected={(file) => void onPickUploadAudio(file)}
@@ -1763,7 +1771,7 @@ export function AdminApp() {
                 label="Replacement audio file"
                 tooltip="Manual replace: choose new audio for the selected track."
                 iconType="audio"
-                accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,video/quicktime,.wav,.mp3,.m4a,.aac,.mp4,.mov"
+                accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,.wav,.mp3,.m4a,.aac,.mp4,.mov"
                 compact
                 selectedFileName={selectedAudioFile?.name}
                 armed={Boolean(selectedAudioFile)}
@@ -1847,7 +1855,7 @@ export function AdminApp() {
               label="Audio Track"
               tooltip="Drop audio files here to create a new track or replace the selected track’s audio."
               iconType="audio"
-              accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,video/mp4,video/quicktime,.wav,.mp3,.m4a,.aac,.mp4,.mov"
+              accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,.wav,.mp3,.m4a,.aac,.mp4,.mov"
               selectedFileName={audioTransferMode === "replace" ? selectedAudioFile?.name : uploadAudio?.name}
               busy={isAudioLaneBusy}
               onFileSelected={async (file) => {

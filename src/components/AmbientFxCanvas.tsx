@@ -18,8 +18,28 @@ type Props = {
   mode: AmbientFxMode;
   quality: AmbientFxQuality;
   reducedMotion: boolean;
+  auraRgb?: string | null;
   themeRefreshKey?: string;
 };
+
+function parseAuraRgb(input: string | null | undefined): [number, number, number] | null {
+  if (!input) return null;
+  const parts = input.split(",").map((part) => Number(part.trim()));
+  if (parts.length < 3 || parts.some((part) => !Number.isFinite(part))) return null;
+  return [
+    Math.max(0, Math.min(255, Math.round(parts[0] || 0))),
+    Math.max(0, Math.min(255, Math.round(parts[1] || 0))),
+    Math.max(0, Math.min(255, Math.round(parts[2] || 0)))
+  ];
+}
+
+function readResolvedThemeTokens(auraRgb: string | null | undefined) {
+  const auraTuple = parseAuraRgb(auraRgb);
+  return {
+    ...readThemeTokensFromCss(),
+    ...(auraTuple ? { auraRgb: auraTuple } : {})
+  };
+}
 
 function isCoarsePointer(): boolean {
   return (
@@ -30,7 +50,7 @@ function isCoarsePointer(): boolean {
 }
 
 export const AmbientFxCanvas = forwardRef<AmbientFxCanvasHandle, Props>(function AmbientFxCanvas(
-  { allowed, mode, quality, reducedMotion, themeRefreshKey = "" },
+  { allowed, mode, quality, reducedMotion, auraRgb, themeRefreshKey = "" },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -48,12 +68,12 @@ export const AmbientFxCanvas = forwardRef<AmbientFxCanvasHandle, Props>(function
     };
 
     const engine = init(canvas, options);
-    engine.setThemeTokens(readThemeTokensFromCss());
+    engine.setThemeTokens(readResolvedThemeTokens(auraRgb));
     engineRef.current = engine;
 
     const onResize = () => {
       engine.resize();
-      engine.setThemeTokens(readThemeTokensFromCss());
+      engine.setThemeTokens(readResolvedThemeTokens(auraRgb));
     };
 
     window.addEventListener("resize", onResize);
@@ -85,8 +105,8 @@ export const AmbientFxCanvas = forwardRef<AmbientFxCanvasHandle, Props>(function
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;
-    engine.setThemeTokens(readThemeTokensFromCss());
-  }, [mode, quality, reducedMotion, themeRefreshKey]);
+    engine.setThemeTokens(readResolvedThemeTokens(auraRgb));
+  }, [mode, quality, reducedMotion, auraRgb, themeRefreshKey]);
 
   useEffect(() => {
     const engine = engineRef.current;

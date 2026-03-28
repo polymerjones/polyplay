@@ -286,6 +286,9 @@ function getAdjacentTrackId(
 }
 
 export default function App() {
+  const VAULT_SWIPE_CLOSE_DISTANCE_PX = 140;
+  const VAULT_SWIPE_CLOSE_MAX_SIDEWAYS_PX = 72;
+  const VAULT_SWIPE_CLOSE_MIN_VELOCITY = 0.42;
   const [tracks, setTracks] = useState<Track[]>([]);
   const [currentTrackId, setCurrentTrackId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -501,6 +504,7 @@ export default function App() {
   const vaultToastTimeoutRef = useRef<number | null>(null);
   const vaultImportCloseTimeoutRef = useRef<number | null>(null);
   const vaultImportCloseIntervalRef = useRef<number | null>(null);
+  const vaultSwipeStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
   const loopDragResumeTimeoutRef = useRef<number | null>(null);
   const loopDragWasPlayingRef = useRef(false);
   const playbackResyncInFlightRef = useRef(false);
@@ -1050,6 +1054,29 @@ export default function App() {
     clearVaultImportSuccessCountdown();
     setShowImportWarning(false);
     setOverlayPage(null);
+  };
+
+  const beginVaultSwipeDismiss = (touch: { clientX: number; clientY: number }) => {
+    vaultSwipeStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      at: performance.now()
+    };
+  };
+
+  const endVaultSwipeDismiss = (touch: { clientX: number; clientY: number }) => {
+    const start = vaultSwipeStartRef.current;
+    vaultSwipeStartRef.current = null;
+    if (!start) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (dy <= 0) return;
+    if (Math.abs(dx) > VAULT_SWIPE_CLOSE_MAX_SIDEWAYS_PX) return;
+    const elapsedMs = Math.max(1, performance.now() - start.at);
+    const velocity = dy / elapsedMs;
+    if (dy >= VAULT_SWIPE_CLOSE_DISTANCE_PX || velocity >= VAULT_SWIPE_CLOSE_MIN_VELOCITY) {
+      closeVaultOverlay();
+    }
   };
 
   const startVaultImportSuccessCountdown = () => {
@@ -3316,6 +3343,7 @@ export default function App() {
   };
 
   const activeThemeSelection = getThemeSelection(themeMode, customThemeSlot);
+  const ambientAuraRgb = auraHexToRgb(auraColor ?? "#bc84ff");
   const fxThemeRefreshKey = `${themeMode}:${customThemeSlot}:${auraColor ?? "default"}:${currentTrack?.id ?? "none"}:${currentTrack?.aura ?? 0}`;
   const showHeaderUploadButton = true;
   const isPreTourState = isInitialDemoFirstRunState && quickTourPhase === null;
@@ -3341,6 +3369,7 @@ export default function App() {
             mode={fxMode}
             quality={fxQuality}
             reducedMotion={fxReducedMotion}
+            auraRgb={ambientAuraRgb}
             themeRefreshKey={fxThemeRefreshKey}
           />
           <div
@@ -3839,7 +3868,27 @@ export default function App() {
       )}
 
       {overlayPage === "vault" && (
-        <section className="app-overlay" role="dialog" aria-modal="true" aria-label="Vault — Full Backup">
+        <section
+          className="app-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Vault — Full Backup"
+          onTouchStart={(event) => {
+            if (event.touches.length !== 1) {
+              vaultSwipeStartRef.current = null;
+              return;
+            }
+            beginVaultSwipeDismiss(event.touches[0]);
+          }}
+          onTouchEnd={(event) => {
+            const touch = event.changedTouches[0];
+            if (!touch) return;
+            endVaultSwipeDismiss(touch);
+          }}
+          onTouchCancel={() => {
+            vaultSwipeStartRef.current = null;
+          }}
+        >
           <div className="app-overlay-card vault-card">
             <div className="app-overlay-head">
               <div className="app-overlay-title">Vault — Full Backup</div>

@@ -71,6 +71,18 @@ function writeEntries(entries: GratitudeEntry[]): void {
   }
 }
 
+function sortEntriesNewestFirst(entries: GratitudeEntry[]): GratitudeEntry[] {
+  return entries
+    .slice()
+    .sort((a, b) => {
+      const aTime = Date.parse(a.updatedAt || a.createdAt);
+      const bTime = Date.parse(b.updatedAt || b.createdAt);
+      const safeATime = Number.isFinite(aTime) ? aTime : 0;
+      const safeBTime = Number.isFinite(bTime) ? bTime : 0;
+      return safeBTime - safeATime;
+    });
+}
+
 export function loadGratitudeSettings(): GratitudeSettings {
   try {
     const raw = localStorage.getItem(GRATITUDE_SETTINGS_KEY);
@@ -155,12 +167,16 @@ export function getGratitudeEntries(): GratitudeEntry[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     const normalized = normalizeEntries(parsed);
-    return normalized
-      .slice()
-      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    return sortEntriesNewestFirst(normalized);
   } catch {
     return [];
   }
+}
+
+export function replaceGratitudeEntries(entries: unknown): GratitudeEntry[] {
+  const normalized = sortEntriesNewestFirst(normalizeEntries(entries));
+  writeEntries(normalized);
+  return normalized;
 }
 
 export function deleteGratitudeEntry(entryId: string): void {
