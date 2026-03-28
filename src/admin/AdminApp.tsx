@@ -620,10 +620,17 @@ export function AdminApp() {
     setUploadAudio(file);
   };
 
-  const onPickUploadAudioNative = async () => {
-    const file = await pickIosNativeAudioFile();
-    if (!file) return;
-    setUploadAudio(file);
+  const onPickUploadAudioNative = async (fallbackPick?: () => void) => {
+    try {
+      const file = await pickIosNativeAudioFile();
+      if (!file) {
+        fallbackPick?.();
+        return;
+      }
+      setUploadAudio(file);
+    } catch {
+      fallbackPick?.();
+    }
   };
 
   const onPickUploadArtwork = async (file: File | null) => {
@@ -679,10 +686,17 @@ export function AdminApp() {
     setSelectedAudioFile(file);
   };
 
-  const onPickSelectedAudioNative = async () => {
-    const file = await pickIosNativeAudioFile();
-    if (!file) return;
-    setSelectedAudioFile(file);
+  const onPickSelectedAudioNative = async (fallbackPick?: () => void) => {
+    try {
+      const file = await pickIosNativeAudioFile();
+      if (!file) {
+        fallbackPick?.();
+        return;
+      }
+      setSelectedAudioFile(file);
+    } catch {
+      fallbackPick?.();
+    }
   };
 
   const seekPreviewVideo = (video: HTMLVideoElement | null, timeSec: number) => {
@@ -1643,7 +1657,7 @@ export function AdminApp() {
               accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,.wav,.mp3,.m4a,.aac,.mp4,.mov"
               selectedFileName={uploadAudio?.name}
               armed={Boolean(uploadAudio)}
-              onPickRequest={CAN_USE_IOS_NATIVE_AUDIO_IMPORT ? () => void onPickUploadAudioNative() : undefined}
+              onPickRequest={CAN_USE_IOS_NATIVE_AUDIO_IMPORT ? (fallbackPick) => void onPickUploadAudioNative(fallbackPick) : undefined}
               onFileSelected={(file) => void onPickUploadAudio(file)}
             />
 
@@ -1825,7 +1839,7 @@ export function AdminApp() {
                 compact
                 selectedFileName={selectedAudioFile?.name}
                 armed={Boolean(selectedAudioFile)}
-                onPickRequest={CAN_USE_IOS_NATIVE_AUDIO_IMPORT ? () => void onPickSelectedAudioNative() : undefined}
+                onPickRequest={CAN_USE_IOS_NATIVE_AUDIO_IMPORT ? (fallbackPick) => void onPickSelectedAudioNative(fallbackPick) : undefined}
                 onFileSelected={(file) => void onPickSelectedAudio(file)}
                 disabled={!hasTracks}
               />
@@ -1911,12 +1925,19 @@ export function AdminApp() {
               busy={isAudioLaneBusy}
               onPickRequest={
                 CAN_USE_IOS_NATIVE_AUDIO_IMPORT
-                  ? async () => {
-                      const file = await pickIosNativeAudioFile();
-                      if (!file) return;
-                      if (audioTransferMode === "replace") setSelectedAudioFile(file);
-                      else setUploadAudio(file);
-                      await runAudioLaneTransfer(file);
+                  ? async (fallbackPick) => {
+                      try {
+                        const file = await pickIosNativeAudioFile();
+                        if (!file) {
+                          fallbackPick();
+                          return;
+                        }
+                        if (audioTransferMode === "replace") setSelectedAudioFile(file);
+                        else setUploadAudio(file);
+                        await runAudioLaneTransfer(file);
+                      } catch {
+                        fallbackPick();
+                      }
                     }
                   : undefined
               }

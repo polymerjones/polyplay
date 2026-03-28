@@ -34,10 +34,12 @@ function getMediaImportPlugin(): MediaImportPlugin | null {
 export async function pickIosNativeAudioFile(): Promise<File | null> {
   const plugin = getMediaImportPlugin();
   const capacitor = getCapacitor();
-  if (!plugin || !capacitor || typeof capacitor.convertFileSrc !== "function") return null;
+  if (!plugin) return null;
   const picked = await plugin.pickAudioFile();
   if (picked.cancelled || !picked.path || !picked.name) return null;
-  const response = await fetch(capacitor.convertFileSrc(picked.path));
+  const resolvedPath =
+    capacitor && typeof capacitor.convertFileSrc === "function" ? capacitor.convertFileSrc(picked.path) : picked.path;
+  const response = await fetch(resolvedPath);
   if (!response.ok) throw new Error(`Failed to read imported file (${response.status}).`);
   const blob = await response.blob();
   return new File([blob], picked.name, { type: picked.mimeType || blob.type || "application/octet-stream" });

@@ -11,7 +11,7 @@ type Props = {
   disabled?: boolean;
   busy?: boolean;
   armed?: boolean;
-  onPickRequest?: () => void | Promise<void>;
+  onPickRequest?: (fallbackPick: () => void) => void | Promise<void>;
   onFileSelected: (file: File | null) => void | Promise<void>;
 };
 
@@ -55,7 +55,7 @@ export function TransferLaneDropZone({
   const pick = () => {
     if (disabled || busy) return;
     if (onPickRequest) {
-      void onPickRequest();
+      void onPickRequest(() => inputRef.current?.click());
       return;
     }
     inputRef.current?.click();
