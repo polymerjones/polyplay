@@ -75,6 +75,7 @@ const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
 const DIM_MODE_KEY = "polyplay_dimMode_v1";
+const CURRENT_TRACK_ID_KEY = "polyplay_currentTrackId_v1";
 const LOOP_REGION_KEY = "polyplay_loopByTrack";
 const LOOP_MODE_KEY = "polyplay_loopModeByTrack";
 const THEME_PACK_AURA_COLORS: Record<"crimson" | "teal" | "amber", string> = {
@@ -174,6 +175,19 @@ function formatBytes(bytes: number): string {
     index += 1;
   }
   return `${value.toFixed(value >= 100 || index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+function getPreferredCurrentTrackId(rows: DbTrackRecord[]): string {
+  if (!rows.length) return "";
+  try {
+    const currentTrackId = localStorage.getItem(CURRENT_TRACK_ID_KEY);
+    if (currentTrackId && rows.some((track) => track.id === currentTrackId)) {
+      return currentTrackId;
+    }
+  } catch {
+    // Ignore storage failures.
+  }
+  return String(rows[0].id);
 }
 
 export function AdminApp() {
@@ -301,11 +315,19 @@ export function AdminApp() {
         return;
       }
 
-      const first = String(rows[0].id);
-      setSelectedArtworkTrackId((prev) => prev || first);
-      setSelectedAudioTrackId((prev) => prev || first);
-      setSelectedRemoveTrackId((prev) => prev || first);
-      setSelectedTransferTrackId((prev) => prev || first);
+      const preferred = getPreferredCurrentTrackId(rows);
+      setSelectedArtworkTrackId((prev) =>
+        prev && rows.some((track) => track.id === prev) ? prev : preferred
+      );
+      setSelectedAudioTrackId((prev) =>
+        prev && rows.some((track) => track.id === prev) ? prev : preferred
+      );
+      setSelectedRemoveTrackId((prev) =>
+        prev && rows.some((track) => track.id === prev) ? prev : preferred
+      );
+      setSelectedTransferTrackId((prev) =>
+        prev && rows.some((track) => track.id === prev) ? prev : preferred
+      );
     } catch {
       setStatus("Failed to load tracks.");
     }
@@ -503,7 +525,7 @@ export function AdminApp() {
     }
   };
 
-  const showUploadSuccessNotice = (message: string) => {
+  const showSuccessNotice = (message: string) => {
     setUploadSuccessNotice(message);
     if (uploadSuccessNoticeTimeoutRef.current !== null) {
       window.clearTimeout(uploadSuccessNoticeTimeoutRef.current);
@@ -778,7 +800,7 @@ export function AdminApp() {
           ? "Import complete. Video artwork added (poster frame unavailable on this browser)."
           : "Import complete."
       );
-      showUploadSuccessNotice(
+      showSuccessNotice(
         artwork.posterCaptureFailed
           ? "Import complete. Video artwork added."
           : "Import complete."
@@ -828,11 +850,11 @@ export function AdminApp() {
       await updateArtworkInDb(selectedArtworkTrackId, artwork);
       notifyUserImported();
       setSelectedArtworkAssetFile(null);
-      setStatus(
-        artwork.posterCaptureFailed
-          ? "Artwork updated. Video artwork added (poster frame unavailable on this browser)."
-          : "Artwork updated."
-      );
+      const successMessage = artwork.posterCaptureFailed
+        ? "Artwork updated. Video artwork added (poster frame unavailable on this browser)."
+        : "Artwork updated.";
+      setStatus(successMessage);
+      showSuccessNotice(successMessage);
       await refreshTracks();
       await refreshStorage();
     } catch (error) {
@@ -864,6 +886,7 @@ export function AdminApp() {
       notifyUserImported();
       setSelectedAudioFile(null);
       setStatus("Audio replaced.");
+      showSuccessNotice("Audio replaced.");
       await refreshTracks();
       await refreshStorage();
     } catch (error) {
@@ -886,6 +909,7 @@ export function AdminApp() {
       await new Promise((resolve) => window.setTimeout(resolve, 170));
       await removeTrackFromDb(trackId);
       setStatus("Track removed.");
+      showSuccessNotice("Track removed.");
       await refreshTracks();
       await refreshStorage();
       emitLibraryUpdated();

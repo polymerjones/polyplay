@@ -120,6 +120,7 @@ const UI_CURRENT_TIME_MIN_DELTA_SEC = 0.08;
 const FX_ENABLED_KEY = "polyplay_fxEnabled_v1";
 const FX_MODE_KEY = "polyplay_fxMode_v1";
 const FX_QUALITY_KEY = "polyplay_fxQuality_v1";
+const CURRENT_TRACK_ID_KEY = "polyplay_currentTrackId_v1";
 const IOS_NOW_PLAYING_APP_TITLE = "PolyPlay Audio";
 const THEME_PACK_AURA_COLORS: Record<CustomThemeSlot, string> = {
   crimson: "#cf6f82",
@@ -482,6 +483,7 @@ export default function App() {
   const activeScratchRef = useRef<HTMLAudioElement | null>(null);
   const importUniverseInputRef = useRef<HTMLInputElement | null>(null);
   const pendingAutoPlayRef = useRef(false);
+  const pendingAutoPlayTrackIdRef = useRef<string | null>(null);
   const audioSrcRef = useRef<string | null>(null);
   const splashTimeoutRef = useRef<number | null>(null);
   const nukeTimeoutRef = useRef<number | null>(null);
@@ -531,6 +533,18 @@ export default function App() {
 
   useEffect(() => {
     currentTrackIdRef.current = currentTrackId;
+  }, [currentTrackId]);
+
+  useEffect(() => {
+    try {
+      if (currentTrackId) {
+        localStorage.setItem(CURRENT_TRACK_ID_KEY, currentTrackId);
+      } else {
+        localStorage.removeItem(CURRENT_TRACK_ID_KEY);
+      }
+    } catch {
+      // Ignore localStorage failures.
+    }
   }, [currentTrackId]);
 
   const markActivePlaylistDirty = () => {
@@ -889,6 +903,7 @@ export default function App() {
     audio.removeAttribute("src");
     audio.load();
     audioSrcRef.current = null;
+    pendingAutoPlayTrackIdRef.current = null;
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
@@ -1638,7 +1653,9 @@ export default function App() {
 
       await setIosNowPlayingItem({
         title: currentTrack.title || "Untitled",
-        subtitle: IOS_NOW_PLAYING_APP_TITLE
+        subtitle: IOS_NOW_PLAYING_APP_TITLE,
+        artBlob: currentTrack.artBlob,
+        artUrl: currentTrack.artUrl
       });
       await syncMediaSessionItem(currentTrack);
     };
@@ -1891,17 +1908,34 @@ export default function App() {
     }
 
     if (pendingAutoPlayRef.current) {
-      pendingAutoPlayRef.current = false;
-      logAudioDebug("play() called", { reason: "pending-autoplay" });
-      audio
-        .play()
+      const targetTrackId = currentTrackId;
+      const attemptPlay = (reason: "pending-autoplay") => {
+        logAudioDebug("play() called", { reason, targetTrackId, readyState: audio.readyState });
+        return audio.play();
+      };
+      const finalizePendingAutoPlay = () => {
+        pendingAutoPlayRef.current = false;
+        pendingAutoPlayTrackIdRef.current = null;
+      };
+
+      finalizePendingAutoPlay();
+      void attemptPlay("pending-autoplay")
         .then(() => {
-          logAudioDebug("play() resolved", { reason: "pending-autoplay" });
+          logAudioDebug("play() resolved", { reason: "pending-autoplay", targetTrackId });
           setIsPlaying(true);
         })
         .catch((error) => {
-          logAudioDebug("play() rejected", { reason: "pending-autoplay", error: String(error) });
-          setIsPlaying(false);
+          logAudioDebug("play() rejected", {
+            reason: "pending-autoplay",
+            targetTrackId,
+            readyState: audio.readyState,
+            error: String(error)
+          });
+          if (!isIOS || !targetTrackId || currentTrackId !== targetTrackId) {
+            setIsPlaying(false);
+            return;
+          }
+          pendingAutoPlayTrackIdRef.current = targetTrackId;
         });
     }
   }, [currentTrackId, currentAudioUrl]);
@@ -2156,8 +2190,37 @@ export default function App() {
       const nextDuration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
       setDuration(nextDuration);
     };
-    const onMeta = () => syncDuration();
-    const onDurationChange = () => syncDuration();
+    const retryPendingAutoPlayIfNeeded = (reason: "loadedmetadata" | "durationchange" | "canplay") => {
+      const pendingTrackId = pendingAutoPlayTrackIdRef.current;
+      if (!pendingTrackId || pendingTrackId !== currentTrackId) return;
+      if (audioSrcRef.current !== currentAudioUrl || !currentAudioUrl) return;
+      if (audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      pendingAutoPlayTrackIdRef.current = null;
+      logAudioDebug("play() called", { reason: `pending-autoplay-${reason}`, readyState: audio.readyState, pendingTrackId });
+      void audio.play()
+        .then(() => {
+          logAudioDebug("play() resolved", { reason: `pending-autoplay-${reason}`, pendingTrackId });
+          setIsPlaying(true);
+        })
+        .catch((error) => {
+          logAudioDebug("play() rejected", {
+            reason: `pending-autoplay-${reason}`,
+            pendingTrackId,
+            readyState: audio.readyState,
+            error: String(error)
+          });
+          setIsPlaying(false);
+        });
+    };
+    const onMeta = () => {
+      syncDuration();
+      retryPendingAutoPlayIfNeeded("loadedmetadata");
+    };
+    const onCanPlay = () => retryPendingAutoPlayIfNeeded("canplay");
+    const onDurationChangeWithRetry = () => {
+      syncDuration();
+      retryPendingAutoPlayIfNeeded("durationchange");
+    };
     const onPlay = () => {
       setIsPlaying(true);
       if (currentTrackId) {
@@ -2204,25 +2267,27 @@ export default function App() {
 
     audio.addEventListener("timeupdate", onTime);
     audio.addEventListener("loadedmetadata", onMeta);
-    audio.addEventListener("durationchange", onDurationChange);
+    audio.addEventListener("durationchange", onDurationChangeWithRetry);
+    audio.addEventListener("canplay", onCanPlay);
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
     audio.addEventListener("error", onError);
     audio.addEventListener("ended", onEnded);
     logAudioDebug("listeners attached", {
-      listeners: ["timeupdate", "loadedmetadata", "durationchange", "play", "pause", "error", "ended"]
+      listeners: ["timeupdate", "loadedmetadata", "durationchange", "canplay", "play", "pause", "error", "ended"]
     });
 
     const detachListeners = () => {
       audio.removeEventListener("timeupdate", onTime);
       audio.removeEventListener("loadedmetadata", onMeta);
-      audio.removeEventListener("durationchange", onDurationChange);
+      audio.removeEventListener("durationchange", onDurationChangeWithRetry);
+      audio.removeEventListener("canplay", onCanPlay);
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("error", onError);
       audio.removeEventListener("ended", onEnded);
       logAudioDebug("listeners detached", {
-        listeners: ["timeupdate", "loadedmetadata", "durationchange", "play", "pause", "error", "ended"]
+        listeners: ["timeupdate", "loadedmetadata", "durationchange", "canplay", "play", "pause", "error", "ended"]
       });
     };
     teardownAudioListenersRef.current = detachListeners;

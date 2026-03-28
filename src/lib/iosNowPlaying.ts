@@ -2,6 +2,8 @@ type NowPlayingPlugin = {
   setNowPlayingItem(options: {
     title: string;
     subtitle?: string;
+    artworkDataUrl?: string;
+    artworkUrl?: string;
   }): Promise<void>;
   updatePlaybackState(options: {
     elapsedTime: number;
@@ -29,6 +31,7 @@ declare global {
 }
 
 let nowPlayingPluginCache: NowPlayingPlugin | null | undefined;
+const artworkDataUrlCache = new WeakMap<Blob, string>();
 
 function getNowPlayingPlugin(): NowPlayingPlugin | null {
   if (nowPlayingPluginCache !== undefined) return nowPlayingPluginCache;
@@ -58,15 +61,38 @@ function getNowPlayingPlugin(): NowPlayingPlugin | null {
   return nowPlayingPluginCache;
 }
 
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  const cached = artworkDataUrlCache.get(blob);
+  if (cached) return cached;
+
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Unable to read artwork blob as data URL"));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Unable to read artwork blob"));
+    reader.readAsDataURL(blob);
+  });
+
+  artworkDataUrlCache.set(blob, dataUrl);
+  return dataUrl;
+}
+
 export async function setIosNowPlayingItem(options: {
   title: string;
   subtitle?: string;
+  artBlob?: Blob;
+  artUrl?: string;
 }): Promise<void> {
   const plugin = getNowPlayingPlugin();
   if (!plugin) return;
+  const artworkDataUrl = options.artBlob ? await blobToDataUrl(options.artBlob) : undefined;
   await plugin.setNowPlayingItem({
     title: options.title,
-    subtitle: options.subtitle
+    subtitle: options.subtitle,
+    artworkDataUrl,
+    artworkUrl: artworkDataUrl ? undefined : options.artUrl
   });
 }
 

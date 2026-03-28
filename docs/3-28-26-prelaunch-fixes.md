@@ -773,6 +773,193 @@ Suggested order:
 
 ---
 
+### 15. Admin/settings success toast visibility for artwork and similar actions
+**Status:** Fixed
+
+**Notes:**
+- On long Settings/Admin pages, success feedback for actions like `Update Artwork` could appear too low in the scroll flow.
+- The user could miss the confirmation because it lived near the bottom of the page instead of near the top of the viewport.
+
+**Problem:**
+- Success feedback was not sufficiently visible after `Update Artwork` and similar Manage Library actions.
+
+**Repro:**
+- Open Settings / Admin and switch to `Manage Library`.
+- Perform `Update Artwork` successfully.
+- Observe that the main success message appears in the bottom status area, which can sit below the visible viewport on a long admin page.
+
+**Root cause:**
+- Manage Library success messages were being written only to the shared bottom `status` line.
+- A fixed top success toast already existed for import completion, but the manage-side actions were not using it.
+
+**What the code was doing before:**
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) used a fixed top toast for import success.
+- `Update Artwork`, `Replace Audio`, and `Remove Track` only updated the bottom inline status block, which is useful for persistent page state but weak for immediate visual confirmation.
+
+**What we tried:**
+- Reused the existing fixed top success-toast mechanism instead of adding another notification system.
+- Kept the bottom status updates in place for persistent context.
+
+**Why a failed attempt failed:**
+- No failed intermediate patch was kept.
+- The important constraint was not to move all status messaging into a toast, because progress and error states still benefit from staying inline and persistent.
+
+**Final fix:**
+- Generalized the existing success-toast helper in [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx).
+- Routed successful `Update Artwork`, `Replace Audio`, and `Remove Track` completions through that fixed top toast path while preserving the bottom status text.
+- Result: immediate success feedback now stays visible on both desktop and iPhone even when the admin page is scrolled deep into the form.
+
+**How to avoid this later:**
+- Use a fixed toast surface for short-lived success confirmations on tall Settings/Admin pages.
+- Keep inline status for durable feedback such as validation, progress, and failure states.
+- When adding new admin actions, decide explicitly whether the primary feedback should be a toast, an inline status, or both.
+
+---
+
+### 16. Update/replace/remove selectors should default to the currently playing track
+**Status:** Fixed
+
+**Notes:**
+- The current track should already be selected by default when opening Manage Library actions like `Update Artwork`, `Replace Audio`, and `Remove Track`.
+- The previous behavior felt arbitrary because the selectors defaulted to the first track returned from storage instead of the active now-playing track.
+
+**Problem:**
+- Update-related dropdowns did not reliably default to the currently playing/current track.
+
+**Repro:**
+- Start playback on a track that is not first in the library ordering.
+- Open Settings / Admin and go to `Manage Library`.
+- Check `Update Artwork`, `Replace Audio`, and `Remove Track`.
+- Observe that the selectors can default to the first stored track rather than the track currently playing.
+
+**Root cause:**
+- The player was not publishing its active `currentTrackId` to a place the admin iframe could reuse.
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) populated those selectors by falling back to the first row returned from IndexedDB.
+
+**What the code was doing before:**
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) tracked `currentTrackId` in React state only.
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) chose `rows[0]` as the default selection for manage-side track actions when the selector state was empty.
+
+**What we tried:**
+- Added a narrow shared `localStorage` key for the active track ID rather than inventing a heavier cross-window sync layer.
+- Taught the admin selector hydration logic to prefer that saved active track when it exists and is still present in the track list.
+
+**Why a failed attempt failed:**
+- No failed intermediate patch was kept.
+- The important design choice was to use the persisted active track only as the default/fallback, not to override a valid manual selection after the user has already changed a dropdown.
+
+**Final fix:**
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) now persists the active `currentTrackId` to `localStorage` whenever playback selection changes.
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) now prefers that persisted active track when initializing or rehydrating the `Update Artwork`, `Replace Audio`, `Remove Track`, and transfer target selectors.
+- If the persisted current track no longer exists, Admin safely falls back to the first available track.
+
+**How to avoid this later:**
+- If an admin/editor flow is supposed to act on "the thing the user is currently hearing/seeing," persist or expose that state explicitly instead of inferring from storage order.
+- Treat "default selection" and "live forced selection" as separate behaviors so admin forms do not unexpectedly fight manual user choices.
+
+---
+
+### 17. iOS newly imported track can show `0:00` and fail on first tap
+**Status:** Fixed
+
+**Notes:**
+- User reported that on iPhone, a newly imported track could show `0:00` and fail to begin playback on the first tap.
+- The same session also felt laggy around immediate playback start after import.
+
+**Problem:**
+- On iOS, a freshly imported track could briefly present as `0:00` and not start on the first tap even though the track had been imported successfully.
+
+**Repro:**
+- Import a new track on iPhone.
+- Return to the player and tap that newly imported track right away.
+- The mini player can briefly show `0:00`, and the first play attempt may fail before a later tap succeeds.
+
+**Root cause:**
+- Evidence in [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) pointed to an iOS media-readiness race rather than a plain selection bug.
+- On track switch, the player intentionally resets UI time/duration to `0` and immediately calls `audio.play()` after assigning a fresh blob-backed source and `load()`.
+- On iOS/Safari, that one-shot autoplay attempt is brittle for freshly loaded media. If the media element is not ready yet, the play promise can reject and the app previously did not retry when metadata or playable data arrived a moment later.
+
+**What the code was doing before:**
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) assigned the new `audio.src`, called `audio.load()`, reset the displayed duration to `0`, and then tried one immediate pending-autoplay call.
+- If that `play()` attempt rejected, the app set `isPlaying` false and stopped there.
+- Later `loadedmetadata` / `durationchange` events updated duration, but they did not revive the failed first-play attempt.
+
+**What we tried:**
+- Kept the existing source-switch path intact.
+- Added a narrow iOS-targeted retry path that remembers a failed pending autoplay for the active track and retries once media readiness advances enough to make playback viable.
+- Hooked that retry into `loadedmetadata`, `durationchange`, and `canplay`, while guarding it so it only applies to the same active track/source.
+
+**Why a failed attempt failed:**
+- No failed intermediate patch was kept.
+- The key issue was that a single eager `play()` call is not robust enough for freshly loaded blob/object-URL media on iOS.
+
+**Final fix:**
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) now records when a pending autoplay fails for the current iOS track switch instead of immediately abandoning playback.
+- When the same source advances to `loadedmetadata`, `durationchange`, or `canplay`, the player retries playback once the media element has enough data.
+- The retry is scoped to the same active track/source and is cleared on teardown, so it does not leak into unrelated playback changes.
+- Result: newly imported tracks are less likely to get stuck on the initial `0:00` / first-tap failure path on iPhone.
+
+**How to avoid this later:**
+- Treat “fresh source assigned” and “safe to autoplay” as separate states on iOS/Safari.
+- When the UI intentionally resets time/duration during a source swap, pair that with a readiness-aware playback strategy so transient `0:00` state does not become a dead-end failed play attempt.
+- For blob-backed media especially, prefer readiness-aware retry/recovery over assuming a single immediate `play()` call will always succeed.
+
+---
+
+### 18. iOS Now Playing / Dynamic Island should show still album art if possible
+**Status:** Fixed
+
+**Notes:**
+- This started as an audit request: determine whether still artwork was already being sent correctly to iOS Now Playing / Dynamic Island.
+- Repo inspection showed the issue was not a vague platform limitation. The app’s native Now Playing path simply was not receiving artwork data.
+
+**Problem:**
+- Still artwork did not appear in iOS Now Playing / Dynamic Island because the current native metadata path only sent title/subtitle/playback state, not artwork.
+
+**Repro:**
+- Inspect the iOS Now Playing bridge and plugin code used by playback state sync.
+- Observe that the JS bridge only called `setNowPlayingItem({ title, subtitle })`.
+- Observe that the native plugin only wrote title/artist/album/playback fields into `MPNowPlayingInfoCenter` and never set `MPMediaItemPropertyArtwork`.
+
+**Root cause:**
+- [`src/lib/iosNowPlaying.ts`](/Users/paulfisher/Polyplay/src/lib/iosNowPlaying.ts) exposed no artwork fields in its plugin contract.
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) therefore never sent the current track’s still art to the iOS plugin.
+- [`ios/App/App/NowPlayingPlugin.swift`](/Users/paulfisher/Polyplay/ios/App/App/NowPlayingPlugin.swift) never created `MPMediaItemArtwork`, so iOS had no still image to show in system Now Playing UI.
+
+**What the code was doing before:**
+- The web `MediaSession` path already attempted to provide artwork for browser surfaces.
+- The native iOS plugin path only cached and published:
+  - title
+  - subtitle/artist
+  - album title
+  - elapsed time
+  - duration
+  - playback rate
+- No artwork payload crossed the JS/native boundary.
+
+**What we tried:**
+- Extended the JS bridge to accept the current track’s still art.
+- Preferred sending a data URL derived from `artBlob` for imported tracks, because native iOS cannot use browser-only blob URLs directly.
+- Added a native fallback path that can also resolve a standard artwork URL when available.
+- Updated the plugin to build `MPMediaItemArtwork` and attach it to `MPNowPlayingInfoCenter`.
+
+**Why a failed attempt failed:**
+- No failed intermediate patch was kept.
+- The key realization from the audit was that nothing downstream could display art until the plugin was given actual image data and explicitly set `MPMediaItemPropertyArtwork`.
+
+**Final fix:**
+- [`src/lib/iosNowPlaying.ts`](/Users/paulfisher/Polyplay/src/lib/iosNowPlaying.ts) now supports `artBlob` / `artUrl`, converts blob-backed still art to a cached data URL, and passes artwork fields into the native plugin call.
+- [`src/App.tsx`](/Users/paulfisher/Polyplay/src/App.tsx) now sends the current track’s still artwork when syncing the iOS Now Playing item.
+- [`ios/App/App/NowPlayingPlugin.swift`](/Users/paulfisher/Polyplay/ios/App/App/NowPlayingPlugin.swift) now resolves artwork from either a data URL or URL, creates `MPMediaItemArtwork`, and writes it into `MPNowPlayingInfoCenter`.
+- This affects iOS specifically. Desktop/web behavior was already using the browser Media Session path separately.
+
+**How to avoid this later:**
+- Treat browser `MediaSession` metadata and native iOS Now Playing metadata as separate integration surfaces; fixing one does not fix the other.
+- When auditing missing lock-screen / Dynamic Island art, check explicitly for `MPMediaItemPropertyArtwork` in the native path instead of assuming the platform is ignoring valid metadata.
+- For imported media stored as browser blobs, convert artwork into a native-consumable payload before sending it across the bridge.
+
+---
+
 ## Notes / triage log
 
 ### General rules for this pass
@@ -783,6 +970,10 @@ Suggested order:
 
 ### Progress log
 - _Start of 3-28-26 pass: document created and issue list established._
+- Added item 15: elevated Manage Library media-action success feedback into the fixed top admin toast while preserving the bottom inline status surface.
+- Added item 16: persisted the player’s active track ID and used it to default Manage Library track selectors to the currently playing track.
+- Added item 17: made iOS fresh-track autoplay recover when the initial post-import play attempt loses the race with media readiness.
+- Added item 18: audited and fixed the native iOS Now Playing artwork path so still art is now sent into `MPNowPlayingInfoCenter`.
 
 ---
 
