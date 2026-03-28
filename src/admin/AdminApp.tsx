@@ -60,6 +60,7 @@ import {
   parseConfigImportText,
   serializeConfig
 } from "../lib/backup";
+import { fireSuccessHaptic } from "../lib/haptics";
 import { canUseIosNativeAudioImport, pickIosNativeAudioFile } from "../lib/iosMediaImport";
 import { saveBlobWithBestEffort } from "../lib/saveBlob";
 import { titleFromFilename } from "../lib/title";
@@ -723,9 +724,11 @@ export function AdminApp() {
           audio: file
         });
         setStatus("New track created from Audio Track lane.");
+        fireSuccessHaptic();
       } else {
         await replaceAudioInDb(selectedTransferTrackId, file);
         setStatus("Selected track audio replaced.");
+        fireSuccessHaptic();
       }
       notifyUserImported();
       await refreshTracks();
@@ -780,6 +783,7 @@ export function AdminApp() {
       await refreshTracks();
       await refreshStorage();
       setStatus("Artwork applied from Artwork lane.");
+      fireSuccessHaptic();
     } catch (error) {
       if (isStorageCapError(error)) {
         setInfoModal({
@@ -850,6 +854,7 @@ export function AdminApp() {
           ? "Import complete. Video artwork added (poster frame unavailable on this browser)."
           : "Import complete."
       );
+      fireSuccessHaptic();
       showSuccessNotice(
         artwork.posterCaptureFailed
           ? "Import complete. Video artwork added."
@@ -904,6 +909,7 @@ export function AdminApp() {
         ? "Artwork updated. Video artwork added (poster frame unavailable on this browser)."
         : "Artwork updated.";
       setStatus(successMessage);
+      fireSuccessHaptic();
       showSuccessNotice(successMessage);
       await refreshTracks();
       await refreshStorage();
@@ -940,6 +946,7 @@ export function AdminApp() {
       notifyUserImported();
       setSelectedAudioFile(null);
       setStatus("Audio replaced.");
+      fireSuccessHaptic();
       showSuccessNotice("Audio replaced.");
       await refreshTracks();
       await refreshStorage();
@@ -2094,6 +2101,7 @@ export function AdminApp() {
                   ? `Theme set to ${nextSlot}. Aura matched to pack.`
                   : `Theme set to ${nextMode === "dark" ? "Default (Dark)" : "Light"}.`
               );
+              fireSuccessHaptic();
               showSuccessNotice(
                 nextMode === "custom"
                   ? `Theme set to ${nextSlot}. Aura matched to pack.`
@@ -2145,6 +2153,7 @@ export function AdminApp() {
                     // Ignore postMessage failures.
                   }
                   setStatus(`Aura color applied: ${next}.`);
+                  fireSuccessHaptic();
                   showSuccessNotice(`Aura color applied: ${next}.`);
                 }}
               >

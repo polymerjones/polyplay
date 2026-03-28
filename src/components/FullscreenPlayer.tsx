@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
 import { buildPeaksFromAudioBlob, fallbackPeaks } from "../lib/artwork/waveformArtwork";
+import { fireLightHaptic } from "../lib/haptics";
 import { formatTime } from "../lib/time";
 import type { LoopMode, LoopRegion, Track } from "../types";
 import { PlayerControls } from "./PlayerControls";
@@ -264,13 +265,7 @@ export function FullscreenPlayer({
   };
 
   const dismissFullscreenWithFeedback = () => {
-    try {
-      if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
-        navigator.vibrate(12);
-      }
-    } catch {
-      // Ignore vibration failures.
-    }
+    fireLightHaptic();
     onClose();
   };
 
