@@ -76,11 +76,15 @@ export function FullscreenPlayer({
   onSkip
 }: Props) {
   const FULLSCREEN_AURA_FLASH_COOLDOWN_MS = 220;
+  const FULLSCREEN_SWIPE_CLOSE_DISTANCE_PX = 140;
+  const FULLSCREEN_SWIPE_CLOSE_MAX_SIDEWAYS_PX = 72;
+  const FULLSCREEN_SWIPE_CLOSE_MIN_VELOCITY = 0.42;
   const artRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const artworkVideoRef = useRef<HTMLVideoElement | null>(null);
   const isPlayingRef = useRef(isPlaying);
   const lastAuraFlashAtRef = useRef(0);
+  const swipeStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
   const artStyle = track.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
     : ({ backgroundImage: track.artGrad || `url('${DEFAULT_ARTWORK_URL}')` } as CSSProperties);
@@ -259,12 +263,61 @@ export function FullscreenPlayer({
     }
   };
 
+  const dismissFullscreenWithFeedback = () => {
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+        navigator.vibrate(12);
+      }
+    } catch {
+      // Ignore vibration failures.
+    }
+    onClose();
+  };
+
+  const beginSwipeDismiss = (touch: { clientX: number; clientY: number }) => {
+    swipeStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      at: performance.now()
+    };
+  };
+
+  const endSwipeDismiss = (touch: { clientX: number; clientY: number }) => {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!start) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (dy <= 0) return;
+    if (Math.abs(dx) > FULLSCREEN_SWIPE_CLOSE_MAX_SIDEWAYS_PX) return;
+    const elapsedMs = Math.max(1, performance.now() - start.at);
+    const velocity = dy / elapsedMs;
+    if (dy >= FULLSCREEN_SWIPE_CLOSE_DISTANCE_PX || velocity >= FULLSCREEN_SWIPE_CLOSE_MIN_VELOCITY) {
+      dismissFullscreenWithFeedback();
+    }
+  };
+
   return (
     <section
       className="fullscreen-player-shell"
       role="dialog"
       aria-modal="true"
       aria-label="Fullscreen player"
+      onTouchStart={(event) => {
+        if (event.touches.length !== 1) {
+          swipeStartRef.current = null;
+          return;
+        }
+        beginSwipeDismiss(event.touches[0]);
+      }}
+      onTouchEnd={(event) => {
+        const touch = event.changedTouches[0];
+        if (!touch) return;
+        endSwipeDismiss(touch);
+      }}
+      onTouchCancel={() => {
+        swipeStartRef.current = null;
+      }}
       onPointerDown={(event) => {
         const target = event.target as HTMLElement | null;
         if (!target?.closest(".fullscreen-player-shell__content")) onClose();
