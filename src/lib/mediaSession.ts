@@ -4,6 +4,8 @@ type MediaSessionWithPosition = MediaSession & {
   setPositionState?: (state?: MediaPositionState) => void;
 };
 
+type PolyplayMediaSessionAction = MediaSessionAction | "toggleplaypause";
+
 function getMediaSession(): MediaSessionWithPosition | null {
   if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return null;
   return navigator.mediaSession as MediaSessionWithPosition;
@@ -91,16 +93,17 @@ export function bindMediaSessionTransportActions(actions: {
   const mediaSession = getMediaSession();
   if (!mediaSession || typeof mediaSession.setActionHandler !== "function") return () => {};
 
-  const bindings: Array<[MediaSessionAction, MediaSessionActionHandler | null]> = [
+  const bindings: Array<[PolyplayMediaSessionAction, MediaSessionActionHandler | null]> = [
     ["play", () => actions.onPlay()],
     ["pause", () => actions.onPause()],
+    ["toggleplaypause", () => actions.onTogglePlayPause()],
     ["previoustrack", () => actions.onPreviousTrack()],
     ["nexttrack", () => actions.onNextTrack()]
   ];
 
   for (const [action, handler] of bindings) {
     try {
-      mediaSession.setActionHandler(action, handler);
+      mediaSession.setActionHandler(action as MediaSessionAction, handler);
     } catch {
       // Ignore unsupported action handlers on this platform.
     }
@@ -115,7 +118,7 @@ export function bindMediaSessionTransportActions(actions: {
   return () => {
     for (const [action] of bindings) {
       try {
-        mediaSession.setActionHandler(action, null);
+        mediaSession.setActionHandler(action as MediaSessionAction, null);
       } catch {
         // Ignore unsupported action handlers on cleanup.
       }

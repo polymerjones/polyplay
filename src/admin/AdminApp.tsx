@@ -1376,9 +1376,9 @@ export function AdminApp() {
       });
       setStatus(
         saveMode === "shared"
-          ? "Gratitude .txt ready to share."
+          ? "Gratitude .txt ready."
           : saveMode === "opened-preview"
-            ? "Gratitude .txt opened. Use Share or Save to Files."
+            ? "Gratitude .txt ready. Use iPhone save options to keep the file."
             : "Gratitude .txt exported."
       );
     } catch {
@@ -1398,11 +1398,11 @@ export function AdminApp() {
       });
       setStatus(
         saveMode === "shared"
-          ? `Share sheet opened for ${filename}.`
+          ? "Config ready."
           : saveMode === "save-dialog"
             ? `Saved to selected location: ${filename}.`
             : saveMode === "opened-preview"
-              ? `Config opened for ${filename}. Use Share and Save to Files on iPhone.`
+              ? `Config ready for ${filename}. Use iPhone save options to keep the file.`
               : `Download started for ${filename}.`
       );
     } catch {
@@ -1447,12 +1447,12 @@ export function AdminApp() {
       });
       setStatus(
         saveMode === "shared"
-          ? `Share sheet opened for ${filename}.`
+          ? "Vault backup ready."
           : saveMode === "save-dialog"
             ? `Saved to selected location: ${filename}.`
             : saveMode === "opened-preview"
-              ? `Backup opened for ${filename}. Use Share and Save to Files on iPhone.`
-              : `Download started (${result.trackCount} tracks).`
+              ? `Backup ready for ${filename}. Use iPhone save options to keep the file.`
+              : `Download started for ${filename}.`
       );
       setBackupProgress("");
     } catch (error) {
@@ -1505,11 +1505,11 @@ export function AdminApp() {
       });
       setStatus(
         saveMode === "shared"
-          ? `Share sheet opened for ${filename}.`
+          ? "PolyPlaylist ready."
           : saveMode === "save-dialog"
             ? `Saved to selected location: ${filename}.`
             : saveMode === "opened-preview"
-              ? `PolyPlaylist opened for ${filename}. Use Share and Save to Files on iPhone.`
+              ? `PolyPlaylist ready for ${filename}. Use iPhone save options to keep the file.`
               : `PolyPlaylist exported: ${result.trackCount} track${result.trackCount === 1 ? "" : "s"} from "${result.playlistName}".`
       );
     } catch (error) {

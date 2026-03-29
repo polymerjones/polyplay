@@ -24,7 +24,8 @@ const THEME_MODE_KEY = "polyplay_themeMode";
 const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
 const AURA_COLOR_KEY = "polyplay_auraColor_v1";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
-const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
+const REPEAT_TRACK_KEY = "polyplay_repeatTrackMode";
+const LEGACY_REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
 const DIM_MODE_KEY = "polyplay_dimMode_v1";
 const NOVELTY_MODE_KEY = "polyplay_noveltyMode_v1";
 const HAS_IMPORTED_KEY = "polyplay_hasImported";
@@ -72,7 +73,8 @@ export type PolyplayConfig = {
     auraColor?: string | null;
     layoutMode: "grid" | "list";
     shuffleEnabled: boolean;
-    repeatTrackEnabled: boolean;
+    repeatTrackMode?: "off" | "loop-one" | "threepeat";
+    repeatTrackEnabled?: boolean;
     dimMode: "normal" | "dim" | "mute";
     noveltyMode: "normal" | "dim" | "mute";
   };
@@ -348,6 +350,16 @@ function asBoolean(value: unknown): boolean {
   return value === true || value === "true";
 }
 
+function asRepeatTrackMode(value: unknown): "off" | "loop-one" | "threepeat" {
+  if (value === "threepeat") return "threepeat";
+  if (value === "loop-one" || value === true || value === "true") return "loop-one";
+  return "off";
+}
+
+function getStoredRepeatTrackMode(): "off" | "loop-one" | "threepeat" {
+  return asRepeatTrackMode(localStorage.getItem(REPEAT_TRACK_KEY) ?? localStorage.getItem(LEGACY_REPEAT_TRACK_KEY));
+}
+
 function asDimMode(value: unknown): "normal" | "dim" | "mute" {
   return value === "dim" || value === "mute" ? value : "normal";
 }
@@ -514,7 +526,8 @@ export function buildConfigSnapshot(): PolyplayConfig {
       auraColor: asAuraColor(localStorage.getItem(AURA_COLOR_KEY)),
       layoutMode: asLayout(localStorage.getItem(LAYOUT_MODE_KEY)),
       shuffleEnabled: asBoolean(localStorage.getItem(SHUFFLE_ENABLED_KEY)),
-      repeatTrackEnabled: asBoolean(localStorage.getItem(REPEAT_TRACK_KEY)),
+      repeatTrackMode: getStoredRepeatTrackMode(),
+      repeatTrackEnabled: getStoredRepeatTrackMode() !== "off",
       dimMode: asDimMode(localStorage.getItem(DIM_MODE_KEY)),
       noveltyMode: asDimMode(localStorage.getItem(NOVELTY_MODE_KEY))
     },
@@ -588,6 +601,7 @@ function normalizeImportedConfig(input: unknown): PolyplayConfig {
     auraColor: null,
     layoutMode: "grid",
     shuffleEnabled: false,
+    repeatTrackMode: "off",
     repeatTrackEnabled: false,
     dimMode: "normal",
     noveltyMode: "normal"
@@ -637,7 +651,12 @@ function normalizeImportedConfig(input: unknown): PolyplayConfig {
       auraColor: asAuraColor(settings.auraColor),
       layoutMode: asLayout(settings.layoutMode),
       shuffleEnabled: asBoolean(settings.shuffleEnabled),
-      repeatTrackEnabled: asBoolean(settings.repeatTrackEnabled),
+      repeatTrackMode: asRepeatTrackMode(
+        settings.repeatTrackMode ?? settings.repeatTrackEnabled
+      ),
+      repeatTrackEnabled: asRepeatTrackMode(
+        settings.repeatTrackMode ?? settings.repeatTrackEnabled
+      ) !== "off",
       dimMode: asDimMode(settings.dimMode),
       noveltyMode: asDimMode(settings.noveltyMode)
     },
@@ -673,7 +692,9 @@ export function applyImportedConfig(config: PolyplayConfig): ImportConfigSummary
   else localStorage.removeItem(AURA_COLOR_KEY);
   localStorage.setItem(LAYOUT_MODE_KEY, config.settings.layoutMode);
   localStorage.setItem(SHUFFLE_ENABLED_KEY, config.settings.shuffleEnabled ? "true" : "false");
-  localStorage.setItem(REPEAT_TRACK_KEY, config.settings.repeatTrackEnabled ? "true" : "false");
+  const repeatTrackMode = asRepeatTrackMode(config.settings.repeatTrackMode ?? config.settings.repeatTrackEnabled);
+  localStorage.setItem(REPEAT_TRACK_KEY, repeatTrackMode);
+  localStorage.setItem(LEGACY_REPEAT_TRACK_KEY, repeatTrackMode === "off" ? "false" : "true");
   localStorage.setItem(DIM_MODE_KEY, asDimMode(config.settings.dimMode));
   localStorage.setItem(NOVELTY_MODE_KEY, asDimMode(config.settings.noveltyMode));
   localStorage.setItem(HAS_IMPORTED_KEY, config.flags.hasImported ? "true" : "false");

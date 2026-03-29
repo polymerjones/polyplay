@@ -3133,11 +3133,11 @@ export default function App() {
       clearActivePlaylistDirty();
       setVaultStatus(
         saveMode === "shared"
-          ? "Vault backup ready to share."
+          ? "Vault backup ready."
           : saveMode === "save-dialog"
             ? `Saved to selected location: ${filename}.`
             : saveMode === "opened-preview"
-              ? `Backup ready for ${filename}. Use Share and Save to Files on iPhone.`
+              ? `Backup ready for ${filename}. Use iPhone save options to keep the file.`
               : `Download started for ${filename}.`,
         "success"
       );

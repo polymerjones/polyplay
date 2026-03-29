@@ -701,7 +701,6 @@ export function JournalModal({ open, onClose }: Props) {
     resetImportUiState();
     setEntries(nextEntries);
     resumeBackgroundPlayback();
-    setMiniToast(`Backup imported (${payload.entries.length} entries)`);
   };
 
   const canStartSwipeDismiss = (target: EventTarget | null, clientY: number) => {
@@ -848,9 +847,9 @@ export function JournalModal({ open, onClose }: Props) {
                       setJournalStatus({
                         message:
                           saveMode === "shared"
-                            ? "Gratitude backup ready to share."
+                            ? "Gratitude backup ready."
                             : saveMode === "opened-preview"
-                              ? "Backup ready for Share or Save to Files."
+                              ? "Backup ready. Use iPhone save options to keep the file."
                               : "Gratitude backup saved.",
                         tone: "success"
                       });
@@ -909,7 +908,6 @@ export function JournalModal({ open, onClose }: Props) {
                   });
                 } catch {
                   resumeBackgroundPlayback();
-                  setMiniToast("Import failed");
                   setJournalStatus({ message: "Gratitude backup import failed.", tone: "error" });
                 }
               })();
