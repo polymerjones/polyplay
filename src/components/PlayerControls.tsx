@@ -82,7 +82,7 @@ export function PlayerControls({
     repeatTrackMode === "off"
       ? "Enable repeat track"
       : repeatTrackMode === "loop-one"
-        ? "Enable 3PEAT repeat mode"
+        ? "Enable 3PEAT mode"
         : "Disable repeat track";
   void onVinylScratch;
   void onToggleLoopMode;
@@ -239,7 +239,7 @@ export function PlayerControls({
                 <path d="M7 22l-3-3 3-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M20 13v2a4 4 0 0 1-4 4H4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              {isRepeatActive && <span className="pc-repeat-badge">{isThreepeat ? "3" : "1"}</span>}
+              {isThreepeat && <span className="pc-repeat-badge">3</span>}
             </span>
           }
           active={isRepeatActive}

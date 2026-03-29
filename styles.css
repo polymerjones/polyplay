@@ -3617,14 +3617,13 @@ body.mute-freeze .track-backdrop {
   z-index: 3;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 3px;
 }
 
 .journalVerseBtn {
-  width: 29px;
-  height: 29px;
-  min-width: 29px;
-  border-radius: 999px;
+  width: 18px;
+  height: 31px;
+  min-width: 18px;
   border: 1px solid rgba(255, 218, 142, 0.78);
   background:
     radial-gradient(circle at 34% 30%, rgba(255, 243, 205, 0.72), transparent 38%),
@@ -3638,6 +3637,16 @@ body.mute-freeze .track-backdrop {
     0 0 0 1px rgba(255, 239, 192, 0.3) inset,
     0 0 14px rgba(255, 194, 84, 0.28);
   transition: transform 150ms ease, filter 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+  position: relative;
+}
+
+.journalVerseBtn::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-top: 2px solid rgba(92, 50, 10, 0.94);
+  border-right: 2px solid rgba(92, 50, 10, 0.94);
+  display: block;
 }
 
 .journalVerseBtn:hover {
@@ -3649,16 +3658,30 @@ body.mute-freeze .track-backdrop {
 }
 
 .journalVerseBtn--prev {
+  border-radius: 999px 0 0 999px;
   background:
     radial-gradient(circle at 26% 30%, rgba(255, 243, 205, 0.76), transparent 38%),
     linear-gradient(180deg, rgba(255, 219, 129, 0.98), rgba(244, 183, 88, 0.96));
+  justify-content: flex-end;
+  padding-right: 5px;
+}
+
+.journalVerseBtn--prev::before {
+  transform: rotate(-135deg);
 }
 
 .journalVerseBtn--next {
+  border-radius: 0 999px 999px 0;
   background:
     radial-gradient(circle at 74% 30%, rgba(255, 243, 205, 0.76), transparent 38%),
     linear-gradient(180deg, rgba(255, 219, 129, 0.98), rgba(244, 183, 88, 0.96));
   filter: brightness(1.02);
+  justify-content: flex-start;
+  padding-left: 5px;
+}
+
+.journalVerseBtn--next::before {
+  transform: rotate(45deg);
 }
 
 .journalVerseBtn:active {

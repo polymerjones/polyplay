@@ -1558,7 +1558,8 @@ body.theme-dark .rowAuraGlow {
 }
 
 .admin-track-row__main,
-.admin-track-row__title-wrap {
+.admin-track-row__title-wrap,
+.admin-track-row__title-stack {
   min-width: 0;
 }
 
@@ -1572,12 +1573,19 @@ body.theme-dark .rowAuraGlow {
   width: 100%;
 }
 
+.admin-track-row__title-stack {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  width: 100%;
+}
+
 .admin-track-row__title {
   min-width: 0;
-  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  width: 100%;
 }
 
 .admin-track-row__rename,

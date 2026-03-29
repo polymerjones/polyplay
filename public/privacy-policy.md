@@ -44,4 +44,4 @@ This Privacy Policy may be updated from time to time. The latest version will be
 
 ## Contact
 
-If you have questions about this Privacy Policy or PolyPlay Audio, contact Paul Fisher Media at paul.t.fisher03@gmail.com.
+If you have questions about this Privacy Policy or PolyPlay Audio, contact Paul Fisher Media at booking@paulfishermedia.com.

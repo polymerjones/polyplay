@@ -2825,6 +2825,7 @@ export default function App() {
       if (next === "threepeat") {
         threepeatRemainingRef.current = 3;
         fireHeavyHaptic();
+        setFxToast("3PEAT Activated");
       } else {
         threepeatRemainingRef.current = 0;
         fireLightHaptic();

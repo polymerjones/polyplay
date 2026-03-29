@@ -2543,7 +2543,7 @@ export function AdminApp() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="admin-track-row__title-wrap flex items-center gap-2">
+                  <div className="admin-track-row__title-stack">
                     <div
                       className="admin-track-row__title text-sm font-semibold text-slate-100"
                       title={trackTitleById[row.id] || row.title}
