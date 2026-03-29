@@ -2339,7 +2339,7 @@ export default function App() {
     };
   }, [currentTrackId, loopByTrack, currentLoopMode, isRepeatTrackEnabled, isShuffleEnabled, tracks, dimMode]);
 
-  const updateAura = async (trackId: string, delta: number) => {
+  const updateAura = async (trackId: string, delta: number, options?: { skipHaptic?: boolean }) => {
     let nextAuraForDb: number | null = null;
     let persistedId: string | null = null;
 
@@ -2353,7 +2353,7 @@ export default function App() {
       })
     );
 
-    if (nextAuraForDb !== null && delta > 0) {
+    if (nextAuraForDb !== null && delta > 0 && options?.skipHaptic !== true) {
       fireAuraHaptic(nextAuraForDb);
     }
 
@@ -2369,6 +2369,14 @@ export default function App() {
     window.dispatchEvent(new CustomEvent("polyplay:aura-art-hit", { detail: { trackId } }));
     if (!currentTrackId || currentTrackId !== trackId) return;
     window.dispatchEvent(new CustomEvent("polyplay:aura-trigger"));
+  };
+
+  const handleAuraUp = (trackId: string) => {
+    const targetTrack = tracks.find((track) => track.id === trackId);
+    const nextAura = clampAura((targetTrack?.aura ?? 0) + 1);
+    fireAuraHaptic(nextAura);
+    triggerAuraPulseForTrack(trackId);
+    void updateAura(trackId, 1, { skipHaptic: true });
   };
 
   const pulseAuraAfterVaultClose = () => {
@@ -3797,10 +3805,7 @@ export default function App() {
             isPlaying={isPlaying}
             layoutMode={layoutMode}
             onSelectTrack={(trackId) => playTrack(trackId, true)}
-            onAuraUp={(trackId) => {
-              triggerAuraPulseForTrack(trackId);
-              void updateAura(trackId, 1);
-            }}
+            onAuraUp={handleAuraUp}
           />
         ) : null}
       </div>
@@ -3818,8 +3823,7 @@ export default function App() {
           onNext={playNext}
           onAuraUp={() => {
             if (!currentTrackId) return;
-            triggerAuraPulseForTrack(currentTrackId);
-            void updateAura(currentTrackId, 1);
+            handleAuraUp(currentTrackId);
           }}
           onSeek={seekTo}
           onSkip={skip}
@@ -3887,8 +3891,7 @@ export default function App() {
           onClearLoop={clearLoop}
           onAuraUp={() => {
             if (!currentTrackId) return;
-            triggerAuraPulseForTrack(currentTrackId);
-            void updateAura(currentTrackId, 1);
+            handleAuraUp(currentTrackId);
           }}
           onSkip={skip}
         />

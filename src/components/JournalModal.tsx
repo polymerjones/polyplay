@@ -11,7 +11,7 @@ import {
   type GratitudeSettings,
   updateEntry
 } from "../lib/gratitude";
-import { fireLightHaptic } from "../lib/haptics";
+import { fireHeavyHaptic, fireLightHaptic, fireSuccessHaptic } from "../lib/haptics";
 import { saveTextWithBestEffort } from "../lib/saveBlob";
 
 type Props = {
@@ -49,7 +49,9 @@ const DEFAULT_JOURNAL_VERSES = [
   "I can do all things through Christ who strengthens me. — Philippians 4:13",
   "The Lord is my shepherd; I shall not want. — Psalm 23:1",
   "Let all that you do be done in love. — 1 Corinthians 16:14",
-  "Rejoice in hope, be patient in tribulation, be constant in prayer. — Romans 12:12"
+  "Rejoice in hope, be patient in tribulation, be constant in prayer. — Romans 12:12",
+  "\"Submit to God, and you will have peace; then things will go well for you.\" — Job 22:21 (NLT)",
+  "\"Humble yourselves, therefore, under God’s mighty hand, that he may lift you up in due time.\" — 1 Peter 5:6 (NIV)"
 ];
 
 type GratitudeBackupImportPayload = {
@@ -579,6 +581,7 @@ export function JournalModal({ open, onClose }: Props) {
   };
 
   const startEditingEntry = (entry: GratitudeEntry) => {
+    fireLightHaptic();
     setEditingEntryId(entry.id);
     setExpandedEntryId(entry.id);
     setIsComposerOpen(false);
@@ -628,6 +631,7 @@ export function JournalModal({ open, onClose }: Props) {
       setSavedEntryId(entryId);
       window.setTimeout(() => setSavedEntryId(null), 420);
       setMiniToast("Saved");
+      fireSuccessHaptic();
     }
     exitEditMode();
     releaseEditResolutionLock();
@@ -1050,6 +1054,7 @@ export function JournalModal({ open, onClose }: Props) {
                                 deleteEntry(entry.id);
                                 setEntries(listEntries());
                                 setMiniToast("Deleted");
+                                fireHeavyHaptic();
                               } catch {
                                 setEntries(previousEntries);
                                 setMiniToast("Delete failed");

@@ -3567,13 +3567,13 @@ body.mute-freeze .track-backdrop {
 .journalVerseCard {
   position: relative;
   overflow: visible;
-  border-radius: 14px;
+  border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: linear-gradient(140deg, rgba(25, 31, 45, 0.72), rgba(17, 23, 34, 0.62));
-  padding: 10px 11px 17px;
+  padding: 12px 13px 19px;
   color: rgba(240, 247, 255, 0.92);
   display: grid;
-  gap: 5px;
+  gap: 7px;
 }
 
 .journalVerseCard::after {
@@ -3593,7 +3593,7 @@ body.mute-freeze .track-backdrop {
 }
 
 .journalVerseCard strong {
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 0.35px;
   text-transform: uppercase;
   color: rgba(201, 227, 255, 0.82);
@@ -3601,61 +3601,62 @@ body.mute-freeze .track-backdrop {
 
 .journalVerseCard p {
   margin: 0;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.5;
-  max-width: calc(100% - 82px);
+  max-width: calc(100% - 88px);
 }
 
 .journalVerseBtnRow {
   position: absolute;
-  right: -8px;
-  bottom: -8px;
+  right: -4px;
+  bottom: -4px;
   z-index: 3;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .journalVerseBtn {
-  height: 40px;
-  min-width: 40px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 206, 121, 0.68);
-  background: linear-gradient(150deg, rgba(255, 218, 132, 0.94), rgba(245, 170, 86, 0.92));
+  height: 34px;
+  min-width: 30px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 206, 121, 0.72);
+  background: linear-gradient(150deg, rgba(255, 218, 132, 0.96), rgba(245, 170, 86, 0.94));
   color: rgba(79, 41, 5, 0.96);
   font-weight: 700;
-  font-size: 14px;
-  padding: 0 11px;
+  font-size: 13px;
+  padding: 0 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.3),
-    0 0 0 1px rgba(255, 228, 155, 0.46),
-    0 0 16px rgba(255, 195, 96, 0.38);
-  transition: transform 150ms ease, filter 160ms ease, box-shadow 160ms ease;
+    0 6px 14px rgba(0, 0, 0, 0.26),
+    0 0 0 1px rgba(255, 228, 155, 0.4),
+    0 0 12px rgba(255, 195, 96, 0.26);
+  transition: transform 150ms ease, filter 160ms ease, background-color 160ms ease;
 }
 
 .journalVerseBtn__triangle {
   line-height: 1;
   transform: translateY(-0.5px);
+  font-size: 11px;
 }
 
 .journalVerseBtn:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.05);
+  background: rgba(255, 248, 227, 0.18);
+  filter: brightness(1.03);
 }
 
 .journalVerseBtn:active {
-  transform: translateY(0);
+  background: rgba(125, 72, 10, 0.14);
+  transform: scale(0.98);
 }
 
 .journalVerseBtn:focus-visible {
   outline: none;
   box-shadow:
     0 0 0 2px rgba(255, 246, 215, 0.95),
-    0 0 0 4px rgba(255, 196, 98, 0.6),
-    0 8px 18px rgba(0, 0, 0, 0.3);
+    0 0 0 4px rgba(255, 196, 98, 0.6);
 }
 
 .journalVerseBurst {
