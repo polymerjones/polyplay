@@ -777,6 +777,7 @@ html[data-theme="light"] .mini-player-bar::before {
   grid-template-columns: 52px 1fr auto;
   gap: var(--pc-space-2);
   align-items: center;
+  touch-action: none;
 }
 
 .mini-player-bar__art {

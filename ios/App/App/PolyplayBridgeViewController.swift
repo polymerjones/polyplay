@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import Capacitor
+import PhotosUI
 import UniformTypeIdentifiers
 import UIKit
 
@@ -13,7 +14,7 @@ class PolyplayBridgeViewController: CAPBridgeViewController {
 }
 
 @objc(MediaImportPlugin)
-public class MediaImportPlugin: CAPPlugin, UIDocumentPickerDelegate {
+public class MediaImportPlugin: CAPPlugin, UIDocumentPickerDelegate, PHPickerViewControllerDelegate {
     private var activeCall: CAPPluginCall?
 
     @objc func pickAudioFile(_ call: CAPPluginCall) {
@@ -30,6 +31,26 @@ public class MediaImportPlugin: CAPPlugin, UIDocumentPickerDelegate {
             picker.delegate = self
             picker.allowsMultipleSelection = false
             picker.modalPresentationStyle = .formSheet
+
+            self.activeCall = call
+            self.bridge?.viewController?.present(picker, animated: true)
+        }
+    }
+
+    @objc func pickArtworkFile(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            if self.activeCall != nil {
+                call.reject("Picker already active.")
+                return
+            }
+
+            var configuration = PHPickerConfiguration(photoLibrary: .shared())
+            configuration.selectionLimit = 1
+            configuration.filter = .any(of: [.images, .videos])
+            configuration.preferredAssetRepresentationMode = .current
+
+            let picker = PHPickerViewController(configuration: configuration)
+            picker.delegate = self
 
             self.activeCall = call
             self.bridge?.viewController?.present(picker, animated: true)
@@ -74,6 +95,31 @@ public class MediaImportPlugin: CAPPlugin, UIDocumentPickerDelegate {
         }
     }
 
+    public func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        guard let call = activeCall else { return }
+        activeCall = nil
+        guard let result = results.first else {
+            call.resolve(["cancelled": true])
+            return
+        }
+
+        importSelectedArtworkFile(result) { imported in
+            DispatchQueue.main.async {
+                switch imported {
+                case .success(let payload):
+                    call.resolve([
+                        "cancelled": false,
+                        "path": payload.path,
+                        "name": payload.name,
+                        "mimeType": payload.mimeType
+                    ])
+                case .failure(let error):
+                    call.reject("Failed to import selected artwork.", nil, error)
+                }
+            }
+        }
+    }
+
     private func supportedAudioImportTypes() -> [UTType] {
         var types: [UTType] = [.audio, .mpeg4Movie, .quickTimeMovie, .movie]
         ["wav", "mp3", "m4a", "aac", "mp4", "mov"].forEach { ext in
@@ -84,14 +130,21 @@ public class MediaImportPlugin: CAPPlugin, UIDocumentPickerDelegate {
         return types
     }
 
-    private func copyImportedFileToTemp(_ sourceURL: URL) throws -> (path: String, name: String, mimeType: String) {
+    private func copyImportedFileToTemp(
+        _ sourceURL: URL,
+        preferredName: String? = nil
+    ) throws -> (path: String, name: String, mimeType: String) {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("polyplay-imports", isDirectory: true)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
 
-        let ext = sourceURL.pathExtension.isEmpty ? "bin" : sourceURL.pathExtension
-        let baseName = sourceURL.deletingPathExtension().lastPathComponent.isEmpty
-            ? "import"
-            : sourceURL.deletingPathExtension().lastPathComponent
+        let resolvedName = (preferredName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? preferredName!
+            : sourceURL.lastPathComponent)
+        let resolvedExtension = URL(fileURLWithPath: resolvedName).pathExtension
+        let ext = !resolvedExtension.isEmpty ? resolvedExtension : (sourceURL.pathExtension.isEmpty ? "bin" : sourceURL.pathExtension)
+        let preferredBaseName = URL(fileURLWithPath: resolvedName).deletingPathExtension().lastPathComponent
+        let sourceBaseName = sourceURL.deletingPathExtension().lastPathComponent
+        let baseName = !preferredBaseName.isEmpty ? preferredBaseName : (sourceBaseName.isEmpty ? "import" : sourceBaseName)
         let fileName = "\(UUID().uuidString)-\(baseName).\(ext)"
         let destinationURL = tempDir.appendingPathComponent(fileName)
 
@@ -100,7 +153,57 @@ public class MediaImportPlugin: CAPPlugin, UIDocumentPickerDelegate {
         }
 
         try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
-        return (path: destinationURL.path, name: sourceURL.lastPathComponent, mimeType: mimeTypeForExtension(ext.lowercased()))
+        let exportName = !resolvedName.isEmpty ? resolvedName : sourceURL.lastPathComponent
+        return (path: destinationURL.path, name: exportName, mimeType: mimeTypeForExtension(ext.lowercased()))
+    }
+
+    private func importSelectedArtworkFile(
+        _ result: PHPickerResult,
+        completion: @escaping (Result<(path: String, name: String, mimeType: String), Error>) -> Void
+    ) {
+        let provider = result.itemProvider
+        let preferredName = provider.suggestedName
+        var candidateTypes: [UTType] = [
+            .quickTimeMovie,
+            .mpeg4Movie,
+            .movie,
+            .image,
+            .png,
+            .jpeg
+        ]
+        if let webpType = UTType(filenameExtension: "webp") {
+            candidateTypes.append(webpType)
+        }
+
+        guard let chosenType = candidateTypes.first(where: { provider.hasItemConformingToTypeIdentifier($0.identifier) }) else {
+            completion(.failure(NSError(
+                domain: "MediaImportPlugin",
+                code: 4,
+                userInfo: [NSLocalizedDescriptionKey: "Unsupported artwork type."]
+            )))
+            return
+        }
+
+        provider.loadFileRepresentation(forTypeIdentifier: chosenType.identifier) { url, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            guard let sourceURL = url else {
+                completion(.failure(NSError(
+                    domain: "MediaImportPlugin",
+                    code: 5,
+                    userInfo: [NSLocalizedDescriptionKey: "Picker returned no artwork file."]
+                )))
+                return
+            }
+
+            do {
+                completion(.success(try self.copyImportedFileToTemp(sourceURL, preferredName: preferredName)))
+            } catch {
+                completion(.failure(error))
+            }
+        }
     }
 
     private func importSelectedAudioFile(
@@ -208,6 +311,12 @@ public class MediaImportPlugin: CAPPlugin, UIDocumentPickerDelegate {
             return "video/mp4"
         case "mov":
             return "video/quicktime"
+        case "jpg", "jpeg":
+            return "image/jpeg"
+        case "png":
+            return "image/png"
+        case "webp":
+            return "image/webp"
         default:
             return "application/octet-stream"
         }
