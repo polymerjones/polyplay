@@ -3,8 +3,13 @@ import type { CSSProperties } from "react";
 import { formatTime } from "../lib/time";
 import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
 import type { LoopMode, LoopRegion, RepeatTrackMode, Track } from "../types";
+import { fireLightHaptic } from "../lib/haptics";
 import { WaveformLoop } from "./WaveformLoop";
 import { PlayerControls } from "./PlayerControls";
+
+const MINI_PLAYER_SWIPE_TOGGLE_DISTANCE_PX = 96;
+const MINI_PLAYER_SWIPE_TOGGLE_MAX_SIDEWAYS_PX = 72;
+const MINI_PLAYER_SWIPE_TOGGLE_MIN_VELOCITY = 0.42;
 
 type Props = {
   track: Track | null;
@@ -83,6 +88,7 @@ export function MiniPlayerBar({
   onToggleCompact
 }: Props) {
   const artRef = useRef<HTMLButtonElement | null>(null);
+  const swipeStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
   const artStyle = track?.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
     : ({ backgroundImage: track?.artGrad || `url('${DEFAULT_ARTWORK_URL}')` } as CSSProperties);
@@ -99,6 +105,38 @@ export function MiniPlayerBar({
     art.classList.add("is-aura-flash");
   };
 
+  const beginSwipeToggle = (touch: { clientX: number; clientY: number }) => {
+    swipeStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      at: performance.now()
+    };
+  };
+
+  const endSwipeToggle = (touch: { clientX: number; clientY: number }) => {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!start) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) > MINI_PLAYER_SWIPE_TOGGLE_MAX_SIDEWAYS_PX) return;
+    const elapsedMs = Math.max(1, performance.now() - start.at);
+    const velocity = dy / elapsedMs;
+    const qualifiesForCollapse = dy >= MINI_PLAYER_SWIPE_TOGGLE_DISTANCE_PX || velocity >= MINI_PLAYER_SWIPE_TOGGLE_MIN_VELOCITY;
+    const qualifiesForExpand = dy <= -MINI_PLAYER_SWIPE_TOGGLE_DISTANCE_PX || velocity <= -MINI_PLAYER_SWIPE_TOGGLE_MIN_VELOCITY;
+    if ((!isCompact && qualifiesForCollapse) || (isCompact && qualifiesForExpand)) {
+      fireLightHaptic();
+      onToggleCompact();
+    }
+  };
+
+  const canStartSwipeToggle = (target: EventTarget | null) => {
+    const element = target as HTMLElement | null;
+    if (!element) return false;
+    if (element.closest(".mini-player-bar__art, .mini-player-bar__aura-toggle, .mini-player-bar__loop-clear")) return false;
+    return Boolean(element.closest(".mini-player-bar__meta, .mini-player-bar__compact-toggle, .mini-player-bar__header"));
+  };
+
   return (
     <section
       id="polyPlayer"
@@ -112,7 +150,28 @@ export function MiniPlayerBar({
       }
       aria-label="Mini player"
     >
-      <div className="mini-player-bar__header">
+      <div
+        className="mini-player-bar__header"
+        onTouchStart={(event) => {
+          if (event.touches.length !== 1) {
+            swipeStartRef.current = null;
+            return;
+          }
+          if (!canStartSwipeToggle(event.target)) {
+            swipeStartRef.current = null;
+            return;
+          }
+          beginSwipeToggle(event.touches[0]);
+        }}
+        onTouchEnd={(event) => {
+          const touch = event.changedTouches[0];
+          if (!touch) return;
+          endSwipeToggle(touch);
+        }}
+        onTouchCancel={() => {
+          swipeStartRef.current = null;
+        }}
+      >
         <button
           type="button"
           className={`mini-player-bar__art ${showFullscreenHintCue ? "has-fullscreen-hint" : ""}`.trim()}

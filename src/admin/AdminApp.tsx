@@ -62,7 +62,7 @@ import {
   serializeConfig
 } from "../lib/backup";
 import { fireHeavyHaptic, fireLightHaptic, fireMediumHaptic, fireSuccessHaptic } from "../lib/haptics";
-import { canUseIosNativeAudioImport, pickIosNativeAudioFile } from "../lib/iosMediaImport";
+import { canUseIosNativeAudioImport, pickIosNativeAudioFile, pickIosNativeArtworkFile } from "../lib/iosMediaImport";
 import { saveBlobWithBestEffort } from "../lib/saveBlob";
 import { titleFromFilename } from "../lib/title";
 import { Button } from "../components/button";
@@ -90,6 +90,7 @@ const THEME_PACK_AURA_COLORS: Record<"crimson" | "teal" | "amber", string> = {
 const PRIVACY_POLICY_URL = "/privacy-policy.html";
 const TERMS_AND_CONDITIONS_URL = "/terms-and-conditions.html";
 const CAN_USE_IOS_NATIVE_AUDIO_IMPORT = canUseIosNativeAudioImport();
+const CAN_USE_IOS_NATIVE_ARTWORK_IMPORT = canUseIosNativeAudioImport();
 type ThemeSelection = "dark" | "light" | "amber" | "teal" | "crimson";
 type AdminHapticTone = "success" | "heavy";
 type AdminConfirmState =
@@ -753,6 +754,19 @@ export function AdminApp() {
     setUploadArtworkFile(file);
   };
 
+  const onPickUploadArtworkNative = async (fallbackPick?: () => void) => {
+    try {
+      const file = await pickIosNativeArtworkFile();
+      if (!file) {
+        fallbackPick?.();
+        return;
+      }
+      await onPickUploadArtwork(file);
+    } catch {
+      fallbackPick?.();
+    }
+  };
+
   const onPickSelectedArtwork = async (file: File | null) => {
     if (!file) {
       setSelectedArtworkAssetFile(null);
@@ -776,6 +790,19 @@ export function AdminApp() {
       }
     }
     setSelectedArtworkAssetFile(file);
+  };
+
+  const onPickSelectedArtworkNative = async (fallbackPick?: () => void) => {
+    try {
+      const file = await pickIosNativeArtworkFile();
+      if (!file) {
+        fallbackPick?.();
+        return;
+      }
+      await onPickSelectedArtwork(file);
+    } catch {
+      fallbackPick?.();
+    }
   };
 
   const onPickSelectedAudio = (file: File | null) => {
@@ -1833,6 +1860,7 @@ export function AdminApp() {
               accept="image/*,video/mp4,video/quicktime,.mov"
               selectedFileName={uploadArt?.name}
               armed={Boolean(uploadArt)}
+              onPickRequest={CAN_USE_IOS_NATIVE_ARTWORK_IMPORT ? (fallbackPick) => void onPickUploadArtworkNative(fallbackPick) : undefined}
               onFileSelected={(file) => void onPickUploadArtwork(file)}
               disabled={!uploadAudio}
             />
@@ -1922,6 +1950,7 @@ export function AdminApp() {
                 compact
                 selectedFileName={selectedArtworkFile?.name}
                 armed={Boolean(selectedArtworkFile)}
+                onPickRequest={CAN_USE_IOS_NATIVE_ARTWORK_IMPORT ? (fallbackPick) => void onPickSelectedArtworkNative(fallbackPick) : undefined}
                 onFileSelected={(file) => void onPickSelectedArtwork(file)}
                 disabled={!hasTracks}
               />
@@ -2121,6 +2150,23 @@ export function AdminApp() {
               accept="image/*,video/mp4,video/quicktime,.mov,.jpg,.jpeg,.png,.webp"
               selectedFileName={selectedArtworkFile?.name || uploadArt?.name}
               busy={isArtworkLaneBusy}
+              onPickRequest={
+                CAN_USE_IOS_NATIVE_ARTWORK_IMPORT
+                  ? async (fallbackPick) => {
+                      try {
+                        const file = await pickIosNativeArtworkFile();
+                        if (!file) {
+                          fallbackPick();
+                          return;
+                        }
+                        setSelectedArtworkFile(file);
+                        await runArtworkLaneTransfer(file);
+                      } catch {
+                        fallbackPick();
+                      }
+                    }
+                  : undefined
+              }
               onFileSelected={async (file) => {
                 if (!file) return;
                 setSelectedArtworkFile(file);

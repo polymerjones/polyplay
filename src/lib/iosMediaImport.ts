@@ -1,5 +1,6 @@
 type MediaImportPlugin = {
   pickAudioFile: () => Promise<{ cancelled?: boolean; path?: string; name?: string; mimeType?: string }>;
+  pickArtworkFile: () => Promise<{ cancelled?: boolean; path?: string; name?: string; mimeType?: string }>;
 };
 
 type CapacitorLike = {
@@ -41,6 +42,20 @@ export async function pickIosNativeAudioFile(): Promise<File | null> {
     capacitor && typeof capacitor.convertFileSrc === "function" ? capacitor.convertFileSrc(picked.path) : picked.path;
   const response = await fetch(resolvedPath);
   if (!response.ok) throw new Error(`Failed to read imported file (${response.status}).`);
+  const blob = await response.blob();
+  return new File([blob], picked.name, { type: picked.mimeType || blob.type || "application/octet-stream" });
+}
+
+export async function pickIosNativeArtworkFile(): Promise<File | null> {
+  const plugin = getMediaImportPlugin();
+  const capacitor = getCapacitor();
+  if (!plugin) return null;
+  const picked = await plugin.pickArtworkFile();
+  if (picked.cancelled || !picked.path || !picked.name) return null;
+  const resolvedPath =
+    capacitor && typeof capacitor.convertFileSrc === "function" ? capacitor.convertFileSrc(picked.path) : picked.path;
+  const response = await fetch(resolvedPath);
+  if (!response.ok) throw new Error(`Failed to read imported artwork (${response.status}).`);
   const blob = await response.blob();
   return new File([blob], picked.name, { type: picked.mimeType || blob.type || "application/octet-stream" });
 }

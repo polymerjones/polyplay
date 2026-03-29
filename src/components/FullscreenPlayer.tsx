@@ -292,13 +292,17 @@ export function FullscreenPlayer({
     }
   };
 
-  const canStartSwipeDismiss = (target: EventTarget | null) => {
+  const canStartSwipeDismiss = (target: EventTarget | null, clientY: number) => {
     const element = target as HTMLElement | null;
     if (!element) return false;
+    if (element.closest("button, input, textarea, select, a, label")) return false;
+    if (element.closest(".player-controls, .pc-progress, .pc-row, .pc-loop-row, .pc-wave")) return false;
+    const withinMidDismissBand = typeof window !== "undefined" && clientY <= window.innerHeight * 0.72;
     return Boolean(
-      element.closest(
-        ".fullscreen-player-shell__swipe-zone, .fullscreen-player-shell__close, .fullscreen-player-shell__meta"
-      )
+      withinMidDismissBand ||
+        element.closest(
+          ".fullscreen-player-shell__swipe-zone, .fullscreen-player-shell__close, .fullscreen-player-shell__meta"
+        )
     );
   };
 
@@ -313,7 +317,7 @@ export function FullscreenPlayer({
           swipeStartRef.current = null;
           return;
         }
-        if (!canStartSwipeDismiss(event.target)) {
+        if (!canStartSwipeDismiss(event.target, event.touches[0].clientY)) {
           swipeStartRef.current = null;
           return;
         }

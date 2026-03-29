@@ -42,6 +42,9 @@ const JOURNAL_SWIPE_CLOSE_DISTANCE_PX = 128;
 const JOURNAL_SWIPE_CLOSE_MAX_SIDEWAYS_PX = 72;
 const JOURNAL_SWIPE_CLOSE_MIN_VELOCITY = 0.42;
 const JOURNAL_SWIPE_START_BAND_PX = 180;
+const JOURNAL_VERSE_SWIPE_DISTANCE_PX = 44;
+const JOURNAL_VERSE_SWIPE_MAX_VERTICAL_PX = 52;
+const JOURNAL_VERSE_SWIPE_MIN_VELOCITY = 0.3;
 
 const JOURNAL_BACKGROUNDS: JournalBackground[] = [
   { id: "1", src: "/clouds1.mov" },
@@ -227,6 +230,7 @@ export function JournalModal({ open, onClose }: Props) {
   const verseFxRafRef = useRef<number | null>(null);
   const suspendBackgroundPlaybackRef = useRef(false);
   const swipeDismissStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
+  const verseSwipeStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -505,6 +509,37 @@ export function JournalModal({ open, onClose }: Props) {
     });
     fireLightHaptic();
     triggerVerseFeedback();
+  };
+
+  const beginVerseSwipe = (touch: { clientX: number; clientY: number }, target: EventTarget | null) => {
+    const element = target as HTMLElement | null;
+    if (element?.closest("button, input, textarea, select, a, label")) {
+      verseSwipeStartRef.current = null;
+      return;
+    }
+    verseSwipeStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      at: performance.now()
+    };
+  };
+
+  const endVerseSwipe = (touch: { clientX: number; clientY: number }) => {
+    const start = verseSwipeStartRef.current;
+    verseSwipeStartRef.current = null;
+    if (!start) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dy) > JOURNAL_VERSE_SWIPE_MAX_VERTICAL_PX) return;
+    const elapsedMs = Math.max(1, performance.now() - start.at);
+    const velocityX = dx / elapsedMs;
+    if (dx <= -JOURNAL_VERSE_SWIPE_DISTANCE_PX || velocityX <= -JOURNAL_VERSE_SWIPE_MIN_VELOCITY) {
+      cycleVerse(1);
+      return;
+    }
+    if (dx >= JOURNAL_VERSE_SWIPE_DISTANCE_PX || velocityX >= JOURNAL_VERSE_SWIPE_MIN_VELOCITY) {
+      cycleVerse(-1);
+    }
   };
 
   const filteredEntries = useMemo(() => {
@@ -925,7 +960,24 @@ export function JournalModal({ open, onClose }: Props) {
             </div>
           )}
           <div className="journalControlRow">
-            <div className={`journalVerseCard ${verseFxActive ? "is-verse-flash" : ""}`.trim()}>
+            <div
+              className={`journalVerseCard ${verseFxActive ? "is-verse-flash" : ""}`.trim()}
+              onTouchStart={(event) => {
+                if (event.touches.length !== 1) {
+                  verseSwipeStartRef.current = null;
+                  return;
+                }
+                beginVerseSwipe(event.touches[0], event.target);
+              }}
+              onTouchEnd={(event) => {
+                const touch = event.changedTouches[0];
+                if (!touch) return;
+                endVerseSwipe(touch);
+              }}
+              onTouchCancel={() => {
+                verseSwipeStartRef.current = null;
+              }}
+            >
               <strong>Verse</strong>
               <p>{currentVerse}</p>
               {verseFxActive && (
