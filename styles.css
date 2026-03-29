@@ -3618,7 +3618,7 @@ body.mute-freeze .track-backdrop {
   z-index: 3;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
 }
 
 .journalVerseBtn {

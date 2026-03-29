@@ -130,6 +130,14 @@ export function MiniPlayerBar({
     }
   };
 
+  const shouldPreventSwipeScroll = (touch: { clientX: number; clientY: number }) => {
+    const start = swipeStartRef.current;
+    if (!start) return false;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    return Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx);
+  };
+
   const canStartSwipeToggle = (target: EventTarget | null) => {
     const element = target as HTMLElement | null;
     if (!element) return false;
@@ -167,6 +175,13 @@ export function MiniPlayerBar({
           const touch = event.changedTouches[0];
           if (!touch) return;
           endSwipeToggle(touch);
+        }}
+        onTouchMove={(event) => {
+          const touch = event.touches[0];
+          if (!touch) return;
+          if (shouldPreventSwipeScroll(touch)) {
+            event.preventDefault();
+          }
         }}
         onTouchCancel={() => {
           swipeStartRef.current = null;
