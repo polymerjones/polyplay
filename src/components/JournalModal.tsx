@@ -491,6 +491,15 @@ export function JournalModal({ open, onClose }: Props) {
     }, 520);
   };
 
+  const cycleVerse = (delta: -1 | 1) => {
+    setVerseIndex((prev) => {
+      const safeLength = Math.max(1, verses.length);
+      return (prev + delta + safeLength) % safeLength;
+    });
+    fireLightHaptic();
+    triggerVerseFeedback();
+  };
+
   const filteredEntries = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return entries;
@@ -862,22 +871,24 @@ export function JournalModal({ open, onClose }: Props) {
                   <span className="journalVerseSpark journalVerseSpark--4" />
                 </div>
               )}
-              <button
-                type="button"
-                className="journalVerseBtn"
-                aria-label="Next verse"
-                onClick={() => {
-                  setVerseIndex((prev) => (prev + 1) % Math.max(1, verses.length));
-                  fireLightHaptic();
-                  triggerVerseFeedback();
-                }}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="12" cy="12" r="4.2" />
-                  <path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.4 5.4l2.2 2.2M16.4 16.4l2.2 2.2M18.6 5.4l-2.2 2.2M7.6 16.4l-2.2 2.2" />
-                </svg>
-                <span>Verse</span>
-              </button>
+              <div className="journalVerseBtnRow">
+                <button
+                  type="button"
+                  className="journalVerseBtn journalVerseBtn--prev"
+                  aria-label="Previous verse"
+                  onClick={() => cycleVerse(-1)}
+                >
+                  <span className="journalVerseBtn__triangle" aria-hidden="true">◀</span>
+                </button>
+                <button
+                  type="button"
+                  className="journalVerseBtn journalVerseBtn--next"
+                  aria-label="Next verse"
+                  onClick={() => cycleVerse(1)}
+                >
+                  <span className="journalVerseBtn__triangle" aria-hidden="true">▶</span>
+                </button>
+              </div>
             </div>
             <div className="journalPrimaryActionWrap">
               <button

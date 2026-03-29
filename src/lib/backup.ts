@@ -17,6 +17,7 @@ import {
   type LibraryState,
   type TrackRecord
 } from "./storage/library";
+import { isConstrainedMobileDevice } from "./platform";
 
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const THEME_MODE_KEY = "polyplay_themeMode";
@@ -31,7 +32,8 @@ const LOOP_REGION_KEY = "polyplay_loopByTrack";
 const LOOP_MODE_KEY = "polyplay_loopModeByTrack";
 
 const BACKUP_ROOT = "polyplay-backup";
-const BACKUP_CAP_BYTES = 250 * 1024 * 1024;
+const BACKUP_CAP_BYTES_MOBILE = 512 * 1024 * 1024;
+const BACKUP_CAP_BYTES_DESKTOP = 1024 * 1024 * 1024;
 export const MIN_FULL_BACKUP_USER_TRACKS = 1;
 const FULL_BACKUP_VERSION = 1;
 const POLYPLAYLIST_ROOT = "polyplaylist";
@@ -243,6 +245,33 @@ export class BackupSizeError extends Error {
     this.estimatedBytes = estimatedBytes;
     this.capBytes = capBytes;
   }
+}
+
+export function formatByteCount(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const decimals = value >= 100 || unitIndex === 0 ? 0 : value >= 10 ? 1 : 2;
+  return `${value.toFixed(decimals)} ${units[unitIndex]}`;
+}
+
+export function getBackupCapBytes(): number {
+  let capBytes = isConstrainedMobileDevice() ? BACKUP_CAP_BYTES_MOBILE : BACKUP_CAP_BYTES_DESKTOP;
+  try {
+    const deviceMemory = Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 0);
+    if (Number.isFinite(deviceMemory) && deviceMemory > 0) {
+      if (deviceMemory <= 2) capBytes = Math.min(capBytes, 384 * 1024 * 1024);
+      else if (deviceMemory <= 4) capBytes = Math.min(capBytes, 768 * 1024 * 1024);
+    }
+  } catch {
+    // Ignore capability detection failures and keep the platform fallback.
+  }
+  return capBytes;
 }
 
 function clampAura(value: number): number {
@@ -1265,8 +1294,9 @@ export async function exportFullBackup(
 
   const estimatedBytes =
     mediaBytes + jsonEntries.reduce((sum, entry) => sum + entry.bytes.length, 0) + 1024 * Math.max(1, mediaEntries.length);
-  if (estimatedBytes > BACKUP_CAP_BYTES) {
-    throw new BackupSizeError(estimatedBytes, BACKUP_CAP_BYTES);
+  const capBytes = getBackupCapBytes();
+  if (estimatedBytes > capBytes) {
+    throw new BackupSizeError(estimatedBytes, capBytes);
   }
 
   onProgress?.({ done: 0, total: 1, label: "Building zip archive…" });
@@ -1381,8 +1411,9 @@ export async function exportPolyplaylist(
   };
 
   const estimatedBytes = mediaBytes + manifestEntry.bytes.length + 1024 * Math.max(1, mediaEntries.length);
-  if (estimatedBytes > BACKUP_CAP_BYTES) {
-    throw new BackupSizeError(estimatedBytes, BACKUP_CAP_BYTES);
+  const capBytes = getBackupCapBytes();
+  if (estimatedBytes > capBytes) {
+    throw new BackupSizeError(estimatedBytes, capBytes);
   }
 
   onProgress?.({ done: 0, total: 1, label: "Building polyplaylist archive…" });

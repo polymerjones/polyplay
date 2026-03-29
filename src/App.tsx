@@ -15,8 +15,10 @@ import { SplashOverlay } from "./components/SplashOverlay";
 import { TrackGrid } from "./components/TrackGrid";
 import { getAllTracksFromDb, hardResetLibraryInDb, saveAuraToDb } from "./lib/db";
 import {
+  BackupSizeError,
   countNonDemoTracksForFullBackup,
   exportFullBackup,
+  formatByteCount,
   getFullBackupFilename,
   MIN_FULL_BACKUP_USER_TRACKS,
   importFullBackup
@@ -766,6 +768,9 @@ export default function App() {
       if (current === null && isFirstPlaylistInTracklessOnboardingState) return "upload-track";
       return current;
     });
+    if (isFirstPlaylistInTracklessOnboardingState || quickTourPhase === "create-playlist") {
+      fireSuccessHaptic();
+    }
     window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
     await refreshTracks();
   };
@@ -2389,22 +2394,7 @@ export default function App() {
     if (trackId === currentTrackId) {
       if (autoPlay && canPlay) {
         if (audio && audio.paused) {
-          const effectiveDuration = getSafeDuration(duration) || getSafeDuration(audio.duration);
-          if (effectiveDuration > 0 && audio.currentTime >= Math.max(0, effectiveDuration - 0.05)) {
-            audio.currentTime = 0;
-            setCurrentTime(0);
-          }
-          logAudioDebug("play() called", { reason: "same-track" });
-          void audio
-            .play()
-            .then(() => {
-              logAudioDebug("play() resolved", { reason: "same-track" });
-              setIsPlaying(true);
-            })
-            .catch((error) => {
-              logAudioDebug("play() rejected", { reason: "same-track", error: String(error) });
-              setIsPlaying(false);
-            });
+          void resumeCurrentTrackPlayback("same-track");
         }
       }
       return;
@@ -2432,44 +2422,146 @@ export default function App() {
     if (nextId) playTrack(nextId, true);
   };
 
+  const resumeCurrentTrackPlayback = async (reason: "toggle-play" | "same-track" | "remote-play") => {
+    const audio = audioRef.current;
+    if (!audio || !currentTrack?.audioUrl) return;
+    try {
+      await ensurePlaybackGainRouting(true);
+      const fallbackResumeTime = Number.isFinite(audio.currentTime) && audio.currentTime >= 0 ? audio.currentTime : currentTime;
+      const effectiveDuration = getSafeDuration(duration) || getSafeDuration(audio.duration);
+      if (effectiveDuration > 0 && fallbackResumeTime >= Math.max(0, effectiveDuration - 0.05)) {
+        audio.currentTime = 0;
+        setCurrentTime(0);
+      }
+
+      if (audioSrcRef.current !== currentTrack.audioUrl) {
+        logAudioDebug("resume:src-repair", { reason, expectedSrc: currentTrack.audioUrl, actualSrc: audioSrcRef.current });
+        audio.pause();
+        audio.src = currentTrack.audioUrl;
+        audioSrcRef.current = currentTrack.audioUrl;
+        audio.load();
+      } else if (!audio.currentSrc || audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        logAudioDebug("resume:load-refresh", {
+          reason,
+          readyState: audio.readyState,
+          networkState: audio.networkState,
+          currentSrc: audio.currentSrc
+        });
+        audio.load();
+      }
+
+      logAudioDebug("play() called", { reason, readyState: audio.readyState });
+      await audio.play();
+      logAudioDebug("play() resolved", { reason });
+      setIsPlaying(true);
+      return;
+    } catch (error) {
+      logAudioDebug("play() rejected", { reason, error: String(error) });
+    }
+
+    if (!isIOS) {
+      setIsPlaying(false);
+      return;
+    }
+
+    try {
+      const resumeTime = Number.isFinite(audio.currentTime) && audio.currentTime >= 0 ? audio.currentTime : currentTime;
+      logAudioDebug("resume:ios-recovery", {
+        reason,
+        readyState: audio.readyState,
+        networkState: audio.networkState,
+        resumeTime
+      });
+      audio.pause();
+      audio.src = currentTrack.audioUrl;
+      audioSrcRef.current = currentTrack.audioUrl;
+      audio.load();
+
+      await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const cleanup = () => {
+          audio.removeEventListener("loadedmetadata", onReady);
+          audio.removeEventListener("canplay", onReady);
+          audio.removeEventListener("error", onError);
+          window.clearTimeout(timeoutId);
+        };
+        const onReady = () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve();
+        };
+        const onError = () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(new Error("audio-reload-failed"));
+        };
+        const timeoutId = window.setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(new Error("audio-reload-timeout"));
+        }, 1800);
+        audio.addEventListener("loadedmetadata", onReady);
+        audio.addEventListener("canplay", onReady);
+        audio.addEventListener("error", onError);
+      });
+
+      const recoveredDuration = getSafeDuration(audio.duration) || getSafeDuration(duration);
+      if (resumeTime > 0 && recoveredDuration > 0) {
+        const safeResumeTime = Math.max(0, Math.min(recoveredDuration - 0.05, resumeTime));
+        if (safeResumeTime > 0) {
+          try {
+            audio.currentTime = safeResumeTime;
+            commitUiCurrentTime(safeResumeTime, { force: true });
+          } catch {
+            // Ignore transient seek failures during iOS resume recovery.
+          }
+        }
+      }
+
+      logAudioDebug("play() called", { reason: `${reason}-recovery`, readyState: audio.readyState });
+      await audio.play();
+      logAudioDebug("play() resolved", { reason: `${reason}-recovery` });
+      setIsPlaying(true);
+    } catch (recoveryError) {
+      logAudioDebug("play() rejected", { reason: `${reason}-recovery`, error: String(recoveryError) });
+      setIsPlaying(false);
+    }
+  };
+
+  const pauseCurrentTrackPlayback = (reason: "toggle-pause" | "remote-pause") => {
+    const audio = audioRef.current;
+    if (!audio || audio.paused) return;
+    commitUiCurrentTime(Number.isFinite(audio.currentTime) ? Math.max(0, audio.currentTime) : currentTime, { force: true });
+    logAudioDebug("pause() called", { reason });
+    audio.pause();
+  };
+
   const togglePlayPause = async () => {
     const audio = audioRef.current;
     if (!audio || !currentTrack?.audioUrl) return;
     dismissOpenState();
 
     if (audio.paused) {
-      try {
-        await ensurePlaybackGainRouting(true);
-        const effectiveDuration = getSafeDuration(duration) || getSafeDuration(audio.duration);
-        if (effectiveDuration > 0 && audio.currentTime >= Math.max(0, effectiveDuration - 0.05)) {
-          audio.currentTime = 0;
-          setCurrentTime(0);
-        }
-        logAudioDebug("play() called", { reason: "toggle-play" });
-        await audio.play();
-        logAudioDebug("play() resolved", { reason: "toggle-play" });
-      } catch {
-        logAudioDebug("play() rejected", { reason: "toggle-play" });
-        setIsPlaying(false);
-      }
+      await resumeCurrentTrackPlayback("toggle-play");
     } else {
-      audio.pause();
+      pauseCurrentTrackPlayback("toggle-pause");
     }
   };
 
   const resumeCurrentTrack = () => {
     const audio = audioRef.current;
     if (!audio || !audio.paused) return;
-    void togglePlayPause();
+    void resumeCurrentTrackPlayback("remote-play");
   };
 
   useEffect(() => {
     const cleanupMediaSession = bindMediaSessionTransportActions({
       onPlay: resumeCurrentTrack,
       onPause: () => {
-        const audio = audioRef.current;
-        if (!audio || audio.paused) return;
-        audio.pause();
+        pauseCurrentTrackPlayback("remote-pause");
       },
       onTogglePlayPause: () => {
         void togglePlayPause();
@@ -2490,9 +2582,7 @@ export default function App() {
           void togglePlayPause();
           break;
         case "pause": {
-          const audio = audioRef.current;
-          if (!audio || audio.paused) return;
-          audio.pause();
+          pauseCurrentTrackPlayback("remote-pause");
           break;
         }
         case "previousTrack":
@@ -3110,7 +3200,14 @@ export default function App() {
           // Ignore close failures.
         }
       }
-      setVaultStatus(`Save Universe failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+      if (error instanceof BackupSizeError) {
+        setVaultStatus(
+          `Save Universe failed: backup estimate ${formatByteCount(error.estimatedBytes)} exceeds this device's export limit of ${formatByteCount(error.capBytes)}.`,
+          "error"
+        );
+      } else {
+        setVaultStatus(`Save Universe failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+      }
       schedulePlaybackResync("vault-save-return");
       return false;
     }
@@ -3631,6 +3728,7 @@ export default function App() {
                   }`.trim()}
                   onClick={(event) => {
                     if (shouldShowNewPlaylistHint) {
+                      fireLightHaptic();
                       triggerOnboardingSparkle(event);
                       markNewPlaylistHintSeen();
                     }
@@ -3671,7 +3769,10 @@ export default function App() {
         {!hasOnboarded && !isEmptyWelcomeDismissed && (!hasTracks || isInitialDemoFirstRunState) && (
           <EmptyLibraryWelcome
             phase={welcomePhase}
-            onStartQuickTour={() => setQuickTourPhase("create-playlist")}
+            onStartQuickTour={() => {
+              fireLightHaptic();
+              setQuickTourPhase("create-playlist");
+            }}
             onUploadFirstTrack={() => openUploadPanel()}
             onPrimaryButtonClick={triggerOnboardingSparkle}
             primaryButtonLabel={welcomePhase === "pre-tour" ? "Start Quick Tour" : "Import your first track"}

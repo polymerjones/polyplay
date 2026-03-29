@@ -52,6 +52,7 @@ import {
   buildConfigSnapshot,
   exportFullBackup,
   exportPolyplaylist,
+  formatByteCount,
   getConfigExportFilename,
   getFullBackupFilename,
   getPolyplaylistFilename,
@@ -139,6 +140,11 @@ function formatTrackOptionLabel(track: DbTrackRecord): string {
     .join(", ");
   const suffix = missing ? ` • ${truncateMiddle(missing, 18)}` : "";
   return `${title} (#${shortId})${suffix}`;
+}
+
+function formatTrackStorageLabel(row: TrackStorageRow): string {
+  const fallback = `Track ${row.id.slice(0, 8)}`;
+  return truncateMiddle(row.title?.trim() || fallback, 44);
 }
 
 function isVideoArtwork(file: File | null): boolean {
@@ -240,6 +246,7 @@ export function AdminApp() {
   const [isArtworkLaneBusy, setIsArtworkLaneBusy] = useState(false);
   const [laneToast, setLaneToast] = useState<string | null>(null);
   const [uploadSuccessNotice, setUploadSuccessNotice] = useState<string | null>(null);
+  const [importNotice, setImportNotice] = useState<string | null>(null);
 
   const [selectedRemoveTrackId, setSelectedRemoveTrackId] = useState<string>("");
   const [gratitudeSettings, setGratitudeSettings] = useState<GratitudeSettings>(DEFAULT_GRATITUDE_SETTINGS);
@@ -301,6 +308,7 @@ export function AdminApp() {
   const nukeTimerRef = useRef<number | null>(null);
   const nukeGenerationRef = useRef(0);
   const uploadSuccessNoticeTimeoutRef = useRef<number | null>(null);
+  const importNoticeTimeoutRef = useRef<number | null>(null);
   const settingsHeroSwipeStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
   const manageStorageRef = useRef<HTMLElement | null>(null);
   const importConfigInputRef = useRef<HTMLInputElement | null>(null);
@@ -537,6 +545,10 @@ export function AdminApp() {
         window.clearTimeout(uploadSuccessNoticeTimeoutRef.current);
         uploadSuccessNoticeTimeoutRef.current = null;
       }
+      if (importNoticeTimeoutRef.current !== null) {
+        window.clearTimeout(importNoticeTimeoutRef.current);
+        importNoticeTimeoutRef.current = null;
+      }
     };
   }, [selectedArtPreviewUrl, uploadArtPreviewUrl]);
 
@@ -609,6 +621,7 @@ export function AdminApp() {
   };
 
   const showSuccessNotice = (message: string) => {
+    setImportNotice(null);
     setUploadSuccessNotice(message);
     if (uploadSuccessNoticeTimeoutRef.current !== null) {
       window.clearTimeout(uploadSuccessNoticeTimeoutRef.current);
@@ -617,6 +630,34 @@ export function AdminApp() {
       setUploadSuccessNotice(null);
       uploadSuccessNoticeTimeoutRef.current = null;
     }, 2600);
+  };
+
+  const showImportNotice = (message: string) => {
+    setUploadSuccessNotice(null);
+    setImportNotice(message);
+    if (importNoticeTimeoutRef.current !== null) {
+      window.clearTimeout(importNoticeTimeoutRef.current);
+      importNoticeTimeoutRef.current = null;
+    }
+  };
+
+  const clearImportNotice = () => {
+    setImportNotice(null);
+    if (importNoticeTimeoutRef.current !== null) {
+      window.clearTimeout(importNoticeTimeoutRef.current);
+      importNoticeTimeoutRef.current = null;
+    }
+  };
+
+  const dismissEditingFocus = () => {
+    try {
+      const active = document.activeElement;
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
+        active.blur();
+      }
+    } catch {
+      // Ignore focus-management failures.
+    }
   };
 
   const requestParentHaptic = (tone: AdminHapticTone) => {
@@ -898,6 +939,7 @@ export function AdminApp() {
 
   const onUpload = async (event: FormEvent) => {
     event.preventDefault();
+    dismissEditingFocus();
     if (!isSupportedTrackFile(uploadAudio)) {
       setStatus("Select a track file (.wav, .mp3, .m4a, .mp4, or .mov).");
       return;
@@ -913,6 +955,7 @@ export function AdminApp() {
 
     const derivedTitle = uploadTitle.trim() || titleFromFilename(uploadAudio.name);
     setStatus("Importing...");
+    showImportNotice("IMPORTING TRACK...");
 
     try {
       const artwork = await buildArtworkPayload(uploadArt, uploadArtPosterBlob, uploadArtFrameTime);
@@ -943,6 +986,7 @@ export function AdminApp() {
       await refreshStorage();
       await notifyUploadSuccess();
     } catch (error) {
+      clearImportNotice();
       if (isStorageCapError(error)) {
         setInfoModal({
           title: "Storage Almost Full",
@@ -1358,7 +1402,7 @@ export function AdminApp() {
       if (error instanceof BackupSizeError) {
         setInfoModal({
           title: "Backup Too Large",
-          message: `Backup estimate exceeds 250MB (${formatBytes(error.estimatedBytes)}). Remove tracks or use Export Config.`
+          message: `Backup estimate ${formatByteCount(error.estimatedBytes)} exceeds this device's export limit of ${formatByteCount(error.capBytes)}. Remove large media or use Export Config.`
         });
       } else {
         setStatus(`Full backup export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -1641,6 +1685,13 @@ export function AdminApp() {
       {uploadSuccessNotice && (
         <div className="admin-upload-success-toast" role="status" aria-live="polite">
           {uploadSuccessNotice}
+        </div>
+      )}
+      {importNotice && (
+        <div className="admin-import-toast" role="status" aria-live="polite">
+          <div className="admin-import-toast__eyebrow">PolyPlay Import</div>
+          <div className="admin-import-toast__title">{importNotice}</div>
+          <div className="admin-import-toast__sub">Please keep this window open while media is being stored.</div>
         </div>
       )}
       <header
@@ -2463,7 +2514,9 @@ export function AdminApp() {
                   </div>
                 ) : (
                   <div className="admin-track-row__title-wrap flex items-center gap-2">
-                    <div className="admin-track-row__title truncate text-sm font-semibold text-slate-100">{row.title}</div>
+                    <div className="admin-track-row__title text-sm font-semibold text-slate-100" title={row.title}>
+                      {formatTrackStorageLabel(row)}
+                    </div>
                     <button
                       type="button"
                       className="admin-track-row__rename inline-flex h-7 items-center gap-1 rounded-md border border-slate-300/20 bg-slate-800/70 px-2 text-xs font-semibold text-slate-100"

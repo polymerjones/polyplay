@@ -629,3 +629,35 @@
 
 **How to avoid this later:**
 - State-dependent tactile feedback should be centralized in the state-change path, not duplicated across individual buttons.
+
+---
+
+### 36. iPhone import title field kept the keyboard open after Enter-based submit
+**Status:** Fixed
+
+**Problem:**
+- On iPhone, when the user typed a track title and pressed Enter/Return on the keyboard, the import submitted but the keyboard/text-edit session stayed active instead of dismissing cleanly.
+
+**Repro:**
+- Open `Import Track` on iPhone.
+- Pick an audio source.
+- Type a title in the title field.
+- Press Enter/Return on the iPhone keyboard.
+- Observe that import runs, but the title field remains focused and the keyboard stays up.
+
+**Root cause:**
+- The form submit path was executing import logic without explicitly blurring the active text field first.
+- On iOS, form submission alone did not guarantee the input lost focus.
+
+**What the code was doing before:**
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) submitted the import form directly from the Enter path, but did not force the focused input to blur before import.
+
+**What we tried:**
+- Added a small focus-management helper that blurs the active input/textarea before import runs.
+
+**Final fix:**
+- [`src/admin/AdminApp.tsx`](/Users/paulfisher/Polyplay/src/admin/AdminApp.tsx) now calls `dismissEditingFocus()` at the start of the import submit path.
+- Result: iPhone keyboard should dismiss cleanly when Enter/Return is used to submit the import.
+
+**How to avoid this later:**
+- On iOS, if a form is submitted from an active text field and the next UX state no longer needs text entry, blur the field explicitly instead of assuming submit will dismiss the keyboard.

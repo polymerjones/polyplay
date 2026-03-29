@@ -1566,9 +1566,18 @@ body.theme-dark .rowAuraGlow {
   flex: 1 1 280px;
 }
 
+.admin-track-row__title-wrap {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
 .admin-track-row__title {
   min-width: 0;
   flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .admin-track-row__rename,
