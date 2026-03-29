@@ -2,7 +2,7 @@ import { useRef } from "react";
 import type { CSSProperties } from "react";
 import { formatTime } from "../lib/time";
 import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
-import type { LoopMode, LoopRegion, Track } from "../types";
+import type { LoopMode, LoopRegion, RepeatTrackMode, Track } from "../types";
 import { WaveformLoop } from "./WaveformLoop";
 import { PlayerControls } from "./PlayerControls";
 
@@ -23,7 +23,7 @@ type Props = {
   onSeek: (seconds: number) => void;
   onSkip: (delta: number) => void;
   shuffleEnabled: boolean;
-  repeatTrackEnabled: boolean;
+  repeatTrackMode: RepeatTrackMode;
   onToggleShuffle: () => void;
   onToggleRepeatTrack: () => void;
   onCycleDimMode: () => void;
@@ -64,7 +64,7 @@ export function MiniPlayerBar({
   onSeek,
   onSkip,
   shuffleEnabled,
-  repeatTrackEnabled,
+  repeatTrackMode,
   onToggleShuffle,
   onToggleRepeatTrack,
   onCycleDimMode,
@@ -178,7 +178,7 @@ export function MiniPlayerBar({
         onNext={onNext}
         onSeek={onSeek}
         shuffleEnabled={shuffleEnabled}
-        repeatTrackEnabled={repeatTrackEnabled}
+        repeatTrackMode={repeatTrackMode}
         onToggleShuffle={onToggleShuffle}
         onToggleRepeatTrack={onToggleRepeatTrack}
         onCycleDimMode={onCycleDimMode}

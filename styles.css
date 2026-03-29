@@ -78,6 +78,7 @@ html[data-theme="custom"] {
   --color-accent: #cf6f82;
   --aura-rgb: 207, 111, 130;
   --glow-intensity: 1.08;
+  --bg-line-rgb: 207, 111, 130;
 }
 
 html[data-theme="custom"][data-theme-slot="crimson"] {
@@ -87,6 +88,7 @@ html[data-theme="custom"][data-theme-slot="crimson"] {
   --color-accent: #cf6f82;
   --aura-rgb: 207, 111, 130;
   --glow-intensity: 1.2;
+  --bg-line-rgb: 207, 111, 130;
 }
 
 html[data-theme="custom"][data-theme-slot="teal"] {
@@ -96,6 +98,7 @@ html[data-theme="custom"][data-theme-slot="teal"] {
   --color-accent: #42c7c4;
   --aura-rgb: 66, 199, 196;
   --glow-intensity: 1.22;
+  --bg-line-rgb: 66, 199, 196;
 }
 
 html[data-theme="custom"][data-theme-slot="amber"] {
@@ -105,6 +108,7 @@ html[data-theme="custom"][data-theme-slot="amber"] {
   --color-accent: #f0b35b;
   --aura-rgb: 240, 179, 91;
   --glow-intensity: 1.24;
+  --bg-line-rgb: 240, 179, 91;
 }
 
 * {
@@ -148,10 +152,10 @@ body::before {
   pointer-events: none;
   opacity: 0.35;
   background:
-    radial-gradient(circle at 20% 20%, rgba(160, 90, 220, 0.18) 0 25px, transparent 26px),
-    radial-gradient(circle at 70% 30%, rgba(160, 90, 220, 0.18) 0 22px, transparent 23px),
-    radial-gradient(circle at 40% 70%, rgba(160, 90, 220, 0.18) 0 28px, transparent 29px),
-    repeating-radial-gradient(circle, rgba(160, 90, 220, 0.18) 0 1px, transparent 1px 6px);
+    radial-gradient(circle at 20% 20%, rgba(var(--bg-line-rgb, 160, 90, 220), 0.18) 0 25px, transparent 26px),
+    radial-gradient(circle at 70% 30%, rgba(var(--bg-line-rgb, 160, 90, 220), 0.18) 0 22px, transparent 23px),
+    radial-gradient(circle at 40% 70%, rgba(var(--bg-line-rgb, 160, 90, 220), 0.18) 0 28px, transparent 29px),
+    repeating-radial-gradient(circle, rgba(var(--bg-line-rgb, 160, 90, 220), 0.18) 0 1px, transparent 1px 6px);
   background-size: 320px 320px, 280px 280px, 360px 360px, 240px 240px;
   animation: vinyl-spin 24s linear infinite;
 }
@@ -3613,43 +3617,53 @@ body.mute-freeze .track-backdrop {
   z-index: 3;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
 
 .journalVerseBtn {
-  height: 34px;
-  min-width: 30px;
+  width: 29px;
+  height: 29px;
+  min-width: 29px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 206, 121, 0.72);
-  background: linear-gradient(150deg, rgba(255, 218, 132, 0.96), rgba(245, 170, 86, 0.94));
-  color: rgba(79, 41, 5, 0.96);
-  font-weight: 700;
-  font-size: 13px;
-  padding: 0 8px;
+  border: 1px solid rgba(255, 218, 142, 0.78);
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 243, 205, 0.72), transparent 38%),
+    linear-gradient(180deg, rgba(255, 219, 129, 0.98), rgba(244, 183, 88, 0.96));
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-shadow:
-    0 6px 14px rgba(0, 0, 0, 0.26),
-    0 0 0 1px rgba(255, 228, 155, 0.4),
-    0 0 12px rgba(255, 195, 96, 0.26);
-  transition: transform 150ms ease, filter 160ms ease, background-color 160ms ease;
-}
-
-.journalVerseBtn__triangle {
-  line-height: 1;
-  transform: translateY(-0.5px);
-  font-size: 11px;
+    0 6px 14px rgba(0, 0, 0, 0.24),
+    0 0 0 1px rgba(255, 239, 192, 0.3) inset,
+    0 0 14px rgba(255, 194, 84, 0.28);
+  transition: transform 150ms ease, filter 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
 }
 
 .journalVerseBtn:hover {
-  background: rgba(255, 248, 227, 0.18);
-  filter: brightness(1.03);
+  filter: brightness(1.04);
+  box-shadow:
+    0 6px 14px rgba(0, 0, 0, 0.24),
+    0 0 0 1px rgba(255, 239, 192, 0.34) inset,
+    0 0 18px rgba(255, 194, 84, 0.34);
+}
+
+.journalVerseBtn--prev {
+  background:
+    radial-gradient(circle at 26% 30%, rgba(255, 243, 205, 0.76), transparent 38%),
+    linear-gradient(180deg, rgba(255, 219, 129, 0.98), rgba(244, 183, 88, 0.96));
+}
+
+.journalVerseBtn--next {
+  background:
+    radial-gradient(circle at 74% 30%, rgba(255, 243, 205, 0.76), transparent 38%),
+    linear-gradient(180deg, rgba(255, 219, 129, 0.98), rgba(244, 183, 88, 0.96));
+  filter: brightness(1.02);
 }
 
 .journalVerseBtn:active {
-  background: rgba(125, 72, 10, 0.14);
-  transform: scale(0.98);
+  background: rgba(125, 72, 10, 0.12);
+  transform: scale(0.985);
 }
 
 .journalVerseBtn:focus-visible {

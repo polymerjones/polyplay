@@ -53,15 +53,15 @@ import {
 import { fireAuraHaptic, fireHeavyHaptic, fireLightHaptic, fireSuccessHaptic } from "./lib/haptics";
 import { bindMediaSessionTransportActions, syncMediaSessionItem, syncMediaSessionPlaybackState } from "./lib/mediaSession";
 import { revokeAllMediaUrls } from "./lib/player/media";
-import { isDesktopSafari } from "./lib/platform";
 import {
   createPlaylistInLibrary,
   ensureActivePlaylist,
   getVisibleTracksFromLibrary,
   setActivePlaylistInLibrary
 } from "./lib/playlistState";
+import { saveBlobWithBestEffort } from "./lib/saveBlob";
 import type { LibraryState } from "./lib/storage/library";
-import type { LoopMode, LoopRegion, Track } from "./types";
+import type { LoopMode, LoopRegion, RepeatTrackMode, Track } from "./types";
 import type { AmbientFxMode, AmbientFxQuality } from "./fx/ambientFxEngine";
 
 type DimMode = "normal" | "dim" | "mute";
@@ -94,7 +94,7 @@ const THEME_MODE_KEY = "polyplay_themeMode";
 const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
 const AURA_COLOR_KEY = "polyplay_auraColor_v1";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
-const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
+const REPEAT_TRACK_KEY = "polyplay_repeatTrackMode";
 const DIM_MODE_KEY = "polyplay_dimMode_v1";
 const NOVELTY_MODE_KEY = "polyplay_noveltyMode_v1";
 const LOOP_REGION_KEY = "polyplay_loopByTrack";
@@ -288,6 +288,22 @@ function getAdjacentTrackId(
   return tracks[safeIndex]?.id ?? null;
 }
 
+function parseRepeatTrackMode(raw: string | null): RepeatTrackMode {
+  if (raw === "threepeat") return "threepeat";
+  if (raw === "loop-one" || raw === "true") return "loop-one";
+  return "off";
+}
+
+function getStoredRepeatTrackMode(): RepeatTrackMode {
+  try {
+    const next = localStorage.getItem(REPEAT_TRACK_KEY);
+    if (next !== null) return parseRepeatTrackMode(next);
+    return parseRepeatTrackMode(localStorage.getItem("polyplay_repeatTrackEnabled"));
+  } catch {
+    return "off";
+  }
+}
+
 export default function App() {
   const VAULT_SWIPE_CLOSE_DISTANCE_PX = 140;
   const VAULT_SWIPE_CLOSE_MAX_SIDEWAYS_PX = 72;
@@ -347,6 +363,7 @@ export default function App() {
     return "auto";
   });
   const [fxToast, setFxToast] = useState<string | null>(null);
+  const [allTracksCatalog, setAllTracksCatalog] = useState<Track[]>([]);
   const [isPageVisible, setIsPageVisible] = useState<boolean>(() =>
     typeof document === "undefined" ? true : !document.hidden
   );
@@ -355,7 +372,7 @@ export default function App() {
     return window.matchMedia("(min-width: 900px)").matches;
   });
   const [isShuffleEnabled, setIsShuffleEnabled] = useState(false);
-  const [isRepeatTrackEnabled, setIsRepeatTrackEnabled] = useState(false);
+  const [repeatTrackMode, setRepeatTrackMode] = useState<RepeatTrackMode>(() => getStoredRepeatTrackMode());
   const [dimMode, setDimMode] = useState<DimMode>("normal");
   const [noveltyMode, setNoveltyMode] = useState<DimMode>("normal");
   const [showOpenState, setShowOpenState] = useState(false);
@@ -516,6 +533,8 @@ export default function App() {
   const lastUiCurrentTimeCommitAtRef = useRef(0);
   const lastUiCurrentTimeValueRef = useRef(0);
   const currentTrackIdRef = useRef<string | null>(null);
+  const allTracksRef = useRef<Track[]>([]);
+  const threepeatRemainingRef = useRef(0);
   const nowPlayingItemSyncSeqRef = useRef(0);
   const lastNowPlayingPlaybackSyncRef = useRef<{
     trackId: string | null;
@@ -634,7 +653,7 @@ export default function App() {
       }
       setAuraColor(normalizeAuraColor(localStorage.getItem(AURA_COLOR_KEY)));
       setIsShuffleEnabled(localStorage.getItem(SHUFFLE_ENABLED_KEY) === "true");
-      setIsRepeatTrackEnabled(localStorage.getItem(REPEAT_TRACK_KEY) === "true");
+      setRepeatTrackMode(getStoredRepeatTrackMode());
       const savedDimMode = localStorage.getItem(DIM_MODE_KEY);
       if (savedDimMode === "normal" || savedDimMode === "dim" || savedDimMode === "mute") {
         setDimMode(normalizeDimModeForPlatform(savedDimMode, isIOS));
@@ -677,6 +696,8 @@ export default function App() {
       acc[track.id] = track;
       return acc;
     }, {});
+    allTracksRef.current = allTracks;
+    setAllTracksCatalog(allTracks);
     let loaded = getVisibleTracksFromLibrary(librarySnapshot, allTracksById);
     if (loaded.length === 0 && allTracks.length > 0) {
       // Recovery path: only correct invalid active playlist pointers.
@@ -721,8 +742,10 @@ export default function App() {
     }
     void refreshVaultInspector();
     setCurrentTrackId((prev) => {
-      if (prev && loaded.some((track) => track.id === prev)) return prev;
-      if (prev && !loaded.some((track) => track.id === prev)) {
+      if (prev && allTracksById[prev]) {
+        return prev;
+      }
+      if (prev) {
         teardownCurrentAudio();
       }
       return loaded[0]?.id ?? null;
@@ -1022,12 +1045,6 @@ export default function App() {
     };
   }, []);
 
-  const isStandalonePwa = () => {
-    if (typeof window === "undefined") return false;
-    const nav = navigator as Navigator & { standalone?: boolean };
-    return Boolean(nav.standalone) || (typeof window.matchMedia === "function" && window.matchMedia("(display-mode: standalone)").matches);
-  };
-
   const setVaultStatus = (message: string, tone: VaultToastTone = "info") => {
     if (vaultToastTimeoutRef.current !== null) {
       window.clearTimeout(vaultToastTimeoutRef.current);
@@ -1317,7 +1334,7 @@ export default function App() {
   useEffect(() => {
     try {
       setIsShuffleEnabled(localStorage.getItem(SHUFFLE_ENABLED_KEY) === "true");
-      setIsRepeatTrackEnabled(localStorage.getItem(REPEAT_TRACK_KEY) === "true");
+      setRepeatTrackMode(getStoredRepeatTrackMode());
       const savedDimMode = localStorage.getItem(DIM_MODE_KEY);
       if (savedDimMode === "normal" || savedDimMode === "dim" || savedDimMode === "mute") {
         setDimMode(normalizeDimModeForPlatform(savedDimMode, isIOS));
@@ -1541,7 +1558,8 @@ export default function App() {
         setAuraColor(null);
         setLayoutMode("grid");
         setIsShuffleEnabled(false);
-        setIsRepeatTrackEnabled(false);
+        setRepeatTrackMode("off");
+        threepeatRemainingRef.current = 0;
         setDimMode("normal");
         setNoveltyMode("normal");
         setLoopByTrack({});
@@ -1614,8 +1632,8 @@ export default function App() {
   }, [gratitudeSettings, isNuking, isSplashDismissing, showSplash]);
 
   const currentTrack = useMemo(
-    () => tracks.find((track) => track.id === currentTrackId) ?? null,
-    [tracks, currentTrackId]
+    () => allTracksCatalog.find((track) => track.id === currentTrackId) ?? null,
+    [allTracksCatalog, currentTrackId]
   );
   const hasTracks = tracks.length > 0;
   const isInitialDemoFirstRunState = useMemo(() => {
@@ -2277,12 +2295,29 @@ export default function App() {
         void audio.play().catch(() => setIsPlaying(false));
         return;
       }
-      if (isRepeatTrackEnabled && currentLoopMode === "off") {
+      if (repeatTrackMode === "loop-one" && currentLoopMode === "off") {
         audio.currentTime = 0;
         setCurrentTime(0);
         applyDimMode(audio, dimMode);
         void audio.play().catch(() => setIsPlaying(false));
         return;
+      }
+      if (repeatTrackMode === "threepeat" && currentLoopMode === "off") {
+        if (threepeatRemainingRef.current > 0) {
+          threepeatRemainingRef.current -= 1;
+          audio.currentTime = 0;
+          setCurrentTime(0);
+          applyDimMode(audio, dimMode);
+          void audio.play().catch(() => setIsPlaying(false));
+          return;
+        }
+        setRepeatTrackMode("off");
+        threepeatRemainingRef.current = 0;
+        try {
+          localStorage.setItem(REPEAT_TRACK_KEY, "off");
+        } catch {
+          // Ignore localStorage failures.
+        }
       }
       if (isShuffleEnabled) {
         const nextId = pickAuraWeightedTrack(
@@ -2337,7 +2372,7 @@ export default function App() {
       }
       detachListeners();
     };
-  }, [currentTrackId, loopByTrack, currentLoopMode, isRepeatTrackEnabled, isShuffleEnabled, tracks, dimMode]);
+  }, [currentTrackId, loopByTrack, currentLoopMode, repeatTrackMode, isShuffleEnabled, tracks, dimMode]);
 
   const updateAura = async (trackId: string, delta: number, options?: { skipHaptic?: boolean }) => {
     let nextAuraForDb: number | null = null;
@@ -2392,7 +2427,7 @@ export default function App() {
   const playTrack = (trackId: string, autoPlay = true) => {
     logAudioDebug("playTrack() called", { trackId, autoPlay });
     dismissOpenState();
-    const selectedTrack = tracks.find((track) => track.id === trackId) ?? null;
+    const selectedTrack = allTracksRef.current.find((track) => track.id === trackId) ?? null;
     const canPlay = Boolean(selectedTrack?.audioUrl) && !selectedTrack?.missingAudio;
     if (autoPlay && canPlay) {
       void ensurePlaybackGainRouting(true);
@@ -2406,6 +2441,16 @@ export default function App() {
         }
       }
       return;
+    }
+
+    if (repeatTrackMode === "threepeat") {
+      setRepeatTrackMode("off");
+      threepeatRemainingRef.current = 0;
+      try {
+        localStorage.setItem(REPEAT_TRACK_KEY, "off");
+      } catch {
+        // Ignore localStorage failures.
+      }
     }
 
     teardownCurrentAudio();
@@ -2775,10 +2820,17 @@ export default function App() {
   };
 
   const toggleRepeatTrack = () => {
-    setIsRepeatTrackEnabled((prev) => {
-      const next = !prev;
+    setRepeatTrackMode((prev) => {
+      const next: RepeatTrackMode = prev === "off" ? "loop-one" : prev === "loop-one" ? "threepeat" : "off";
+      if (next === "threepeat") {
+        threepeatRemainingRef.current = 3;
+        fireHeavyHaptic();
+      } else {
+        threepeatRemainingRef.current = 0;
+        fireLightHaptic();
+      }
       try {
-        localStorage.setItem(REPEAT_TRACK_KEY, next ? "true" : "false");
+        localStorage.setItem(REPEAT_TRACK_KEY, next);
       } catch {
         // Ignore localStorage failures.
       }
@@ -2817,6 +2869,7 @@ export default function App() {
       }
       return next;
     });
+    setFxToast("Vibe switch.");
   };
 
   const setThemeModeExplicit = (nextSelection: ThemeSelection, event?: MouseEvent<HTMLButtonElement>) => {
@@ -3050,117 +3103,7 @@ export default function App() {
     });
   };
 
-  const downloadBlobFile = (blob: Blob, filename: string) => {
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-  };
-
-  const openBlobPreview = (blob: Blob, filename: string, targetWindow?: Window | null) => {
-    const previewFile = typeof File !== "undefined" ? new File([blob], filename, { type: blob.type || "application/zip" }) : blob;
-    const url = URL.createObjectURL(previewFile);
-    if (targetWindow && !targetWindow.closed) {
-      try {
-        targetWindow.location.href = url;
-      } catch {
-        targetWindow = null;
-      }
-    }
-    if (!targetWindow) {
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.target = "_blank";
-      anchor.rel = "noopener noreferrer";
-      anchor.setAttribute("aria-label", `Open preview for ${filename}`);
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-    }
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  };
-
-  const openPendingPreviewWindow = () => {
-    if (!(isIOS || isStandalonePwa())) return null;
-    try {
-      const previewWindow = window.open("", "_blank");
-      if (!previewWindow) return null;
-      previewWindow.document.title = "Preparing backup";
-      previewWindow.document.body.innerHTML =
-        '<div style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;padding:24px;line-height:1.45;color:#111;background:#f6f1e8;">Preparing backup…</div>';
-      return previewWindow;
-    } catch {
-      return null;
-    }
-  };
-
-  const saveBlobWithBestEffort = async (
-    blob: Blob,
-    filename: string,
-    options?: { accept?: Record<string, string[]>; description?: string; previewWindow?: Window | null }
-  ): Promise<"shared" | "save-dialog" | "downloaded" | "opened-preview"> => {
-    const nav = navigator as Navigator & {
-      canShare?: (data: { files?: File[] }) => boolean;
-      share?: (data: { title?: string; text?: string; files?: File[] }) => Promise<void>;
-    };
-    if (!isDesktopSafari() && typeof nav.share === "function" && typeof File !== "undefined") {
-      try {
-        const file = new File([blob], filename, { type: blob.type || "application/zip" });
-        if (!nav.canShare || nav.canShare({ files: [file] })) {
-          await nav.share({ title: filename, files: [file] });
-          return "shared";
-        }
-      } catch {
-        // Share canceled/unsupported in this context; continue with picker/download fallback.
-      }
-    }
-
-    const pickerHost = window as typeof window & {
-      showSaveFilePicker?: (options: {
-        suggestedName?: string;
-        types?: Array<{ description?: string; accept: Record<string, string[]> }>;
-      }) => Promise<{
-        createWritable: () => Promise<{
-          write: (data: Blob) => Promise<void>;
-          close: () => Promise<void>;
-        }>;
-      }>;
-    };
-
-    if (typeof pickerHost.showSaveFilePicker === "function") {
-      try {
-        const handle = await pickerHost.showSaveFilePicker({
-          suggestedName: filename,
-          types: [
-            {
-              description: options?.description || "PolyPlay Backup",
-              accept: options?.accept || { "application/octet-stream": [".zip"] }
-            }
-          ]
-        });
-        const writable = await handle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        return "save-dialog";
-      } catch {
-        // User cancelled or picker unsupported in this context; use browser download fallback.
-      }
-    }
-
-    if (isIOS || isStandalonePwa()) {
-      openBlobPreview(blob, filename, options?.previewWindow);
-      return "opened-preview";
-    }
-
-    downloadBlobFile(blob, filename);
-    return "downloaded";
-  };
-
-  const saveUniverseBackup = async (previewWindow?: Window | null): Promise<boolean> => {
+  const saveUniverseBackup = async (): Promise<boolean> => {
     try {
       const library = await getLibrary();
       const nonDemoTrackCount = countNonDemoTracksForFullBackup(library);
@@ -3176,8 +3119,7 @@ export default function App() {
       const filename = getFullBackupFilename();
       const saveMode = await saveBlobWithBestEffort(payload.blob, filename, {
         description: "PolyPlay Universe Backup",
-        accept: { "application/zip": [".zip"] },
-        previewWindow
+        accept: { "application/zip": [".zip"] }
       });
       const stamp = new Date().toISOString();
       setLastExportedAt(stamp);
@@ -3201,13 +3143,6 @@ export default function App() {
       schedulePlaybackResync("vault-save-return");
       return true;
     } catch (error) {
-      if (previewWindow && !previewWindow.closed) {
-        try {
-          previewWindow.close();
-        } catch {
-          // Ignore close failures.
-        }
-      }
       if (error instanceof BackupSizeError) {
         setVaultStatus(
           `Save Universe failed: backup estimate ${formatByteCount(error.estimatedBytes)} exceeds this device's export limit of ${formatByteCount(error.capBytes)}.`,
@@ -3828,7 +3763,7 @@ export default function App() {
           onSeek={seekTo}
           onSkip={skip}
           shuffleEnabled={isShuffleEnabled}
-          repeatTrackEnabled={isRepeatTrackEnabled}
+          repeatTrackMode={repeatTrackMode}
           dimMode={dimMode}
           dimControlSkipsSoftDim={isIOS}
           noveltyMode={noveltyMode}
@@ -3874,7 +3809,7 @@ export default function App() {
           onNext={playNext}
           onSeek={seekTo}
           shuffleEnabled={isShuffleEnabled}
-          repeatTrackEnabled={isRepeatTrackEnabled}
+          repeatTrackMode={repeatTrackMode}
           dimMode={dimMode}
           dimControlSkipsSoftDim={isIOS}
           noveltyMode={noveltyMode}
@@ -4053,8 +3988,7 @@ export default function App() {
                   type="button"
                   className="vault-btn vault-btn--primary"
                   onClick={() => {
-                    const previewWindow = openPendingPreviewWindow();
-                    void saveUniverseBackup(previewWindow);
+                    void saveUniverseBackup();
                   }}
                 >
                   Export Full Backup

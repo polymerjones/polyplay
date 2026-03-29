@@ -1,4 +1,4 @@
-import type { LoopMode } from "../types";
+import type { LoopMode, RepeatTrackMode } from "../types";
 import { useEffect, useRef, useState } from "react";
 import { formatTime } from "../lib/time";
 import { TransportIconButton } from "./TransportIconButton";
@@ -18,7 +18,7 @@ type Props = {
   onNext: () => void;
   onSeek: (seconds: number) => void;
   shuffleEnabled: boolean;
-  repeatTrackEnabled: boolean;
+  repeatTrackMode: RepeatTrackMode;
   onToggleShuffle: () => void;
   onToggleRepeatTrack: () => void;
   onCycleDimMode: () => void;
@@ -53,7 +53,7 @@ export function PlayerControls({
   onNext,
   onSeek,
   shuffleEnabled,
-  repeatTrackEnabled,
+  repeatTrackMode,
   onToggleShuffle,
   onToggleRepeatTrack,
   onCycleDimMode,
@@ -76,6 +76,14 @@ export function PlayerControls({
   const safeDuration = Math.max(0, duration || 0);
   const safeCurrent = clampTime(currentTime, safeDuration);
   const isMuteOnlyDimControl = dimControlSkipsSoftDim;
+  const isRepeatActive = repeatTrackMode !== "off";
+  const isThreepeat = repeatTrackMode === "threepeat";
+  const repeatAriaLabel =
+    repeatTrackMode === "off"
+      ? "Enable repeat track"
+      : repeatTrackMode === "loop-one"
+        ? "Enable 3PEAT repeat mode"
+        : "Disable repeat track";
   void onVinylScratch;
   void onToggleLoopMode;
 
@@ -224,17 +232,21 @@ export function PlayerControls({
         </button>
         <TransportIconButton
           icon={
-            <svg className="pc-repeat-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M17 2l3 3-3 3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M4 11V9a4 4 0 0 1 4-4h12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M7 22l-3-3 3-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M20 13v2a4 4 0 0 1-4 4H4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <span className="pc-repeat-wrap" aria-hidden="true">
+              <svg className="pc-repeat-icon" viewBox="0 0 24 24">
+                <path d="M17 2l3 3-3 3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M4 11V9a4 4 0 0 1 4-4h12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M7 22l-3-3 3-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M20 13v2a4 4 0 0 1-4 4H4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {isRepeatActive && <span className="pc-repeat-badge">{isThreepeat ? "3" : "1"}</span>}
+            </span>
           }
-          active={repeatTrackEnabled}
+          active={isRepeatActive}
           onClick={() => onToggleRepeatTrack()}
-          ariaLabel={repeatTrackEnabled ? "Disable repeat track" : "Enable repeat track"}
+          ariaLabel={repeatAriaLabel}
           size="sm"
+          className={isThreepeat ? "pc-transport-btn--repeat-threepeat" : ""}
         />
         <button
           type="button"

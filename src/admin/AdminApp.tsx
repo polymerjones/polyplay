@@ -61,7 +61,7 @@ import {
   parseConfigImportText,
   serializeConfig
 } from "../lib/backup";
-import { fireHeavyHaptic, fireSuccessHaptic } from "../lib/haptics";
+import { fireHeavyHaptic, fireLightHaptic, fireMediumHaptic, fireSuccessHaptic } from "../lib/haptics";
 import { canUseIosNativeAudioImport, pickIosNativeAudioFile } from "../lib/iosMediaImport";
 import { saveBlobWithBestEffort } from "../lib/saveBlob";
 import { titleFromFilename } from "../lib/title";
@@ -77,7 +77,7 @@ const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
 const AURA_COLOR_KEY = "polyplay_auraColor_v1";
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
-const REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
+const REPEAT_TRACK_KEY = "polyplay_repeatTrackMode";
 const DIM_MODE_KEY = "polyplay_dimMode_v1";
 const CURRENT_TRACK_ID_KEY = "polyplay_currentTrackId_v1";
 const LOOP_REGION_KEY = "polyplay_loopByTrack";
@@ -142,9 +142,9 @@ function formatTrackOptionLabel(track: DbTrackRecord): string {
   return `${title} (#${shortId})${suffix}`;
 }
 
-function formatTrackStorageLabel(row: TrackStorageRow): string {
+function formatTrackStorageLabel(row: TrackStorageRow, preferredTitle?: string | null): string {
   const fallback = `Track ${row.id.slice(0, 8)}`;
-  return truncateMiddle(row.title?.trim() || fallback, 44);
+  return truncateMiddle(preferredTitle?.trim() || row.title?.trim() || fallback, 44);
 }
 
 function isVideoArtwork(file: File | null): boolean {
@@ -330,6 +330,14 @@ export function AdminApp() {
 
   const trackOptions = useMemo(
     () => tracks.map((track) => ({ value: String(track.id), label: formatTrackOptionLabel(track) })),
+    [tracks]
+  );
+  const trackTitleById = useMemo(
+    () =>
+      tracks.reduce<Record<string, string>>((acc, track) => {
+        acc[track.id] = track.title?.trim() || "";
+        return acc;
+      }, {}),
     [tracks]
   );
 
@@ -1165,6 +1173,8 @@ export function AdminApp() {
     setNukeCountdownMs(2000);
     setIsNukePromptOpen(true);
     setStatus("Nuke armed. Abort within 2 seconds.");
+    fireLightHaptic();
+    requestParentHaptic("success");
   };
 
   const abortNuke = () => {
@@ -1182,6 +1192,7 @@ export function AdminApp() {
     if (!isNukePromptOpen) return;
     const generation = nukeGenerationRef.current;
     const startedAt = Date.now();
+    let lastBucket = -1;
     nukeTimerRef.current = window.setInterval(() => {
       if (generation !== nukeGenerationRef.current) {
         if (nukeTimerRef.current !== null) {
@@ -1192,6 +1203,21 @@ export function AdminApp() {
       }
       const remaining = Math.max(0, 2000 - (Date.now() - startedAt));
       setNukeCountdownMs(remaining);
+      const bucket =
+        remaining <= 0 ? 5 : remaining <= 180 ? 4 : remaining <= 420 ? 3 : remaining <= 800 ? 2 : remaining <= 1300 ? 1 : 0;
+      if (bucket > lastBucket) {
+        lastBucket = bucket;
+        if (bucket >= 4) {
+          fireHeavyHaptic();
+          requestParentHaptic("heavy");
+        } else if (bucket >= 2) {
+          fireMediumHaptic();
+          requestParentHaptic("success");
+        } else if (bucket >= 1) {
+          fireLightHaptic();
+          requestParentHaptic("success");
+        }
+      }
       if (remaining <= 0) {
         if (nukeTimerRef.current !== null) {
           window.clearInterval(nukeTimerRef.current);
@@ -1211,6 +1237,10 @@ export function AdminApp() {
   }, [isNukePromptOpen]);
 
   const onFactoryReset = async () => {
+    fireHeavyHaptic();
+    requestParentHaptic("heavy");
+    fireLightHaptic();
+    requestParentHaptic("success");
     if (!window.confirm("Factory Reset will delete all playlists and tracks, and reset onboarding. Continue?")) return;
     setStatus("Running factory reset...");
     try {
@@ -1221,7 +1251,7 @@ export function AdminApp() {
       localStorage.removeItem(AURA_COLOR_KEY);
       localStorage.setItem(LAYOUT_MODE_KEY, "grid");
       localStorage.setItem(SHUFFLE_ENABLED_KEY, "false");
-      localStorage.setItem(REPEAT_TRACK_KEY, "false");
+      localStorage.setItem(REPEAT_TRACK_KEY, "off");
       localStorage.setItem(DIM_MODE_KEY, "normal");
       localStorage.removeItem(LOOP_REGION_KEY);
       localStorage.removeItem(LOOP_MODE_KEY);
@@ -2514,15 +2544,18 @@ export function AdminApp() {
                   </div>
                 ) : (
                   <div className="admin-track-row__title-wrap flex items-center gap-2">
-                    <div className="admin-track-row__title text-sm font-semibold text-slate-100" title={row.title}>
-                      {formatTrackStorageLabel(row)}
+                    <div
+                      className="admin-track-row__title text-sm font-semibold text-slate-100"
+                      title={trackTitleById[row.id] || row.title}
+                    >
+                      {formatTrackStorageLabel(row, trackTitleById[row.id])}
                     </div>
                     <button
                       type="button"
                       className="admin-track-row__rename inline-flex h-7 items-center gap-1 rounded-md border border-slate-300/20 bg-slate-800/70 px-2 text-xs font-semibold text-slate-100"
                       title="Rename"
-                      aria-label={`Rename ${row.title}`}
-                      onClick={() => onStartTrackRename(row.id, row.title)}
+                      aria-label={`Rename ${trackTitleById[row.id] || row.title}`}
+                      onClick={() => onStartTrackRename(row.id, trackTitleById[row.id] || row.title)}
                     >
                       <span aria-hidden="true">✎</span>
                       Rename
@@ -2540,7 +2573,7 @@ export function AdminApp() {
                   setConfirmState({
                     kind: "remove-track",
                     trackId: row.id,
-                    message: `Remove "${row.title}" to free storage?`
+                    message: `Remove "${trackTitleById[row.id] || row.title}" to free storage?`
                   });
                 }}
               >

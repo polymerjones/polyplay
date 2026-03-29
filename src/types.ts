@@ -28,3 +28,5 @@ export type LoopRegion = {
 };
 
 export type LoopMode = "off" | "track" | "region";
+
+export type RepeatTrackMode = "off" | "loop-one" | "threepeat";

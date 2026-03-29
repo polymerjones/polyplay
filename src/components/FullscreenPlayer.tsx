@@ -4,7 +4,7 @@ import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
 import { buildPeaksFromAudioBlob, fallbackPeaks } from "../lib/artwork/waveformArtwork";
 import { fireLightHaptic } from "../lib/haptics";
 import { formatTime } from "../lib/time";
-import type { LoopMode, LoopRegion, Track } from "../types";
+import type { LoopMode, LoopRegion, RepeatTrackMode, Track } from "../types";
 import { PlayerControls } from "./PlayerControls";
 import { WaveformLoop } from "./WaveformLoop";
 
@@ -24,7 +24,7 @@ type Props = {
   onNext: () => void;
   onSeek: (seconds: number) => void;
   shuffleEnabled: boolean;
-  repeatTrackEnabled: boolean;
+  repeatTrackMode: RepeatTrackMode;
   onToggleShuffle: () => void;
   onToggleRepeatTrack: () => void;
   onCycleDimMode: () => void;
@@ -61,7 +61,7 @@ export function FullscreenPlayer({
   onNext,
   onSeek,
   shuffleEnabled,
-  repeatTrackEnabled,
+  repeatTrackMode,
   onToggleShuffle,
   onToggleRepeatTrack,
   onCycleDimMode,
@@ -292,6 +292,16 @@ export function FullscreenPlayer({
     }
   };
 
+  const canStartSwipeDismiss = (target: EventTarget | null) => {
+    const element = target as HTMLElement | null;
+    if (!element) return false;
+    return Boolean(
+      element.closest(
+        ".fullscreen-player-shell__swipe-zone, .fullscreen-player-shell__close, .fullscreen-player-shell__meta"
+      )
+    );
+  };
+
   return (
     <section
       className="fullscreen-player-shell"
@@ -300,6 +310,10 @@ export function FullscreenPlayer({
       aria-label="Fullscreen player"
       onTouchStart={(event) => {
         if (event.touches.length !== 1) {
+          swipeStartRef.current = null;
+          return;
+        }
+        if (!canStartSwipeDismiss(event.target)) {
           swipeStartRef.current = null;
           return;
         }
@@ -325,6 +339,7 @@ export function FullscreenPlayer({
       </button>
 
       <div className="fullscreen-player-shell__content">
+        <div className="fullscreen-player-shell__swipe-zone" aria-hidden="true" />
         <div
           className={`fullscreen-player-shell__art ${hasArtworkVideo ? "has-video" : ""}`}
           ref={artRef}
@@ -372,7 +387,7 @@ export function FullscreenPlayer({
           onNext={onNext}
           onSeek={onSeek}
           shuffleEnabled={shuffleEnabled}
-          repeatTrackEnabled={repeatTrackEnabled}
+          repeatTrackMode={repeatTrackMode}
           onToggleShuffle={onToggleShuffle}
           onToggleRepeatTrack={onToggleRepeatTrack}
           onCycleDimMode={onCycleDimMode}

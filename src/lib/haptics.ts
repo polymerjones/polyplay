@@ -22,6 +22,12 @@ export function fireHeavyHaptic(): void {
   });
 }
 
+export function fireMediumHaptic(): void {
+  void Haptics.impact({ style: ImpactStyle.Medium }).catch(() => {
+    fallbackVibrate(18);
+  });
+}
+
 export function fireAuraHaptic(level: number): void {
   const clamped = Math.max(0, Math.min(10, Math.round(level)));
   if (clamped >= 8) {

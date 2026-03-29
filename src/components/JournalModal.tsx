@@ -38,6 +38,10 @@ const JOURNAL_VERSE_INDEX_KEY = "polyplay_journalVerseIndex_v1";
 const JOURNAL_LOOP_START_SEC = 0.08;
 const JOURNAL_LOOP_END_GUARD_SEC = 0.06;
 const JOURNAL_EDGE_CLOSE_PX = 56;
+const JOURNAL_SWIPE_CLOSE_DISTANCE_PX = 128;
+const JOURNAL_SWIPE_CLOSE_MAX_SIDEWAYS_PX = 72;
+const JOURNAL_SWIPE_CLOSE_MIN_VELOCITY = 0.42;
+const JOURNAL_SWIPE_START_BAND_PX = 180;
 
 const JOURNAL_BACKGROUNDS: JournalBackground[] = [
   { id: "1", src: "/clouds1.mov" },
@@ -222,6 +226,7 @@ export function JournalModal({ open, onClose }: Props) {
   const verseFxTimerRef = useRef<number | null>(null);
   const verseFxRafRef = useRef<number | null>(null);
   const suspendBackgroundPlaybackRef = useRef(false);
+  const swipeDismissStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -664,6 +669,44 @@ export function JournalModal({ open, onClose }: Props) {
     setMiniToast(`Backup imported (${payload.entries.length} entries)`);
   };
 
+  const canStartSwipeDismiss = (target: EventTarget | null, clientY: number) => {
+    const element = target as HTMLElement | null;
+    const card = cardRef.current;
+    if (!element || !card) return false;
+    if (editingEntryId !== null || isComposerOpen || pendingImportPayload !== null) return false;
+    if (element.closest("button, input, textarea, select, a, label")) return false;
+    const cardTop = card.getBoundingClientRect().top;
+    return clientY <= cardTop + JOURNAL_SWIPE_START_BAND_PX;
+  };
+
+  const beginSwipeDismiss = (touch: { clientX: number; clientY: number }, target: EventTarget | null) => {
+    if (!canStartSwipeDismiss(target, touch.clientY)) {
+      swipeDismissStartRef.current = null;
+      return;
+    }
+    swipeDismissStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      at: performance.now()
+    };
+  };
+
+  const endSwipeDismiss = (touch: { clientX: number; clientY: number }) => {
+    const start = swipeDismissStartRef.current;
+    swipeDismissStartRef.current = null;
+    if (!start) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (dy <= 0) return;
+    if (Math.abs(dx) > JOURNAL_SWIPE_CLOSE_MAX_SIDEWAYS_PX) return;
+    const elapsedMs = Math.max(1, performance.now() - start.at);
+    const velocity = dy / elapsedMs;
+    if (dy >= JOURNAL_SWIPE_CLOSE_DISTANCE_PX || velocity >= JOURNAL_SWIPE_CLOSE_MIN_VELOCITY) {
+      fireLightHaptic();
+      onClose();
+    }
+  };
+
   return (
     <section
       className="journal-modal journalScene"
@@ -728,7 +771,25 @@ export function JournalModal({ open, onClose }: Props) {
         </div>
       )}
       <div className="journalUI">
-        <div className={`journal-modal__card journalGlassPanel ${isWritingActive ? "is-writing" : ""}`.trim()} ref={cardRef}>
+        <div
+          className={`journal-modal__card journalGlassPanel ${isWritingActive ? "is-writing" : ""}`.trim()}
+          ref={cardRef}
+          onTouchStart={(event) => {
+            if (event.touches.length !== 1) {
+              swipeDismissStartRef.current = null;
+              return;
+            }
+            beginSwipeDismiss(event.touches[0], event.target);
+          }}
+          onTouchEnd={(event) => {
+            const touch = event.changedTouches[0];
+            if (!touch) return;
+            endSwipeDismiss(touch);
+          }}
+          onTouchCancel={() => {
+            swipeDismissStartRef.current = null;
+          }}
+        >
           <div className="journalRim" aria-hidden="true" />
           <div className="journal-modal__head">
             <h3>Gratitude Journal</h3>
@@ -881,17 +942,13 @@ export function JournalModal({ open, onClose }: Props) {
                   className="journalVerseBtn journalVerseBtn--prev"
                   aria-label="Previous verse"
                   onClick={() => cycleVerse(-1)}
-                >
-                  <span className="journalVerseBtn__triangle" aria-hidden="true">◀</span>
-                </button>
+                />
                 <button
                   type="button"
                   className="journalVerseBtn journalVerseBtn--next"
                   aria-label="Next verse"
                   onClick={() => cycleVerse(1)}
-                >
-                  <span className="journalVerseBtn__triangle" aria-hidden="true">▶</span>
-                </button>
+                />
               </div>
             </div>
             <div className="journalPrimaryActionWrap">
