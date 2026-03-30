@@ -2847,8 +2847,9 @@ export default function App() {
       markActivePlaylistDirty();
       return;
     }
-    const safeStart = 0;
-    const safeEnd = effectiveDuration;
+    const margin = Math.max(0, Math.min(effectiveDuration * 0.15, effectiveDuration / 2 - 0.05));
+    const safeStart = Math.max(0, Math.min(effectiveDuration - 0.1, margin));
+    const safeEnd = Math.min(effectiveDuration, Math.max(safeStart + 0.1, effectiveDuration - margin));
     setLoopByTrack((prev) => ({
       ...prev,
       [currentTrackId]: { start: safeStart, end: safeEnd, active: true, editing: false }
