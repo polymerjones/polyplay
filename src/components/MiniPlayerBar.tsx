@@ -29,6 +29,8 @@ type Props = {
   onSkip: (delta: number) => void;
   shuffleEnabled: boolean;
   repeatTrackMode: RepeatTrackMode;
+  threepeatDisplayCount: number;
+  repeatFlashTick: number;
   onToggleShuffle: () => void;
   onToggleRepeatTrack: () => void;
   onCycleDimMode: () => void;
@@ -43,6 +45,8 @@ type Props = {
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
   onClearLoop: () => void;
+  canCropAudio?: boolean;
+  onOpenCropAudioPrompt?: () => void;
   onOpenFullscreen: () => void;
   showFullscreenHintCue: boolean;
   showCompactHintCue: boolean;
@@ -70,6 +74,8 @@ export function MiniPlayerBar({
   onSkip,
   shuffleEnabled,
   repeatTrackMode,
+  threepeatDisplayCount,
+  repeatFlashTick,
   onToggleShuffle,
   onToggleRepeatTrack,
   onCycleDimMode,
@@ -79,6 +85,8 @@ export function MiniPlayerBar({
   onSetLoop,
   onToggleLoopMode,
   onClearLoop,
+  canCropAudio = false,
+  onOpenCropAudioPrompt,
   onOpenFullscreen,
   showFullscreenHintCue,
   showCompactHintCue,
@@ -253,6 +261,8 @@ export function MiniPlayerBar({
         onSeek={onSeek}
         shuffleEnabled={shuffleEnabled}
         repeatTrackMode={repeatTrackMode}
+        threepeatDisplayCount={threepeatDisplayCount}
+        repeatFlashTick={repeatFlashTick}
         onToggleShuffle={onToggleShuffle}
         onToggleRepeatTrack={onToggleRepeatTrack}
         onCycleDimMode={onCycleDimMode}
@@ -263,6 +273,8 @@ export function MiniPlayerBar({
         onSetLoop={onSetLoop}
         onToggleLoopMode={onToggleLoopMode}
         onClearLoop={onClearLoop}
+        canCropAudio={canCropAudio}
+        onOpenCropAudioPrompt={onOpenCropAudioPrompt}
         onAuraUp={
           track
             ? () => {

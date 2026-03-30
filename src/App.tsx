@@ -13,7 +13,13 @@ import { PolyOracleOrb } from "./components/PolyOracleOrb";
 import { QuickTipsModal } from "./components/QuickTipsModal";
 import { SplashOverlay } from "./components/SplashOverlay";
 import { TrackGrid } from "./components/TrackGrid";
-import { getAllTracksFromDb, hardResetLibraryInDb, saveAuraToDb } from "./lib/db";
+import {
+  duplicateTrackWithAudioInDb,
+  getAllTracksFromDb,
+  hardResetLibraryInDb,
+  replaceAudioInDb,
+  saveAuraToDb
+} from "./lib/db";
 import {
   BackupSizeError,
   countNonDemoTracksForFullBackup,
@@ -60,6 +66,8 @@ import {
   setActivePlaylistInLibrary
 } from "./lib/playlistState";
 import { saveBlobWithBestEffort } from "./lib/saveBlob";
+import { cropAudioBlobToWav } from "./lib/audio/cropAudio";
+import { formatTime } from "./lib/time";
 import type { LibraryState } from "./lib/storage/library";
 import type { LoopMode, LoopRegion, RepeatTrackMode, Track } from "./types";
 import type { AmbientFxMode, AmbientFxQuality } from "./fx/ambientFxEngine";
@@ -95,6 +103,7 @@ const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
 const AURA_COLOR_KEY = "polyplay_auraColor_v1";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackMode";
+const THREEPEAT_REMAINING_KEY = "polyplay_threepeatRemaining_v1";
 const DIM_MODE_KEY = "polyplay_dimMode_v1";
 const NOVELTY_MODE_KEY = "polyplay_noveltyMode_v1";
 const LOOP_REGION_KEY = "polyplay_loopByTrack";
@@ -304,6 +313,21 @@ function getStoredRepeatTrackMode(): RepeatTrackMode {
   }
 }
 
+function parseStoredThreepeatRemaining(raw: string | null): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return 3;
+  return Math.max(0, Math.min(3, Math.round(parsed)));
+}
+
+function getStoredThreepeatRemaining(mode: RepeatTrackMode): number {
+  if (mode !== "threepeat") return 0;
+  try {
+    return parseStoredThreepeatRemaining(localStorage.getItem(THREEPEAT_REMAINING_KEY));
+  } catch {
+    return 3;
+  }
+}
+
 export default function App() {
   const VAULT_SWIPE_CLOSE_DISTANCE_PX = 140;
   const VAULT_SWIPE_CLOSE_MAX_SIDEWAYS_PX = 72;
@@ -317,6 +341,8 @@ export default function App() {
   const [loopModeByTrack, setLoopModeByTrack] = useState<Record<string, LoopMode>>({});
   const [isFullscreenPlayerOpen, setIsFullscreenPlayerOpen] = useState(false);
   const [overlayPage, setOverlayPage] = useState<"settings" | "vault" | "playlists" | null>(null);
+  const [isCropAudioPromptOpen, setIsCropAudioPromptOpen] = useState(false);
+  const [isCropAudioBusy, setIsCropAudioBusy] = useState(false);
   const [settingsPanelMode, setSettingsPanelMode] = useState<"upload" | "manage">("upload");
   const [isTipsOpen, setIsTipsOpen] = useState(false);
   const [layoutMode, setLayoutMode] = useState<"grid" | "list">("grid");
@@ -550,6 +576,10 @@ export default function App() {
   );
   const safeTapLastSpawnAtRef = useRef(0);
   const [safeTapBursts, setSafeTapBursts] = useState<SafeTapBurst[]>([]);
+  const [threepeatDisplayCount, setThreepeatDisplayCount] = useState<number>(() =>
+    getStoredRepeatTrackMode() === "threepeat" ? getStoredThreepeatRemaining("threepeat") : 0
+  );
+  const [threepeatFlashTick, setThreepeatFlashTick] = useState(0);
   const ambientFxRef = useRef<AmbientFxCanvasHandle | null>(null);
   const fxToastTimeoutRef = useRef<number | null>(null);
   const returnToCompactAfterClearRef = useRef(false);
@@ -653,7 +683,11 @@ export default function App() {
       }
       setAuraColor(normalizeAuraColor(localStorage.getItem(AURA_COLOR_KEY)));
       setIsShuffleEnabled(localStorage.getItem(SHUFFLE_ENABLED_KEY) === "true");
-      setRepeatTrackMode(getStoredRepeatTrackMode());
+      const storedRepeatTrackMode = getStoredRepeatTrackMode();
+      const storedThreepeatRemaining = getStoredThreepeatRemaining(storedRepeatTrackMode);
+      setRepeatTrackMode(storedRepeatTrackMode);
+      threepeatRemainingRef.current = storedThreepeatRemaining;
+      setThreepeatDisplayCount(storedRepeatTrackMode === "threepeat" ? storedThreepeatRemaining : 0);
       const savedDimMode = localStorage.getItem(DIM_MODE_KEY);
       if (savedDimMode === "normal" || savedDimMode === "dim" || savedDimMode === "mute") {
         setDimMode(normalizeDimModeForPlatform(savedDimMode, isIOS));
@@ -1334,7 +1368,11 @@ export default function App() {
   useEffect(() => {
     try {
       setIsShuffleEnabled(localStorage.getItem(SHUFFLE_ENABLED_KEY) === "true");
-      setRepeatTrackMode(getStoredRepeatTrackMode());
+      const storedRepeatTrackMode = getStoredRepeatTrackMode();
+      const storedThreepeatRemaining = getStoredThreepeatRemaining(storedRepeatTrackMode);
+      setRepeatTrackMode(storedRepeatTrackMode);
+      threepeatRemainingRef.current = storedThreepeatRemaining;
+      setThreepeatDisplayCount(storedRepeatTrackMode === "threepeat" ? storedThreepeatRemaining : 0);
       const savedDimMode = localStorage.getItem(DIM_MODE_KEY);
       if (savedDimMode === "normal" || savedDimMode === "dim" || savedDimMode === "mute") {
         setDimMode(normalizeDimModeForPlatform(savedDimMode, isIOS));
@@ -1532,6 +1570,7 @@ export default function App() {
           localStorage.removeItem(AURA_COLOR_KEY);
           localStorage.removeItem(SHUFFLE_ENABLED_KEY);
           localStorage.removeItem(REPEAT_TRACK_KEY);
+          localStorage.removeItem(THREEPEAT_REMAINING_KEY);
           localStorage.removeItem(LAYOUT_MODE_KEY);
           localStorage.removeItem(DIM_MODE_KEY);
           localStorage.removeItem(NOVELTY_MODE_KEY);
@@ -1560,6 +1599,7 @@ export default function App() {
         setIsShuffleEnabled(false);
         setRepeatTrackMode("off");
         threepeatRemainingRef.current = 0;
+        setThreepeatDisplayCount(0);
         setDimMode("normal");
         setNoveltyMode("normal");
         setLoopByTrack({});
@@ -1897,6 +1937,10 @@ export default function App() {
     if (!currentTrackId) return "off";
     return loopModeByTrack[currentTrackId] ?? "off";
   }, [currentTrackId, loopModeByTrack]);
+  const hasCroppableLoop = useMemo(
+    () => currentLoopMode === "region" && currentLoop.active && currentLoop.end > currentLoop.start,
+    [currentLoop, currentLoopMode]
+  );
 
   const dismissOpenState = () => {
     if (!showOpenState) return;
@@ -2230,11 +2274,58 @@ export default function App() {
     const audio = audioRef.current;
     if (!audio) return;
 
+    const handleThreepeatReplay = (
+      restartAt: number,
+      options?: { onExhausted?: () => void }
+    ): boolean => {
+      if (repeatTrackMode !== "threepeat") return false;
+      const remainingBeforeReplay = threepeatRemainingRef.current;
+      if (remainingBeforeReplay > 0) {
+        audio.currentTime = restartAt;
+        setCurrentTime(restartAt);
+        commitUiCurrentTime(restartAt, { force: true });
+        applyDimMode(audio, dimMode);
+        void Promise.resolve(audio.play())
+          .then(() => {
+            const nextRemaining = Math.max(0, remainingBeforeReplay - 1);
+            threepeatRemainingRef.current = nextRemaining;
+            setThreepeatDisplayCount(nextRemaining);
+            setThreepeatFlashTick((prev) => prev + 1);
+            try {
+              localStorage.setItem(THREEPEAT_REMAINING_KEY, String(nextRemaining));
+            } catch {
+              // Ignore localStorage failures.
+            }
+          })
+          .catch(() => {
+            audio.currentTime = restartAt;
+            setCurrentTime(restartAt);
+            commitUiCurrentTime(restartAt, { force: true });
+            setIsPlaying(false);
+          });
+        return true;
+      }
+      setRepeatTrackMode("off");
+      threepeatRemainingRef.current = 0;
+      setThreepeatDisplayCount(0);
+      try {
+        localStorage.setItem(REPEAT_TRACK_KEY, "off");
+        localStorage.removeItem(THREEPEAT_REMAINING_KEY);
+      } catch {
+        // Ignore localStorage failures.
+      }
+      options?.onExhausted?.();
+      return false;
+    };
+
     const onTime = () => {
       const nextTime = audio.currentTime || 0;
       const loopRegion = currentTrackId ? loopByTrack[currentTrackId] : undefined;
       if (currentLoopMode === "region" && loopRegion && loopRegion.end > loopRegion.start) {
         if (nextTime >= loopRegion.end || nextTime < loopRegion.start) {
+          if (handleThreepeatReplay(loopRegion.start)) {
+            return;
+          }
           audio.currentTime = loopRegion.start;
           commitUiCurrentTime(loopRegion.start, { force: true });
           return;
@@ -2303,20 +2394,8 @@ export default function App() {
         return;
       }
       if (repeatTrackMode === "threepeat" && currentLoopMode === "off") {
-        if (threepeatRemainingRef.current > 0) {
-          threepeatRemainingRef.current -= 1;
-          audio.currentTime = 0;
-          setCurrentTime(0);
-          applyDimMode(audio, dimMode);
-          void audio.play().catch(() => setIsPlaying(false));
+        if (handleThreepeatReplay(0)) {
           return;
-        }
-        setRepeatTrackMode("off");
-        threepeatRemainingRef.current = 0;
-        try {
-          localStorage.setItem(REPEAT_TRACK_KEY, "off");
-        } catch {
-          // Ignore localStorage failures.
         }
       }
       if (isShuffleEnabled) {
@@ -2446,8 +2525,10 @@ export default function App() {
     if (repeatTrackMode === "threepeat") {
       setRepeatTrackMode("off");
       threepeatRemainingRef.current = 0;
+      setThreepeatDisplayCount(0);
       try {
         localStorage.setItem(REPEAT_TRACK_KEY, "off");
+        localStorage.removeItem(THREEPEAT_REMAINING_KEY);
       } catch {
         // Ignore localStorage failures.
       }
@@ -2721,10 +2802,8 @@ export default function App() {
       markActivePlaylistDirty();
       return;
     }
-    const now = audioRef.current?.currentTime || 0;
-    const safeStart = Math.max(0, Math.min(effectiveDuration, now));
-    const safeEnd = Math.max(safeStart + 0.1, Math.min(effectiveDuration, safeStart + 5));
-    seekTo(safeStart);
+    const safeStart = 0;
+    const safeEnd = effectiveDuration;
     setLoopByTrack((prev) => ({
       ...prev,
       [currentTrackId]: { start: safeStart, end: safeEnd, active: true, editing: false }
@@ -2758,11 +2837,16 @@ export default function App() {
     markActivePlaylistDirty();
   };
 
+  const resetLoopStateForTrack = (trackId: string) => {
+    setLoopByTrack((prev) => ({ ...prev, [trackId]: EMPTY_LOOP }));
+    setLoopModeByTrack((prev) => ({ ...prev, [trackId]: "off" }));
+  };
+
   const clearLoop = () => {
     if (!currentTrackId) return;
     fireLightHaptic();
-    setLoopByTrack((prev) => ({ ...prev, [currentTrackId]: EMPTY_LOOP }));
-    setLoopModeByTrack((prev) => ({ ...prev, [currentTrackId]: "off" }));
+    resetLoopStateForTrack(currentTrackId);
+    setIsCropAudioPromptOpen(false);
     markActivePlaylistDirty();
   };
 
@@ -2783,6 +2867,73 @@ export default function App() {
       returnToCompactAfterClearRef.current = false;
     }
   };
+
+  const openCropAudioPrompt = () => {
+    if (!hasCroppableLoop) return;
+    fireLightHaptic();
+    setIsFullscreenPlayerOpen(false);
+    setIsCropAudioPromptOpen(true);
+  };
+
+  const closeCropAudioPrompt = () => {
+    if (isCropAudioBusy) return;
+    setIsCropAudioPromptOpen(false);
+  };
+
+  const cropCurrentLoopToWav = async () => {
+    if (!currentTrack?.audioBlob) throw new Error("Current track audio is not available for cropping.");
+    if (!hasCroppableLoop) throw new Error("Create a valid loop before cropping audio.");
+    return cropAudioBlobToWav(currentTrack.audioBlob, currentLoop.start, currentLoop.end);
+  };
+
+  const handleCropExistingTrack = async () => {
+    if (!currentTrackId || !currentTrack) return;
+    try {
+      setIsCropAudioBusy(true);
+      const targetTrackId = currentTrackId;
+      const cropped = await cropCurrentLoopToWav();
+      await replaceAudioInDb(targetTrackId, cropped, currentTrack.title);
+      resetLoopStateForTrack(targetTrackId);
+      setCurrentTime(0);
+      setDuration(0);
+      await refreshTracks({ allowEmptyDemoFallback: false });
+      setIsCropAudioPromptOpen(false);
+      markActivePlaylistDirty();
+      fireSuccessHaptic();
+      setVaultStatus("Track audio cropped to the selected loop.", "success");
+    } catch (error) {
+      setVaultStatus(error instanceof Error ? error.message : "Audio crop failed.", "error");
+    } finally {
+      setIsCropAudioBusy(false);
+    }
+  };
+
+  const handleCropToNewTrack = async () => {
+    if (!currentTrackId || !currentTrack) return;
+    try {
+      setIsCropAudioBusy(true);
+      const cropped = await cropCurrentLoopToWav();
+      const nextTrackId = await duplicateTrackWithAudioInDb(currentTrackId, cropped, {
+        title: `${currentTrack.title} (Loop Crop)`,
+        sub: currentTrack.sub || "Imported"
+      });
+      await refreshTracks({ allowEmptyDemoFallback: false });
+      setCurrentTrackId(nextTrackId);
+      setIsCropAudioPromptOpen(false);
+      fireSuccessHaptic();
+      setVaultStatus("Created a new cropped track from the selected loop.", "success");
+    } catch (error) {
+      setVaultStatus(error instanceof Error ? error.message : "Audio crop failed.", "error");
+    } finally {
+      setIsCropAudioBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isCropAudioPromptOpen) return;
+    if (hasCroppableLoop) return;
+    setIsCropAudioPromptOpen(false);
+  }, [hasCroppableLoop, isCropAudioPromptOpen]);
 
   const markLayoutToggleHintSeen = () => {
     if (hasSeenLayoutToggleHint) return;
@@ -2824,14 +2975,21 @@ export default function App() {
       const next: RepeatTrackMode = prev === "off" ? "loop-one" : prev === "loop-one" ? "threepeat" : "off";
       if (next === "threepeat") {
         threepeatRemainingRef.current = 3;
+        setThreepeatDisplayCount(3);
         fireHeavyHaptic();
         setFxToast("3PEAT Activated");
       } else {
         threepeatRemainingRef.current = 0;
+        setThreepeatDisplayCount(0);
         fireLightHaptic();
       }
       try {
         localStorage.setItem(REPEAT_TRACK_KEY, next);
+        if (next === "threepeat") {
+          localStorage.setItem(THREEPEAT_REMAINING_KEY, "3");
+        } else {
+          localStorage.removeItem(THREEPEAT_REMAINING_KEY);
+        }
       } catch {
         // Ignore localStorage failures.
       }
@@ -3765,6 +3923,8 @@ export default function App() {
           onSkip={skip}
           shuffleEnabled={isShuffleEnabled}
           repeatTrackMode={repeatTrackMode}
+          threepeatDisplayCount={threepeatDisplayCount}
+          repeatFlashTick={threepeatFlashTick}
           dimMode={dimMode}
           dimControlSkipsSoftDim={isIOS}
           noveltyMode={noveltyMode}
@@ -3775,6 +3935,8 @@ export default function App() {
           onSetLoop={setLoopFromCurrentWithExpand}
           onToggleLoopMode={toggleLoopMode}
           onClearLoop={clearLoopWithCompactRestore}
+          canCropAudio={hasCroppableLoop}
+          onOpenCropAudioPrompt={openCropAudioPrompt}
           onOpenFullscreen={openFullscreenFromPlaybarArt}
           showFullscreenHintCue={!hasSeenFullscreenArtHint}
           showCompactHintCue={!hasSeenPlayerCompactHint}
@@ -3811,6 +3973,8 @@ export default function App() {
           onSeek={seekTo}
           shuffleEnabled={isShuffleEnabled}
           repeatTrackMode={repeatTrackMode}
+          threepeatDisplayCount={threepeatDisplayCount}
+          repeatFlashTick={threepeatFlashTick}
           dimMode={dimMode}
           dimControlSkipsSoftDim={isIOS}
           noveltyMode={noveltyMode}
@@ -3825,6 +3989,8 @@ export default function App() {
           onSetLoop={setLoopFromCurrent}
           onToggleLoopMode={toggleLoopMode}
           onClearLoop={clearLoop}
+          canCropAudio={hasCroppableLoop}
+          onOpenCropAudioPrompt={openCropAudioPrompt}
           onAuraUp={() => {
             if (!currentTrackId) return;
             handleAuraUp(currentTrackId);
@@ -4087,6 +4253,75 @@ export default function App() {
                   )}
                 </div>
               )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {isCropAudioPromptOpen && (
+        <section
+          className="app-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Crop audio"
+          onPointerDown={(event) => {
+            const target = event.target as HTMLElement | null;
+            if (!target?.closest(".app-overlay-card")) closeCropAudioPrompt();
+          }}
+        >
+          <div className="app-overlay-card crop-audio-card">
+            <div className="app-overlay-head">
+              <div className="app-overlay-title">Crop Audio</div>
+              <button
+                type="button"
+                className="app-overlay-close"
+                aria-label="Close crop audio prompt"
+                onClick={closeCropAudioPrompt}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="crop-audio-card__body">
+              <p className="crop-audio-card__intro">
+                Crop the selected loop either into the current track or into a new track with the same artwork.
+              </p>
+              <div className="crop-audio-card__summary" aria-label="Loop selection summary">
+                <span>
+                  Loop start <strong>{formatTime(currentLoop.start)}</strong>
+                </span>
+                <span>
+                  Loop end <strong>{formatTime(currentLoop.end)}</strong>
+                </span>
+              </div>
+              <div className="crop-audio-card__actions">
+                <button
+                  type="button"
+                  className="vault-btn vault-btn--danger"
+                  onClick={() => void handleCropExistingTrack()}
+                  disabled={isCropAudioBusy}
+                >
+                  {isCropAudioBusy ? "Cropping..." : "Crop Existing Track"}
+                </button>
+                <button
+                  type="button"
+                  className="vault-btn vault-btn--secondary"
+                  onClick={() => void handleCropToNewTrack()}
+                  disabled={isCropAudioBusy}
+                >
+                  Crop to New Track
+                </button>
+                <button
+                  type="button"
+                  className="vault-btn vault-btn--ghost"
+                  onClick={closeCropAudioPrompt}
+                  disabled={isCropAudioBusy}
+                >
+                  Cancel
+                </button>
+              </div>
+              <p className="crop-audio-card__note">
+                Cropped audio is written as WAV. New-track crops preserve artwork and reset aura.
+              </p>
             </div>
           </div>
         </section>

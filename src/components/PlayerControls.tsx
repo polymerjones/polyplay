@@ -19,6 +19,9 @@ type Props = {
   onSeek: (seconds: number) => void;
   shuffleEnabled: boolean;
   repeatTrackMode: RepeatTrackMode;
+  threepeatDisplayCount: number;
+  repeatFlashTick: number;
+  cinemaMode?: boolean;
   onToggleShuffle: () => void;
   onToggleRepeatTrack: () => void;
   onCycleDimMode: () => void;
@@ -28,6 +31,8 @@ type Props = {
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
   onClearLoop: () => void;
+  canCropAudio?: boolean;
+  onOpenCropAudioPrompt?: () => void;
   onVinylScratch?: () => void;
   onAuraUp?: () => void;
   showAuraInline?: boolean;
@@ -54,6 +59,9 @@ export function PlayerControls({
   onSeek,
   shuffleEnabled,
   repeatTrackMode,
+  threepeatDisplayCount,
+  repeatFlashTick,
+  cinemaMode = false,
   onToggleShuffle,
   onToggleRepeatTrack,
   onCycleDimMode,
@@ -63,6 +71,8 @@ export function PlayerControls({
   onSetLoop,
   onToggleLoopMode,
   onClearLoop,
+  canCropAudio = false,
+  onOpenCropAudioPrompt,
   onVinylScratch,
   onAuraUp,
   showAuraInline = true,
@@ -73,6 +83,8 @@ export function PlayerControls({
   const shuffleFxCooldownRef = useRef(0);
   const shuffleAnimTimeoutRef = useRef<number | null>(null);
   const [shuffleAnimState, setShuffleAnimState] = useState<"on" | "off" | null>(null);
+  const repeatFlashTimeoutRef = useRef<number | null>(null);
+  const [repeatFlashActive, setRepeatFlashActive] = useState(false);
   const safeDuration = Math.max(0, duration || 0);
   const safeCurrent = clampTime(currentTime, safeDuration);
   const isMuteOnlyDimControl = dimControlSkipsSoftDim;
@@ -106,8 +118,28 @@ export function PlayerControls({
         window.clearTimeout(shuffleAnimTimeoutRef.current);
         shuffleAnimTimeoutRef.current = null;
       }
+      if (repeatFlashTimeoutRef.current !== null) {
+        window.clearTimeout(repeatFlashTimeoutRef.current);
+        repeatFlashTimeoutRef.current = null;
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (repeatFlashTick <= 0) return;
+    setRepeatFlashActive(false);
+    const rafId = window.requestAnimationFrame(() => {
+      setRepeatFlashActive(true);
+      if (repeatFlashTimeoutRef.current !== null) {
+        window.clearTimeout(repeatFlashTimeoutRef.current);
+      }
+      repeatFlashTimeoutRef.current = window.setTimeout(() => {
+        setRepeatFlashActive(false);
+        repeatFlashTimeoutRef.current = null;
+      }, 260);
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [repeatFlashTick]);
 
   const prefersReducedMotion = () =>
     typeof window !== "undefined" &&
@@ -165,7 +197,9 @@ export function PlayerControls({
   return (
     <section
       ref={rootRef}
-      className={`player-controls player-controls--${variant} ${loopMode !== "off" ? "is-loop-active" : ""}`.trim()}
+      className={`player-controls player-controls--${variant} ${loopMode !== "off" ? "is-loop-active" : ""} ${
+        cinemaMode ? "is-cinema-mode" : ""
+      }`.trim()}
       aria-label="Player controls"
     >
       <div className="pc-progress">
@@ -184,6 +218,9 @@ export function PlayerControls({
           <time dateTime={`PT${Math.floor(safeDuration)}S`}>{formatTime(safeDuration)}</time>
         </div>
       </div>
+
+      {cinemaMode ? null : (
+        <>
 
       <div className="pc-row" role="group" aria-label="Transport controls">
         <TransportIconButton
@@ -239,14 +276,16 @@ export function PlayerControls({
                 <path d="M7 22l-3-3 3-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M20 13v2a4 4 0 0 1-4 4H4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              {isThreepeat && <span className="pc-repeat-badge">3</span>}
+              {isThreepeat && <span className="pc-repeat-badge">{Math.max(0, threepeatDisplayCount)}</span>}
             </span>
           }
           active={isRepeatActive}
           onClick={() => onToggleRepeatTrack()}
           ariaLabel={repeatAriaLabel}
           size="sm"
-          className={isThreepeat ? "pc-transport-btn--repeat-threepeat" : ""}
+          className={`${isThreepeat ? "pc-transport-btn--repeat-threepeat" : ""} ${
+            repeatFlashActive && isThreepeat ? "pc-transport-btn--repeat-flash" : ""
+          }`.trim()}
         />
         <button
           type="button"
@@ -338,9 +377,20 @@ export function PlayerControls({
             <button type="button" className="pc-btn pc-btn--sm" onClick={onClearLoop}>
               Clear Loop
             </button>
+            <button
+              type="button"
+              className="pc-btn pc-btn--sm"
+              onClick={onOpenCropAudioPrompt}
+              disabled={!canCropAudio || !onOpenCropAudioPrompt}
+              aria-disabled={!canCropAudio || !onOpenCropAudioPrompt}
+            >
+              Crop Audio
+            </button>
           </div>
         )}
       </div>
+        </>
+      )}
     </section>
   );
 }

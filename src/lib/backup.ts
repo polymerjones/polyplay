@@ -26,6 +26,7 @@ const AURA_COLOR_KEY = "polyplay_auraColor_v1";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackMode";
 const LEGACY_REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
+const THREEPEAT_REMAINING_KEY = "polyplay_threepeatRemaining_v1";
 const DIM_MODE_KEY = "polyplay_dimMode_v1";
 const NOVELTY_MODE_KEY = "polyplay_noveltyMode_v1";
 const HAS_IMPORTED_KEY = "polyplay_hasImported";
@@ -74,6 +75,7 @@ export type PolyplayConfig = {
     layoutMode: "grid" | "list";
     shuffleEnabled: boolean;
     repeatTrackMode?: "off" | "loop-one" | "threepeat";
+    threepeatRemaining?: number;
     repeatTrackEnabled?: boolean;
     dimMode: "normal" | "dim" | "mute";
     noveltyMode: "normal" | "dim" | "mute";
@@ -360,6 +362,16 @@ function getStoredRepeatTrackMode(): "off" | "loop-one" | "threepeat" {
   return asRepeatTrackMode(localStorage.getItem(REPEAT_TRACK_KEY) ?? localStorage.getItem(LEGACY_REPEAT_TRACK_KEY));
 }
 
+function asThreepeatRemaining(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 3;
+  return Math.max(0, Math.min(3, Math.round(parsed)));
+}
+
+function getStoredThreepeatRemaining(): number {
+  return asThreepeatRemaining(localStorage.getItem(THREEPEAT_REMAINING_KEY));
+}
+
 function asDimMode(value: unknown): "normal" | "dim" | "mute" {
   return value === "dim" || value === "mute" ? value : "normal";
 }
@@ -527,6 +539,7 @@ export function buildConfigSnapshot(): PolyplayConfig {
       layoutMode: asLayout(localStorage.getItem(LAYOUT_MODE_KEY)),
       shuffleEnabled: asBoolean(localStorage.getItem(SHUFFLE_ENABLED_KEY)),
       repeatTrackMode: getStoredRepeatTrackMode(),
+      threepeatRemaining: getStoredRepeatTrackMode() === "threepeat" ? getStoredThreepeatRemaining() : undefined,
       repeatTrackEnabled: getStoredRepeatTrackMode() !== "off",
       dimMode: asDimMode(localStorage.getItem(DIM_MODE_KEY)),
       noveltyMode: asDimMode(localStorage.getItem(NOVELTY_MODE_KEY))
@@ -602,6 +615,7 @@ function normalizeImportedConfig(input: unknown): PolyplayConfig {
     layoutMode: "grid",
     shuffleEnabled: false,
     repeatTrackMode: "off",
+    threepeatRemaining: undefined,
     repeatTrackEnabled: false,
     dimMode: "normal",
     noveltyMode: "normal"
@@ -654,6 +668,10 @@ function normalizeImportedConfig(input: unknown): PolyplayConfig {
       repeatTrackMode: asRepeatTrackMode(
         settings.repeatTrackMode ?? settings.repeatTrackEnabled
       ),
+      threepeatRemaining:
+        asRepeatTrackMode(settings.repeatTrackMode ?? settings.repeatTrackEnabled) === "threepeat"
+          ? asThreepeatRemaining(settings.threepeatRemaining)
+          : undefined,
       repeatTrackEnabled: asRepeatTrackMode(
         settings.repeatTrackMode ?? settings.repeatTrackEnabled
       ) !== "off",
@@ -695,6 +713,11 @@ export function applyImportedConfig(config: PolyplayConfig): ImportConfigSummary
   const repeatTrackMode = asRepeatTrackMode(config.settings.repeatTrackMode ?? config.settings.repeatTrackEnabled);
   localStorage.setItem(REPEAT_TRACK_KEY, repeatTrackMode);
   localStorage.setItem(LEGACY_REPEAT_TRACK_KEY, repeatTrackMode === "off" ? "false" : "true");
+  if (repeatTrackMode === "threepeat") {
+    localStorage.setItem(THREEPEAT_REMAINING_KEY, String(asThreepeatRemaining(config.settings.threepeatRemaining)));
+  } else {
+    localStorage.removeItem(THREEPEAT_REMAINING_KEY);
+  }
   localStorage.setItem(DIM_MODE_KEY, asDimMode(config.settings.dimMode));
   localStorage.setItem(NOVELTY_MODE_KEY, asDimMode(config.settings.noveltyMode));
   localStorage.setItem(HAS_IMPORTED_KEY, config.flags.hasImported ? "true" : "false");

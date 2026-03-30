@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
 import { buildPeaksFromAudioBlob, fallbackPeaks } from "../lib/artwork/waveformArtwork";
 import { fireLightHaptic } from "../lib/haptics";
@@ -25,6 +25,8 @@ type Props = {
   onSeek: (seconds: number) => void;
   shuffleEnabled: boolean;
   repeatTrackMode: RepeatTrackMode;
+  threepeatDisplayCount: number;
+  repeatFlashTick: number;
   onToggleShuffle: () => void;
   onToggleRepeatTrack: () => void;
   onCycleDimMode: () => void;
@@ -41,6 +43,8 @@ type Props = {
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
   onClearLoop: () => void;
+  canCropAudio?: boolean;
+  onOpenCropAudioPrompt?: () => void;
   onAuraUp: () => void;
   onSkip: (delta: number) => void;
 };
@@ -62,6 +66,8 @@ export function FullscreenPlayer({
   onSeek,
   shuffleEnabled,
   repeatTrackMode,
+  threepeatDisplayCount,
+  repeatFlashTick,
   onToggleShuffle,
   onToggleRepeatTrack,
   onCycleDimMode,
@@ -73,19 +79,27 @@ export function FullscreenPlayer({
   onSetLoop,
   onToggleLoopMode,
   onClearLoop,
+  canCropAudio = false,
+  onOpenCropAudioPrompt,
   onAuraUp,
   onSkip
 }: Props) {
   const FULLSCREEN_AURA_FLASH_COOLDOWN_MS = 220;
   const FULLSCREEN_SWIPE_CLOSE_DISTANCE_PX = 140;
+  const CINEMA_EXIT_SWIPE_DISTANCE_PX = 96;
   const FULLSCREEN_SWIPE_CLOSE_MAX_SIDEWAYS_PX = 72;
   const FULLSCREEN_SWIPE_CLOSE_MIN_VELOCITY = 0.42;
+  const CINEMA_OUTSIDE_DOUBLE_TAP_MS = 320;
+  const LOOP_GESTURE_SUPPRESS_MS = 260;
   const artRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const artworkVideoRef = useRef<HTMLVideoElement | null>(null);
   const isPlayingRef = useRef(isPlaying);
   const lastAuraFlashAtRef = useRef(0);
   const swipeStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
+  const lastCinemaOutsideTapAtRef = useRef(0);
+  const loopGestureActiveRef = useRef(false);
+  const loopGestureSuppressUntilRef = useRef(0);
   const artStyle = track.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
     : ({ backgroundImage: track.artGrad || `url('${DEFAULT_ARTWORK_URL}')` } as CSSProperties);
@@ -94,9 +108,11 @@ export function FullscreenPlayer({
   const showLoopEditor = loopMode === "region" && loopRegion.active;
   const [peaks, setPeaks] = useState<number[]>(() => fallbackPeaks(120));
   const [isArtworkVideoReady, setIsArtworkVideoReady] = useState(false);
+  const [isCinemaMode, setIsCinemaMode] = useState(false);
 
   useEffect(() => {
     setIsArtworkVideoReady(false);
+    setIsCinemaMode(false);
   }, [track.artVideoUrl, track.id]);
 
   useEffect(() => {
@@ -269,7 +285,24 @@ export function FullscreenPlayer({
     onClose();
   };
 
+  const exitCinemaMode = () => {
+    setIsCinemaMode(false);
+    fireLightHaptic();
+  };
+
+  const isLoopGestureSuppressed = () => {
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    return loopGestureActiveRef.current || now < loopGestureSuppressUntilRef.current;
+  };
+
+  const armLoopGestureCooldown = () => {
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    loopGestureSuppressUntilRef.current = now + LOOP_GESTURE_SUPPRESS_MS;
+    swipeStartRef.current = null;
+  };
+
   const beginSwipeDismiss = (touch: { clientX: number; clientY: number }) => {
+    if (isLoopGestureSuppressed()) return;
     swipeStartRef.current = {
       x: touch.clientX,
       y: touch.clientY,
@@ -278,24 +311,38 @@ export function FullscreenPlayer({
   };
 
   const endSwipeDismiss = (touch: { clientX: number; clientY: number }) => {
+    if (isLoopGestureSuppressed()) {
+      swipeStartRef.current = null;
+      return;
+    }
     const start = swipeStartRef.current;
     swipeStartRef.current = null;
     if (!start) return;
     const dx = touch.clientX - start.x;
     const dy = touch.clientY - start.y;
-    if (dy <= 0) return;
     if (Math.abs(dx) > FULLSCREEN_SWIPE_CLOSE_MAX_SIDEWAYS_PX) return;
     const elapsedMs = Math.max(1, performance.now() - start.at);
     const velocity = dy / elapsedMs;
+    if (isCinemaMode) {
+      if (Math.abs(dy) >= CINEMA_EXIT_SWIPE_DISTANCE_PX || Math.abs(velocity) >= FULLSCREEN_SWIPE_CLOSE_MIN_VELOCITY) {
+        exitCinemaMode();
+      }
+      return;
+    }
+    if (dy <= 0) return;
     if (dy >= FULLSCREEN_SWIPE_CLOSE_DISTANCE_PX || velocity >= FULLSCREEN_SWIPE_CLOSE_MIN_VELOCITY) {
       dismissFullscreenWithFeedback();
     }
   };
 
   const canStartSwipeDismiss = (target: EventTarget | null, clientY: number) => {
+    if (isLoopGestureSuppressed()) return false;
     const element = target as HTMLElement | null;
     if (!element) return false;
     if (element.closest("button, input, textarea, select, a, label")) return false;
+    if (isCinemaMode) {
+      return !element.closest(".pc-progress");
+    }
     if (element.closest(".player-controls, .pc-progress, .pc-row, .pc-loop-row, .pc-wave")) return false;
     const withinMidDismissBand = typeof window !== "undefined" && clientY <= window.innerHeight * 0.72;
     return Boolean(
@@ -306,14 +353,32 @@ export function FullscreenPlayer({
     );
   };
 
+  const handleCinemaOutsidePointerUp = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!isCinemaMode) return;
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    if (target.closest(".fullscreen-player-shell__art, .pc-progress")) return;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (now - lastCinemaOutsideTapAtRef.current <= CINEMA_OUTSIDE_DOUBLE_TAP_MS) {
+      lastCinemaOutsideTapAtRef.current = 0;
+      exitCinemaMode();
+      return;
+    }
+    lastCinemaOutsideTapAtRef.current = now;
+  };
+
   return (
     <section
-      className="fullscreen-player-shell"
+      className={`fullscreen-player-shell ${isCinemaMode ? "is-cinema-mode" : ""}`.trim()}
       role="dialog"
       aria-modal="true"
       aria-label="Fullscreen player"
       onTouchStart={(event) => {
         if (event.touches.length !== 1) {
+          swipeStartRef.current = null;
+          return;
+        }
+        if (isLoopGestureSuppressed()) {
           swipeStartRef.current = null;
           return;
         }
@@ -332,22 +397,32 @@ export function FullscreenPlayer({
         swipeStartRef.current = null;
       }}
       onPointerDown={(event) => {
+        if (isCinemaMode) return;
         const target = event.target as HTMLElement | null;
         if (!target?.closest(".fullscreen-player-shell__content")) onClose();
       }}
+      onPointerUp={handleCinemaOutsidePointerUp}
     >
       <div className="fullscreen-player-shell__bg" style={artStyle} aria-hidden="true" />
 
-      <button className="fullscreen-player-shell__close" aria-label="Close fullscreen player" onClick={onClose}>
-        ✕
-      </button>
+      {!isCinemaMode && (
+        <button className="fullscreen-player-shell__close" aria-label="Close fullscreen player" onClick={onClose}>
+          ✕
+        </button>
+      )}
 
-      <div className="fullscreen-player-shell__content">
-        <div className="fullscreen-player-shell__swipe-zone" aria-hidden="true" />
+      <div className={`fullscreen-player-shell__content ${isCinemaMode ? "is-cinema-mode" : ""}`.trim()}>
+        {!isCinemaMode && <div className="fullscreen-player-shell__swipe-zone" aria-hidden="true" />}
         <div
-          className={`fullscreen-player-shell__art ${hasArtworkVideo ? "has-video" : ""}`}
+          className={`fullscreen-player-shell__art ${hasArtworkVideo ? "has-video" : ""} ${
+            isCinemaMode ? "is-cinema-mode" : ""
+          }`.trim()}
           ref={artRef}
           style={hasArtworkVideo ? undefined : artStyle}
+          onClick={() => {
+            if (isCinemaMode) return;
+            setIsCinemaMode(true);
+          }}
         >
           {hasArtworkVideo && !isArtworkVideoReady && (
             <div className="fullscreen-player-shell__art-poster" style={artStyle} aria-hidden="true" />
@@ -368,14 +443,16 @@ export function FullscreenPlayer({
           )}
         </div>
 
-        <div className="fullscreen-player-shell__meta">
-          <h2>{track.title}</h2>
-          <p>
-            {formatTime(currentTime)} / {formatTime(duration)} • Aura {track.aura}/10
-          </p>
-          {track.missingAudio && <p>Missing audio</p>}
-          {track.missingArt && <p>Missing artwork</p>}
-        </div>
+        {!isCinemaMode && (
+          <div className="fullscreen-player-shell__meta">
+            <h2>{track.title}</h2>
+            <p>
+              {formatTime(currentTime)} / {formatTime(duration)} • Aura {track.aura}/10
+            </p>
+            {track.missingAudio && <p>Missing audio</p>}
+            {track.missingArt && <p>Missing artwork</p>}
+          </div>
+        )}
 
         <PlayerControls
           variant="fullscreen"
@@ -392,6 +469,9 @@ export function FullscreenPlayer({
           onSeek={onSeek}
           shuffleEnabled={shuffleEnabled}
           repeatTrackMode={repeatTrackMode}
+          threepeatDisplayCount={threepeatDisplayCount}
+          repeatFlashTick={repeatFlashTick}
+          cinemaMode={isCinemaMode}
           onToggleShuffle={onToggleShuffle}
           onToggleRepeatTrack={onToggleRepeatTrack}
           onCycleDimMode={onCycleDimMode}
@@ -400,6 +480,8 @@ export function FullscreenPlayer({
           onSetLoop={onSetLoop}
           onToggleLoopMode={onToggleLoopMode}
           onClearLoop={onClearLoop}
+          canCropAudio={canCropAudio}
+          onOpenCropAudioPrompt={onOpenCropAudioPrompt}
           onAuraUp={() => {
             triggerArtworkFlash();
             onAuraUp();
@@ -408,7 +490,7 @@ export function FullscreenPlayer({
           enableAuraPulse={false}
         />
 
-        {showLoopEditor && (
+        {!isCinemaMode && showLoopEditor && (
           <WaveformLoop
             track={track}
             currentTime={currentTime}
@@ -417,20 +499,30 @@ export function FullscreenPlayer({
             loopRegion={loopRegion}
             onSeek={onSeek}
             onSetLoopRange={onSetLoopRange}
-            onLoopDragStart={onLoopDragStart}
-            onLoopDragCommit={onLoopDragCommit}
+            onLoopDragStart={() => {
+              loopGestureActiveRef.current = true;
+              armLoopGestureCooldown();
+              onLoopDragStart?.();
+            }}
+            onLoopDragCommit={(start) => {
+              loopGestureActiveRef.current = false;
+              armLoopGestureCooldown();
+              onLoopDragCommit?.(start);
+            }}
             enableAuraPulse={false}
           />
         )}
 
-        <button
-          type="button"
-          className="fullscreen-player-shell__close-bottom"
-          aria-label="Close fullscreen player"
-          onClick={onClose}
-        >
-          Done
-        </button>
+        {!isCinemaMode && (
+          <button
+            type="button"
+            className="fullscreen-player-shell__close-bottom"
+            aria-label="Close fullscreen player"
+            onClick={onClose}
+          >
+            Done
+          </button>
+        )}
       </div>
     </section>
   );

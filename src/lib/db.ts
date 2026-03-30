@@ -542,6 +542,33 @@ export async function replaceAudioInDb(trackId: string, audio: Blob, userProvide
   }
 }
 
+export async function duplicateTrackWithAudioInDb(
+  sourceTrackId: string,
+  audio: Blob,
+  options?: { title?: string | null; sub?: string | null; targetPlaylistId?: string | null }
+): Promise<string> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const source = library.tracksById[sourceTrackId];
+  if (!source) throw new Error("Source track not found");
+
+  const artPoster = source.artKey ? await getBlob(source.artKey) : null;
+  const artVideo = source.artVideoKey ? await getBlob(source.artVideoKey) : null;
+  const nextTrackId = makeId();
+
+  await addTrackToDb({
+    trackId: nextTrackId,
+    targetPlaylistId: options?.targetPlaylistId ?? library.activePlaylistId,
+    title: options?.title?.trim() || `${source.title} (Loop Crop)`,
+    sub: options?.sub?.trim() || source.sub || "Imported",
+    audio,
+    artPoster,
+    artVideo
+  });
+
+  return nextTrackId;
+}
+
 export async function removeTrackFromDb(trackId: string): Promise<void> {
   await maybeMigrateLegacyTracks();
   const library = loadLibrary();

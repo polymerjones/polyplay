@@ -179,6 +179,11 @@ export function replaceGratitudeEntries(entries: unknown): GratitudeEntry[] {
   return normalized;
 }
 
+export function clearGratitudeEntries(): GratitudeEntry[] {
+  writeEntries([]);
+  return [];
+}
+
 export function deleteGratitudeEntry(entryId: string): void {
   try {
     const next = getGratitudeEntries().filter((entry) => entry.id !== entryId);

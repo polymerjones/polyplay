@@ -33,6 +33,7 @@ import { normalizeStillImage } from "../lib/artwork/normalizeStillImage";
 import { validateVideoArtworkFile } from "../lib/artwork/videoValidation";
 import { restoreDemoTracks } from "../lib/demoSeed";
 import {
+  clearGratitudeEntries,
   DEFAULT_GRATITUDE_SETTINGS,
   GRATITUDE_ENTRIES_KEY,
   GRATITUDE_LAST_PROMPT_KEY,
@@ -78,6 +79,7 @@ const AURA_COLOR_KEY = "polyplay_auraColor_v1";
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackMode";
+const THREEPEAT_REMAINING_KEY = "polyplay_threepeatRemaining_v1";
 const DIM_MODE_KEY = "polyplay_dimMode_v1";
 const CURRENT_TRACK_ID_KEY = "polyplay_currentTrackId_v1";
 const LOOP_REGION_KEY = "polyplay_loopByTrack";
@@ -306,8 +308,13 @@ export function AdminApp() {
   const [isNukePromptOpen, setIsNukePromptOpen] = useState(false);
   const [nukeCountdownMs, setNukeCountdownMs] = useState(2000);
   const [isNukeRunning, setIsNukeRunning] = useState(false);
+  const [isJournalNukePromptOpen, setIsJournalNukePromptOpen] = useState(false);
+  const [journalNukeCountdownMs, setJournalNukeCountdownMs] = useState(2000);
+  const [isJournalNukeRunning, setIsJournalNukeRunning] = useState(false);
   const nukeTimerRef = useRef<number | null>(null);
+  const journalNukeTimerRef = useRef<number | null>(null);
   const nukeGenerationRef = useRef(0);
+  const journalNukeGenerationRef = useRef(0);
   const uploadSuccessNoticeTimeoutRef = useRef<number | null>(null);
   const importNoticeTimeoutRef = useRef<number | null>(null);
   const settingsHeroSwipeStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
@@ -1199,7 +1206,7 @@ export function AdminApp() {
     nukeGenerationRef.current += 1;
     setNukeCountdownMs(2000);
     setIsNukePromptOpen(true);
-    setStatus("Nuke armed. Abort within 2 seconds.");
+    setStatus("Nuke Playlist arming.");
     fireLightHaptic();
     requestParentHaptic("success");
   };
@@ -1213,6 +1220,44 @@ export function AdminApp() {
     setIsNukePromptOpen(false);
     setNukeCountdownMs(2000);
     setStatus("Nuke aborted.");
+  };
+
+  const runJournalNuke = async () => {
+    if (isJournalNukeRunning) return;
+    setIsJournalNukeRunning(true);
+    try {
+      clearGratitudeEntries();
+      setGratitudeEntries([]);
+      setSelectedGratitudeEntry(null);
+      setStatus("Gratitude Journal cleared.");
+      fireHeavyHaptic();
+      requestParentHaptic("heavy");
+      showSuccessNotice("Gratitude Journal cleared.");
+    } catch {
+      setStatus("Nuke Journal failed.");
+    }
+    setIsJournalNukeRunning(false);
+  };
+
+  const onNukeJournal = () => {
+    if (gratitudeEntries.length === 0 || isJournalNukeRunning || isJournalNukePromptOpen) return;
+    journalNukeGenerationRef.current += 1;
+    setJournalNukeCountdownMs(2000);
+    setIsJournalNukePromptOpen(true);
+    setStatus("Nuke Journal arming.");
+    fireLightHaptic();
+    requestParentHaptic("success");
+  };
+
+  const abortJournalNuke = () => {
+    journalNukeGenerationRef.current += 1;
+    if (journalNukeTimerRef.current !== null) {
+      window.clearInterval(journalNukeTimerRef.current);
+      journalNukeTimerRef.current = null;
+    }
+    setIsJournalNukePromptOpen(false);
+    setJournalNukeCountdownMs(2000);
+    setStatus("Nuke Journal aborted.");
   };
 
   useEffect(() => {
@@ -1251,8 +1296,7 @@ export function AdminApp() {
           nukeTimerRef.current = null;
         }
         if (generation !== nukeGenerationRef.current) return;
-        setIsNukePromptOpen(false);
-        void runNuke();
+        setStatus("Nuke Playlist armed. Confirm or cancel.");
       }
     }, 50);
     return () => {
@@ -1262,6 +1306,53 @@ export function AdminApp() {
       }
     };
   }, [isNukePromptOpen]);
+
+  useEffect(() => {
+    if (!isJournalNukePromptOpen) return;
+    const generation = journalNukeGenerationRef.current;
+    const startedAt = Date.now();
+    let lastBucket = -1;
+    journalNukeTimerRef.current = window.setInterval(() => {
+      if (generation !== journalNukeGenerationRef.current) {
+        if (journalNukeTimerRef.current !== null) {
+          window.clearInterval(journalNukeTimerRef.current);
+          journalNukeTimerRef.current = null;
+        }
+        return;
+      }
+      const remaining = Math.max(0, 2000 - (Date.now() - startedAt));
+      setJournalNukeCountdownMs(remaining);
+      const bucket =
+        remaining <= 0 ? 5 : remaining <= 180 ? 4 : remaining <= 420 ? 3 : remaining <= 800 ? 2 : remaining <= 1300 ? 1 : 0;
+      if (bucket > lastBucket) {
+        lastBucket = bucket;
+        if (bucket >= 4) {
+          fireHeavyHaptic();
+          requestParentHaptic("heavy");
+        } else if (bucket >= 2) {
+          fireMediumHaptic();
+          requestParentHaptic("success");
+        } else if (bucket >= 1) {
+          fireLightHaptic();
+          requestParentHaptic("success");
+        }
+      }
+      if (remaining <= 0) {
+        if (journalNukeTimerRef.current !== null) {
+          window.clearInterval(journalNukeTimerRef.current);
+          journalNukeTimerRef.current = null;
+        }
+        if (generation !== journalNukeGenerationRef.current) return;
+        setStatus("Nuke Journal armed. Confirm or cancel.");
+      }
+    }, 50);
+    return () => {
+      if (journalNukeTimerRef.current !== null) {
+        window.clearInterval(journalNukeTimerRef.current);
+        journalNukeTimerRef.current = null;
+      }
+    };
+  }, [isJournalNukePromptOpen, isJournalNukeRunning, gratitudeEntries.length]);
 
   const onFactoryReset = async () => {
     fireHeavyHaptic();
@@ -1279,6 +1370,7 @@ export function AdminApp() {
       localStorage.setItem(LAYOUT_MODE_KEY, "grid");
       localStorage.setItem(SHUFFLE_ENABLED_KEY, "false");
       localStorage.setItem(REPEAT_TRACK_KEY, "off");
+      localStorage.removeItem(THREEPEAT_REMAINING_KEY);
       localStorage.setItem(DIM_MODE_KEY, "normal");
       localStorage.removeItem(LOOP_REGION_KEY);
       localStorage.removeItem(LOOP_MODE_KEY);
@@ -2657,6 +2749,9 @@ export function AdminApp() {
           <Button variant="danger" onClick={onNuke} disabled={!hasTracks}>
             Nuke Playlist
           </Button>
+          <Button variant="danger" onClick={onNukeJournal} disabled={gratitudeEntries.length === 0}>
+            Nuke Journal
+          </Button>
         </div>
       </section>
       </>
@@ -2695,14 +2790,61 @@ export function AdminApp() {
       )}
 
       {isNukePromptOpen && (
-        <section className="admin-nuke-modal" role="dialog" aria-modal="true" aria-label="Nuke countdown">
+        <section
+          className="admin-nuke-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Nuke countdown"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) abortNuke();
+          }}
+        >
           <div className="admin-nuke-modal__card">
             <h3 className="admin-nuke-modal__title">Nuke Playlist Armed</h3>
-            <p className="admin-nuke-modal__sub">Clearing the current playlist in</p>
-            <div className="admin-nuke-modal__count">{(nukeCountdownMs / 1000).toFixed(1)}s</div>
-            <Button variant="secondary" onClick={abortNuke}>
-              Abort
-            </Button>
+            <p className="admin-nuke-modal__sub">
+              {nukeCountdownMs > 0 ? "Arming playlist clear in" : "Playlist clear is armed."}
+            </p>
+            <div className="admin-nuke-modal__count">
+              {nukeCountdownMs > 0 ? `${(nukeCountdownMs / 1000).toFixed(1)}s` : "READY"}
+            </div>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button variant="secondary" onClick={abortNuke}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={() => void runNuke()} disabled={nukeCountdownMs > 0 || isNukeRunning}>
+                Nuke Playlist
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
+      {isJournalNukePromptOpen && (
+        <section
+          className="admin-nuke-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Nuke Journal countdown"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) abortJournalNuke();
+          }}
+        >
+          <div className="admin-nuke-modal__card">
+            <h3 className="admin-nuke-modal__title">Nuke Journal Armed</h3>
+            <p className="admin-nuke-modal__sub">
+              {journalNukeCountdownMs > 0 ? "Arming journal clear in" : "Journal clear is armed."}
+            </p>
+            <div className="admin-nuke-modal__count">
+              {journalNukeCountdownMs > 0 ? `${(journalNukeCountdownMs / 1000).toFixed(1)}s` : "READY"}
+            </div>
+            <p className="admin-nuke-modal__sub">Tracks, playlists, artwork, settings, and Vaults are not affected.</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button variant="secondary" onClick={abortJournalNuke}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={() => void runJournalNuke()} disabled={journalNukeCountdownMs > 0 || isJournalNukeRunning}>
+                Nuke Journal
+              </Button>
+            </div>
           </div>
         </section>
       )}

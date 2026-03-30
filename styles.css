@@ -1174,14 +1174,44 @@ body.theme-custom.theme-custom-crimson::before {
 }
 
 body.theme-custom.theme-custom-teal::before {
-  opacity: 0.31;
-  filter: saturate(1.12) brightness(0.96);
+  opacity: 0.34;
+  filter: saturate(1.14) brightness(0.98);
+  animation: wave-sweep 34s ease-in-out infinite;
   background:
-    radial-gradient(circle at 18% 18%, rgba(108, 231, 220, 0.16) 0 25px, transparent 26px),
-    radial-gradient(circle at 72% 24%, rgba(70, 192, 183, 0.15) 0 22px, transparent 23px),
-    radial-gradient(circle at 42% 74%, rgba(211, 255, 248, 0.1) 0 28px, transparent 29px),
-    repeating-radial-gradient(circle, rgba(79, 206, 196, 0.13) 0 1px, transparent 1px 6px);
-  background-size: 320px 320px, 280px 280px, 360px 360px, 240px 240px;
+    radial-gradient(52% 42% at 20% 18%, rgba(120, 244, 236, 0.16), rgba(120, 244, 236, 0) 72%),
+    radial-gradient(44% 36% at 78% 68%, rgba(62, 201, 221, 0.14), rgba(62, 201, 221, 0) 74%),
+    radial-gradient(30% 26% at 58% 34%, rgba(198, 255, 250, 0.08), rgba(198, 255, 250, 0) 76%),
+    linear-gradient(128deg, transparent 0 25.8%, rgba(138, 255, 247, 0.05) 27.4%, rgba(138, 255, 247, 0.22) 28.1%, rgba(138, 255, 247, 0.05) 29%, transparent 30.6%),
+    linear-gradient(128deg, transparent 0 60.5%, rgba(92, 235, 229, 0.04) 61.7%, rgba(92, 235, 229, 0.16) 62.8%, rgba(92, 235, 229, 0.04) 64%, transparent 65.3%),
+    linear-gradient(36deg, transparent 0 46.8%, rgba(128, 247, 255, 0.04) 48.2%, rgba(128, 247, 255, 0.16) 49.1%, rgba(128, 247, 255, 0.04) 50.1%, transparent 51.5%),
+    linear-gradient(36deg, transparent 0 72.6%, rgba(86, 214, 241, 0.03) 73.4%, rgba(86, 214, 241, 0.1) 74.1%, rgba(86, 214, 241, 0.03) 75%, transparent 75.9%);
+  background-size: auto;
+}
+
+body.theme-custom.theme-custom-teal::after {
+  opacity: 0.21;
+  background:
+    repeating-linear-gradient(
+      128deg,
+      transparent 0 112px,
+      rgba(118, 244, 238, 0.07) 112px 113px,
+      transparent 113px 176px
+    ),
+    repeating-linear-gradient(
+      128deg,
+      transparent 0 228px,
+      rgba(78, 214, 226, 0.12) 228px 232px,
+      transparent 232px 336px
+    ),
+    repeating-linear-gradient(
+      36deg,
+      transparent 0 166px,
+      rgba(136, 252, 255, 0.05) 166px 167px,
+      transparent 167px 248px
+    ),
+    linear-gradient(128deg, transparent 0 31.2%, rgba(190, 255, 252, 0.14) 31.7%, transparent 32.5%),
+    linear-gradient(36deg, transparent 0 64.8%, rgba(129, 239, 255, 0.1) 65.3%, transparent 66.1%);
+  animation: wave-sweep 28s linear infinite;
 }
 
 body.theme-custom.theme-custom-crimson .topbar {
@@ -5656,6 +5686,54 @@ html[data-theme="light"] .playlist-selector select {
 
 .playlist-create-card {
   width: min(460px, 92vw);
+}
+
+.crop-audio-card {
+  width: min(480px, 92vw);
+}
+
+.crop-audio-card__body {
+  display: grid;
+  gap: 14px;
+  padding: 4px 14px 14px;
+}
+
+.crop-audio-card__intro,
+.crop-audio-card__note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.crop-audio-card__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 214, 122, 0.2);
+  background: rgba(16, 21, 33, 0.72);
+  padding: 12px;
+  color: rgba(239, 244, 255, 0.92);
+  font-size: 13px;
+}
+
+.crop-audio-card__summary span {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.crop-audio-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.crop-audio-card__actions .vault-btn:disabled {
+  opacity: 0.54;
+  cursor: not-allowed;
 }
 
 .playlist-create-body {
