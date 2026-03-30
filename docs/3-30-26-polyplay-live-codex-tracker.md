@@ -107,6 +107,7 @@ User should still see repeats-left countdown on the button.
 
 ---
 
+- const project info
 ### 6. Product support page
 **Status:** [verify]  
 **Platform:** web / App Store support  
@@ -121,6 +122,7 @@ Need a static HTML or React product support page suitable for App Store.
 Did we already start this? If yes, document what exists and what still needs to be done.
 
 **Codex notes:**  
+- `/public/support.html` contains the support page; added a header/footer link (`/support`) from the app so the page is reachable without redesigning routing; still needs live QA before marking done
 
 ---
 

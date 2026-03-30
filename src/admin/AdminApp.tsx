@@ -2837,6 +2837,14 @@ export function AdminApp() {
           >
             Terms & Conditions
           </a>
+          <a
+            href="/support"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg px-3 py-2 font-medium text-slate-100 underline decoration-slate-400/60 underline-offset-4"
+          >
+            Support
+          </a>
         </div>
       </div>
       </div>
