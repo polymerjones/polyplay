@@ -29,7 +29,7 @@ This file is intentionally meant to be **edited by Codex during the session** so
 ## Priority order for this pass
 
 ### 1. Artwork update status toast / hang clarity
-**Status:** [open]  
+**Status:** [verify]  
 **Platform:** both  
 **Problem:**  
 Updating artwork needs a prominent status toast/progress state while user waits for it to take effect. Right now the app can feel hung and the user gets confused.
@@ -40,6 +40,7 @@ Updating artwork needs a prominent status toast/progress state while user waits 
 - user should never think the app froze
 
 **Codex notes:**  
+- Drag zone now shows a toast running “Applying artwork…” when either artwork lane or manual update is busy and reports the success/failure messages once the update finishes; still need live confirmation the text is noticeable/no freeze
 
 ---
 

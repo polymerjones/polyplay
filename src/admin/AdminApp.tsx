@@ -945,6 +945,7 @@ export function AdminApp() {
         return;
       }
     }
+    setLaneToast("Applying artwork...");
     setIsArtworkLaneBusy(true);
     try {
       const artwork = await buildArtworkPayload(file, null);
@@ -952,7 +953,9 @@ export function AdminApp() {
       notifyUserImported();
       await refreshTracks();
       await refreshStorage();
-      setStatus("Artwork applied from Artwork lane.");
+      const successMessage = "Artwork applied from Artwork lane.";
+      setStatus(successMessage);
+      setLaneToast(successMessage);
       fireSuccessHaptic();
       requestParentHaptic("success");
     } catch (error) {
@@ -963,7 +966,9 @@ export function AdminApp() {
           openManageStorage: true
         });
       } else {
-        setStatus("Artwork transfer failed.");
+        const failureMessage = "Artwork transfer failed.";
+        setStatus(failureMessage);
+        setLaneToast(failureMessage);
       }
     } finally {
       setIsArtworkLaneBusy(false);
@@ -1075,7 +1080,9 @@ export function AdminApp() {
       return;
     }
 
-    setStatus("Updating artwork...");
+    const updatingMessage = "Updating artwork…";
+    setStatus(updatingMessage);
+    setLaneToast(updatingMessage);
     try {
       const artwork = await buildArtworkPayload(selectedArtworkFile, selectedArtPosterBlob, selectedArtFrameTime);
       await updateArtworkInDb(selectedArtworkTrackId, artwork);
@@ -1085,6 +1092,7 @@ export function AdminApp() {
         ? "Artwork updated. Video artwork added (poster frame unavailable on this browser)."
         : "Artwork updated.";
       setStatus(successMessage);
+      setLaneToast(successMessage);
       fireSuccessHaptic();
       requestParentHaptic("success");
       showSuccessNotice(successMessage);
@@ -1099,7 +1107,9 @@ export function AdminApp() {
         });
         return;
       }
-      setStatus("Artwork update failed.");
+      const failureMessage = "Artwork update failed.";
+      setStatus(failureMessage);
+      setLaneToast(failureMessage);
     }
   };
 
