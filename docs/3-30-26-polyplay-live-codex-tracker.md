@@ -39,7 +39,9 @@ Updating artwork needs a prominent status toast/progress state while user waits 
 - strong completion/failure messaging
 - user should never think the app froze
 
+- `/public/support.html` contains the support page; added a header/footer link (`/support`) from the app so the page is reachable without redesigning routing; still needs live QA before marking done
 **Codex notes:**  
+- `/public/support.html` contains the support page; added a rewrite in `vercel.json` so `/support` resolves to it and kept the footer link; still needs live QA before marking done
 - Drag zone now shows a toast running “Applying artwork…” when either artwork lane or manual update is busy and reports the success/failure messages once the update finishes; still need live confirmation the text is noticeable/no freeze
 
 ---
