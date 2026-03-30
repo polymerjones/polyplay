@@ -561,7 +561,7 @@ export function getGratitudeBackupFilename(): string {
 }
 
 export function getFullBackupFilename(): string {
-  return `Polyplay-Vault-${formatStamp()}.zip`;
+  return `Vault-${formatStamp()}.zip`;
 }
 
 export function getNextDefaultPolyplaylistName(): string {

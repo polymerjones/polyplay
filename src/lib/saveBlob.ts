@@ -10,6 +10,7 @@ type SaveBlobOptions = {
 type SaveFilenamePromptOptions = {
   message?: string;
   requiredExtension?: string;
+  preserveGestureForSave?: boolean;
 };
 
 function isIosLikeDevice(): boolean {
@@ -64,19 +65,32 @@ function getFilenameExtension(filename: string): string {
   return filename.slice(lastDot);
 }
 
+export function shouldUseInlineSaveNameStep(): boolean {
+  return isIosLikeDevice() || isStandalonePwa();
+}
+
+export function normalizeSaveFilename(
+  rawValue: string,
+  fallbackFilename: string,
+  requiredExtension?: string
+): string | null {
+  const sanitized = sanitizeFilenameInput(rawValue);
+  if (!sanitized) return null;
+  const extension = requiredExtension || getFilenameExtension(fallbackFilename);
+  if (!extension) return sanitized;
+  return sanitized.toLowerCase().endsWith(extension.toLowerCase()) ? sanitized : `${sanitized}${extension}`;
+}
+
 export function promptForSaveFilename(
   initialFilename: string,
   options?: SaveFilenamePromptOptions
 ): string | null {
+  if (options?.preserveGestureForSave !== false && shouldUseInlineSaveNameStep()) {
+    return initialFilename;
+  }
   const response = window.prompt(options?.message || "Name this file before saving.", initialFilename);
   if (response === null) return null;
-  const sanitized = sanitizeFilenameInput(response);
-  if (!sanitized) return null;
-  const requiredExtension = options?.requiredExtension || getFilenameExtension(initialFilename);
-  if (!requiredExtension) return sanitized;
-  return sanitized.toLowerCase().endsWith(requiredExtension.toLowerCase())
-    ? sanitized
-    : `${sanitized}${requiredExtension}`;
+  return normalizeSaveFilename(response, initialFilename, options?.requiredExtension);
 }
 
 export async function saveBlobWithBestEffort(

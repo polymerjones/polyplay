@@ -65,7 +65,7 @@ import {
   getVisibleTracksFromLibrary,
   setActivePlaylistInLibrary
 } from "./lib/playlistState";
-import { promptForSaveFilename, saveBlobWithBestEffort } from "./lib/saveBlob";
+import { normalizeSaveFilename, promptForSaveFilename, saveBlobWithBestEffort, shouldUseInlineSaveNameStep } from "./lib/saveBlob";
 import { cropAudioBlobToWav } from "./lib/audio/cropAudio";
 import { formatTime } from "./lib/time";
 import type { LibraryState } from "./lib/storage/library";
@@ -436,6 +436,8 @@ export default function App() {
   });
   const [showImportWarning, setShowImportWarning] = useState(false);
   const [vaultToast, setVaultToastState] = useState<{ message: string; tone: VaultToastTone } | null>(null);
+  const [pendingVaultBackupBlob, setPendingVaultBackupBlob] = useState<Blob | null>(null);
+  const [pendingVaultBackupName, setPendingVaultBackupName] = useState("");
   const [vaultImportCloseCountdownMs, setVaultImportCloseCountdownMs] = useState<number | null>(null);
   const [importSummary, setImportSummary] = useState<{
     playlistName: string;
@@ -1108,6 +1110,8 @@ export default function App() {
   const closeVaultOverlay = () => {
     clearVaultImportSuccessCountdown();
     setShowImportWarning(false);
+    setPendingVaultBackupBlob(null);
+    setPendingVaultBackupName("");
     setOverlayPage(null);
   };
 
@@ -3277,7 +3281,35 @@ export default function App() {
     });
   };
 
-  const saveUniverseBackup = async (): Promise<boolean> => {
+  const finishVaultBackupSave = async (blob: Blob, filename: string): Promise<boolean> => {
+    const saveMode = await saveBlobWithBestEffort(blob, filename, {
+      description: "PolyPlay Universe Backup",
+      accept: { "application/zip": [".zip"] }
+    });
+    const stamp = new Date().toISOString();
+    setLastExportedAt(stamp);
+    try {
+      localStorage.setItem(LAST_EXPORTED_AT_KEY, stamp);
+      if (activePlaylistId) localStorage.setItem(LAST_EXPORTED_PLAYLIST_ID_KEY, activePlaylistId);
+    } catch {
+      // Ignore localStorage failures.
+    }
+    clearActivePlaylistDirty();
+    setVaultStatus(
+      saveMode === "shared"
+        ? "Vault backup ready."
+        : saveMode === "save-dialog"
+          ? `Saved to selected location: ${filename}.`
+          : saveMode === "opened-preview"
+            ? `Backup ready for ${filename}. Use iPhone save options to keep the file.`
+            : `Download started for ${filename}.`,
+      "success"
+    );
+    schedulePlaybackResync("vault-save-return");
+    return true;
+  };
+
+  const saveUniverseBackup = async ({ allowDeferredNaming = true }: { allowDeferredNaming?: boolean } = {}): Promise<boolean> => {
     try {
       const library = await getLibrary();
       const nonDemoTrackCount = countNonDemoTracksForFullBackup(library);
@@ -3290,6 +3322,13 @@ export default function App() {
       }
       setVaultStatus("Zipping backup now.");
       const payload = await exportFullBackup();
+      const defaultFilename = getFullBackupFilename();
+      if (allowDeferredNaming && shouldUseInlineSaveNameStep()) {
+        setPendingVaultBackupBlob(payload.blob);
+        setPendingVaultBackupName(defaultFilename);
+        setVaultStatus("Backup ready. Name it, then tap Save backup.", "info");
+        return false;
+      }
       const filename = promptForSaveFilename(getFullBackupFilename(), {
         message: "Name this backup before saving.",
         requiredExtension: ".zip"
@@ -3299,31 +3338,7 @@ export default function App() {
         schedulePlaybackResync("vault-save-return");
         return false;
       }
-      const saveMode = await saveBlobWithBestEffort(payload.blob, filename, {
-        description: "PolyPlay Universe Backup",
-        accept: { "application/zip": [".zip"] }
-      });
-      const stamp = new Date().toISOString();
-      setLastExportedAt(stamp);
-      try {
-        localStorage.setItem(LAST_EXPORTED_AT_KEY, stamp);
-        if (activePlaylistId) localStorage.setItem(LAST_EXPORTED_PLAYLIST_ID_KEY, activePlaylistId);
-      } catch {
-        // Ignore localStorage failures.
-      }
-      clearActivePlaylistDirty();
-      setVaultStatus(
-        saveMode === "shared"
-          ? "Vault backup ready."
-          : saveMode === "save-dialog"
-            ? `Saved to selected location: ${filename}.`
-            : saveMode === "opened-preview"
-              ? `Backup ready for ${filename}. Use iPhone save options to keep the file.`
-              : `Download started for ${filename}.`,
-        "success"
-      );
-      schedulePlaybackResync("vault-save-return");
-      return true;
+      return finishVaultBackupSave(payload.blob, filename);
     } catch (error) {
       if (error instanceof BackupSizeError) {
         setVaultStatus(
@@ -3335,6 +3350,22 @@ export default function App() {
       }
       schedulePlaybackResync("vault-save-return");
       return false;
+    }
+  };
+
+  const onConfirmPendingVaultBackup = async () => {
+    if (!pendingVaultBackupBlob) return;
+    const filename = normalizeSaveFilename(pendingVaultBackupName, getFullBackupFilename(), ".zip");
+    if (!filename) {
+      setVaultStatus("Enter a backup filename first.", "error");
+      return;
+    }
+    try {
+      await finishVaultBackupSave(pendingVaultBackupBlob, filename);
+      setPendingVaultBackupBlob(null);
+      setPendingVaultBackupName("");
+    } catch (error) {
+      setVaultStatus(`Save Universe failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
     }
   };
 
@@ -4198,6 +4229,37 @@ export default function App() {
                   }}
                 />
               </div>
+              {pendingVaultBackupBlob && (
+                <div className="vault-warning vault-save-name-card" role="group" aria-label="Name backup file">
+                  <p>Name this backup before saving.</p>
+                  <input
+                    type="text"
+                    value={pendingVaultBackupName}
+                    onChange={(event) => setPendingVaultBackupName(event.currentTarget.value)}
+                    className="vault-save-name-input"
+                    placeholder="Vault backup"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                  <div className="vault-warning__actions">
+                    <button type="button" className="vault-btn vault-btn--primary" onClick={() => void onConfirmPendingVaultBackup()}>
+                      Save backup
+                    </button>
+                    <button
+                      type="button"
+                      className="vault-btn vault-btn--ghost"
+                      onClick={() => {
+                        setPendingVaultBackupBlob(null);
+                        setPendingVaultBackupName("");
+                        setVaultStatus("Save Universe canceled.", "info");
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="vault-helper-block">
                 <p className="vault-helper">
                   Vault backups contain your personal playlists, imported media, and app settings.
@@ -4213,7 +4275,7 @@ export default function App() {
                       type="button"
                       className="vault-btn vault-btn--primary"
                       onClick={async () => {
-                        const didExport = await saveUniverseBackup();
+                        const didExport = await saveUniverseBackup({ allowDeferredNaming: false });
                         if (!didExport) return;
                         setShowImportWarning(false);
                         importUniverseInputRef.current?.click();
