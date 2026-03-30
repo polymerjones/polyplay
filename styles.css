@@ -272,6 +272,9 @@ main,
 }
 
 .topbar {
+  --hero-line-rgb: 175, 120, 255;
+  --hero-line-soft-rgb: 120, 170, 255;
+  --hero-glow-rgb: 168, 85, 247;
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
@@ -642,7 +645,7 @@ main,
   position: absolute;
   inset: -8px;
   border-radius: inherit;
-  background: radial-gradient(circle, rgba(168, 85, 247, 0.35) 0%, rgba(168, 85, 247, 0) 70%);
+  background: radial-gradient(circle, rgba(var(--hero-glow-rgb), 0.35) 0%, rgba(var(--hero-glow-rgb), 0) 70%);
   opacity: 0.55;
   filter: blur(6px);
   pointer-events: none;
@@ -1301,14 +1304,23 @@ body.theme-custom.theme-custom-amber::after {
 }
 
 body.theme-custom.theme-custom-crimson .topbar {
+  --hero-line-rgb: 224, 118, 152;
+  --hero-line-soft-rgb: 246, 206, 220;
+  --hero-glow-rgb: 214, 86, 132;
   background: radial-gradient(980px 360px at 26% -6%, rgba(170, 64, 104, 0.94) 0%, rgba(24, 11, 18, 0.97) 64%);
 }
 
 body.theme-custom.theme-custom-teal .topbar {
+  --hero-line-rgb: 92, 233, 226;
+  --hero-line-soft-rgb: 188, 255, 249;
+  --hero-glow-rgb: 68, 198, 186;
   background: radial-gradient(980px 360px at 26% -6%, rgba(40, 154, 145, 0.94) 0%, rgba(7, 24, 25, 0.97) 64%);
 }
 
 body.theme-custom.theme-custom-amber .topbar {
+  --hero-line-rgb: 255, 203, 118;
+  --hero-line-soft-rgb: 255, 237, 188;
+  --hero-glow-rgb: 240, 171, 82;
   background: radial-gradient(980px 360px at 26% -6%, rgba(196, 126, 44, 0.94) 0%, rgba(34, 22, 8, 0.97) 62%);
 }
 
@@ -5145,7 +5157,30 @@ body.mute-freeze .track-backdrop {
   position: absolute;
   inset: -40% -10% -10% -10%;
   opacity: 0.35;
-  background: repeating-linear-gradient(120deg, rgba(175, 120, 255, 0.35) 0, rgba(175, 120, 255, 0.35) 2px, transparent 2px, transparent 26px);
+  background:
+    repeating-linear-gradient(
+      120deg,
+      rgba(var(--hero-line-rgb), 0.32) 0,
+      rgba(var(--hero-line-rgb), 0.32) 2px,
+      transparent 2px,
+      transparent 26px
+    ),
+    linear-gradient(
+      128deg,
+      transparent 0 20.6%,
+      rgba(var(--hero-line-soft-rgb), 0.04) 22.2%,
+      rgba(var(--hero-line-soft-rgb), 0.18) 23.1%,
+      rgba(var(--hero-line-soft-rgb), 0.04) 24.1%,
+      transparent 25.8%
+    ),
+    linear-gradient(
+      36deg,
+      transparent 0 58.8%,
+      rgba(var(--hero-line-rgb), 0.03) 60.1%,
+      rgba(var(--hero-line-rgb), 0.14) 61%,
+      rgba(var(--hero-line-rgb), 0.03) 62.1%,
+      transparent 63.7%
+    );
   animation: wave-sweep 18s linear infinite;
   mix-blend-mode: screen;
   pointer-events: none;
