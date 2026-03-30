@@ -28,11 +28,15 @@ const LOOP_VIEW_BUFFER_RATIO = 0.18;
 const LOOP_VIEW_MIN_BUFFER_SEC = 0.3;
 const MAX_LOOP_VIEW_SCALE = 2.75;
 const LOOP_VIEW_TINY_LOOP_THRESHOLD_SEC = 2.5;
-const LOOP_VIEW_TINY_MIN_SPAN_SEC = 1.6;
+const LOOP_VIEW_TINY_MIN_SPAN_SEC = 1.15;
+const LOOP_VIEW_TINY_BUFFER_RATIO = 0.12;
+const LOOP_VIEW_TINY_MIN_BUFFER_SEC = 0.14;
 const DRAG_VIEW_BUFFER_RATIO = 0.42;
 const DRAG_VIEW_MIN_BUFFER_SEC = 0.7;
-const MAX_DRAG_VIEW_SCALE = 1.8;
-const DRAG_VIEW_TINY_MIN_SPAN_SEC = 2.2;
+const MAX_DRAG_VIEW_SCALE = 2.3;
+const DRAG_VIEW_TINY_MIN_SPAN_SEC = 1.35;
+const DRAG_VIEW_TINY_BUFFER_RATIO = 0.22;
+const DRAG_VIEW_TINY_MIN_BUFFER_SEC = 0.18;
 const DRAG_START_DEADZONE_PX = 10;
 
 export function WaveformLoop({
@@ -51,14 +55,28 @@ export function WaveformLoop({
     trackDuration: number,
     start: number,
     end: number,
-    options?: { bufferRatio?: number; minBufferSec?: number; maxScale?: number; tinyLoopMinSpanSec?: number }
+    options?: {
+      bufferRatio?: number;
+      minBufferSec?: number;
+      maxScale?: number;
+      tinyLoopMinSpanSec?: number;
+      tinyLoopBufferRatio?: number;
+      tinyLoopMinBufferSec?: number;
+    }
   ) => {
     const loopSpan = end - start;
-    const buffer = Math.max(options?.minBufferSec ?? LOOP_VIEW_MIN_BUFFER_SEC, loopSpan * (options?.bufferRatio ?? LOOP_VIEW_BUFFER_RATIO));
+    const isTinyLoop = loopSpan <= LOOP_VIEW_TINY_LOOP_THRESHOLD_SEC;
+    const bufferRatio = isTinyLoop
+      ? options?.tinyLoopBufferRatio ?? options?.bufferRatio ?? LOOP_VIEW_TINY_BUFFER_RATIO
+      : options?.bufferRatio ?? LOOP_VIEW_BUFFER_RATIO;
+    const minBufferSec = isTinyLoop
+      ? options?.tinyLoopMinBufferSec ?? options?.minBufferSec ?? LOOP_VIEW_TINY_MIN_BUFFER_SEC
+      : options?.minBufferSec ?? LOOP_VIEW_MIN_BUFFER_SEC;
+    const buffer = Math.max(minBufferSec, loopSpan * bufferRatio);
     const desiredSpan = loopSpan + buffer * 2;
     const maxScale = options?.maxScale ?? MAX_LOOP_VIEW_SCALE;
     const minimumReadableSpan =
-      loopSpan <= LOOP_VIEW_TINY_LOOP_THRESHOLD_SEC
+      isTinyLoop
         ? Math.min(trackDuration / maxScale, options?.tinyLoopMinSpanSec ?? LOOP_VIEW_TINY_MIN_SPAN_SEC)
         : trackDuration / maxScale;
     const targetSpan = Math.max(desiredSpan, minimumReadableSpan);
@@ -162,7 +180,9 @@ export function WaveformLoop({
           bufferRatio: DRAG_VIEW_BUFFER_RATIO,
           minBufferSec: DRAG_VIEW_MIN_BUFFER_SEC,
           maxScale: MAX_DRAG_VIEW_SCALE,
-          tinyLoopMinSpanSec: DRAG_VIEW_TINY_MIN_SPAN_SEC
+          tinyLoopMinSpanSec: DRAG_VIEW_TINY_MIN_SPAN_SEC,
+          tinyLoopBufferRatio: DRAG_VIEW_TINY_BUFFER_RATIO,
+          tinyLoopMinBufferSec: DRAG_VIEW_TINY_MIN_BUFFER_SEC
         })
       );
       return;

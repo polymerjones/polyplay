@@ -1148,13 +1148,17 @@ body.theme-custom.theme-custom-amber {
 
 body.theme-custom.theme-custom-amber::before {
   opacity: 0.34;
-  filter: saturate(1.14) brightness(0.96);
+  filter: saturate(1.16) brightness(0.98);
+  animation: wave-sweep 35s ease-in-out infinite;
   background:
-    radial-gradient(circle at 18% 16%, rgba(255, 205, 120, 0.18) 0 25px, transparent 26px),
-    radial-gradient(circle at 72% 28%, rgba(255, 188, 98, 0.15) 0 22px, transparent 23px),
-    radial-gradient(circle at 42% 72%, rgba(255, 228, 170, 0.12) 0 28px, transparent 29px),
-    repeating-radial-gradient(circle, rgba(255, 196, 102, 0.16) 0 1px, transparent 1px 6px);
-  background-size: 320px 320px, 280px 280px, 360px 360px, 240px 240px;
+    radial-gradient(56% 42% at 18% 14%, rgba(255, 219, 146, 0.18), rgba(255, 219, 146, 0) 74%),
+    radial-gradient(38% 30% at 76% 72%, rgba(255, 179, 78, 0.14), rgba(255, 179, 78, 0) 72%),
+    radial-gradient(28% 22% at 58% 34%, rgba(255, 241, 210, 0.08), rgba(255, 241, 210, 0) 78%),
+    linear-gradient(126deg, transparent 0 23.6%, rgba(255, 224, 156, 0.05) 25.3%, rgba(255, 224, 156, 0.21) 26.1%, rgba(255, 224, 156, 0.05) 27.1%, transparent 28.8%),
+    linear-gradient(126deg, transparent 0 58.8%, rgba(255, 185, 86, 0.04) 60.2%, rgba(255, 185, 86, 0.15) 61.1%, rgba(255, 185, 86, 0.04) 62.2%, transparent 63.8%),
+    linear-gradient(34deg, transparent 0 44.8%, rgba(255, 232, 181, 0.04) 46.1%, rgba(255, 232, 181, 0.15) 47%, rgba(255, 232, 181, 0.04) 48%, transparent 49.4%),
+    linear-gradient(34deg, transparent 0 72.2%, rgba(255, 171, 65, 0.03) 73.1%, rgba(255, 171, 65, 0.11) 73.9%, rgba(255, 171, 65, 0.03) 74.8%, transparent 75.8%);
+  background-size: auto;
 }
 
 body.theme-custom::before {
@@ -1163,14 +1167,50 @@ body.theme-custom::before {
 }
 
 body.theme-custom.theme-custom-crimson::before {
-  opacity: 0.33;
-  filter: saturate(1.12) brightness(0.98);
+  opacity: 0.34;
+  filter: saturate(1.04) brightness(0.96);
+  animation: wave-sweep 33s ease-in-out infinite;
   background:
-    radial-gradient(circle at 18% 18%, rgba(232, 121, 150, 0.18) 0 25px, transparent 26px),
-    radial-gradient(circle at 74% 26%, rgba(201, 88, 124, 0.16) 0 22px, transparent 23px),
-    radial-gradient(circle at 40% 72%, rgba(255, 208, 220, 0.11) 0 28px, transparent 29px),
-    repeating-radial-gradient(circle, rgba(214, 104, 135, 0.14) 0 1px, transparent 1px 6px);
-  background-size: 320px 320px, 280px 280px, 360px 360px, 240px 240px;
+    radial-gradient(20% 16% at 17% 20%, rgba(245, 217, 223, 0.15), rgba(245, 217, 223, 0) 72%),
+    radial-gradient(16% 14% at 23% 25%, rgba(208, 127, 147, 0.11), rgba(208, 127, 147, 0) 74%),
+    radial-gradient(18% 15% at 59% 24%, rgba(233, 193, 204, 0.13), rgba(233, 193, 204, 0) 72%),
+    radial-gradient(15% 13% at 65% 30%, rgba(169, 79, 102, 0.11), rgba(169, 79, 102, 0) 74%),
+    radial-gradient(19% 16% at 77% 68%, rgba(150, 55, 72, 0.13), rgba(150, 55, 72, 0) 72%),
+    radial-gradient(16% 13% at 71% 74%, rgba(239, 206, 214, 0.09), rgba(239, 206, 214, 0) 74%),
+    radial-gradient(24% 18% at 47% 44%, rgba(255, 231, 236, 0.06), rgba(255, 231, 236, 0) 76%),
+    conic-gradient(from 126deg at 20% 22%, transparent 0deg 28deg, rgba(240, 210, 218, 0.07) 34deg 66deg, transparent 74deg 360deg),
+    conic-gradient(from 302deg at 59% 26%, transparent 0deg 36deg, rgba(218, 160, 176, 0.07) 43deg 78deg, transparent 86deg 360deg),
+    conic-gradient(from 118deg at 77% 70%, transparent 0deg 34deg, rgba(158, 74, 95, 0.07) 42deg 76deg, transparent 84deg 360deg),
+    linear-gradient(128deg, transparent 0 24.6%, rgba(235, 202, 211, 0.03) 26.1%, rgba(235, 202, 211, 0.1) 27%, rgba(235, 202, 211, 0.03) 28%, transparent 29.7%),
+    linear-gradient(36deg, transparent 0 46.2%, rgba(245, 222, 228, 0.025) 47.4%, rgba(245, 222, 228, 0.08) 48.2%, rgba(245, 222, 228, 0.025) 49.1%, transparent 50.3%),
+    linear-gradient(128deg, transparent 0 60.8%, rgba(142, 52, 71, 0.03) 61.9%, rgba(142, 52, 71, 0.08) 62.7%, rgba(142, 52, 71, 0.03) 63.8%, transparent 65%);
+  background-size: auto;
+}
+
+body.theme-custom.theme-custom-crimson::after {
+  opacity: 0.18;
+  background:
+    radial-gradient(12% 10% at 16% 21%, rgba(250, 227, 233, 0.09), rgba(250, 227, 233, 0) 72%),
+    radial-gradient(11% 10% at 24% 27%, rgba(167, 79, 101, 0.08), rgba(167, 79, 101, 0) 74%),
+    radial-gradient(13% 11% at 58% 23%, rgba(242, 217, 223, 0.08), rgba(242, 217, 223, 0) 72%),
+    radial-gradient(10% 9% at 66% 30%, rgba(155, 66, 88, 0.08), rgba(155, 66, 88, 0) 74%),
+    radial-gradient(13% 11% at 77% 69%, rgba(150, 53, 70, 0.08), rgba(150, 53, 70, 0) 72%),
+    repeating-linear-gradient(
+      129deg,
+      transparent 0 126px,
+      rgba(238, 215, 222, 0.03) 126px 127px,
+      transparent 127px 206px
+    ),
+    repeating-linear-gradient(
+      37deg,
+      transparent 0 178px,
+      rgba(188, 98, 121, 0.04) 178px 180px,
+      transparent 180px 270px
+    ),
+    conic-gradient(from 134deg at 19% 22%, transparent 0deg 22deg, rgba(246, 225, 231, 0.08) 30deg 58deg, transparent 66deg 360deg),
+    conic-gradient(from 316deg at 60% 25%, transparent 0deg 26deg, rgba(223, 174, 186, 0.07) 34deg 60deg, transparent 68deg 360deg),
+    conic-gradient(from 122deg at 77% 70%, transparent 0deg 24deg, rgba(166, 79, 101, 0.07) 33deg 57deg, transparent 65deg 360deg);
+  animation: wave-sweep 27s linear infinite;
 }
 
 body.theme-custom.theme-custom-teal::before {
@@ -1212,6 +1252,32 @@ body.theme-custom.theme-custom-teal::after {
     linear-gradient(128deg, transparent 0 31.2%, rgba(190, 255, 252, 0.14) 31.7%, transparent 32.5%),
     linear-gradient(36deg, transparent 0 64.8%, rgba(129, 239, 255, 0.1) 65.3%, transparent 66.1%);
   animation: wave-sweep 28s linear infinite;
+}
+
+body.theme-custom.theme-custom-amber::after {
+  opacity: 0.2;
+  background:
+    repeating-linear-gradient(
+      126deg,
+      transparent 0 116px,
+      rgba(255, 223, 162, 0.07) 116px 117px,
+      transparent 117px 184px
+    ),
+    repeating-linear-gradient(
+      126deg,
+      transparent 0 236px,
+      rgba(255, 183, 79, 0.12) 236px 240px,
+      transparent 240px 344px
+    ),
+    repeating-linear-gradient(
+      34deg,
+      transparent 0 162px,
+      rgba(255, 233, 192, 0.05) 162px 163px,
+      transparent 163px 246px
+    ),
+    linear-gradient(126deg, transparent 0 30.6%, rgba(255, 239, 204, 0.12) 31.2%, transparent 32%),
+    linear-gradient(34deg, transparent 0 63.4%, rgba(255, 191, 104, 0.09) 64%, transparent 64.8%);
+  animation: wave-sweep 29s linear infinite;
 }
 
 body.theme-custom.theme-custom-crimson .topbar {
