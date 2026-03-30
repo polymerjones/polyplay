@@ -64,7 +64,7 @@ import {
 } from "../lib/backup";
 import { fireHeavyHaptic, fireLightHaptic, fireMediumHaptic, fireSuccessHaptic } from "../lib/haptics";
 import { canUseIosNativeAudioImport, pickIosNativeAudioFile, pickIosNativeArtworkFile } from "../lib/iosMediaImport";
-import { saveBlobWithBestEffort } from "../lib/saveBlob";
+import { promptForSaveFilename, saveBlobWithBestEffort } from "../lib/saveBlob";
 import { titleFromFilename } from "../lib/title";
 import { Button } from "../components/button";
 
@@ -250,6 +250,7 @@ export function AdminApp() {
   const [laneToast, setLaneToast] = useState<string | null>(null);
   const [uploadSuccessNotice, setUploadSuccessNotice] = useState<string | null>(null);
   const [importNotice, setImportNotice] = useState<string | null>(null);
+  const [keepImportPageOpen, setKeepImportPageOpen] = useState(false);
 
   const [selectedRemoveTrackId, setSelectedRemoveTrackId] = useState<string>("");
   const [gratitudeSettings, setGratitudeSettings] = useState<GratitudeSettings>(DEFAULT_GRATITUDE_SETTINGS);
@@ -618,6 +619,7 @@ export function AdminApp() {
   };
 
   const notifyUploadSuccess = async () => {
+    if (keepImportPageOpen) return;
     try {
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type: "polyplay:upload-success" }, window.location.origin);
@@ -1027,6 +1029,7 @@ export function AdminApp() {
       await refreshTracks();
       await refreshStorage();
       await notifyUploadSuccess();
+      uploadTitleInputRef.current?.focus();
     } catch (error) {
       clearImportNotice();
       if (isStorageCapError(error)) {
@@ -1483,7 +1486,14 @@ export function AdminApp() {
       setStatus("Preparing download…");
       const content = serializeConfig(buildConfigSnapshot());
       const blob = new Blob([content], { type: "application/json;charset=utf-8" });
-      const filename = getConfigExportFilename();
+      const filename = promptForSaveFilename(getConfigExportFilename(), {
+        message: "Name this config export before saving.",
+        requiredExtension: ".json"
+      });
+      if (!filename) {
+        setStatus("Config export canceled.");
+        return;
+      }
       const saveMode = await saveBlobWithBestEffort(blob, filename, {
         description: "PolyPlay Config",
         accept: { "application/json": [".json"] }
@@ -1532,7 +1542,15 @@ export function AdminApp() {
       const result = await exportFullBackup((progress) => {
         setBackupProgress(progress.label);
       });
-      const filename = getFullBackupFilename();
+      const filename = promptForSaveFilename(getFullBackupFilename(), {
+        message: "Name this backup before saving.",
+        requiredExtension: ".zip"
+      });
+      if (!filename) {
+        setStatus("Full backup export canceled.");
+        setBackupProgress("");
+        return;
+      }
       const saveMode = await saveBlobWithBestEffort(result.blob, filename, {
         description: "PolyPlay Full Backup",
         accept: { "application/zip": [".zip"] }
@@ -1590,7 +1608,14 @@ export function AdminApp() {
       setIsBackupBusy(true);
       setStatus("Preparing download…");
       const result = await exportPolyplaylist();
-      const filename = getPolyplaylistFilename(result.playlistName);
+      const filename = promptForSaveFilename(getPolyplaylistFilename(result.playlistName), {
+        message: "Name this PolyPlaylist before saving.",
+        requiredExtension: ".polyplaylist"
+      });
+      if (!filename) {
+        setStatus("PolyPlaylist export canceled.");
+        return;
+      }
       const saveMode = await saveBlobWithBestEffort(result.blob, filename, {
         description: "PolyPlaylist Export",
         accept: { "application/zip": [".polyplaylist", ".zip"] }
@@ -2011,6 +2036,16 @@ export function AdminApp() {
             >
               Import
             </Button>
+
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={keepImportPageOpen}
+                onChange={(event) => setKeepImportPageOpen(event.currentTarget.checked)}
+                className="h-4 w-4 rounded border border-slate-300/30 bg-slate-950/70"
+              />
+              Keep me on Import page
+            </label>
           </div>
         </form>
         )}

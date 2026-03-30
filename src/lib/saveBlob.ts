@@ -7,6 +7,11 @@ type SaveBlobOptions = {
   description?: string;
 };
 
+type SaveFilenamePromptOptions = {
+  message?: string;
+  requiredExtension?: string;
+};
+
 function isIosLikeDevice(): boolean {
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent || "";
@@ -44,6 +49,34 @@ function openBlobPreview(blob: Blob, filename: string): void {
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+function sanitizeFilenameInput(value: string): string {
+  return value
+    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getFilenameExtension(filename: string): string {
+  const lastDot = filename.lastIndexOf(".");
+  if (lastDot <= 0 || lastDot === filename.length - 1) return "";
+  return filename.slice(lastDot);
+}
+
+export function promptForSaveFilename(
+  initialFilename: string,
+  options?: SaveFilenamePromptOptions
+): string | null {
+  const response = window.prompt(options?.message || "Name this file before saving.", initialFilename);
+  if (response === null) return null;
+  const sanitized = sanitizeFilenameInput(response);
+  if (!sanitized) return null;
+  const requiredExtension = options?.requiredExtension || getFilenameExtension(initialFilename);
+  if (!requiredExtension) return sanitized;
+  return sanitized.toLowerCase().endsWith(requiredExtension.toLowerCase())
+    ? sanitized
+    : `${sanitized}${requiredExtension}`;
 }
 
 export async function saveBlobWithBestEffort(

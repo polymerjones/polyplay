@@ -65,7 +65,7 @@ import {
   getVisibleTracksFromLibrary,
   setActivePlaylistInLibrary
 } from "./lib/playlistState";
-import { saveBlobWithBestEffort } from "./lib/saveBlob";
+import { promptForSaveFilename, saveBlobWithBestEffort } from "./lib/saveBlob";
 import { cropAudioBlobToWav } from "./lib/audio/cropAudio";
 import { formatTime } from "./lib/time";
 import type { LibraryState } from "./lib/storage/library";
@@ -419,10 +419,8 @@ export default function App() {
     try {
       const hasImported = localStorage.getItem(HAS_IMPORTED_KEY) === "true";
       const hasOnboarded = localStorage.getItem(HAS_ONBOARDED_KEY) === "true";
-      if (!hasImported && !hasOnboarded) return true;
-      const skipAlways = localStorage.getItem(SPLASH_SEEN_KEY) === "true";
-      const seenSession = sessionStorage.getItem(SPLASH_SESSION_KEY) === "true";
-      return !skipAlways && !seenSession;
+      const hasSeenSplash = localStorage.getItem(SPLASH_SEEN_KEY) === "true";
+      return !hasImported && !hasOnboarded && !hasSeenSplash;
     } catch {
       return true;
     }
@@ -1196,13 +1194,12 @@ export default function App() {
     try {
       const hasImported = localStorage.getItem(HAS_IMPORTED_KEY) === "true";
       const hasOnboarded = localStorage.getItem(HAS_ONBOARDED_KEY) === "true";
-      if (!hasImported && !hasOnboarded) {
+      const hasSeenSplash = localStorage.getItem(SPLASH_SEEN_KEY) === "true";
+      if (!hasImported && !hasOnboarded && !hasSeenSplash) {
         setShowSplash(true);
         return;
       }
-      const skipAlways = localStorage.getItem(SPLASH_SEEN_KEY) === "true";
-      const seenSession = sessionStorage.getItem(SPLASH_SESSION_KEY) === "true";
-      if (!skipAlways && !seenSession) setShowSplash(true);
+      setShowSplash(false);
     } catch {
       setShowSplash(true);
     }
@@ -1444,15 +1441,11 @@ export default function App() {
     }
   }, []);
 
-  const finishSplash = (skipEveryTime = false) => {
+  const finishSplash = (_skipEveryTime = false) => {
     if (!showSplash || isSplashDismissing) return;
     setIsSplashDismissing(true);
     try {
-      if (skipEveryTime) {
-        localStorage.setItem(SPLASH_SEEN_KEY, "true");
-      } else {
-        localStorage.removeItem(SPLASH_SEEN_KEY);
-      }
+      localStorage.setItem(SPLASH_SEEN_KEY, "true");
       sessionStorage.setItem(SPLASH_SESSION_KEY, "true");
     } catch {
       // Ignore storage failures.
@@ -3297,7 +3290,15 @@ export default function App() {
       }
       setVaultStatus("Zipping backup now.");
       const payload = await exportFullBackup();
-      const filename = getFullBackupFilename();
+      const filename = promptForSaveFilename(getFullBackupFilename(), {
+        message: "Name this backup before saving.",
+        requiredExtension: ".zip"
+      });
+      if (!filename) {
+        setVaultStatus("Save Universe canceled.", "info");
+        schedulePlaybackResync("vault-save-return");
+        return false;
+      }
       const saveMode = await saveBlobWithBestEffort(payload.blob, filename, {
         description: "PolyPlay Universe Backup",
         accept: { "application/zip": [".zip"] }
