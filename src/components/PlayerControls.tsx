@@ -89,13 +89,13 @@ export function PlayerControls({
   const safeCurrent = clampTime(currentTime, safeDuration);
   const isMuteOnlyDimControl = dimControlSkipsSoftDim;
   const isRepeatActive = repeatTrackMode !== "off";
-  const isThreepeat = repeatTrackMode === "threepeat";
+  const isCountRepeat = repeatTrackMode !== "off";
   const repeatAriaLabel =
     repeatTrackMode === "off"
-      ? "Enable repeat track"
-      : repeatTrackMode === "loop-one"
-        ? "Enable 3PEAT mode"
-        : "Disable repeat track";
+      ? "Enable repeat 2"
+      : repeatTrackMode === "repeat-2"
+        ? "Enable repeat 3"
+        : "Disable repeat";
   void onVinylScratch;
   void onToggleLoopMode;
 
@@ -276,15 +276,15 @@ export function PlayerControls({
                 <path d="M7 22l-3-3 3-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M20 13v2a4 4 0 0 1-4 4H4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              {isThreepeat && <span className="pc-repeat-badge">{Math.max(0, threepeatDisplayCount)}</span>}
+              {isCountRepeat && <span className="pc-repeat-badge">{Math.max(0, threepeatDisplayCount)}</span>}
             </span>
           }
           active={isRepeatActive}
           onClick={() => onToggleRepeatTrack()}
           ariaLabel={repeatAriaLabel}
           size="sm"
-          className={`${isThreepeat ? "pc-transport-btn--repeat-threepeat" : ""} ${
-            repeatFlashActive && isThreepeat ? "pc-transport-btn--repeat-flash" : ""
+          className={`${isCountRepeat ? "pc-transport-btn--repeat-threepeat" : ""} ${
+            repeatFlashActive && isCountRepeat ? "pc-transport-btn--repeat-flash" : ""
           }`.trim()}
         />
         <button

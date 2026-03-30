@@ -15,6 +15,7 @@ export type DbTrackRecord = {
   title?: string;
   sub?: string;
   aura?: number;
+  artUrl?: string | null;
   audioKey?: string | null;
   artKey?: string | null;
   artVideoKey?: string | null;
@@ -298,6 +299,7 @@ export async function getTrackRowsFromDb(): Promise<DbTrackRecord[]> {
         record.artKey ? getBlob(record.artKey) : Promise.resolve(null),
         record.artVideoKey ? getBlob(record.artVideoKey) : Promise.resolve(null)
       ]);
+      const artUrl = record.bundledArtUrl || (await getMediaUrl(record.artKey));
       return {
         id: record.id,
         demoId: record.demoId ?? null,
@@ -305,6 +307,7 @@ export async function getTrackRowsFromDb(): Promise<DbTrackRecord[]> {
         title: record.title,
         sub: record.sub === "Uploaded" ? "Imported" : (record.sub || "Imported"),
         aura: clampAura(record.aura),
+        artUrl,
         audioKey: record.audioKey,
         artKey: record.artKey,
         artVideoKey: record.artVideoKey || null,

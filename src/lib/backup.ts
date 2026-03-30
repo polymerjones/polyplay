@@ -74,7 +74,7 @@ export type PolyplayConfig = {
     auraColor?: string | null;
     layoutMode: "grid" | "list";
     shuffleEnabled: boolean;
-    repeatTrackMode?: "off" | "loop-one" | "threepeat";
+    repeatTrackMode?: "off" | "repeat-2" | "repeat-3" | "loop-one" | "threepeat";
     threepeatRemaining?: number;
     repeatTrackEnabled?: boolean;
     dimMode: "normal" | "dim" | "mute";
@@ -352,13 +352,13 @@ function asBoolean(value: unknown): boolean {
   return value === true || value === "true";
 }
 
-function asRepeatTrackMode(value: unknown): "off" | "loop-one" | "threepeat" {
-  if (value === "threepeat") return "threepeat";
-  if (value === "loop-one" || value === true || value === "true") return "loop-one";
+function asRepeatTrackMode(value: unknown): "off" | "repeat-2" | "repeat-3" {
+  if (value === "repeat-3" || value === "threepeat") return "repeat-3";
+  if (value === "repeat-2" || value === "loop-one" || value === true || value === "true") return "repeat-2";
   return "off";
 }
 
-function getStoredRepeatTrackMode(): "off" | "loop-one" | "threepeat" {
+function getStoredRepeatTrackMode(): "off" | "repeat-2" | "repeat-3" {
   return asRepeatTrackMode(localStorage.getItem(REPEAT_TRACK_KEY) ?? localStorage.getItem(LEGACY_REPEAT_TRACK_KEY));
 }
 
@@ -539,7 +539,7 @@ export function buildConfigSnapshot(): PolyplayConfig {
       layoutMode: asLayout(localStorage.getItem(LAYOUT_MODE_KEY)),
       shuffleEnabled: asBoolean(localStorage.getItem(SHUFFLE_ENABLED_KEY)),
       repeatTrackMode: getStoredRepeatTrackMode(),
-      threepeatRemaining: getStoredRepeatTrackMode() === "threepeat" ? getStoredThreepeatRemaining() : undefined,
+      threepeatRemaining: getStoredRepeatTrackMode() !== "off" ? getStoredThreepeatRemaining() : undefined,
       repeatTrackEnabled: getStoredRepeatTrackMode() !== "off",
       dimMode: asDimMode(localStorage.getItem(DIM_MODE_KEY)),
       noveltyMode: asDimMode(localStorage.getItem(NOVELTY_MODE_KEY))
@@ -669,7 +669,7 @@ function normalizeImportedConfig(input: unknown): PolyplayConfig {
         settings.repeatTrackMode ?? settings.repeatTrackEnabled
       ),
       threepeatRemaining:
-        asRepeatTrackMode(settings.repeatTrackMode ?? settings.repeatTrackEnabled) === "threepeat"
+        asRepeatTrackMode(settings.repeatTrackMode ?? settings.repeatTrackEnabled) !== "off"
           ? asThreepeatRemaining(settings.threepeatRemaining)
           : undefined,
       repeatTrackEnabled: asRepeatTrackMode(
@@ -713,7 +713,7 @@ export function applyImportedConfig(config: PolyplayConfig): ImportConfigSummary
   const repeatTrackMode = asRepeatTrackMode(config.settings.repeatTrackMode ?? config.settings.repeatTrackEnabled);
   localStorage.setItem(REPEAT_TRACK_KEY, repeatTrackMode);
   localStorage.setItem(LEGACY_REPEAT_TRACK_KEY, repeatTrackMode === "off" ? "false" : "true");
-  if (repeatTrackMode === "threepeat") {
+  if (repeatTrackMode !== "off") {
     localStorage.setItem(THREEPEAT_REMAINING_KEY, String(asThreepeatRemaining(config.settings.threepeatRemaining)));
   } else {
     localStorage.removeItem(THREEPEAT_REMAINING_KEY);

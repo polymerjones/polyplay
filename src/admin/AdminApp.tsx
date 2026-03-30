@@ -349,6 +349,14 @@ export function AdminApp() {
       }, {}),
     [tracks]
   );
+  const trackArtById = useMemo(
+    () =>
+      tracks.reduce<Record<string, string>>((acc, track) => {
+        if (track.artUrl) acc[track.id] = track.artUrl;
+        return acc;
+      }, {}),
+    [tracks]
+  );
 
   const refreshTracks = async () => {
     try {
@@ -2688,6 +2696,13 @@ export function AdminApp() {
                 removingTrackIds.includes(row.id) ? "is-removing" : ""
               }`.trim()}
             >
+              <div className="admin-track-row__thumb" aria-hidden="true">
+                {trackArtById[row.id] ? (
+                  <img src={trackArtById[row.id]} alt="" loading="lazy" />
+                ) : (
+                  <span className="admin-track-row__thumb-fallback">♪</span>
+                )}
+              </div>
               <div className="admin-track-row__main min-w-0">
                 {editingTrackId === row.id ? (
                   <div className="admin-track-row__edit flex flex-wrap items-center gap-2">

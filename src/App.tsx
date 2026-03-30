@@ -298,9 +298,15 @@ function getAdjacentTrackId(
 }
 
 function parseRepeatTrackMode(raw: string | null): RepeatTrackMode {
-  if (raw === "threepeat") return "threepeat";
-  if (raw === "loop-one" || raw === "true") return "loop-one";
+  if (raw === "repeat-3" || raw === "threepeat") return "repeat-3";
+  if (raw === "repeat-2" || raw === "loop-one" || raw === "true") return "repeat-2";
   return "off";
+}
+
+function getRepeatModeCount(mode: RepeatTrackMode): number {
+  if (mode === "repeat-3") return 3;
+  if (mode === "repeat-2") return 2;
+  return 0;
 }
 
 function getStoredRepeatTrackMode(): RepeatTrackMode {
@@ -320,11 +326,12 @@ function parseStoredThreepeatRemaining(raw: string | null): number {
 }
 
 function getStoredThreepeatRemaining(mode: RepeatTrackMode): number {
-  if (mode !== "threepeat") return 0;
+  const maxRemaining = getRepeatModeCount(mode);
+  if (maxRemaining <= 0) return 0;
   try {
-    return parseStoredThreepeatRemaining(localStorage.getItem(THREEPEAT_REMAINING_KEY));
+    return Math.min(maxRemaining, parseStoredThreepeatRemaining(localStorage.getItem(THREEPEAT_REMAINING_KEY)));
   } catch {
-    return 3;
+    return maxRemaining;
   }
 }
 
@@ -576,9 +583,10 @@ export default function App() {
   );
   const safeTapLastSpawnAtRef = useRef(0);
   const [safeTapBursts, setSafeTapBursts] = useState<SafeTapBurst[]>([]);
-  const [threepeatDisplayCount, setThreepeatDisplayCount] = useState<number>(() =>
-    getStoredRepeatTrackMode() === "threepeat" ? getStoredThreepeatRemaining("threepeat") : 0
-  );
+  const [threepeatDisplayCount, setThreepeatDisplayCount] = useState<number>(() => {
+    const storedMode = getStoredRepeatTrackMode();
+    return storedMode === "off" ? 0 : getStoredThreepeatRemaining(storedMode);
+  });
   const [threepeatFlashTick, setThreepeatFlashTick] = useState(0);
   const ambientFxRef = useRef<AmbientFxCanvasHandle | null>(null);
   const fxToastTimeoutRef = useRef<number | null>(null);
@@ -687,7 +695,7 @@ export default function App() {
       const storedThreepeatRemaining = getStoredThreepeatRemaining(storedRepeatTrackMode);
       setRepeatTrackMode(storedRepeatTrackMode);
       threepeatRemainingRef.current = storedThreepeatRemaining;
-      setThreepeatDisplayCount(storedRepeatTrackMode === "threepeat" ? storedThreepeatRemaining : 0);
+      setThreepeatDisplayCount(storedRepeatTrackMode === "off" ? 0 : storedThreepeatRemaining);
       const savedDimMode = localStorage.getItem(DIM_MODE_KEY);
       if (savedDimMode === "normal" || savedDimMode === "dim" || savedDimMode === "mute") {
         setDimMode(normalizeDimModeForPlatform(savedDimMode, isIOS));
@@ -1373,7 +1381,7 @@ export default function App() {
       const storedThreepeatRemaining = getStoredThreepeatRemaining(storedRepeatTrackMode);
       setRepeatTrackMode(storedRepeatTrackMode);
       threepeatRemainingRef.current = storedThreepeatRemaining;
-      setThreepeatDisplayCount(storedRepeatTrackMode === "threepeat" ? storedThreepeatRemaining : 0);
+      setThreepeatDisplayCount(storedRepeatTrackMode === "off" ? 0 : storedThreepeatRemaining);
       const savedDimMode = localStorage.getItem(DIM_MODE_KEY);
       if (savedDimMode === "normal" || savedDimMode === "dim" || savedDimMode === "mute") {
         setDimMode(normalizeDimModeForPlatform(savedDimMode, isIOS));
@@ -2286,7 +2294,7 @@ export default function App() {
       restartAt: number,
       options?: { onExhausted?: () => void }
     ): boolean => {
-      if (repeatTrackMode !== "threepeat") return false;
+      if (repeatTrackMode === "off") return false;
       const remainingBeforeReplay = threepeatRemainingRef.current;
       if (remainingBeforeReplay > 0) {
         audio.currentTime = restartAt;
@@ -2399,20 +2407,16 @@ export default function App() {
     const onEnded = () => {
       const loopRegion = currentTrackId ? loopByTrack[currentTrackId] : undefined;
       if (currentLoopMode === "region" && loopRegion && loopRegion.end > loopRegion.start) {
+        if (handleThreepeatReplay(loopRegion.start)) {
+          return;
+        }
         audio.currentTime = loopRegion.start;
         setCurrentTime(loopRegion.start);
         applyDimMode(audio, dimMode);
         void audio.play().catch(() => setIsPlaying(false));
         return;
       }
-      if (repeatTrackMode === "loop-one" && currentLoopMode === "off") {
-        audio.currentTime = 0;
-        setCurrentTime(0);
-        applyDimMode(audio, dimMode);
-        void audio.play().catch(() => setIsPlaying(false));
-        return;
-      }
-      if (repeatTrackMode === "threepeat" && currentLoopMode === "off") {
+      if (repeatTrackMode !== "off" && currentLoopMode === "off") {
         if (handleThreepeatReplay(0)) {
           return;
         }
@@ -2541,7 +2545,7 @@ export default function App() {
       return;
     }
 
-    if (repeatTrackMode === "threepeat") {
+    if (repeatTrackMode !== "off") {
       setRepeatTrackMode("off");
       threepeatRemainingRef.current = 0;
       setThreepeatDisplayCount(0);
@@ -2991,12 +2995,13 @@ export default function App() {
 
   const toggleRepeatTrack = () => {
     setRepeatTrackMode((prev) => {
-      const next: RepeatTrackMode = prev === "off" ? "loop-one" : prev === "loop-one" ? "threepeat" : "off";
-      if (next === "threepeat") {
-        threepeatRemainingRef.current = 3;
-        setThreepeatDisplayCount(3);
+      const next: RepeatTrackMode = prev === "off" ? "repeat-2" : prev === "repeat-2" ? "repeat-3" : "off";
+      const nextRemaining = getRepeatModeCount(next);
+      if (next !== "off") {
+        threepeatRemainingRef.current = nextRemaining;
+        setThreepeatDisplayCount(nextRemaining);
         fireHeavyHaptic();
-        setFxToast("3PEAT Activated");
+        setFxToast(next === "repeat-2" ? "Repeat 2 Activated" : "Repeat 3 Activated");
       } else {
         threepeatRemainingRef.current = 0;
         setThreepeatDisplayCount(0);
@@ -3004,8 +3009,8 @@ export default function App() {
       }
       try {
         localStorage.setItem(REPEAT_TRACK_KEY, next);
-        if (next === "threepeat") {
-          localStorage.setItem(THREEPEAT_REMAINING_KEY, "3");
+        if (next !== "off") {
+          localStorage.setItem(THREEPEAT_REMAINING_KEY, String(nextRemaining));
         } else {
           localStorage.removeItem(THREEPEAT_REMAINING_KEY);
         }

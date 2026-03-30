@@ -1557,6 +1557,34 @@ body.theme-dark .rowAuraGlow {
   will-change: opacity, transform;
 }
 
+.admin-track-row__thumb {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 12px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    radial-gradient(circle at 28% 22%, rgba(162, 218, 255, 0.24), transparent 42%),
+    linear-gradient(180deg, rgba(24, 33, 48, 0.94), rgba(12, 18, 29, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.admin-track-row__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.admin-track-row__thumb-fallback {
+  color: rgba(223, 234, 247, 0.74);
+  font-size: 17px;
+  line-height: 1;
+}
+
 .admin-track-row__main,
 .admin-track-row__title-wrap,
 .admin-track-row__title-stack {
