@@ -153,6 +153,15 @@ export function MiniPlayerBar({
     return Boolean(element.closest(".mini-player-bar__meta, .mini-player-bar__compact-toggle, .mini-player-bar__header"));
   };
 
+  const canToggleCompactFromDesktopHeader = (target: EventTarget | null) => {
+    const element = target as HTMLElement | null;
+    if (!element) return false;
+    if (element.closest(".mini-player-bar__art, .mini-player-bar__aura-toggle, .mini-player-bar__loop-clear, .mini-player-bar__compact-toggle")) {
+      return false;
+    }
+    return Boolean(element.closest(".mini-player-bar__meta, .mini-player-bar__header"));
+  };
+
   return (
     <section
       id="polyPlayer"
@@ -193,6 +202,10 @@ export function MiniPlayerBar({
         }}
         onTouchCancel={() => {
           swipeStartRef.current = null;
+        }}
+        onDoubleClick={(event) => {
+          if (!canToggleCompactFromDesktopHeader(event.target)) return;
+          onToggleCompact();
         }}
       >
         <button

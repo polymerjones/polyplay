@@ -888,6 +888,21 @@ html[data-theme="light"] .mini-player-bar::before {
   font-size: 12px;
 }
 
+@media (pointer: fine) {
+  .mini-player-bar__title {
+    -webkit-user-select: text;
+    user-select: text;
+    cursor: text;
+  }
+
+  .mini-player-bar__sub,
+  .mini-player-bar__header-actions,
+  .mini-player-bar__compact-toggle {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
 .mini-player-bar__compact-toggle {
   min-width: 34px;
   min-height: 34px;
