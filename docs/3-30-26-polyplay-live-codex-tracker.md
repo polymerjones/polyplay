@@ -56,6 +56,7 @@ User should be able to import/select artwork before selecting an audio file if t
 - do not force audio-first workflow if unnecessary
 
 **Codex notes:**  
+- Artwork drop zone now accepts files before audio is selected; tracks still require an audio file to be created, so the view supports picking art first while remaining safe
 
 ---
 

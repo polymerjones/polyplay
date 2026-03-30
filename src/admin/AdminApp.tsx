@@ -1997,7 +1997,6 @@ export function AdminApp() {
               armed={Boolean(uploadArt)}
               onPickRequest={CAN_USE_IOS_NATIVE_ARTWORK_IMPORT ? (fallbackPick) => void onPickUploadArtworkNative(fallbackPick) : undefined}
               onFileSelected={(file) => void onPickUploadArtwork(file)}
-              disabled={!uploadAudio}
             />
             {uploadArtPreviewUrl && (
               <div className="video-frame-picker">
