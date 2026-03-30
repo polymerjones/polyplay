@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PolyPlay Audio Support</title>
+    <meta
+      name="description"
+      content="Support information for PolyPlay Audio, including contact, backup guidance, compatibility notes, and troubleshooting."
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #fff7fa;
+        --panel: rgba(255, 255, 255, 0.9);
+        --text: #341927;
+        --muted: #6c4b5f;
+        --border: rgba(207, 111, 130, 0.18);
+        --accent: #cf6f82;
+        --shadow: 0 18px 40px rgba(126, 84, 108, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Avenir Next", Avenir, "Trebuchet MS", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(255, 223, 235, 0.92), transparent 34%),
+          radial-gradient(circle at top right, rgba(245, 221, 234, 0.78), transparent 30%),
+          linear-gradient(180deg, #fff9fb, var(--bg));
+      }
+
+      main {
+        width: min(880px, calc(100vw - 32px));
+        margin: 32px auto;
+        padding: 28px 24px;
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(8px);
+      }
+
+      h1,
+      h2 {
+        line-height: 1.15;
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: clamp(30px, 4vw, 42px);
+        color: #4f2940;
+      }
+
+      h2 {
+        margin: 28px 0 10px;
+        font-size: 20px;
+        color: #5a3148;
+      }
+
+      p,
+      li {
+        line-height: 1.65;
+        font-size: 16px;
+      }
+
+      p {
+        margin: 0 0 14px;
+      }
+
+      ul {
+        margin: 0 0 14px 18px;
+        padding: 0;
+      }
+
+      li {
+        margin: 0 0 8px;
+      }
+
+      .lede {
+        color: var(--muted);
+        font-size: 16px;
+        margin-bottom: 24px;
+      }
+
+      .card {
+        margin: 18px 0 0;
+        padding: 16px 16px 14px;
+        border-radius: 16px;
+        border: 1px solid rgba(207, 111, 130, 0.14);
+        background: rgba(255, 255, 255, 0.64);
+      }
+
+      .contact {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 44px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(207, 111, 130, 0.22);
+        background: rgba(255, 255, 255, 0.92);
+        color: #8b3e5d;
+        text-decoration: none;
+        font-weight: 700;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.92em;
+      }
+
+      @media (max-width: 640px) {
+        main {
+          width: min(100vw - 20px, 880px);
+          margin: 10px auto;
+          padding: 20px 16px;
+          border-radius: 18px;
+        }
+
+        p,
+        li {
+          font-size: 15px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>PolyPlay Audio Support</h1>
+      <p class="lede">
+        PolyPlay Audio is an offline-first personal media player built for fast playback, local library control, custom
+        artwork, playlists, and backup-friendly ownership of your media experience.
+      </p>
+
+      <div class="card">
+        <p><strong>Need help?</strong></p>
+        <p>
+          For support, bug reports, App Store questions, or account-free product help, contact Paul Fisher Media:
+        </p>
+        <p>
+          <a class="contact" href="mailto:booking@paulfishermedia.com?subject=PolyPlay%20Audio%20Support">
+            booking@paulfishermedia.com
+          </a>
+        </p>
+      </div>
+
+      <h2>What PolyPlay Audio Does</h2>
+      <p>PolyPlay Audio lets you build and play a personal media library from your own files.</p>
+      <ul>
+        <li>Import audio from supported local files.</li>
+        <li>Organize tracks into playlists.</li>
+        <li>Replace artwork, including video artwork on supported flows.</li>
+        <li>Use offline playback, loops, backups, and custom visual themes.</li>
+      </ul>
+
+      <h2>Compatibility Notes</h2>
+      <p>PolyPlay Audio is designed around local-device playback and local storage.</p>
+      <ul>
+        <li>Behavior can vary slightly between desktop browsers, Safari, and the iPhone app wrapper.</li>
+        <li>Large media files, unsupported codecs, or browser storage limits can affect import behavior.</li>
+        <li>Video artwork support depends on the browser or platform being able to decode the uploaded file correctly.</li>
+      </ul>
+
+      <h2>Troubleshooting</h2>
+      <ul>
+        <li>If imported media does not appear correctly, try re-importing the file from the app’s import/settings flow.</li>
+        <li>If playback or artwork looks stale, fully close and reopen the app, then revisit the affected track.</li>
+        <li>If a backup import/export seems incomplete, confirm that the file finished saving before re-importing it.</li>
+        <li>If local media was removed from the device or browser storage was cleared, the app may no longer be able to load that content.</li>
+      </ul>
+
+      <h2>Backups And Data Safety</h2>
+      <p>
+        PolyPlay Audio is intended to store your library data locally. If your media, playlists, settings, or gratitude
+        entries matter to you, create backups regularly.
+      </p>
+      <ul>
+        <li>Use the app’s backup/export tools before deleting the app or clearing browser/device storage.</li>
+        <li>Deleting local app data can permanently remove your library unless you saved a backup first.</li>
+        <li>Backups should be stored somewhere you can find later, such as Files, iCloud Drive, or your preferred desktop folder.</li>
+      </ul>
+
+      <h2>What To Include In A Support Message</h2>
+      <ul>
+        <li>Your device and OS version</li>
+        <li>Browser name/version or whether you are using the iPhone app</li>
+        <li>What action you took right before the issue</li>
+        <li>What you expected to happen</li>
+        <li>What actually happened</li>
+      </ul>
+
+      <h2>Policy Links</h2>
+      <p>
+        Privacy Policy:
+        <a href="/privacy-policy.html">/privacy-policy.html</a>
+      </p>
+      <p>
+        Terms &amp; Conditions:
+        <a href="/terms-and-conditions.html">/terms-and-conditions.html</a>
+      </p>
+
+      <p class="muted">Last updated: March 30, 2026</p>
+    </main>
+  </body>
+</html>

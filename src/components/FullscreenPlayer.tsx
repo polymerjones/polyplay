@@ -103,6 +103,7 @@ export function FullscreenPlayer({
   const artStyle = track.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
     : ({ backgroundImage: track.artGrad || `url('${DEFAULT_ARTWORK_URL}')` } as CSSProperties);
+  const cinemaStillSrc = track.artUrl || DEFAULT_ARTWORK_URL;
   const hasArtworkVideo = Boolean(track.artVideoUrl);
   const shouldAnimateGenerated = track.artworkSource === "auto" && !hasArtworkVideo;
   const showLoopEditor = loopMode === "region" && loopRegion.active;
@@ -424,6 +425,14 @@ export function FullscreenPlayer({
             setIsCinemaMode(true);
           }}
         >
+          {!hasArtworkVideo && isCinemaMode && (
+            <img
+              className="fullscreen-player-shell__art-image"
+              src={cinemaStillSrc}
+              alt={`${track.title} artwork`}
+              draggable={false}
+            />
+          )}
           {hasArtworkVideo && !isArtworkVideoReady && (
             <div className="fullscreen-player-shell__art-poster" style={artStyle} aria-hidden="true" />
           )}

@@ -1941,6 +1941,10 @@ export default function App() {
     () => currentLoopMode === "region" && currentLoop.active && currentLoop.end > currentLoop.start,
     [currentLoop, currentLoopMode]
   );
+  const hasActiveRegionLoop = useMemo(
+    () => currentLoopMode === "region" && currentLoop.end > currentLoop.start,
+    [currentLoop, currentLoopMode]
+  );
 
   const dismissOpenState = () => {
     if (!showOpenState) return;
@@ -2010,6 +2014,7 @@ export default function App() {
 
     if (pendingAutoPlayRef.current) {
       const targetTrackId = currentTrackId;
+      const shouldDeferLoopedAutoplay = hasActiveRegionLoop;
       const attemptPlay = (reason: "pending-autoplay") => {
         logAudioDebug("play() called", { reason, targetTrackId, readyState: audio.readyState });
         return audio.play();
@@ -2018,6 +2023,12 @@ export default function App() {
         pendingAutoPlayRef.current = false;
         pendingAutoPlayTrackIdRef.current = null;
       };
+
+      if (shouldDeferLoopedAutoplay && targetTrackId) {
+        pendingAutoPlayRef.current = false;
+        pendingAutoPlayTrackIdRef.current = targetTrackId;
+        return;
+      }
 
       finalizePendingAutoPlay();
       void attemptPlay("pending-autoplay")
@@ -2039,7 +2050,7 @@ export default function App() {
           pendingAutoPlayTrackIdRef.current = targetTrackId;
         });
     }
-  }, [currentTrackId, currentAudioUrl]);
+  }, [currentTrackId, currentAudioUrl, hasActiveRegionLoop]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -2343,6 +2354,17 @@ export default function App() {
       if (!pendingTrackId || pendingTrackId !== currentTrackId) return;
       if (audioSrcRef.current !== currentAudioUrl || !currentAudioUrl) return;
       if (audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      const loopRegion = currentTrackId ? loopByTrack[currentTrackId] : undefined;
+      if (currentLoopMode === "region" && loopRegion && loopRegion.end > loopRegion.start) {
+        const effectiveDuration = getSafeDuration(audio.duration) || getSafeDuration(duration);
+        const safeLoopStart = Math.max(0, Math.min(effectiveDuration || loopRegion.start, loopRegion.start));
+        try {
+          audio.currentTime = safeLoopStart;
+        } catch {
+          // Ignore transient seek failures; the play path below will still be guarded by loop timeupdate logic.
+        }
+        commitUiCurrentTime(safeLoopStart, { force: true });
+      }
       pendingAutoPlayTrackIdRef.current = null;
       logAudioDebug("play() called", { reason: `pending-autoplay-${reason}`, readyState: audio.readyState, pendingTrackId });
       void audio.play()

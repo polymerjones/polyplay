@@ -1719,10 +1719,20 @@ html[data-theme="light"] .fullscreen-player-shell__art {
 }
 
 .fullscreen-player-shell__art.is-cinema-mode {
-  width: min(94vw, 1120px);
+  width: fit-content;
+  max-width: min(94vw, 1120px);
+  aspect-ratio: auto;
   max-width: min(94vw, 1120px);
   max-height: 72dvh;
+  height: auto;
   border-radius: calc(var(--pc-radius-lg) + 6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(7, 9, 15, 0.72);
+  background-image: none !important;
+  background-size: auto;
+  background-position: center;
   box-shadow:
     0 28px 56px rgba(0, 0, 0, 0.44),
     0 0 0 1px rgba(255, 255, 255, 0.08);
@@ -1733,6 +1743,30 @@ html[data-theme="light"] .fullscreen-player-shell__art {
   inset: 0;
   background-size: cover;
   background-position: center;
+}
+
+.fullscreen-player-shell__art.is-cinema-mode .fullscreen-player-shell__art-poster {
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+.fullscreen-player-shell__art-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.fullscreen-player-shell__art.is-cinema-mode .fullscreen-player-shell__art-image {
+  position: relative;
+  inset: auto;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 72dvh;
+  object-fit: contain;
 }
 
 .fullscreen-player-shell__art-video {
@@ -1747,6 +1781,12 @@ html[data-theme="light"] .fullscreen-player-shell__art {
 }
 
 .fullscreen-player-shell__art.is-cinema-mode .fullscreen-player-shell__art-video {
+  position: relative;
+  inset: auto;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 72dvh;
   object-fit: contain;
 }
 
@@ -2233,7 +2273,12 @@ body.perf-lite .fullscreen-player-shell__art-canvas.is-aura-flash-canvas {
   }
 
   .fullscreen-player-shell__art.is-cinema-mode {
-    width: min(96vw, 760px);
+    max-width: min(96vw, 760px);
+    max-height: 64dvh;
+  }
+
+  .fullscreen-player-shell__art.is-cinema-mode .fullscreen-player-shell__art-image,
+  .fullscreen-player-shell__art.is-cinema-mode .fullscreen-player-shell__art-video {
     max-height: 64dvh;
   }
 }
@@ -2252,7 +2297,12 @@ body.perf-lite .fullscreen-player-shell__art-canvas.is-aura-flash-canvas {
   }
 
   .fullscreen-player-shell__art.is-cinema-mode {
-    width: min(88vw, 620px);
+    max-width: min(88vw, 620px);
+    max-height: 58dvh;
+  }
+
+  .fullscreen-player-shell__art.is-cinema-mode .fullscreen-player-shell__art-image,
+  .fullscreen-player-shell__art.is-cinema-mode .fullscreen-player-shell__art-video {
     max-height: 58dvh;
   }
 
@@ -2374,7 +2424,12 @@ body.perf-lite .fullscreen-player-shell__art-canvas.is-aura-flash-canvas {
   }
 
   .fullscreen-player-shell__art.is-cinema-mode {
-    width: min(88vw, 1120px);
+    max-width: min(88vw, 1120px);
+  }
+
+  .fullscreen-player-shell__art.is-cinema-mode .fullscreen-player-shell__art-image,
+  .fullscreen-player-shell__art.is-cinema-mode .fullscreen-player-shell__art-video {
+    max-width: min(88vw, 1120px);
   }
 }
 

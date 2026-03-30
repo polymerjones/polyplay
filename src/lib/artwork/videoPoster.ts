@@ -1,3 +1,5 @@
+import { isDesktopSafari, isIosSafari } from "../platform";
+
 type PosterOptions = {
   timeSec?: number;
   maxEdge?: number;
@@ -16,6 +18,10 @@ const DEFAULT_SEEK_TIMEOUT_MS = 2000;
 let activePosterVideo: HTMLVideoElement | null = null;
 const MOBILE_POSTER_MAX_EDGE = 768;
 const DESKTOP_POSTER_MAX_EDGE = 1024;
+
+function prefersJpegPosterExport(): boolean {
+  return isDesktopSafari() || isIosSafari();
+}
 
 function isConstrainedDevice(): boolean {
   if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
@@ -218,12 +224,20 @@ export async function generateVideoPoster(file: Blob, options: PosterOptions = {
 
     if (!captured) throw new Error("Could not capture a usable poster frame");
 
-    const webpBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.88));
-    if (webpBlob && webpBlob.size > 0) return webpBlob;
+    if (!prefersJpegPosterExport()) {
+      const webpBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.88));
+      if (webpBlob && webpBlob.size > 0) return webpBlob;
+    }
 
     const jpegBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
-    if (!jpegBlob) throw new Error("Could not export poster image");
-    return jpegBlob;
+    if (jpegBlob && jpegBlob.size > 0) return jpegBlob;
+
+    if (prefersJpegPosterExport()) {
+      const webpBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.88));
+      if (webpBlob && webpBlob.size > 0) return webpBlob;
+    }
+
+    throw new Error("Could not export poster image");
   } finally {
     URL.revokeObjectURL(objectUrl);
     disposeVideo(activePosterVideo);
