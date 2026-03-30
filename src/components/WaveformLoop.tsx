@@ -230,7 +230,7 @@ export function WaveformLoop({
       return;
     }
     if (loopRegion.editing || draggingHandle) {
-      if (showManualZoomControls && manualZoomLevel > 0 && viewRange.end > viewRange.start) {
+      if (viewRange.end > viewRange.start) {
         const lockedSpan = Math.max(MIN_LOOP_SECONDS, viewRange.end - viewRange.start);
         setViewRange(centerRangeOnLoop(duration, safeStart, safeEnd, lockedSpan));
         return;

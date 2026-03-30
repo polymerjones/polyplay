@@ -3390,6 +3390,14 @@ export default function App() {
   };
 
   const openSettingsPanel = (mode: "upload" | "manage" = "upload") => {
+    try {
+      const active = document.activeElement;
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
+        active.blur();
+      }
+    } catch {
+      // Ignore focus-management failures while opening settings.
+    }
     markHasOnboarded();
     setSettingsPanelMode(mode);
     setOverlayPage("settings");
