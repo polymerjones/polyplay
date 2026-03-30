@@ -1951,6 +1951,13 @@ export default function App() {
     [currentLoop, currentLoopMode]
   );
 
+  const getSafeActiveLoopStart = () => {
+    if (currentLoopMode !== "region" || !currentLoop.active || currentLoop.end <= currentLoop.start) return null;
+    const audio = audioRef.current;
+    const effectiveDuration = getSafeDuration(duration) || getSafeDuration(audio?.duration || 0) || currentLoop.end;
+    return Math.max(0, Math.min(effectiveDuration, currentLoop.start));
+  };
+
   const dismissOpenState = () => {
     if (!showOpenState) return;
     setShowOpenState(false);
@@ -2013,7 +2020,7 @@ export default function App() {
       logAudioDebug("new src assigned", { src: nextUrl });
       audio.load();
       audioSrcRef.current = nextUrl;
-      setCurrentTime(0);
+      setCurrentTime(getSafeActiveLoopStart() ?? 0);
       setDuration(0);
     }
 
@@ -2030,6 +2037,10 @@ export default function App() {
       };
 
       if (shouldDeferLoopedAutoplay && targetTrackId) {
+        const safeLoopStart = getSafeActiveLoopStart();
+        if (safeLoopStart !== null) {
+          commitUiCurrentTime(safeLoopStart, { force: true });
+        }
         pendingAutoPlayRef.current = false;
         pendingAutoPlayTrackIdRef.current = targetTrackId;
         return;
@@ -2055,7 +2066,7 @@ export default function App() {
           pendingAutoPlayTrackIdRef.current = targetTrackId;
         });
     }
-  }, [currentTrackId, currentAudioUrl, hasActiveRegionLoop]);
+  }, [currentTrackId, currentAudioUrl, hasActiveRegionLoop, currentLoop.active, currentLoop.end, currentLoop.start, currentLoopMode, duration]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -2607,6 +2618,15 @@ export default function App() {
         audio.load();
       }
 
+      const safeLoopStart = getSafeActiveLoopStart();
+      if (safeLoopStart !== null) {
+        const loopEnd = Math.max(safeLoopStart + 0.05, currentLoop.end);
+        if (audio.currentTime < safeLoopStart || audio.currentTime >= loopEnd) {
+          audio.currentTime = safeLoopStart;
+          commitUiCurrentTime(safeLoopStart, { force: true });
+        }
+      }
+
       logAudioDebug("play() called", { reason, readyState: audio.readyState });
       await audio.play();
       logAudioDebug("play() resolved", { reason });
@@ -2666,8 +2686,10 @@ export default function App() {
       });
 
       const recoveredDuration = getSafeDuration(audio.duration) || getSafeDuration(duration);
-      if (resumeTime > 0 && recoveredDuration > 0) {
-        const safeResumeTime = Math.max(0, Math.min(recoveredDuration - 0.05, resumeTime));
+      const safeLoopStart = getSafeActiveLoopStart();
+      const preferredResumeTime = safeLoopStart ?? resumeTime;
+      if (preferredResumeTime > 0 && recoveredDuration > 0) {
+        const safeResumeTime = Math.max(0, Math.min(recoveredDuration - 0.05, preferredResumeTime));
         if (safeResumeTime > 0) {
           try {
             audio.currentTime = safeResumeTime;

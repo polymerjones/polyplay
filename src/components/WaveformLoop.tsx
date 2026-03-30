@@ -133,6 +133,7 @@ export function WaveformLoop({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const decorCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const dragSnapshotRef = useRef<{ start: number; end: number } | null>(null);
+  const dragViewSpanRef = useRef<number | null>(null);
   const zoomTimerRef = useRef<number | null>(null);
   const committedLoopDragRef = useRef(false);
   const prevCommittedLoopRef = useRef<{ start: number; end: number; active: boolean } | null>(null);
@@ -192,6 +193,7 @@ export function WaveformLoop({
       setHasAdjustedLoop(false);
       setManualZoomLevel(0);
       setShowManualZoomControls(false);
+      dragViewSpanRef.current = null;
       committedLoopDragRef.current = false;
       prevCommittedLoopRef.current = null;
       return;
@@ -225,13 +227,14 @@ export function WaveformLoop({
       if (!loopRegion.active || !hasLoopRange) {
         setManualZoomLevel(0);
         setShowManualZoomControls(false);
+        dragViewSpanRef.current = null;
       }
       setViewRange({ start: 0, end: duration });
       return;
     }
     if (loopRegion.editing || draggingHandle) {
-      if (viewRange.end > viewRange.start) {
-        const lockedSpan = Math.max(MIN_LOOP_SECONDS, viewRange.end - viewRange.start);
+      const lockedSpan = dragViewSpanRef.current;
+      if (lockedSpan !== null) {
         setViewRange(centerRangeOnLoop(duration, safeStart, safeEnd, lockedSpan));
         return;
       }
@@ -437,6 +440,11 @@ export function WaveformLoop({
         if (Math.hypot(dx, dy) < DRAG_START_DEADZONE_PX) return;
         activeHandle = pending.handle;
         dragSnapshotRef.current = { start: safeStart, end: safeEnd };
+        const fallbackDragRange = buildWindowedViewRange(duration, safeStart, safeEnd);
+        dragViewSpanRef.current =
+          viewRange.end > viewRange.start
+            ? Math.max(MIN_LOOP_SECONDS, viewRange.end - viewRange.start)
+            : Math.max(MIN_LOOP_SECONDS, fallbackDragRange.end - fallbackDragRange.start);
         pendingDragRef.current = null;
         setPendingHandle(null);
         setDraggingHandle(activeHandle);
@@ -468,6 +476,7 @@ export function WaveformLoop({
         onLoopDragCommit?.(snapshot.start);
       }
       dragSnapshotRef.current = null;
+      dragViewSpanRef.current = null;
       setDraggingHandle(null);
       window.requestAnimationFrame(() => {
         suppressSeekOnPointerUpRef.current = false;
@@ -494,6 +503,28 @@ export function WaveformLoop({
     window.addEventListener("polyplay:aura-trigger", onAuraTrigger);
     return () => window.removeEventListener("polyplay:aura-trigger", onAuraTrigger);
   }, [enableAuraPulse]);
+
+  useEffect(() => {
+    if (!pendingHandle && !draggingHandle) return;
+    const root = document.documentElement;
+    const body = document.body;
+    const prevRootUserSelect = root.style.userSelect;
+    const prevBodyUserSelect = body.style.userSelect;
+    const prevRootWebkitUserSelect = root.style.webkitUserSelect;
+    const prevBodyWebkitUserSelect = body.style.webkitUserSelect;
+
+    root.style.userSelect = "none";
+    body.style.userSelect = "none";
+    root.style.webkitUserSelect = "none";
+    body.style.webkitUserSelect = "none";
+
+    return () => {
+      root.style.userSelect = prevRootUserSelect;
+      body.style.userSelect = prevBodyUserSelect;
+      root.style.webkitUserSelect = prevRootWebkitUserSelect;
+      body.style.webkitUserSelect = prevBodyWebkitUserSelect;
+    };
+  }, [draggingHandle, pendingHandle]);
 
   return (
     <>
