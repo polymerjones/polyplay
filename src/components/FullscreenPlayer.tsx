@@ -337,6 +337,7 @@ export function FullscreenPlayer({
   };
 
   const canStartSwipeDismiss = (target: EventTarget | null, clientY: number) => {
+    if (loopRegion.editing) return false;
     if (isLoopGestureSuppressed()) return false;
     const element = target as HTMLElement | null;
     if (!element) return false;
@@ -355,6 +356,7 @@ export function FullscreenPlayer({
   };
 
   const handleCinemaOutsidePointerUp = (event: ReactPointerEvent<HTMLElement>) => {
+    if (loopRegion.editing) return;
     if (!isCinemaMode) return;
     const target = event.target as HTMLElement | null;
     if (!target) return;
@@ -390,6 +392,7 @@ export function FullscreenPlayer({
         beginSwipeDismiss(event.touches[0]);
       }}
       onTouchEnd={(event) => {
+        if (loopRegion.editing) return;
         const touch = event.changedTouches[0];
         if (!touch) return;
         endSwipeDismiss(touch);
@@ -398,6 +401,7 @@ export function FullscreenPlayer({
         swipeStartRef.current = null;
       }}
       onPointerDown={(event) => {
+        if (loopRegion.editing) return;
         if (isCinemaMode) return;
         const target = event.target as HTMLElement | null;
         if (!target?.closest(".fullscreen-player-shell__content")) onClose();
@@ -469,6 +473,7 @@ export function FullscreenPlayer({
           currentTime={currentTime}
           duration={duration}
           loopMode={loopMode}
+          loopRegion={loopRegion}
           dimMode={dimMode}
           dimControlSkipsSoftDim={dimControlSkipsSoftDim}
           noveltyMode={noveltyMode}

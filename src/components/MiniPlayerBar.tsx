@@ -265,6 +265,7 @@ export function MiniPlayerBar({
         currentTime={currentTime}
         duration={duration}
         loopMode={loopMode}
+        loopRegion={loopRegion}
         dimMode={dimMode}
         dimControlSkipsSoftDim={dimControlSkipsSoftDim}
         noveltyMode={noveltyMode}

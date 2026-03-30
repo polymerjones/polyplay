@@ -39,7 +39,8 @@ const DRAG_VIEW_TINY_BUFFER_RATIO = 0.22;
 const DRAG_VIEW_TINY_MIN_BUFFER_SEC = 0.18;
 const DRAG_START_DEADZONE_PX = 10;
 const MAX_MANUAL_ZOOM_LEVEL = 4;
-const MANUAL_ZOOM_FACTORS = [1, 0.8, 0.64, 0.5, 0.4] as const;
+const MANUAL_ZOOM_BUFFER_SEC = 0.2;
+const MANUAL_ZOOM_FACTORS = [1, 0.86, 0.72, 0.58, 0.46] as const;
 export function WaveformLoop({
   track,
   currentTime,
@@ -61,13 +62,29 @@ export function WaveformLoop({
   ) => {
     if (level <= 0) return baseRange;
     const zoomFactor = MANUAL_ZOOM_FACTORS[Math.max(0, Math.min(MAX_MANUAL_ZOOM_LEVEL, level))] ?? 1;
-    const baseSpan = Math.max(MIN_LOOP_SECONDS, baseRange.end - baseRange.start);
     const loopSpan = Math.max(MIN_LOOP_SECONDS, end - start);
-    const baseBuffer = Math.max(0.08, (baseSpan - loopSpan) * 0.5);
-    const targetSpan = Math.max(loopSpan + baseBuffer * 2, baseSpan * zoomFactor);
+    const baseSpan = Math.max(loopSpan + MANUAL_ZOOM_BUFFER_SEC * 2, baseRange.end - baseRange.start);
+    const targetSpan = Math.max(loopSpan + MANUAL_ZOOM_BUFFER_SEC * 2, baseSpan * zoomFactor);
     const center = (start + end) * 0.5;
     const nextStart = Math.max(0, Math.min(trackDuration - targetSpan, center - targetSpan * 0.5));
     const nextEnd = Math.min(trackDuration, nextStart + targetSpan);
+    return {
+      start: nextStart,
+      end: Math.max(nextStart + MIN_LOOP_SECONDS, nextEnd)
+    };
+  };
+
+  const centerRangeOnLoop = (
+    trackDuration: number,
+    start: number,
+    end: number,
+    targetSpan: number
+  ) => {
+    const loopSpan = Math.max(MIN_LOOP_SECONDS, end - start);
+    const span = Math.max(loopSpan + MANUAL_ZOOM_BUFFER_SEC * 2, targetSpan);
+    const center = (start + end) * 0.5;
+    const nextStart = Math.max(0, Math.min(trackDuration - span, center - span * 0.5));
+    const nextEnd = Math.min(trackDuration, nextStart + span);
     return {
       start: nextStart,
       end: Math.max(nextStart + MIN_LOOP_SECONDS, nextEnd)
@@ -213,6 +230,11 @@ export function WaveformLoop({
       return;
     }
     if (loopRegion.editing || draggingHandle) {
+      if (showManualZoomControls && manualZoomLevel > 0 && viewRange.end > viewRange.start) {
+        const lockedSpan = Math.max(MIN_LOOP_SECONDS, viewRange.end - viewRange.start);
+        setViewRange(centerRangeOnLoop(duration, safeStart, safeEnd, lockedSpan));
+        return;
+      }
       const dragRange = buildWindowedViewRange(duration, safeStart, safeEnd, {
           bufferRatio: DRAG_VIEW_BUFFER_RATIO,
           minBufferSec: DRAG_VIEW_MIN_BUFFER_SEC,
@@ -235,7 +257,21 @@ export function WaveformLoop({
         zoomTimerRef.current = null;
       }
     };
-  }, [draggingHandle, duration, hasAdjustedLoop, hasDuration, hasLoopRange, loopRegion.active, loopRegion.editing, manualZoomLevel, safeEnd, safeStart]);
+  }, [
+    draggingHandle,
+    duration,
+    hasAdjustedLoop,
+    hasDuration,
+    hasLoopRange,
+    loopRegion.active,
+    loopRegion.editing,
+    manualZoomLevel,
+    safeEnd,
+    safeStart,
+    showManualZoomControls,
+    viewRange.end,
+    viewRange.start
+  ]);
 
   useEffect(() => {
     let canceled = false;
@@ -519,33 +555,32 @@ export function WaveformLoop({
             type="button"
             className={`pc-wave-toolbar__toggle ${showManualZoomControls ? "is-active" : ""}`.trim()}
             aria-label={showManualZoomControls ? "Hide loop zoom controls" : "Show loop zoom controls"}
+            aria-pressed={showManualZoomControls}
             onClick={toggleManualZoomControls}
           >
-            Zoom
+            <span className="pc-wave-toolbar__glass" aria-hidden="true">⌕</span>
           </button>
-          {showManualZoomControls && (
-            <div className="pc-wave-toolbar__controls">
-              <button
-                type="button"
-                className="pc-wave-toolbar__btn"
-                aria-label="Zoom out loop editor"
-                onClick={() => setManualZoomLevel((prev) => Math.max(0, prev - 1))}
-                disabled={manualZoomLevel <= 0}
-              >
-                -
-              </button>
-              <span className="pc-wave-toolbar__label">Zoom</span>
-              <button
-                type="button"
-                className="pc-wave-toolbar__btn"
-                aria-label="Zoom in loop editor"
-                onClick={() => setManualZoomLevel((prev) => Math.min(MAX_MANUAL_ZOOM_LEVEL, prev + 1))}
-                disabled={manualZoomLevel >= MAX_MANUAL_ZOOM_LEVEL}
-              >
-                +
-              </button>
-            </div>
-          )}
+          <div className={`pc-wave-toolbar__controls ${showManualZoomControls ? "is-open" : ""}`.trim()}>
+            <button
+              type="button"
+              className="pc-wave-toolbar__btn"
+              aria-label="Zoom out loop editor"
+              onClick={() => setManualZoomLevel((prev) => Math.max(0, prev - 1))}
+              disabled={!showManualZoomControls || manualZoomLevel <= 0}
+            >
+              -
+            </button>
+            <span className="pc-wave-toolbar__label">Loop Zoom</span>
+            <button
+              type="button"
+              className="pc-wave-toolbar__btn"
+              aria-label="Zoom in loop editor"
+              onClick={() => setManualZoomLevel((prev) => Math.min(MAX_MANUAL_ZOOM_LEVEL, prev + 1))}
+              disabled={!showManualZoomControls || manualZoomLevel >= MAX_MANUAL_ZOOM_LEVEL}
+            >
+              +
+            </button>
+          </div>
         </div>
       )}
     </>

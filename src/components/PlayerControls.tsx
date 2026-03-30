@@ -1,8 +1,8 @@
-import type { LoopMode, RepeatTrackMode } from "../types";
+import type { LoopMode, LoopRegion, RepeatTrackMode } from "../types";
 import { useEffect, useRef, useState } from "react";
 import { formatTime } from "../lib/time";
 import { TransportIconButton } from "./TransportIconButton";
-import type { MouseEvent } from "react";
+import type { CSSProperties, MouseEvent } from "react";
 
 type Props = {
   variant: "mini" | "fullscreen";
@@ -13,6 +13,7 @@ type Props = {
   currentTime: number;
   duration: number;
   loopMode: LoopMode;
+  loopRegion?: LoopRegion;
   onPrev: () => void;
   onPlayPause: () => void;
   onNext: () => void;
@@ -53,6 +54,7 @@ export function PlayerControls({
   currentTime,
   duration,
   loopMode,
+  loopRegion,
   onPrev,
   onPlayPause,
   onNext,
@@ -87,6 +89,16 @@ export function PlayerControls({
   const [repeatFlashActive, setRepeatFlashActive] = useState(false);
   const safeDuration = Math.max(0, duration || 0);
   const safeCurrent = clampTime(currentTime, safeDuration);
+  const safeLoopStart = Math.max(0, Math.min(safeDuration, loopRegion?.start ?? 0));
+  const safeLoopEndCandidate = loopRegion?.end && loopRegion.end > 0 ? loopRegion.end : safeDuration;
+  const safeLoopEnd = Math.max(safeLoopStart, Math.min(safeDuration, safeLoopEndCandidate));
+  const hasLoopWindow = loopMode !== "off" && safeDuration > 0 && safeLoopEnd > safeLoopStart;
+  const loopStartPct = safeDuration > 0 ? (safeLoopStart / safeDuration) * 100 : 0;
+  const loopEndPct = safeDuration > 0 ? (safeLoopEnd / safeDuration) * 100 : 0;
+  const loopProgressPct =
+    hasLoopWindow && safeLoopEnd > safeLoopStart
+      ? (Math.max(safeLoopStart, Math.min(safeCurrent, safeLoopEnd)) - safeLoopStart) / (safeLoopEnd - safeLoopStart)
+      : 0;
   const isMuteOnlyDimControl = dimControlSkipsSoftDim;
   const isRepeatActive = repeatTrackMode !== "off";
   const isCountRepeat = repeatTrackMode !== "off";
@@ -202,7 +214,24 @@ export function PlayerControls({
       }`.trim()}
       aria-label="Player controls"
     >
-      <div className="pc-progress">
+      <div className={`pc-progress ${hasLoopWindow ? "has-loop-window" : ""}`.trim()}>
+        {hasLoopWindow && (
+          <div
+            className="pc-progress__loop-window"
+            aria-hidden="true"
+            style={
+              {
+                "--pc-loop-start-pct": `${loopStartPct}%`,
+                "--pc-loop-end-pct": `${loopEndPct}%`,
+                "--pc-loop-progress-pct": `${loopProgressPct * 100}%`
+              } as CSSProperties
+            }
+          >
+            <div className="pc-progress__loop-fill" />
+            <div className="pc-progress__loop-marker is-start" />
+            <div className="pc-progress__loop-marker is-end" />
+          </div>
+        )}
         <input
           className="pc-range"
           type="range"
