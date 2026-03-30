@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import logo from "../logo.png";
 import { quickTipsContent } from "./content/quickTips";
 import { APP_TITLE, APP_VERSION } from "./config/version";
@@ -174,6 +174,10 @@ const FX_INTERACTIVE_GUARD_SELECTORS = [
   ".bubble-layer",
   "[data-bubble-safe='off']"
 ].join(", ");
+
+const EDGE_PLAYLIST_ZONE_PX = 80;
+const EDGE_PLAYLIST_HOLD_MS = 600;
+const EDGE_PLAYLIST_SWIPE_THRESHOLD = 32;
 
 function clampAura(value: number): number {
   return Math.max(0, Math.min(10, Math.round(value)));
@@ -358,6 +362,17 @@ export default function App() {
   const [isGratitudeReactive, setIsGratitudeReactive] = useState(false);
   const [isJournalOpen, setIsJournalOpen] = useState(false);
   const [showJournalTapToast, setShowJournalTapToast] = useState(false);
+  const [edgeSwipeIndicator, setEdgeSwipeIndicator] = useState<"left" | "right" | null>(null);
+  const edgeSwipePointerIdRef = useRef<number | null>(null);
+  const edgeSwipeStartXRef = useRef(0);
+  const edgeSwipeHoldTimerRef = useRef<number | null>(null);
+  const edgeSwipeTriggeredRef = useRef(false);
+  const edgeSwipeLatestXRef = useRef(0);
+  const edgeSwipeIndicatorRef = useRef<"left" | "right" | null>(null);
+  const updateEdgeSwipeIndicator = useCallback((edge: "left" | "right" | null) => {
+    edgeSwipeIndicatorRef.current = edge;
+    setEdgeSwipeIndicator(edge);
+  }, []);
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [customThemeSlot, setCustomThemeSlot] = useState<CustomThemeSlot>("crimson");
   const [auraColor, setAuraColor] = useState<string | null>(() => {
@@ -424,10 +439,8 @@ export default function App() {
   });
   const [showSplash, setShowSplash] = useState<boolean>(() => {
     try {
-      const hasImported = localStorage.getItem(HAS_IMPORTED_KEY) === "true";
-      const hasOnboarded = localStorage.getItem(HAS_ONBOARDED_KEY) === "true";
       const hasSeenSplash = localStorage.getItem(SPLASH_SEEN_KEY) === "true";
-      return !hasImported && !hasOnboarded && !hasSeenSplash;
+      return !hasSeenSplash;
     } catch {
       return true;
     }
@@ -469,6 +482,8 @@ export default function App() {
   } | null>(null);
   const [showMissingIds, setShowMissingIds] = useState(false);
   const [runtimeLibrary, setRuntimeLibrary] = useState<LibraryState | null>(null);
+  const runtimeLibraryRef = useRef<LibraryState | null>(null);
+  const activePlaylistIdRef = useRef<string | null>(null);
   const [lastExportedAt, setLastExportedAt] = useState<string | null>(() => {
     try {
       return localStorage.getItem(LAST_EXPORTED_AT_KEY);
@@ -594,6 +609,14 @@ export default function App() {
   const activePlaylistId = runtimeLibrary?.activePlaylistId ?? null;
   const activePlaylistName =
     (activePlaylistId && runtimeLibrary?.playlistsById?.[activePlaylistId]?.name) || "None";
+
+  useEffect(() => {
+    runtimeLibraryRef.current = runtimeLibrary;
+  }, [runtimeLibrary]);
+
+  useEffect(() => {
+    activePlaylistIdRef.current = activePlaylistId;
+  }, [activePlaylistId]);
 
   useEffect(() => {
     currentTrackIdRef.current = currentTrackId;
@@ -1204,14 +1227,8 @@ export default function App() {
 
   useEffect(() => {
     try {
-      const hasImported = localStorage.getItem(HAS_IMPORTED_KEY) === "true";
-      const hasOnboarded = localStorage.getItem(HAS_ONBOARDED_KEY) === "true";
       const hasSeenSplash = localStorage.getItem(SPLASH_SEEN_KEY) === "true";
-      if (!hasImported && !hasOnboarded && !hasSeenSplash) {
-        setShowSplash(true);
-        return;
-      }
-      setShowSplash(false);
+      setShowSplash(!hasSeenSplash);
     } catch {
       setShowSplash(true);
     }
@@ -1221,6 +1238,95 @@ export default function App() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const cancelEdgeSwipeGesture = () => {
+      if (edgeSwipeHoldTimerRef.current !== null) {
+        window.clearTimeout(edgeSwipeHoldTimerRef.current);
+        edgeSwipeHoldTimerRef.current = null;
+      }
+      edgeSwipePointerIdRef.current = null;
+      edgeSwipeTriggeredRef.current = false;
+      updateEdgeSwipeIndicator(null);
+    };
+
+    const beginEdgeHold = (edge: "left" | "right", pointerId: number, clientX: number) => {
+      cancelEdgeSwipeGesture();
+      edgeSwipePointerIdRef.current = pointerId;
+      edgeSwipeStartXRef.current = clientX;
+      edgeSwipeLatestXRef.current = clientX;
+      edgeSwipeTriggeredRef.current = false;
+      edgeSwipeHoldTimerRef.current = window.setTimeout(() => {
+        edgeSwipeHoldTimerRef.current = null;
+        updateEdgeSwipeIndicator(edge);
+      }, EDGE_PLAYLIST_HOLD_MS);
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!event.isPrimary) return;
+      const playlistCount = runtimeLibraryRef.current
+        ? Object.keys(runtimeLibraryRef.current.playlistsById || {}).length
+        : 0;
+      if (playlistCount < 2) return;
+      const target = event.target as HTMLElement | null;
+      const guardTarget = target?.closest(FX_INTERACTIVE_GUARD_SELECTORS);
+      if (guardTarget) return;
+      const { clientX } = event;
+      const boundary = window.innerWidth;
+      if (clientX <= EDGE_PLAYLIST_ZONE_PX) {
+        beginEdgeHold("left", event.pointerId, clientX);
+      } else if (clientX >= boundary - EDGE_PLAYLIST_ZONE_PX) {
+        beginEdgeHold("right", event.pointerId, clientX);
+      }
+    };
+
+    const commitEdgeSwipe = (deltaX: number) => {
+      if (edgeSwipeTriggeredRef.current) return false;
+      if (Math.abs(deltaX) < EDGE_PLAYLIST_SWIPE_THRESHOLD) return false;
+      const playlistsById = runtimeLibraryRef.current?.playlistsById;
+      const playlistIds = playlistsById ? Object.keys(playlistsById) : [];
+      const currentId = activePlaylistIdRef.current;
+      if (!currentId || playlistIds.length < 2) return false;
+      const currentIndex = playlistIds.indexOf(currentId);
+      if (currentIndex === -1) return false;
+      const direction = deltaX > 0 ? 1 : -1;
+      const nextIndex = (currentIndex + direction + playlistIds.length) % playlistIds.length;
+      const nextId = playlistIds[nextIndex];
+      if (!nextId || nextId === currentId) return false;
+      edgeSwipeTriggeredRef.current = true;
+      void setActivePlaylist(nextId);
+      fireLightHaptic();
+      return true;
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      edgeSwipeLatestXRef.current = event.clientX;
+      if (edgeSwipeIndicatorRef.current === null) return;
+      if (edgeSwipePointerIdRef.current !== event.pointerId) return;
+      commitEdgeSwipe(event.clientX - edgeSwipeStartXRef.current);
+    };
+
+    const handlePointerEnd = () => {
+      commitEdgeSwipe(edgeSwipeLatestXRef.current - edgeSwipeStartXRef.current);
+      cancelEdgeSwipeGesture();
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerEnd);
+    window.addEventListener("pointercancel", handlePointerEnd);
+
+    return () => {
+      cancelEdgeSwipeGesture();
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerEnd);
+      window.removeEventListener("pointercancel", handlePointerEnd);
+    };
+  }, [setActivePlaylist]);
+
 
   useEffect(() => {
     try {
@@ -3662,6 +3768,11 @@ export default function App() {
 
   return (
     <>
+      <div
+        className="playlist-edge-swipe-indicator"
+        data-edge={edgeSwipeIndicator ?? undefined}
+        aria-hidden="true"
+      />
       <div className="app-shell">
         <div className="effects-layer" aria-hidden="true">
           <AmbientFxCanvas

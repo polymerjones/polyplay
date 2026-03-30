@@ -1849,3 +1849,55 @@ body.theme-dark .admin-v1 textarea {
     bottom: 52px;
   }
 }
+
+.playlist-edge-swipe-indicator {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3800;
+}
+
+.playlist-edge-swipe-indicator::before,
+.playlist-edge-swipe-indicator::after {
+  content: "";
+  position: absolute;
+  top: 10%;
+  bottom: 10%;
+  width: min(90px, 10vw);
+  max-width: 90px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(248, 187, 110, 0.95) 35%,
+    rgba(246, 158, 60, 0.9) 60%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  opacity: 0;
+  transform: translateX(0);
+  box-shadow: 0 0 20px rgba(248, 187, 110, 0.7), 0 0 42px rgba(246, 158, 60, 0.5);
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+
+.playlist-edge-swipe-indicator::before {
+  left: 0;
+  transform: translateX(-32px);
+}
+
+.playlist-edge-swipe-indicator::after {
+  right: 0;
+  transform: translateX(32px);
+}
+
+.playlist-edge-swipe-indicator[data-edge="left"]::before,
+.playlist-edge-swipe-indicator[data-edge="right"]::after {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .playlist-edge-swipe-indicator::before,
+  .playlist-edge-swipe-indicator::after {
+    transition: none;
+  }
+}

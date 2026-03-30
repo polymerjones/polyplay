@@ -63,16 +63,17 @@ User should be able to import/select artwork before selecting an audio file if t
 ---
 
 ### 3. Splash/logo first-launch behavior
-**Status:** [open]  
+**Status:** [done]  
 **Platform:** both  
 **Problem:**  
-Need to ensure the video logo splash only occurs on first launch. After that, the generated pre-splash/background state should be the normal experience.
+Need to ensure the video logo splash only occurs on first launch. After that, the generated pre-splash/background state should be the normal experience. 
 
 **Need:**  
 - first-launch-only video splash
 - later launches use the polished generated pre-splash state
 
-**Codex notes:**  
+**Codex notes:**
+ - Splash visibility now relies solely on `SPLASH_SEEN_KEY`; once the user dismisses or skips the video the flag stays true and subsequent visits load the standard background without replaying the clip.
 
 ---
 
@@ -91,6 +92,9 @@ If user taps and holds for ~0.6s on left or right edge of the screen, a glowing 
 - subtle flash + hard haptic on playlist switch
 
 **Codex notes:**  
+- Guard logic now exits as soon as the down target lives inside any interactive node so the edge drag is only triggered from the raw background drop zone, and the sensitive zone was widened to 80px to give users more room along each edge.
+- Added CSS for `.playlist-edge-swipe-indicator` so the amber hold cue actually draws against the left or right edge once the 600ms timer completes; the indicator still needs live confirmation that it no longer feels invisible.
+- The failure stemmed from the commit path never firing—even though the hold indicator appeared, the swipe delta was measured but the switch logic never ran when the pointer released. I refactored that logic into a `commitEdgeSwipe` helper that both pointermove and pointerup call (with the latest recorded clientX), so once the hold arms the gesture we now always evaluate the final delta and switch playlists exactly once per arm. The helper also checks runtime library state and wraps the `setActivePlaylist` call so the drop-down updates reliably.
 
 ---
 
