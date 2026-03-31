@@ -5603,7 +5603,6 @@ body.nuke-flash::after {
   animation: heroLogoShine 4s linear infinite;
   pointer-events: none;
 }
-}
 
 .topbar--two-tier .brand-logo {
   width: clamp(42px, 4.2vw, 54px);
