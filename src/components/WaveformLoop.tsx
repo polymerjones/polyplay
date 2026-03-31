@@ -26,21 +26,21 @@ const MIN_LOOP_SECONDS = 0.5;
 const LOOP_VIEW_ZOOM_DELAY_MS = 420;
 const LOOP_VIEW_BUFFER_RATIO = 0.18;
 const LOOP_VIEW_MIN_BUFFER_SEC = 0.3;
-const MAX_LOOP_VIEW_SCALE = 2.75;
+const MAX_LOOP_VIEW_SCALE = 5.0;
 const LOOP_VIEW_TINY_LOOP_THRESHOLD_SEC = 2.5;
 const LOOP_VIEW_TINY_MIN_SPAN_SEC = 1.15;
 const LOOP_VIEW_TINY_BUFFER_RATIO = 0.12;
 const LOOP_VIEW_TINY_MIN_BUFFER_SEC = 0.14;
 const DRAG_VIEW_BUFFER_RATIO = 0.42;
 const DRAG_VIEW_MIN_BUFFER_SEC = 0.7;
-const MAX_DRAG_VIEW_SCALE = 2.3;
+const MAX_DRAG_VIEW_SCALE = 3.3;
 const DRAG_VIEW_TINY_MIN_SPAN_SEC = 1.35;
 const DRAG_VIEW_TINY_BUFFER_RATIO = 0.22;
 const DRAG_VIEW_TINY_MIN_BUFFER_SEC = 0.18;
 const DRAG_START_DEADZONE_PX = 10;
-const MAX_MANUAL_ZOOM_LEVEL = 4;
-const MANUAL_ZOOM_BUFFER_SEC = 0.2;
-const MANUAL_ZOOM_FACTORS = [1, 0.86, 0.72, 0.58, 0.46] as const;
+const MANUAL_ZOOM_BUFFER_SEC = 0.16;
+const MANUAL_ZOOM_FACTORS = [1, 0.86, 0.72, 0.58, 0.46, 0.34, 0.26, 0.18, 0.12] as const;
+const MAX_MANUAL_ZOOM_LEVEL = MANUAL_ZOOM_FACTORS.length - 1;
 export function WaveformLoop({
   track,
   currentTime,
@@ -115,10 +115,11 @@ export function WaveformLoop({
     const buffer = Math.max(minBufferSec, loopSpan * bufferRatio);
     const desiredSpan = loopSpan + buffer * 2;
     const maxScale = options?.maxScale ?? MAX_LOOP_VIEW_SCALE;
-    const minimumReadableSpan =
-      isTinyLoop
-        ? Math.min(trackDuration / maxScale, options?.tinyLoopMinSpanSec ?? LOOP_VIEW_TINY_MIN_SPAN_SEC)
-        : trackDuration / maxScale;
+    const fallbackMinSpan = loopSpan + buffer * 2;
+    const tinyLoopMinSpan = options?.tinyLoopMinSpanSec ?? LOOP_VIEW_TINY_MIN_SPAN_SEC;
+    const minimumReadableSpan = isTinyLoop
+      ? Math.max(fallbackMinSpan, tinyLoopMinSpan)
+      : Math.max(fallbackMinSpan, trackDuration / maxScale);
     const targetSpan = Math.max(desiredSpan, minimumReadableSpan);
     const center = (start + end) * 0.5;
     const nextStart = Math.max(0, Math.min(trackDuration - targetSpan, center - targetSpan * 0.5));
@@ -139,14 +140,16 @@ export function WaveformLoop({
   const prevCommittedLoopRef = useRef<{ start: number; end: number; active: boolean } | null>(null);
   const suppressSeekOnPointerUpRef = useRef(false);
   const pendingDragRef = useRef<{ handle: Handle; clientX: number; clientY: number } | null>(null);
+  const prevEditingRef = useRef(loopRegion.editing);
 
   const [peaks, setPeaks] = useState<number[]>(() => fallbackPeaks());
   const [pendingHandle, setPendingHandle] = useState<Handle | null>(null);
   const [draggingHandle, setDraggingHandle] = useState<Handle | null>(null);
   const [hasAdjustedLoop, setHasAdjustedLoop] = useState(false);
-  const [showManualZoomControls, setShowManualZoomControls] = useState(false);
   const [manualZoomLevel, setManualZoomLevel] = useState(0);
   const [viewRange, setViewRange] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
+  const [shouldPreserveViewRange, setShouldPreserveViewRange] = useState(false);
+  const lockedViewRangeRef = useRef<{ start: number; end: number } | null>(null);
   const isLightTheme =
     typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "light";
 
@@ -181,18 +184,10 @@ export function WaveformLoop({
     return safeViewRange.start + ratio * viewSpan;
   };
 
-  const toggleManualZoomControls = () => {
-    setShowManualZoomControls((prev) => {
-      if (prev) setManualZoomLevel(0);
-      return !prev;
-    });
-  };
-
   useEffect(() => {
     if (!track?.id) {
       setHasAdjustedLoop(false);
       setManualZoomLevel(0);
-      setShowManualZoomControls(false);
       dragViewSpanRef.current = null;
       committedLoopDragRef.current = false;
       prevCommittedLoopRef.current = null;
@@ -215,6 +210,19 @@ export function WaveformLoop({
   }, [loopRegion.active, safeEnd, safeStart, track?.id]);
 
   useEffect(() => {
+    if (
+      shouldPreserveViewRange &&
+      !loopRegion.editing &&
+      loopRegion.active &&
+      hasLoopRange &&
+      lockedViewRangeRef.current
+    ) {
+      const { start, end } = lockedViewRangeRef.current;
+      if (Math.abs(start - viewRange.start) > 0.0001 || Math.abs(end - viewRange.end) > 0.0001) {
+        setViewRange({ start, end });
+      }
+      return;
+    }
     if (!hasDuration) {
       setViewRange({ start: 0, end: 0 });
       return;
@@ -226,7 +234,6 @@ export function WaveformLoop({
     if (!loopRegion.active || !hasLoopRange || !hasAdjustedLoop) {
       if (!loopRegion.active || !hasLoopRange) {
         setManualZoomLevel(0);
-        setShowManualZoomControls(false);
         dragViewSpanRef.current = null;
       }
       setViewRange({ start: 0, end: duration });
@@ -271,10 +278,39 @@ export function WaveformLoop({
     manualZoomLevel,
     safeEnd,
     safeStart,
-    showManualZoomControls,
+    shouldPreserveViewRange,
     viewRange.end,
     viewRange.start
   ]);
+
+  useEffect(() => {
+    if (loopRegion.editing) {
+      lockedViewRangeRef.current = { start: viewRange.start, end: viewRange.end };
+      setShouldPreserveViewRange(false);
+    } else if (
+      prevEditingRef.current &&
+      !loopRegion.editing &&
+      loopRegion.active &&
+      hasLoopRange &&
+      lockedViewRangeRef.current
+    ) {
+      setShouldPreserveViewRange(true);
+    }
+    prevEditingRef.current = loopRegion.editing;
+  }, [loopRegion.editing, loopRegion.active, hasLoopRange, viewRange.start, viewRange.end]);
+
+  useEffect(() => {
+    if (!loopRegion.active) {
+      setShouldPreserveViewRange(false);
+      lockedViewRangeRef.current = null;
+    }
+  }, [loopRegion.active]);
+
+  useEffect(() => {
+    if (!loopRegion.editing) {
+      setManualZoomLevel(0);
+    }
+  }, [loopRegion.editing]);
 
   useEffect(() => {
     let canceled = false;
@@ -472,7 +508,7 @@ export function WaveformLoop({
       if (snapshot) {
         committedLoopDragRef.current = true;
         setHasAdjustedLoop(true);
-        onSetLoopRange(snapshot.start, snapshot.end, true, { persist: true, editing: false });
+        onSetLoopRange(snapshot.start, snapshot.end, true, { persist: true, editing: true });
         onLoopDragCommit?.(snapshot.start);
       }
       dragSnapshotRef.current = null;
@@ -557,47 +593,43 @@ export function WaveformLoop({
               className="pc-wave__loop-handle is-start"
               style={{ left: `${startPct}%` }}
               aria-label="Loop start"
-              onPointerDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                suppressSeekOnPointerUpRef.current = true;
-                pendingDragRef.current = { handle: "start", clientX: event.clientX, clientY: event.clientY };
-                setPendingHandle("start");
-              }}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onSetLoopRange(safeStart, safeEnd, true, { persist: false, editing: true });
+              suppressSeekOnPointerUpRef.current = true;
+              pendingDragRef.current = { handle: "start", clientX: event.clientX, clientY: event.clientY };
+              setPendingHandle("start");
+            }}
             />
             <button
               className="pc-wave__loop-handle is-end"
               style={{ left: `${endPct}%` }}
               aria-label="Loop end"
-              onPointerDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                suppressSeekOnPointerUpRef.current = true;
-                pendingDragRef.current = { handle: "end", clientX: event.clientX, clientY: event.clientY };
-                setPendingHandle("end");
-              }}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onSetLoopRange(safeStart, safeEnd, true, { persist: false, editing: true });
+              suppressSeekOnPointerUpRef.current = true;
+              pendingDragRef.current = { handle: "end", clientX: event.clientX, clientY: event.clientY };
+              setPendingHandle("end");
+            }}
             />
           </div>
         </div>
       </div>
-      {loopRegion.active && hasLoopRange && (
+      {loopRegion.active && hasLoopRange && loopRegion.editing && (
         <div className="pc-wave-toolbar" aria-label="Loop zoom controls">
-          <button
-            type="button"
-            className={`pc-wave-toolbar__toggle ${showManualZoomControls ? "is-active" : ""}`.trim()}
-            aria-label={showManualZoomControls ? "Hide loop zoom controls" : "Show loop zoom controls"}
-            aria-pressed={showManualZoomControls}
-            onClick={toggleManualZoomControls}
-          >
-            <span className="pc-wave-toolbar__glass" aria-hidden="true">⌕</span>
-          </button>
-          <div className={`pc-wave-toolbar__controls ${showManualZoomControls ? "is-open" : ""}`.trim()}>
+          <div className="pc-wave-toolbar__toggle is-active" aria-hidden="true">
+            <span className="pc-wave-toolbar__glass">⌕</span>
+          </div>
+          <div className="pc-wave-toolbar__controls is-open">
             <button
               type="button"
               className="pc-wave-toolbar__btn"
               aria-label="Zoom out loop editor"
               onClick={() => setManualZoomLevel((prev) => Math.max(0, prev - 1))}
-              disabled={!showManualZoomControls || manualZoomLevel <= 0}
+              disabled={manualZoomLevel <= 0}
             >
               -
             </button>
@@ -607,7 +639,7 @@ export function WaveformLoop({
               className="pc-wave-toolbar__btn"
               aria-label="Zoom in loop editor"
               onClick={() => setManualZoomLevel((prev) => Math.min(MAX_MANUAL_ZOOM_LEVEL, prev + 1))}
-              disabled={!showManualZoomControls || manualZoomLevel >= MAX_MANUAL_ZOOM_LEVEL}
+              disabled={manualZoomLevel >= MAX_MANUAL_ZOOM_LEVEL}
             >
               +
             </button>

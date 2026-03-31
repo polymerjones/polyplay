@@ -3033,7 +3033,7 @@ export default function App() {
     const safeEnd = Math.min(effectiveDuration, Math.max(safeStart + 0.1, effectiveDuration - margin));
     setLoopByTrack((prev) => ({
       ...prev,
-      [currentTrackId]: { start: safeStart, end: safeEnd, active: true, editing: false }
+      [currentTrackId]: { start: safeStart, end: safeEnd, active: true, editing: true }
     }));
     setLoopModeByTrack((prev) => ({ ...prev, [currentTrackId]: "region" }));
     markActivePlaylistDirty();
@@ -3075,6 +3075,18 @@ export default function App() {
     resetLoopStateForTrack(currentTrackId);
     setIsCropAudioPromptOpen(false);
     markActivePlaylistDirty();
+  };
+
+  const beginLoopAdjustment = () => {
+    if (!currentTrackId) return;
+    if (currentLoop.end <= currentLoop.start) return;
+    setLoopRange(currentLoop.start, currentLoop.end, true, { persist: true, editing: true });
+  };
+
+  const finishLoopAdjustment = () => {
+    if (!currentTrackId) return;
+    if (currentLoop.end <= currentLoop.start) return;
+    setLoopRange(currentLoop.start, currentLoop.end, true, { persist: true, editing: false });
   };
 
   const setLoopFromCurrentWithExpand = () => {
@@ -4212,6 +4224,8 @@ export default function App() {
           onSetLoop={setLoopFromCurrentWithExpand}
           onToggleLoopMode={toggleLoopMode}
           onClearLoop={clearLoopWithCompactRestore}
+          onBeginLoopAdjustment={beginLoopAdjustment}
+          onFinishLoopAdjustment={finishLoopAdjustment}
           canCropAudio={hasCroppableLoop}
           onOpenCropAudioPrompt={openCropAudioPrompt}
           onOpenFullscreen={openFullscreenFromPlaybarArt}
@@ -4266,6 +4280,8 @@ export default function App() {
           onSetLoop={setLoopFromCurrent}
           onToggleLoopMode={toggleLoopMode}
           onClearLoop={clearLoop}
+          onBeginLoopAdjustment={beginLoopAdjustment}
+          onFinishLoopAdjustment={finishLoopAdjustment}
           canCropAudio={hasCroppableLoop}
           onOpenCropAudioPrompt={openCropAudioPrompt}
           onAuraUp={() => {
@@ -4627,6 +4643,11 @@ export default function App() {
                   Cancel
                 </button>
               </div>
+              {isCropAudioBusy && (
+                <div className="crop-audio-card__busy">
+                  <TextShimmer duration={1.35}>Cropping audio…</TextShimmer>
+                </div>
+              )}
               <p className="crop-audio-card__note">
                 Cropped audio is written as WAV. New-track crops preserve artwork and reset aura.
               </p>

@@ -5957,6 +5957,13 @@ html[data-theme="light"] .playlist-selector select {
   cursor: not-allowed;
 }
 
+.crop-audio-card__busy {
+  margin-top: 12px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.88);
+  text-align: center;
+}
+
 .playlist-create-body {
   display: grid;
   gap: 14px;

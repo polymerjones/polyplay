@@ -43,6 +43,8 @@ type Props = {
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
   onClearLoop: () => void;
+  onBeginLoopAdjustment: () => void;
+  onFinishLoopAdjustment: () => void;
   canCropAudio?: boolean;
   onOpenCropAudioPrompt?: () => void;
   onAuraUp: () => void;
@@ -79,6 +81,8 @@ export function FullscreenPlayer({
   onSetLoop,
   onToggleLoopMode,
   onClearLoop,
+  onBeginLoopAdjustment,
+  onFinishLoopAdjustment,
   canCropAudio = false,
   onOpenCropAudioPrompt,
   onAuraUp,
@@ -504,6 +508,8 @@ export function FullscreenPlayer({
           onSetLoop={onSetLoop}
           onToggleLoopMode={onToggleLoopMode}
           onClearLoop={onClearLoop}
+          onBeginLoopAdjustment={onBeginLoopAdjustment}
+          onFinishLoopAdjustment={onFinishLoopAdjustment}
           canCropAudio={canCropAudio}
           onOpenCropAudioPrompt={onOpenCropAudioPrompt}
           onAuraUp={() => {

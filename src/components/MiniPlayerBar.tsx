@@ -45,6 +45,8 @@ type Props = {
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
   onClearLoop: () => void;
+  onBeginLoopAdjustment: () => void;
+  onFinishLoopAdjustment: () => void;
   canCropAudio?: boolean;
   onOpenCropAudioPrompt?: () => void;
   onOpenFullscreen: () => void;
@@ -85,6 +87,8 @@ export function MiniPlayerBar({
   onSetLoop,
   onToggleLoopMode,
   onClearLoop,
+  onBeginLoopAdjustment,
+  onFinishLoopAdjustment,
   canCropAudio = false,
   onOpenCropAudioPrompt,
   onOpenFullscreen,
@@ -284,9 +288,11 @@ export function MiniPlayerBar({
         showDimHintCue={showDimHintCue}
         showNoveltyHintCue={showVibeHintCue}
         onVinylScratch={onVinylScratch}
-        onSetLoop={onSetLoop}
-        onToggleLoopMode={onToggleLoopMode}
-        onClearLoop={onClearLoop}
+          onSetLoop={onSetLoop}
+          onToggleLoopMode={onToggleLoopMode}
+          onClearLoop={onClearLoop}
+          onBeginLoopAdjustment={onBeginLoopAdjustment}
+          onFinishLoopAdjustment={onFinishLoopAdjustment}
         canCropAudio={canCropAudio}
         onOpenCropAudioPrompt={onOpenCropAudioPrompt}
         onAuraUp={

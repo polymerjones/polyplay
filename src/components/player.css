@@ -1608,6 +1608,12 @@ html[data-theme="light"] .pc-wave__loop-handle::after {
   font-size: 36px;
 }
 
+.pc-wave-toolbar__done {
+  width: 60px;
+  height: 60px;
+  font-size: 32px;
+}
+
 .pc-wave-toolbar__toggle.is-active {
   background: linear-gradient(180deg, rgba(255, 223, 133, 0.96), rgba(255, 191, 74, 0.94));
   color: rgba(59, 34, 5, 0.96);

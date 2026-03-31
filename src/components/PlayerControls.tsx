@@ -32,6 +32,8 @@ type Props = {
   onSetLoop: () => void;
   onToggleLoopMode: () => void;
   onClearLoop: () => void;
+  onBeginLoopAdjustment: () => void;
+  onFinishLoopAdjustment: () => void;
   canCropAudio?: boolean;
   onOpenCropAudioPrompt?: () => void;
   onVinylScratch?: () => void;
@@ -73,6 +75,8 @@ export function PlayerControls({
   onSetLoop,
   onToggleLoopMode,
   onClearLoop,
+  onBeginLoopAdjustment,
+  onFinishLoopAdjustment,
   canCropAudio = false,
   onOpenCropAudioPrompt,
   onVinylScratch,
@@ -93,6 +97,20 @@ export function PlayerControls({
   const safeLoopEndCandidate = loopRegion?.end && loopRegion.end > 0 ? loopRegion.end : safeDuration;
   const safeLoopEnd = Math.max(safeLoopStart, Math.min(safeDuration, safeLoopEndCandidate));
   const hasLoopWindow = loopMode !== "off" && safeDuration > 0 && safeLoopEnd > safeLoopStart;
+  const hasLoopBounds = safeDuration > 0 && safeLoopEnd > safeLoopStart;
+  const isLoopEditing = Boolean(loopRegion?.editing);
+  const primaryLoopLabel = !hasLoopBounds ? "Set Loop" : isLoopEditing ? "Done" : "Edit Loop";
+  const handleLoopButton = () => {
+    if (isLoopEditing) {
+      onFinishLoopAdjustment();
+      return;
+    }
+    if (hasLoopBounds) {
+      onBeginLoopAdjustment();
+      return;
+    }
+    onSetLoop();
+  };
   const loopStartPct = safeDuration > 0 ? (safeLoopStart / safeDuration) * 100 : 0;
   const loopEndPct = safeDuration > 0 ? (safeLoopEnd / safeDuration) * 100 : 0;
   const loopProgressPct =
@@ -398,10 +416,10 @@ export function PlayerControls({
           <div className="pc-loop-row" role="group" aria-label="Loop controls">
             <button
               type="button"
-              className={`pc-btn pc-btn--sm pc-btn--toggle ${loopMode !== "off" ? "is-active" : ""}`.trim()}
-              onClick={loopMode === "off" ? onSetLoop : onToggleLoopMode}
+              className={`pc-btn pc-btn--sm pc-btn--toggle ${isLoopEditing ? "is-active" : ""}`.trim()}
+              onClick={handleLoopButton}
             >
-              {loopMode !== "off" ? "Loop Active" : "Set Loop"}
+              {primaryLoopLabel}
             </button>
             <button type="button" className="pc-btn pc-btn--sm" onClick={onClearLoop}>
               Clear Loop
