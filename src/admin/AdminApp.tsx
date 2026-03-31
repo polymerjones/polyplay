@@ -1061,7 +1061,6 @@ export function AdminApp() {
       await refreshTracks();
       await refreshStorage();
       await notifyUploadSuccess();
-      uploadTitleInputRef.current?.focus();
     } catch (error) {
       clearImportNotice();
       if (isStorageCapError(error)) {

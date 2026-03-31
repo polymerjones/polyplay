@@ -23,6 +23,22 @@
   --playerH: 260px;
 }
 
+.topbar-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  font-size: clamp(16px, 2.1vw, 26px);
+  letter-spacing: 0.2px;
+  font-weight: 700;
+  color: #eef3ff;
+  text-shadow: 0 2px 10px rgba(8, 12, 22, 0.45);
+  line-height: 1.05;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 html[data-theme="light"] {
   --color-bg-primary: #f6f4fb;
   --color-bg-secondary: #f0ecfb;
@@ -5540,11 +5556,12 @@ body.nuke-flash::after {
 }
 
 .topbar-title__logo {
-  height: clamp(24px, 3vw, 32px);
-  max-width: min(240px, 60vw);
+  height: clamp(32px, 4vw, 56px);
+  max-width: min(300px, 72vw);
   width: 100%;
   object-fit: contain;
   display: block;
+  background-color: transparent;
 }
 
 .topbar--two-tier .brand-logo {
