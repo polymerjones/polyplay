@@ -53,7 +53,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   text-align: center;
   font-size: clamp(16px, 2.1vw, 26px);
   letter-spacing: 0.2px;
@@ -1359,21 +1359,27 @@ body.theme-custom.theme-custom-crimson .topbar {
   --hero-line-rgb: 224, 118, 152;
   --hero-line-soft-rgb: 246, 206, 220;
   --hero-glow-rgb: 214, 86, 132;
-  background: radial-gradient(980px 360px at 26% -6%, rgba(170, 64, 104, 0.94) 0%, rgba(24, 11, 18, 0.97) 64%);
+  background:
+    radial-gradient(980px 360px at 26% -6%, rgba(170, 64, 104, 0.6) 0%, transparent 60%),
+    rgba(16, 7, 15, 0.88);
 }
 
 body.theme-custom.theme-custom-teal .topbar {
   --hero-line-rgb: 92, 233, 226;
   --hero-line-soft-rgb: 188, 255, 249;
   --hero-glow-rgb: 68, 198, 186;
-  background: radial-gradient(980px 360px at 26% -6%, rgba(40, 154, 145, 0.94) 0%, rgba(7, 24, 25, 0.97) 64%);
+  background:
+    radial-gradient(980px 360px at 26% -6%, rgba(40, 154, 145, 0.5) 0%, transparent 60%),
+    rgba(7, 24, 25, 0.88);
 }
 
 body.theme-custom.theme-custom-amber .topbar {
   --hero-line-rgb: 255, 203, 118;
   --hero-line-soft-rgb: 255, 237, 188;
   --hero-glow-rgb: 240, 171, 82;
-  background: radial-gradient(980px 360px at 26% -6%, rgba(196, 126, 44, 0.94) 0%, rgba(34, 22, 8, 0.97) 62%);
+  background:
+    radial-gradient(980px 360px at 26% -6%, rgba(196, 126, 44, 0.55) 0%, transparent 58%),
+    rgba(18, 12, 7, 0.88);
 }
 
 body.theme-custom .topbar-tier--controls .theme-switch,
@@ -5570,10 +5576,11 @@ body.nuke-flash::after {
 }
 
 .topbar-title__sub {
-  margin-top: 2px;
+  margin-top: 0;
+  transform: translateY(-4px);
   font-size: clamp(10px, 1vw, 12px);
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   opacity: 0.55;
   color: rgba(255, 255, 255, 0.72);
 }
@@ -5590,6 +5597,20 @@ body.nuke-flash::after {
     drop-shadow(0 0 40px rgba(255, 180, 90, 0.75))
     drop-shadow(0 0 80px rgba(255, 215, 140, 0.45));
   position: relative;
+}
+
+.topbar-title__logo::before {
+  content: "";
+  position: absolute;
+  inset: -18% 0% 20% 0%;
+  background:
+    radial-gradient(circle at 30% 60%, rgba(255, 200, 130, 0.6), transparent 60%),
+    radial-gradient(circle at 70% 20%, rgba(255, 155, 70, 0.4), transparent 65%);
+  filter: blur(28px);
+  opacity: 0.9;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  z-index: -1;
 }
 
 .topbar-title__logo::after {
