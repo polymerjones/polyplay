@@ -5562,6 +5562,9 @@ body.nuke-flash::after {
   object-fit: contain;
   display: block;
   background-color: transparent;
+  filter:
+    drop-shadow(0 12px 32px rgba(255, 209, 141, 0.75))
+    drop-shadow(0 4px 12px rgba(0, 0, 0, 0.45));
 }
 
 .topbar--two-tier .brand-logo {
@@ -6302,9 +6305,16 @@ body.theme-custom.theme-custom-teal .ytm-cover {
 
 body.theme-custom.theme-custom-amber .ytm-cover {
   background:
-    radial-gradient(circle at 20% 20%, rgba(212, 152, 74, 0.44), rgba(212, 152, 74, 0) 58%),
-    radial-gradient(circle at 80% 80%, rgba(245, 199, 129, 0.18), rgba(245, 199, 129, 0) 60%),
-    linear-gradient(145deg, #2a2213, #17120a);
+    radial-gradient(circle at 20% 20%, rgba(212, 152, 74, 0.28), rgba(212, 152, 74, 0) 60%),
+    radial-gradient(circle at 80% 80%, rgba(245, 199, 129, 0.12), rgba(245, 199, 129, 0) 64%),
+    linear-gradient(150deg, #1d1610, #100c06);
+}
+
+body.theme-custom.theme-custom-amber .ytm-tile.is-active::after {
+  background:
+    linear-gradient(120deg, rgba(255, 214, 154, 0.2), rgba(255, 186, 104, 0.14), rgba(255, 255, 255, 0.05)),
+    radial-gradient(220px 120px at 30% 18%, rgba(255, 210, 130, 0.28), transparent 56%);
+  animation-duration: 4.2s;
 }
 
 .ytm-cover-media {
