@@ -21,6 +21,7 @@
   --radius-lg: 18px;
   --shadow-soft: 0 12px 30px rgba(18, 12, 36, 0.24);
   --playerH: 260px;
+  --logo-glow-rgb: 255, 205, 140;
 }
 
 .text-shimmer {
@@ -326,11 +327,14 @@ main,
   --hero-line-rgb: 175, 120, 255;
   --hero-line-soft-rgb: 120, 170, 255;
   --hero-glow-rgb: 168, 85, 247;
+  --logo-glow-rgb: 255, 205, 140;
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 6px 12px;
-  background: radial-gradient(900px 320px at 30% 0%, rgba(60, 38, 96, 0.8) 0%, rgba(10, 12, 18, 0.95) 65%);
+  background:
+    radial-gradient(900px 320px at 30% 0%, rgba(60, 38, 96, 0.58) 0%, transparent 64%),
+    rgba(8, 10, 18, 0.78);
   border-radius: 18px;
   padding: 12px 14px;
   box-shadow: 0 12px 28px rgba(8, 10, 16, 0.45);
@@ -1359,27 +1363,30 @@ body.theme-custom.theme-custom-crimson .topbar {
   --hero-line-rgb: 224, 118, 152;
   --hero-line-soft-rgb: 246, 206, 220;
   --hero-glow-rgb: 214, 86, 132;
+  --logo-glow-rgb: 224, 118, 152;
   background:
-    radial-gradient(980px 360px at 26% -6%, rgba(170, 64, 104, 0.6) 0%, transparent 60%),
-    rgba(16, 7, 15, 0.88);
+    radial-gradient(980px 360px at 26% -6%, rgba(170, 64, 104, 0.6) 0%, transparent 62%),
+    rgba(16, 7, 15, 0.75);
 }
 
 body.theme-custom.theme-custom-teal .topbar {
   --hero-line-rgb: 92, 233, 226;
   --hero-line-soft-rgb: 188, 255, 249;
   --hero-glow-rgb: 68, 198, 186;
+  --logo-glow-rgb: 92, 233, 226;
   background:
-    radial-gradient(980px 360px at 26% -6%, rgba(40, 154, 145, 0.5) 0%, transparent 60%),
-    rgba(7, 24, 25, 0.88);
+    radial-gradient(980px 360px at 26% -6%, rgba(40, 154, 145, 0.5) 0%, transparent 64%),
+    rgba(7, 24, 25, 0.75);
 }
 
 body.theme-custom.theme-custom-amber .topbar {
   --hero-line-rgb: 255, 203, 118;
   --hero-line-soft-rgb: 255, 237, 188;
   --hero-glow-rgb: 240, 171, 82;
+  --logo-glow-rgb: 255, 203, 118;
   background:
-    radial-gradient(980px 360px at 26% -6%, rgba(196, 126, 44, 0.55) 0%, transparent 58%),
-    rgba(18, 12, 7, 0.88);
+    radial-gradient(980px 360px at 26% -6%, rgba(196, 126, 44, 0.55) 0%, transparent 60%),
+    rgba(18, 12, 7, 0.7);
 }
 
 body.theme-custom .topbar-tier--controls .theme-switch,
@@ -5604,8 +5611,8 @@ body.nuke-flash::after {
   position: absolute;
   inset: -18% 0% 20% 0%;
   background:
-    radial-gradient(circle at 30% 60%, rgba(255, 200, 130, 0.6), transparent 60%),
-    radial-gradient(circle at 70% 20%, rgba(255, 155, 70, 0.4), transparent 65%);
+    radial-gradient(circle at 30% 60%, rgba(var(--logo-glow-rgb), 0.6), transparent 60%),
+    radial-gradient(circle at 70% 20%, rgba(var(--logo-glow-rgb), 0.35), transparent 65%);
   filter: blur(28px);
   opacity: 0.9;
   mix-blend-mode: screen;
