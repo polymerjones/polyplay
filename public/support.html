@@ -8,6 +8,7 @@
       name="description"
       content="Support information for PolyPlay Audio, including contact, backup guidance, compatibility notes, and troubleshooting."
     />
+    <meta name="formspree-id" content="xjgedvje" />
     <style>
       :root {
         color-scheme: dark;
@@ -245,22 +246,6 @@
     color: rgba(245, 246, 255, 0.7);
   }
 
-  .support-contact-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 42px;
-    padding: 0 24px;
-    border-radius: 9999px;
-    background: linear-gradient(120deg, #f7b654, #f6a76b);
-    color: #141620;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-    text-decoration: none;
-    box-shadow: 0 12px 30px rgba(247, 182, 109, 0.45);
-  }
-
   .support-feedback-form {
     display: flex;
     flex-direction: column;
@@ -312,6 +297,27 @@
     letter-spacing: 0.2em;
     text-transform: uppercase;
     cursor: pointer;
+  }
+
+  .support-feedback-status {
+    min-height: 18px;
+    margin: 0;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    opacity: 0;
+    transition: opacity 200ms ease;
+  }
+
+  .support-feedback-status.is-visible {
+    opacity: 1;
+  }
+
+  .support-feedback-status[data-tone="error"] {
+    color: #ff9aa4;
+  }
+
+  .support-feedback-status[data-tone="success"] {
+    color: #adffcb;
   }
 
   .support-feedback-note {
@@ -585,37 +591,37 @@
           <section class="support-contact">
             <div class="support-contact-card">
               <h2>Need one-on-one help?</h2>
-              <p>Reach out for playback, import, or artwork questions—we reply as soon as possible.</p>
-              <a
-                class="support-contact-button"
-                href="mailto:booking@paulfishermedia.com?subject=PolyPlay%20Audio%20Support"
-              >
-                Contact
-              </a>
+              <p>
+                Reach out for playback, import, or artwork questions—we reply as soon as possible through the
+                form below.
+              </p>
             </div>
-            <form
-              class="support-feedback-form"
-              action="mailto:booking@paulfishermedia.com"
-              method="post"
-              enctype="text/plain"
-            >
+            <form id="support-feedback-form" class="support-feedback-form">
               <h3>Feedback or bugs</h3>
-              <input type="hidden" name="subject" value="PolyPlay Feedback" />
               <label>
-                Name (optional)
-                <input type="text" name="name" placeholder="Your name or alias" />
+                Name
+                <input type="text" name="name" required />
+              </label>
+              <label>
+                Email
+                <input type="email" name="email" />
+              </label>
+              <label>
+                Phone
+                <input type="tel" name="phone" />
+              </label>
+              <label>
+                Subject
+                <input type="text" name="subject" required />
               </label>
               <label>
                 Message
-                <textarea
-                  name="body"
-                  rows="3"
-                  placeholder="Describe what happened and how we can help"
-                ></textarea>
+                <textarea name="message" rows="3" required></textarea>
               </label>
               <button type="submit">Send feedback</button>
+              <p id="support-feedback-status" class="support-feedback-status" role="status"></p>
               <p class="support-feedback-note">
-                This opens your mail app so you can review the details before sending.
+                This sends your message through our secure Formspree workflow.
               </p>
             </form>
           </section>
@@ -634,5 +640,67 @@
         </div>
       </main>
     </div>
+    <script>
+      (function () {
+        const form = document.getElementById("support-feedback-form");
+        if (!form) return;
+        const statusEl = document.getElementById("support-feedback-status");
+        const submitButton = form.querySelector("button[type='submit']");
+        const meta = document.querySelector('meta[name="formspree-id"]');
+        const formspreeId = meta?.getAttribute("content")?.trim();
+        const endpoint = formspreeId ? `https://formspree.io/f/${formspreeId}` : null;
+
+        const setStatus = (text, tone) => {
+          if (!statusEl) return;
+          statusEl.textContent = text;
+          statusEl.dataset.tone = tone;
+          statusEl.classList.toggle("is-visible", Boolean(text));
+        };
+
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          if (!endpoint) {
+            setStatus("Form endpoint is not configured.", "error");
+            return;
+          }
+          const formData = new FormData(form);
+          const name = formData.get("name")?.toString().trim() || "";
+          const email = formData.get("email")?.toString().trim() || "";
+          const phone = formData.get("phone")?.toString().trim() || "";
+          const subject = formData.get("subject")?.toString().trim() || "";
+          const message = formData.get("message")?.toString().trim() || "";
+
+          if (!name || !subject || !message) {
+            setStatus("Please fill in name, subject, and message.", "error");
+            return;
+          }
+          if (!email && !phone) {
+            setStatus("Provide at least an email or phone number.", "error");
+            return;
+          }
+
+          submitButton?.setAttribute("disabled", "disabled");
+          setStatus("Sending your message…", "info");
+
+          try {
+            const response = await fetch(endpoint, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json"
+              },
+              body: JSON.stringify({ name, email, phone, subject, message })
+            });
+            if (!response.ok) throw new Error("Submit failed");
+            form.reset();
+            setStatus("Thanks! We'll be in touch shortly.", "success");
+          } catch (error) {
+            setStatus("Unable to send right now. Please try again later.", "error");
+          } finally {
+            submitButton?.removeAttribute("disabled");
+          }
+        });
+      })();
+    </script>
   </body>
 </html>
