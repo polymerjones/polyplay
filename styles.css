@@ -24,6 +24,7 @@
 }
 
 .topbar-title {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -323,8 +324,9 @@ main,
     inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 .hint {
-  color: var(--muted);
-  font-size: 14px;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 13px;
+  letter-spacing: 0.02em;
   grid-column: 1 / -1;
   -webkit-user-select: none;
   user-select: none;
@@ -5171,35 +5173,14 @@ body.mute-freeze .track-backdrop {
 .topbar::before {
   content: "";
   position: absolute;
-  inset: -40% -10% -10% -10%;
-  opacity: 0.35;
+  inset: -10% -6% -6% -6%;
+  opacity: 0.22;
   background:
-    repeating-linear-gradient(
-      120deg,
-      rgba(var(--hero-line-rgb), 0.32) 0,
-      rgba(var(--hero-line-rgb), 0.32) 2px,
-      transparent 2px,
-      transparent 26px
-    ),
-    linear-gradient(
-      128deg,
-      transparent 0 20.6%,
-      rgba(var(--hero-line-soft-rgb), 0.04) 22.2%,
-      rgba(var(--hero-line-soft-rgb), 0.18) 23.1%,
-      rgba(var(--hero-line-soft-rgb), 0.04) 24.1%,
-      transparent 25.8%
-    ),
-    linear-gradient(
-      36deg,
-      transparent 0 58.8%,
-      rgba(var(--hero-line-rgb), 0.03) 60.1%,
-      rgba(var(--hero-line-rgb), 0.14) 61%,
-      rgba(var(--hero-line-rgb), 0.03) 62.1%,
-      transparent 63.7%
-    );
-  animation: wave-sweep 18s linear infinite;
+    radial-gradient(circle at 15% 20%, rgba(255, 174, 96, 0.35), transparent 55%),
+    linear-gradient(140deg, rgba(22, 20, 40, 0.9), rgba(10, 12, 24, 0.95));
   mix-blend-mode: screen;
   pointer-events: none;
+  filter: blur(0.6px);
 }
 
 .topbar > * {
@@ -5508,8 +5489,9 @@ body.nuke-flash::after {
 }
 
 .topbar-tier--primary {
-  grid-template-columns: auto 1fr auto;
-  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 240px);
+  gap: 10px;
+  align-items: center;
 }
 
 .topbar-primary-actions {
@@ -5522,17 +5504,39 @@ body.nuke-flash::after {
 .topbar-title {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 4px;
-  text-align: center;
-  font-size: clamp(16px, 2.1vw, 26px);
-  letter-spacing: 0.2px;
+  padding: clamp(8px, 1vw, 14px) clamp(12px, 2vw, 22px);
+  text-align: left;
+  font-size: clamp(18px, 2.4vw, 28px);
+  letter-spacing: 0.4px;
   font-weight: 700;
-  color: #eef3ff;
-  text-shadow: 0 2px 10px rgba(8, 12, 22, 0.45);
   line-height: 1.05;
-  -webkit-user-select: none;
-  user-select: none;
+  color: #f6f6ff;
+  border-radius: 18px;
+  background: rgba(10, 10, 18, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 16px 30px rgba(5, 7, 14, 0.55),
+    0 0 0 1px rgba(255, 200, 118, 0.14);
+  backdrop-filter: blur(6px);
+  position: relative;
+}
+
+.topbar-title::before {
+  content: "";
+  position: absolute;
+  inset: 6% 6% 6% 6%;
+  border-radius: 12px;
+  background: radial-gradient(circle at 20% 40%, rgba(255, 205, 143, 0.38), transparent 55%);
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.topbar-title > * {
+  position: relative;
+  z-index: 1;
 }
 
 .topbar-title__main,
@@ -5548,23 +5552,25 @@ body.nuke-flash::after {
 }
 
 .topbar-title__sub {
-  margin-top: 3px;
+  margin-top: 2px;
   font-size: clamp(10px, 1vw, 12px);
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  opacity: 0.78;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  opacity: 0.55;
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .topbar-title__logo {
-  height: clamp(32px, 4vw, 56px);
-  max-width: min(300px, 72vw);
+  height: clamp(46px, 7vw, 88px);
+  max-width: min(360px, 88vw);
   width: 100%;
   object-fit: contain;
   display: block;
   background-color: transparent;
   filter:
-    drop-shadow(0 12px 32px rgba(255, 209, 141, 0.75))
-    drop-shadow(0 4px 12px rgba(0, 0, 0, 0.45));
+    drop-shadow(0 38px 60px rgba(8, 4, 7, 0.75))
+    drop-shadow(0 0 32px rgba(255, 180, 90, 0.7))
+    drop-shadow(0 0 60px rgba(255, 205, 140, 0.35));
 }
 
 .topbar--two-tier .brand-logo {
@@ -5575,15 +5581,20 @@ body.nuke-flash::after {
 .topbar-tier--controls {
   grid-template-columns: repeat(auto-fit, minmax(38px, max-content));
   justify-content: end;
-  gap: 8px;
+  gap: 6px;
+  background: rgba(10, 10, 20, 0.8);
+  border-radius: 30px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 14px 28px rgba(4, 4, 9, 0.65);
 }
 
 .topbar-tier--controls .nav-action-btn,
 .topbar-tier--controls .theme-switch,
 .topbar-tier--controls .pp-oracle-link {
-  width: 38px;
-  height: 38px;
-  opacity: 0.86;
+  width: 36px;
+  height: 36px;
+  opacity: 0.9;
   transition: transform 150ms ease, opacity 150ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
 
