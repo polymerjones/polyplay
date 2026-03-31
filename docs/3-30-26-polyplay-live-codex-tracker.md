@@ -43,7 +43,15 @@ Updating artwork needs a prominent status toast/progress state while user waits 
 - Guard logic now exits as soon as the down target lives inside any interactive node so the edge drag is only triggered from the raw background drop zone, and the sensitive zone was widened to 80px to give users more room along each edge.
 - Added CSS for `.playlist-edge-swipe-indicator` so the amber hold cue actually draws against the left or right edge once the 600ms timer completes; the indicator still needs live confirmation that it no longer feels invisible.
 - The failure stemmed from the commit path never firing—even though the hold indicator appeared, the swipe delta was measured but the switch logic never ran when the pointer released. I refactored that logic into a `commitEdgeSwipe` helper that both pointermove and pointerup call (with the latest recorded clientX), so once the hold arms the gesture we now always evaluate the final delta and switch playlists exactly once per arm. The helper also checks runtime library state and wraps the `setActivePlaylist` call so the drop-down updates reliably.
-**Codex notes:**  
+- Guard logic now exits as soon as the down target lives inside any interactive node so the edge drag is only triggered from the raw background drop zone, and the sensitive zone was widened to 80px to give users more room along each edge.
+- Added CSS for `.playlist-edge-swipe-indicator` so the amber hold cue actually draws against the left or right edge once the 600ms timer completes; the indicator still needs live confirmation that it no longer feels invisible.
+- Accidental taps were happening because the swipe commit only required delta ≥32px and ignored vertical drift. I tightened the guard by raising the threshold to 48px, tracking the latest clientY, and only committing when horizontal travel exceeds both the threshold and 1.25× the vertical travel; the pointerup fallback runs the same guard, so a tap or slight shuffle no longer switches playlists but an intentional horizontal swipe still does a single committed `setActivePlaylist`.
+- Guard logic now exits as soon as the down target lives inside any interactive node so the edge drag is only triggered from the raw background drop zone, and the sensitive zone was widened to 80px to give users more room along each edge.
+- Added CSS for `.playlist-edge-swipe-indicator` so the amber hold cue actually draws against the left or right edge once the 600ms timer completes; the indicator still needs live confirmation that it no longer feels invisible.
+- Accidental triggers were reduced by requiring the hold indicator to arm before a commit, and by keeping the horizontal travel vs. vertical drift guard. Intentional swipes still had trouble because the commit only happened on pointermove, so I reinstated that guarded commit on pointerup (still gated by the threshold/ratio) while keeping the move-phase evaluation and `edgeSwipeTriggeredRef`; the commit now also flashes the indicator and fires both light + hard haptics so success feels intentional while taps continue to do nothing.
+- Guard logic now exits as soon as the down target lives inside any interactive node so the edge drag is only triggered from the raw background drop zone, and the sensitive zone was widened to 80px to give users more room along each edge.
+- Added CSS for `.playlist-edge-swipe-indicator` so the amber hold cue actually draws against the left or right edge once the 600ms timer completes; the indicator still needs live confirmation that it no longer feels invisible.
+- Accidental taps still occurred because the commit was triggered on pointerup/fallback even without significant movement. I refactored the guard to require the indicator to be armed, removed the pointerup commit, and now only allow `commitEdgeSwipe` from pointermove after the hold finishes while the finger is still present. That means a tap or short jitter no longer fires `setActivePlaylist`; only a deliberate horizontal swipe after the 600ms hold will commit, and the commit still runs once per arm.
 - Guard logic now exits as soon as the down target lives inside any interactive node so the edge drag is only triggered from the raw background drop zone, and the sensitive zone was widened to 80px to give users more room along each edge.
 - Added CSS for `.playlist-edge-swipe-indicator` so the amber hold cue actually draws against the left or right edge once the 600ms timer completes; the indicator still needs live confirmation that it no longer feels invisible.
 - Accidental taps were happening because the swipe commit only required delta ≥32px and ignored vertical drift. I tightened the guard by raising the threshold to 48px, tracking the latest clientY, and only committing when horizontal travel exceeds both the threshold and 1.25× the vertical travel; the pointerup fallback runs the same guard, so a tap or slight shuffle no longer switches playlists but an intentional horizontal swipe still does a single committed `setActivePlaylist`.
@@ -100,7 +108,7 @@ If user taps and holds for ~0.6s on left or right edge of the screen, a glowing 
 **Codex notes:**  
 - Guard logic now exits as soon as the down target lives inside any interactive node so the edge drag is only triggered from the raw background drop zone, and the sensitive zone was widened to 80px to give users more room along each edge.
 - Added CSS for `.playlist-edge-swipe-indicator` so the amber hold cue actually draws against the left or right edge once the 600ms timer completes; the indicator still needs live confirmation that it no longer feels invisible.
-- The failure stemmed from the commit path never firing—even though the hold indicator appeared, the swipe delta was measured but the switch logic never ran when the pointer released. I refactored that logic into a `commitEdgeSwipe` helper that both pointermove and pointerup call (with the latest recorded clientX), so once the hold arms the gesture we now always evaluate the final delta and switch playlists exactly once per arm. The helper also checks runtime library state and wraps the `setActivePlaylist` call so the drop-down updates reliably.
+- Accidental taps were reduced by requiring the hold indicator to arm before any commit fires and by keeping the direction/threshold requirements. The guard went too far when pointerup was removed, so pointermove still attempts commit while armed but pointerup now runs the same guard only if a real swipe delta exists (and pointermove didn’t already fire). This keeps safety high while letting intentional swipes still succeed once per arm.
 
 ---
 
@@ -223,6 +231,22 @@ Closing the Import (Vault) overlay while the backup-name input had focus kept th
 - added `dismissOverlayKeyboard()` that blurs the active input/textarea/contenteditable before the vault overlay closes; the close path now calls it so the keyboard hides before or during the transition.
 
 - no live QA yet; awaiting your confirmation on iOS.
+
+---
+
+### 13. Admin import keyboard commit
+**Status:** [open]  
+**Platform:** iOS  
+**Problem:**  
+Importing a track while an iOS text field still has the keyboard/autocomplete row active meant the user had to hit the keyboard checkmark before Import would finish cleanly.
+
+**Need:**  
+- tapping Import should automatically commit/blur the focused field so the app honors the latest edited text.
+- import validation should wait until that blur passes through the event loop so autocomplete can finish.
+
+**Codex notes:**  
+- `dismissEditingFocus()` now blurs the active input/textarea and awaits the next animation frame (or timer) so iOS composition completes before the import logic reads the state.
+- `readLiveUploadTitle()` mirrors `uploadTitleInputRef.current?.value` into React state after the blur, and `onUpload()` now `await`s the helper and uses that fresh string when deriving the title. Tapping Import no longer depends on the keyboard checkmark to commit the value, but it still needs live verification on iOS.
 
 ---
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import logo from "../logo.png";
 import { quickTipsContent } from "./content/quickTips";
 import { APP_TITLE, APP_VERSION } from "./config/version";
+import heroLogo from "./assets/polyplay-hero-logo.png";
 import { AmbientFxCanvas, type AmbientFxCanvasHandle } from "./components/AmbientFxCanvas";
 import { EmptyLibraryWelcome } from "./components/EmptyLibraryWelcome";
 import { BubbleLayer } from "./components/BubbleLayer";
@@ -371,6 +372,9 @@ export default function App() {
   const edgeSwipeTriggeredRef = useRef(false);
   const edgeSwipeLatestXRef = useRef(0);
   const edgeSwipeLatestYRef = useRef(0);
+  const edgeSwipeArmedRef = useRef(false);
+  const edgeSwipeFlashTimeoutRef = useRef<number | null>(null);
+  const [edgeSwipeFlash, setEdgeSwipeFlash] = useState(false);
   const edgeSwipeIndicatorRef = useRef<"left" | "right" | null>(null);
   const updateEdgeSwipeIndicator = useCallback((edge: "left" | "right" | null) => {
     edgeSwipeIndicatorRef.current = edge;
@@ -431,7 +435,6 @@ export default function App() {
     typeof navigator !== "undefined" &&
     /iPad|iPhone|iPod/.test(navigator.userAgent);
   const splashSkipLabel = isIOS ? "Double Tap to Skip" : "Double Click to Skip";
-  const headerTitle = "PolyPlay Audio";
   const headerVersion = APP_VERSION;
   const [hasOnboarded, setHasOnboarded] = useState<boolean>(() => {
     try {
@@ -1273,6 +1276,7 @@ export default function App() {
       }
       edgeSwipePointerIdRef.current = null;
       edgeSwipeTriggeredRef.current = false;
+      edgeSwipeArmedRef.current = false;
       edgeSwipeLatestXRef.current = edgeSwipeStartXRef.current;
       edgeSwipeLatestYRef.current = edgeSwipeStartYRef.current;
       updateEdgeSwipeIndicator(null);
@@ -1288,6 +1292,7 @@ export default function App() {
       edgeSwipeTriggeredRef.current = false;
       edgeSwipeHoldTimerRef.current = window.setTimeout(() => {
         edgeSwipeHoldTimerRef.current = null;
+        edgeSwipeArmedRef.current = true;
         updateEdgeSwipeIndicator(edge);
       }, EDGE_PLAYLIST_HOLD_MS);
     };
@@ -1311,6 +1316,7 @@ export default function App() {
     };
 
     const commitEdgeSwipe = (deltaX: number) => {
+      if (!edgeSwipeArmedRef.current) return false;
       if (edgeSwipeTriggeredRef.current) return false;
       const deltaY = edgeSwipeLatestYRef.current - edgeSwipeStartYRef.current;
       const horizontalTravel = Math.abs(deltaX);
@@ -1328,34 +1334,49 @@ export default function App() {
       const nextId = playlistIds[nextIndex];
       if (!nextId || nextId === currentId) return false;
       edgeSwipeTriggeredRef.current = true;
-      void setActivePlaylist(nextId);
+      triggerEdgeSwipeFlash();
       fireLightHaptic();
+      fireHeavyHaptic();
+      void setActivePlaylist(nextId);
       return true;
     };
 
     const handlePointerMove = (event: PointerEvent) => {
       edgeSwipeLatestXRef.current = event.clientX;
+      edgeSwipeLatestYRef.current = event.clientY;
       if (edgeSwipeIndicatorRef.current === null) return;
       if (edgeSwipePointerIdRef.current !== event.pointerId) return;
       commitEdgeSwipe(event.clientX - edgeSwipeStartXRef.current);
     };
 
-    const handlePointerEnd = () => {
-      commitEdgeSwipe(edgeSwipeLatestXRef.current - edgeSwipeStartXRef.current);
+    const handlePointerUp = (event: PointerEvent) => {
+      if (edgeSwipePointerIdRef.current !== event.pointerId) {
+        cancelEdgeSwipeGesture();
+        return;
+      }
+      edgeSwipeLatestXRef.current = event.clientX;
+      edgeSwipeLatestYRef.current = event.clientY;
+      if (!edgeSwipeTriggeredRef.current) {
+        commitEdgeSwipe(event.clientX - edgeSwipeStartXRef.current);
+      }
+      cancelEdgeSwipeGesture();
+    };
+
+    const handlePointerCancel = () => {
       cancelEdgeSwipeGesture();
     };
 
     window.addEventListener("pointerdown", handlePointerDown);
     window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerEnd);
-    window.addEventListener("pointercancel", handlePointerEnd);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerCancel);
 
     return () => {
       cancelEdgeSwipeGesture();
       window.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerEnd);
-      window.removeEventListener("pointercancel", handlePointerEnd);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerCancel);
     };
   }, [setActivePlaylist]);
 
@@ -1367,6 +1388,26 @@ export default function App() {
     } catch {
       // Ignore localStorage failures.
     }
+  }, []);
+
+  const triggerEdgeSwipeFlash = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (edgeSwipeFlashTimeoutRef.current !== null) {
+      window.clearTimeout(edgeSwipeFlashTimeoutRef.current);
+    }
+    setEdgeSwipeFlash(true);
+    edgeSwipeFlashTimeoutRef.current = window.setTimeout(() => {
+      edgeSwipeFlashTimeoutRef.current = null;
+      setEdgeSwipeFlash(false);
+    }, 260);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (edgeSwipeFlashTimeoutRef.current !== null) {
+        window.clearTimeout(edgeSwipeFlashTimeoutRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -3803,6 +3844,7 @@ export default function App() {
       <div
         className="playlist-edge-swipe-indicator"
         data-edge={edgeSwipeIndicator ?? undefined}
+        data-flash={edgeSwipeFlash ? "true" : undefined}
         aria-hidden="true"
       />
       <div className="app-shell">
@@ -3883,15 +3925,15 @@ export default function App() {
             }}
           >
         <header className="topbar topbar--two-tier">
-          <div className="topbar-tier topbar-tier--primary">
-            <div className="brand">
-              <img className="brand-logo" src={logo} alt="PolyPlay logo" />
-            </div>
-            <div className="topbar-title">
-              <span className="topbar-title__main">{headerTitle}</span>
-              <span className="topbar-title__sub">{headerVersion}</span>
-            </div>
-            <div className="topbar-primary-actions">
+        <div className="topbar-tier topbar-tier--primary">
+          <div className="brand">
+            <img className="brand-logo" src={logo} alt="PolyPlay logo" />
+          </div>
+          <div className="topbar-title">
+            <img className="topbar-title__logo" src={heroLogo} alt="PolyPlay" />
+            <span className="topbar-title__sub">{headerVersion}</span>
+          </div>
+          <div className="topbar-primary-actions">
               <button
                 type="button"
                 className="upload-link upload-link--icon nav-action-btn"

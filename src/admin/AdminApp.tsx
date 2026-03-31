@@ -675,7 +675,7 @@ export function AdminApp() {
     }
   };
 
-  const dismissEditingFocus = () => {
+  const dismissEditingFocus = async () => {
     try {
       const active = document.activeElement;
       if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
@@ -684,6 +684,21 @@ export function AdminApp() {
     } catch {
       // Ignore focus-management failures.
     }
+    await new Promise<void>((resolve) => {
+      if (typeof window === "undefined") {
+        resolve();
+        return;
+      }
+      if (typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(() => resolve());
+      } else {
+        window.setTimeout(() => resolve(), 0);
+      }
+    });
+  };
+
+  const readLiveUploadTitle = (): string => {
+    return uploadTitleInputRef.current?.value ?? uploadTitle;
   };
 
   const requestParentHaptic = (tone: AdminHapticTone) => {
@@ -996,7 +1011,11 @@ export function AdminApp() {
 
   const onUpload = async (event: FormEvent) => {
     event.preventDefault();
-    dismissEditingFocus();
+    await dismissEditingFocus();
+    const liveTitle = readLiveUploadTitle();
+    if (liveTitle !== uploadTitle) {
+      setUploadTitle(liveTitle);
+    }
     if (!isSupportedTrackFile(uploadAudio)) {
       setStatus("Select a track file (.wav, .mp3, .m4a, .mp4, or .mov).");
       return;
@@ -1010,7 +1029,7 @@ export function AdminApp() {
       return;
     }
 
-    const derivedTitle = uploadTitle.trim() || titleFromFilename(uploadAudio.name);
+    const derivedTitle = liveTitle.trim() || titleFromFilename(uploadAudio.name);
     setStatus("Importing...");
     showImportNotice("IMPORTING TRACK...");
 

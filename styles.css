@@ -5504,8 +5504,10 @@ body.nuke-flash::after {
 }
 
 .topbar-title {
-  display: grid;
-  justify-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   text-align: center;
   font-size: clamp(16px, 2.1vw, 26px);
   letter-spacing: 0.2px;
@@ -5535,6 +5537,14 @@ body.nuke-flash::after {
   font-weight: 700;
   letter-spacing: 0.16em;
   opacity: 0.78;
+}
+
+.topbar-title__logo {
+  height: clamp(24px, 3vw, 32px);
+  max-width: min(240px, 60vw);
+  width: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .topbar--two-tier .brand-logo {
