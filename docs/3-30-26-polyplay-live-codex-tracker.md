@@ -209,6 +209,23 @@ Looks buggy / “bad coding” to the user.
 
 ---
 
+### 12. Vault keyboard dismissal
+**Status:** [open]  
+**Platform:** iOS  
+**Problem:**  
+Closing the Import (Vault) overlay while the backup-name input had focus kept the iOS keyboard on-screen.
+
+**Need:**  
+- any focused input inside the overlay must blur before the panel closes
+- keyboard should dismiss promptly so the remaining UI doesn’t show a floating keyboard
+
+**Codex notes:**  
+- added `dismissOverlayKeyboard()` that blurs the active input/textarea/contenteditable before the vault overlay closes; the close path now calls it so the keyboard hides before or during the transition.
+
+- no live QA yet; awaiting your confirmation on iOS.
+
+---
+
 ## Secondary notes
 These are still important, but are not the first attack items for this tracker.
 

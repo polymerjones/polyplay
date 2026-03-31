@@ -1141,7 +1141,28 @@ export default function App() {
     setVaultImportCloseCountdownMs(null);
   };
 
+  const dismissOverlayKeyboard = () => {
+    if (typeof document === "undefined") return;
+    try {
+      const active = document.activeElement;
+      if (active && active instanceof HTMLElement) {
+        const tag = active.tagName.toLowerCase();
+        const isInputLike =
+          tag === "input" ||
+          tag === "textarea" ||
+          active.isContentEditable ||
+          active.getAttribute("role") === "textbox";
+        if (isInputLike) {
+          (active as HTMLElement).blur();
+        }
+      }
+    } catch {
+      // Ignore focus quirks.
+    }
+  };
+
   const closeVaultOverlay = () => {
+    dismissOverlayKeyboard();
     clearVaultImportSuccessCountdown();
     setShowImportWarning(false);
     setPendingVaultBackupBlob(null);
