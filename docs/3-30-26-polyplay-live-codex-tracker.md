@@ -40,7 +40,13 @@ Updating artwork needs a prominent status toast/progress state while user waits 
 - user should never think the app froze
 
 - `/public/support.html` contains the support page; added a header/footer link (`/support`) from the app so the page is reachable without redesigning routing; still needs live QA before marking done
+- Guard logic now exits as soon as the down target lives inside any interactive node so the edge drag is only triggered from the raw background drop zone, and the sensitive zone was widened to 80px to give users more room along each edge.
+- Added CSS for `.playlist-edge-swipe-indicator` so the amber hold cue actually draws against the left or right edge once the 600ms timer completes; the indicator still needs live confirmation that it no longer feels invisible.
+- The failure stemmed from the commit path never firing—even though the hold indicator appeared, the swipe delta was measured but the switch logic never ran when the pointer released. I refactored that logic into a `commitEdgeSwipe` helper that both pointermove and pointerup call (with the latest recorded clientX), so once the hold arms the gesture we now always evaluate the final delta and switch playlists exactly once per arm. The helper also checks runtime library state and wraps the `setActivePlaylist` call so the drop-down updates reliably.
 **Codex notes:**  
+- Guard logic now exits as soon as the down target lives inside any interactive node so the edge drag is only triggered from the raw background drop zone, and the sensitive zone was widened to 80px to give users more room along each edge.
+- Added CSS for `.playlist-edge-swipe-indicator` so the amber hold cue actually draws against the left or right edge once the 600ms timer completes; the indicator still needs live confirmation that it no longer feels invisible.
+- Accidental taps were happening because the swipe commit only required delta ≥32px and ignored vertical drift. I tightened the guard by raising the threshold to 48px, tracking the latest clientY, and only committing when horizontal travel exceeds both the threshold and 1.25× the vertical travel; the pointerup fallback runs the same guard, so a tap or slight shuffle no longer switches playlists but an intentional horizontal swipe still does a single committed `setActivePlaylist`.
 - `/public/support.html` contains the support page; added a rewrite in `vercel.json` so `/support` resolves to it and kept the footer link; still needs live QA before marking done
 - Drag zone now shows a toast running “Applying artwork…” when either artwork lane or manual update is busy and reports the success/failure messages once the update finishes; still need live confirmation the text is noticeable/no freeze
 

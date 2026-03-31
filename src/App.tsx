@@ -177,7 +177,8 @@ const FX_INTERACTIVE_GUARD_SELECTORS = [
 
 const EDGE_PLAYLIST_ZONE_PX = 80;
 const EDGE_PLAYLIST_HOLD_MS = 600;
-const EDGE_PLAYLIST_SWIPE_THRESHOLD = 32;
+const EDGE_PLAYLIST_SWIPE_THRESHOLD = 48;
+const EDGE_PLAYLIST_DIRECTION_RATIO = 1.25;
 
 function clampAura(value: number): number {
   return Math.max(0, Math.min(10, Math.round(value)));
@@ -365,9 +366,11 @@ export default function App() {
   const [edgeSwipeIndicator, setEdgeSwipeIndicator] = useState<"left" | "right" | null>(null);
   const edgeSwipePointerIdRef = useRef<number | null>(null);
   const edgeSwipeStartXRef = useRef(0);
+  const edgeSwipeStartYRef = useRef(0);
   const edgeSwipeHoldTimerRef = useRef<number | null>(null);
   const edgeSwipeTriggeredRef = useRef(false);
   const edgeSwipeLatestXRef = useRef(0);
+  const edgeSwipeLatestYRef = useRef(0);
   const edgeSwipeIndicatorRef = useRef<"left" | "right" | null>(null);
   const updateEdgeSwipeIndicator = useCallback((edge: "left" | "right" | null) => {
     edgeSwipeIndicatorRef.current = edge;
@@ -1249,14 +1252,18 @@ export default function App() {
       }
       edgeSwipePointerIdRef.current = null;
       edgeSwipeTriggeredRef.current = false;
+      edgeSwipeLatestXRef.current = edgeSwipeStartXRef.current;
+      edgeSwipeLatestYRef.current = edgeSwipeStartYRef.current;
       updateEdgeSwipeIndicator(null);
     };
 
-    const beginEdgeHold = (edge: "left" | "right", pointerId: number, clientX: number) => {
+    const beginEdgeHold = (edge: "left" | "right", pointerId: number, clientX: number, clientY: number) => {
       cancelEdgeSwipeGesture();
       edgeSwipePointerIdRef.current = pointerId;
       edgeSwipeStartXRef.current = clientX;
+      edgeSwipeStartYRef.current = clientY;
       edgeSwipeLatestXRef.current = clientX;
+      edgeSwipeLatestYRef.current = clientY;
       edgeSwipeTriggeredRef.current = false;
       edgeSwipeHoldTimerRef.current = window.setTimeout(() => {
         edgeSwipeHoldTimerRef.current = null;
@@ -1273,18 +1280,22 @@ export default function App() {
       const target = event.target as HTMLElement | null;
       const guardTarget = target?.closest(FX_INTERACTIVE_GUARD_SELECTORS);
       if (guardTarget) return;
-      const { clientX } = event;
+      const { clientX, clientY } = event;
       const boundary = window.innerWidth;
       if (clientX <= EDGE_PLAYLIST_ZONE_PX) {
-        beginEdgeHold("left", event.pointerId, clientX);
+        beginEdgeHold("left", event.pointerId, clientX, clientY);
       } else if (clientX >= boundary - EDGE_PLAYLIST_ZONE_PX) {
-        beginEdgeHold("right", event.pointerId, clientX);
+        beginEdgeHold("right", event.pointerId, clientX, clientY);
       }
     };
 
     const commitEdgeSwipe = (deltaX: number) => {
       if (edgeSwipeTriggeredRef.current) return false;
-      if (Math.abs(deltaX) < EDGE_PLAYLIST_SWIPE_THRESHOLD) return false;
+      const deltaY = edgeSwipeLatestYRef.current - edgeSwipeStartYRef.current;
+      const horizontalTravel = Math.abs(deltaX);
+      const verticalTravel = Math.abs(deltaY);
+      if (horizontalTravel < EDGE_PLAYLIST_SWIPE_THRESHOLD) return false;
+      if (horizontalTravel < verticalTravel * EDGE_PLAYLIST_DIRECTION_RATIO) return false;
       const playlistsById = runtimeLibraryRef.current?.playlistsById;
       const playlistIds = playlistsById ? Object.keys(playlistsById) : [];
       const currentId = activePlaylistIdRef.current;
