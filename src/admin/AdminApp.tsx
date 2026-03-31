@@ -67,6 +67,8 @@ import { canUseIosNativeAudioImport, pickIosNativeAudioFile, pickIosNativeArtwor
 import { promptForSaveFilename, saveBlobWithBestEffort } from "../lib/saveBlob";
 import { titleFromFilename } from "../lib/title";
 import { Button } from "../components/button";
+import { TextShimmer } from "../components/TextShimmer";
+import { isBusyToastMessage } from "../lib/toastUtils";
 
 const HAS_IMPORTED_KEY = "polyplay_hasImported";
 const HAS_ONBOARDED_KEY = "polyplay_hasOnboarded_v1";
@@ -1897,13 +1899,19 @@ export function AdminApp() {
           {uploadSuccessNotice}
         </div>
       )}
-      {importNotice && (
+        {importNotice && (
         <div className="admin-import-toast" role="status" aria-live="polite">
           <div className="admin-import-toast__eyebrow">PolyPlay Import</div>
-          <div className="admin-import-toast__title">{importNotice}</div>
+          <div className="admin-import-toast__title">
+            {isBusyToastMessage(importNotice) ? (
+              <TextShimmer duration={1.4}>{importNotice}</TextShimmer>
+            ) : (
+              importNotice
+            )}
+          </div>
           <div className="admin-import-toast__sub">Please keep this window open while media is being stored.</div>
         </div>
-      )}
+        )}
       <header
         className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-300/20 bg-slate-900/85 p-3 shadow-glow backdrop-blur"
         onTouchStart={(event) => {
@@ -2675,7 +2683,15 @@ export function AdminApp() {
             event.currentTarget.value = "";
           }}
         />
-        {backupProgress && <div className="mt-2 text-sm text-slate-300">{backupProgress}</div>}
+        {backupProgress && (
+          <div className="mt-2 text-sm text-slate-300">
+            {isBusyToastMessage(backupProgress) ? (
+              <TextShimmer duration={1.3}>{backupProgress}</TextShimmer>
+            ) : (
+              backupProgress
+            )}
+          </div>
+        )}
       </section>
       )}
 
@@ -2870,7 +2886,11 @@ export function AdminApp() {
       )}
       {laneToast && (
         <div className="admin-lane-toast" role="status" aria-live="polite">
-          {laneToast}
+          {isBusyToastMessage(laneToast) ? (
+            <TextShimmer duration={1.3}>{laneToast}</TextShimmer>
+          ) : (
+            laneToast
+          )}
         </div>
       )}
 

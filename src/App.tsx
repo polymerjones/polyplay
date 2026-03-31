@@ -14,6 +14,7 @@ import { PolyOracleOrb } from "./components/PolyOracleOrb";
 import { QuickTipsModal } from "./components/QuickTipsModal";
 import { SplashOverlay } from "./components/SplashOverlay";
 import { TrackGrid } from "./components/TrackGrid";
+import { TextShimmer } from "./components/TextShimmer";
 import {
   duplicateTrackWithAudioInDb,
   getAllTracksFromDb,
@@ -72,6 +73,7 @@ import { formatTime } from "./lib/time";
 import type { LibraryState } from "./lib/storage/library";
 import type { LoopMode, LoopRegion, RepeatTrackMode, Track } from "./types";
 import type { AmbientFxMode, AmbientFxQuality } from "./fx/ambientFxEngine";
+import { isBusyToastMessage } from "./lib/toastUtils";
 
 type DimMode = "normal" | "dim" | "mute";
 type ThemeMode = "light" | "dark" | "custom";
@@ -4663,7 +4665,11 @@ export default function App() {
       {fxToast && <div className="fx-toast">{fxToast}</div>}
       {vaultToast && (
         <div className={`vault-toast vault-toast--${vaultToast.tone}`.trim()} role="status" aria-live="polite">
-          {vaultToast.message}
+          {isBusyToastMessage(vaultToast.message) ? (
+            <TextShimmer duration={1.35}>{vaultToast.message}</TextShimmer>
+          ) : (
+            vaultToast.message
+          )}
         </div>
       )}
         </div>

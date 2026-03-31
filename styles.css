@@ -23,6 +23,31 @@
   --playerH: 260px;
 }
 
+.text-shimmer {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.text-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.65) 45%,
+    rgba(255, 255, 255, 0) 75%
+  );
+  mix-blend-mode: screen;
+  filter: blur(0.5px);
+  transform: skewX(-15deg) translateX(-120%);
+  animation: textShimmer var(--text-shimmer-duration, 1.3s) linear infinite;
+  pointer-events: none;
+}
+
 .topbar-title {
   position: relative;
   display: flex;
@@ -186,6 +211,15 @@ body.perf-lite::before {
   0% { transform: translateX(-20%) translateY(0); }
   50% { transform: translateX(10%) translateY(6%); }
   100% { transform: translateX(-20%) translateY(0); }
+}
+
+@keyframes textShimmer {
+  0% {
+    transform: skewX(-15deg) translateX(-120%);
+  }
+  100% {
+    transform: skewX(-15deg) translateX(120%);
+  }
 }
 
 .app {
