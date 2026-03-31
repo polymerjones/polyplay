@@ -2077,7 +2077,7 @@ export function AdminApp() {
                 type="checkbox"
                 checked={keepImportPageOpen}
                 onChange={(event) => setKeepImportPageOpen(event.currentTarget.checked)}
-                className="h-4 w-4 rounded border border-slate-300/30 bg-slate-950/70"
+                className="admin-upload-checkbox h-4 w-4 rounded border border-slate-300/30 bg-slate-950/70"
               />
               Keep me on Import page
             </label>

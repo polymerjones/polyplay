@@ -1547,6 +1547,12 @@ body.theme-dark .rowAuraGlow {
   padding-bottom: 7px !important;
 }
 
+.admin-upload-checkbox {
+  width: auto !important;
+  flex-shrink: 0;
+  margin: 0;
+}
+
 .admin-track-row {
   display: flex;
   flex-wrap: wrap;
