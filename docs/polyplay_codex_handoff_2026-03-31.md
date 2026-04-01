@@ -233,6 +233,12 @@ Determine whether:
 - external links are blocked
 - the wrong open mechanism is being used
 
+### Settings link plan
+- Observation: The terms/privacy/support links live inside `admin.html`, which the app shows in the iframe. In the iOS build those bottom anchors use `target="_blank"`, but iframe navigation/new window behavior is blocked, so taps never open Safari. We will intercept the clicks in `src/admin/AdminApp.tsx` and call `window.open` (or the Capacitor Browser plugin when available) instead of relying on native anchor behavior. This keeps the web behavior intact while ensuring native builds can launch the external URLs.
+
+### Settings link fix applied
+- Root cause: the links simply used `<a target="_blank">` inside an iframe, and Capacitor’s iOS webview prevented opening such new windows, so taps never fired. The fix intercepts the clicks in `src/admin/AdminApp.tsx` and routes them through a helper that uses the Capacitor Browser plugin when available (falling back to `window.open`). That allows the anchor clicks to launch Safari from iOS while preserving normal behavior for the web.
+
 ---
 
 ## 4. Repeat button confusion
@@ -307,6 +313,31 @@ Add a text field on the Import page for **Artist Name** (not required).
 
 ### Memory / autofill
 - Include a memory for autofill for the artist field if practical
+
+### Metadata import audit
+- Title autofocus: the current effect always focuses the title field when an audio file is selected. If metadata already supplies a title, the user will still be thrown into the title input (and may see their metadata text replaced). We must guard this focus so it only fires when metadata is missing or deliberately bypassed.
+- Embedded artwork: metadata should populate the art dropzone the same way manual artwork does, but we need to ensure manual replacements still work and that the metadata artwork can be cleared when “Do not import metadata” is checked.
+- Manual overwrite: metadata must never stomp on values the user has already typed. We’ll track user edits (title touched, artist typed) and only auto-fill when the user hasn’t overwritten that field yet.
+- Checkbox bypass safety: the new “Do not import metadata” checkbox must fully disable metadata ingestion, including undoing previous auto-filled title/artist/artwork if necessary.
+- Partial/malformed data: plan for title-only, artist-only, artwork-only, missing, badly encoded, or huge metadata payloads, and make sure slow parsing doesn’t break the UI.
+- Timing/state: injecting metadata must not trigger focus jumps, flicker, or stale states around the existing “audio import → drop title focus” flow. The checkbox, metadata parser, and manual edits must coordinate cleanly.
+
+### Metadata audit status (2026-03-31)
+- Dependency blocker cleared: `music-metadata-browser` is now installed locally in the repo and present in both `package.json` and `package-lock.json`.
+- Parser verification: local module import succeeds and exposes the browser-side helpers we need for this pass (`parseBlob` and `selectCover`), so metadata-assisted import can move forward.
+- Status: metadata import is now implementation in progress rather than blocked.
+- Side note: the current import screen still auto-focuses the title input immediately after an audio selection, so we must guard that focus once metadata is available; otherwise any auto-filled metadata would be overwritten once the field steals focus again.
+- Active implementation goals: parse supported tags at import time, respect the `Do not import metadata` bypass flag, and prefill title/artist/artwork only when the user hasn’t typed that field yet.
+
+### Session note — metadata-assisted import applied
+- Dependency verification completed first: `package.json` and `package-lock.json` both include `music-metadata-browser@^2.5.11`, and a local module import confirmed `parseBlob` plus `selectCover` are usable in this repo.
+- Import page changes in `src/admin/AdminApp.tsx`: added optional `Artist Name`, added `Do not import metadata` (default unchecked), parsed import-file metadata with `music-metadata-browser`, and auto-filled supported fields only when the user had not already typed over them.
+- Supported metadata fields in this pass: title, artist, and embedded still artwork only. Embedded artwork is converted into a browser `File` and loaded into the existing artwork slot so the import lane shows the same armed state as a manual artwork pick.
+- Autofocus guard: title auto-focus now waits for metadata parsing to finish and only fires when metadata title is absent or metadata import is explicitly bypassed.
+- Persistence/fallback: imported artist values now save to the track record; media session artist falls back to `PolyPlay Audio`, and iOS Now Playing title now includes `Track Title — Artist` when an artist exists.
+- Artist memory: the import form now seeds the artist field from `polyplay_importArtist_v1`, updates that memory after a successful import, and restores the remembered value if metadata autofill is later disabled for the current file.
+- Verification: `npm run typecheck` passes after the metadata-import patch.
+- Live QA still needed: confirm metadata parse timing on real MP3s/M4As, confirm embedded still artwork behaves correctly when toggling the bypass checkbox, and confirm the armed artwork state feels consistent with manual artwork selection on both desktop and iOS.
 
 ---
 

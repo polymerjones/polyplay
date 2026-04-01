@@ -13,6 +13,7 @@ export type DbTrackRecord = {
   demoId?: string | null;
   isDemo?: boolean;
   title?: string;
+  artist?: string | null;
   sub?: string;
   aura?: number;
   artUrl?: string | null;
@@ -247,6 +248,7 @@ async function toTrack(record: TrackRecord): Promise<Track> {
     demoId: record.demoId ?? undefined,
     isDemo: Boolean(record.isDemo),
     title: record.title,
+    artist: record.artist ?? null,
     sub: record.sub === "Uploaded" ? "Imported" : (record.sub || "Imported"),
     aura: clampAura(record.aura),
     waveformPeaks:
@@ -305,6 +307,7 @@ export async function getTrackRowsFromDb(): Promise<DbTrackRecord[]> {
         demoId: record.demoId ?? null,
         isDemo: Boolean(record.isDemo),
         title: record.title,
+        artist: record.artist ?? null,
         sub: record.sub === "Uploaded" ? "Imported" : (record.sub || "Imported"),
         aura: clampAura(record.aura),
         artUrl,
@@ -338,6 +341,7 @@ export async function addTrackToDb(params: {
   isDemo?: boolean;
   targetPlaylistId?: string | null;
   title: string;
+  artist?: string | null;
   sub?: string;
   audio: Blob;
   artPoster?: Blob | null;
@@ -397,7 +401,7 @@ export async function addTrackToDb(params: {
     isDemo: Boolean(params.isDemo),
     title: params.title.trim() || "Untitled",
     sub: params.sub || "Imported",
-    artist: null,
+    artist: params.artist?.trim() || null,
     duration: null,
     aura: 0,
     audioKey,

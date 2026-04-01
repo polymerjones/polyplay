@@ -17,7 +17,7 @@ function getMediaMetadataCtor(): typeof MediaMetadata | null {
 }
 
 export async function syncMediaSessionItem(
-  track: Pick<Track, "title" | "artUrl" | "missingAudio" | "audioUrl"> | null
+  track: Pick<Track, "title" | "artist" | "artUrl" | "missingAudio" | "audioUrl"> | null
 ): Promise<void> {
   const mediaSession = getMediaSession();
   const MediaMetadataCtor = getMediaMetadataCtor();
@@ -40,7 +40,7 @@ export async function syncMediaSessionItem(
 
   mediaSession.metadata = new MediaMetadataCtor({
     title: track.title || "Untitled",
-    artist: "PolyPlay Audio",
+    artist: track.artist?.trim() || "PolyPlay Audio",
     album: "PolyPlay Audio",
     artwork
   });

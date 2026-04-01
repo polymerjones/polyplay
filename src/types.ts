@@ -5,6 +5,7 @@ export type Track = {
   demoId?: string;
   isDemo?: boolean;
   title: string;
+  artist?: string | null;
   sub?: string;
   aura: number;
   waveformPeaks?: number[];

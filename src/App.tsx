@@ -1942,7 +1942,9 @@ export default function App() {
       if (cancelled || nowPlayingItemSyncSeqRef.current !== syncSeq) return;
 
       await setIosNowPlayingItem({
-        title: currentTrack.title || "Untitled",
+        title: currentTrack.artist?.trim()
+          ? `${currentTrack.title || "Untitled"} — ${currentTrack.artist.trim()}`
+          : currentTrack.title || "Untitled",
         subtitle: IOS_NOW_PLAYING_APP_TITLE,
         artBlob: currentTrack.artBlob,
         artUrl: currentTrack.artUrl
@@ -1958,6 +1960,7 @@ export default function App() {
   }, [
     currentTrack?.id,
     currentTrack?.title,
+    currentTrack?.artist,
     currentTrack?.sub,
     currentTrack?.artBlob,
     currentTrack?.artUrl,

@@ -147,6 +147,7 @@ export function WaveformLoop({
   const [draggingHandle, setDraggingHandle] = useState<Handle | null>(null);
   const [hasAdjustedLoop, setHasAdjustedLoop] = useState(false);
   const [manualZoomLevel, setManualZoomLevel] = useState(0);
+  const [showManualZoomControls, setShowManualZoomControls] = useState(false);
   const [viewRange, setViewRange] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
   const [shouldPreserveViewRange, setShouldPreserveViewRange] = useState(false);
   const lockedViewRangeRef = useRef<{ start: number; end: number } | null>(null);
@@ -182,6 +183,16 @@ export function WaveformLoop({
     const rect = waveRef.current.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     return safeViewRange.start + ratio * viewSpan;
+  };
+
+  const toggleManualZoomControls = () => {
+    setShowManualZoomControls((prev) => {
+      if (prev) {
+        setManualZoomLevel(0);
+        return false;
+      }
+      return true;
+    });
   };
 
   useEffect(() => {
@@ -309,6 +320,7 @@ export function WaveformLoop({
   useEffect(() => {
     if (!loopRegion.editing) {
       setManualZoomLevel(0);
+      setShowManualZoomControls(false);
     }
   }, [loopRegion.editing]);
 
@@ -620,10 +632,18 @@ export function WaveformLoop({
       </div>
       {loopRegion.active && hasLoopRange && loopRegion.editing && (
         <div className="pc-wave-toolbar" aria-label="Loop zoom controls">
-          <div className="pc-wave-toolbar__toggle is-active" aria-hidden="true">
-            <span className="pc-wave-toolbar__glass">⌕</span>
-          </div>
-          <div className="pc-wave-toolbar__controls is-open">
+          <button
+            type="button"
+            className={`pc-wave-toolbar__toggle ${showManualZoomControls ? "is-active" : ""}`.trim()}
+            aria-label={showManualZoomControls ? "Hide zoom controls" : "Show zoom controls"}
+            aria-pressed={showManualZoomControls}
+            onClick={toggleManualZoomControls}
+          >
+            <span className="pc-wave-toolbar__glass" aria-hidden="true">
+              ⌕
+            </span>
+          </button>
+          <div className={`pc-wave-toolbar__controls ${showManualZoomControls ? "is-open" : ""}`.trim()}>
             <button
               type="button"
               className="pc-wave-toolbar__btn"

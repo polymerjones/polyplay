@@ -19,6 +19,7 @@
   "dependencies": {
     "@capacitor/core": "^8.1.0",
     "@capacitor/haptics": "^8.0.2",
+    "music-metadata-browser": "^2.5.11",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

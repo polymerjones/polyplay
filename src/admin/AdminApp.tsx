@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent } from "react";
+import { parseBlob, selectCover, type IPicture } from "music-metadata-browser";
 import logo from "../../logo.png";
 import { TransferLaneDropZone } from "./TransferLaneDropZone";
 import { GratitudeEntriesModal } from "./GratitudeEntriesModal";
@@ -93,8 +94,10 @@ const THEME_PACK_AURA_COLORS: Record<"crimson" | "teal" | "amber", string> = {
 };
 const PRIVACY_POLICY_URL = "/privacy-policy.html";
 const TERMS_AND_CONDITIONS_URL = "/terms-and-conditions.html";
+const SUPPORT_URL = "/support";
 const CAN_USE_IOS_NATIVE_AUDIO_IMPORT = canUseIosNativeAudioImport();
 const CAN_USE_IOS_NATIVE_ARTWORK_IMPORT = canUseIosNativeAudioImport();
+const ARTIST_MEMORY_KEY = "polyplay_importArtist_v1";
 type ThemeSelection = "dark" | "light" | "amber" | "teal" | "crimson";
 type AdminHapticTone = "success" | "heavy";
 type AdminConfirmState =
@@ -123,10 +126,91 @@ function getDefaultAuraByTheme(themeMode: string | null, slot: "crimson" | "teal
   return "#bc84ff";
 }
 
+type CapacitorBrowserPlugin = {
+  open: (options: { url: string }) => Promise<void>;
+};
+
+function getCapacitorBrowserPlugin(): CapacitorBrowserPlugin | null {
+  if (typeof window === "undefined") return null;
+  const capacitor = (window as Window & {
+    Capacitor?: {
+      registerPlugin?: <T>(name: string) => T;
+      Plugins?: Record<string, unknown>;
+    };
+  }).Capacitor;
+  if (!capacitor) return null;
+  if (typeof capacitor.registerPlugin === "function") {
+    try {
+      return capacitor.registerPlugin<CapacitorBrowserPlugin>("Browser");
+    } catch {
+      // ignore missing plugin registration
+    }
+  }
+  return (capacitor.Plugins?.Browser ?? null) as CapacitorBrowserPlugin | null;
+}
+
+function openAdminExternalUrl(url: string) {
+  if (typeof window === "undefined") return;
+  let resolvedUrl = url;
+  try {
+    resolvedUrl = new URL(url, window.location.origin).toString();
+  } catch {
+    // fall back to the provided string
+  }
+  const plugin = getCapacitorBrowserPlugin();
+  if (plugin?.open) {
+    void plugin.open({ url: resolvedUrl });
+    return;
+  }
+  window.open(resolvedUrl, "_blank", "noopener,noreferrer");
+}
+
+function handleAdminLinkClick(url: string) {
+  return (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    openAdminExternalUrl(url);
+  };
+}
+
 function getThemeSelectionFromState(themeMode: string | null, slot: "crimson" | "teal" | "amber"): ThemeSelection {
   if (themeMode === "light") return "light";
   if (themeMode === "custom") return slot;
   return "dark";
+}
+
+function getStoredArtistName(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return localStorage.getItem(ARTIST_MEMORY_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function cleanMetadataText(value: string | null | undefined): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function buildEmbeddedArtworkFile(picture: IPicture | null | undefined): File | null {
+  if (!picture?.data?.length) return null;
+  const mimeType = cleanMetadataText(picture.format).toLowerCase();
+  if (!mimeType.startsWith("image/")) return null;
+  const extension = mimeType.split("/")[1] || "jpg";
+  const bytes = new Uint8Array(picture.data);
+  return new File([bytes], `embedded-artwork.${extension}`, { type: mimeType });
+}
+
+function storeArtistName(value: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (value) {
+      localStorage.setItem(ARTIST_MEMORY_KEY, value);
+    } else {
+      localStorage.removeItem(ARTIST_MEMORY_KEY);
+    }
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
 function truncateMiddle(value: string, maxLength: number): string {
@@ -225,6 +309,7 @@ export function AdminApp() {
   const [tracks, setTracks] = useState<DbTrackRecord[]>([]);
   const [status, setStatus] = useState("");
   const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadArtist, setUploadArtist] = useState(() => getStoredArtistName());
   const [uploadAudio, setUploadAudio] = useState<File | null>(null);
   const [uploadArt, setUploadArt] = useState<File | null>(null);
   const [uploadArtPreviewUrl, setUploadArtPreviewUrl] = useState("");
@@ -232,8 +317,17 @@ export function AdminApp() {
   const [uploadArtFrameTime, setUploadArtFrameTime] = useState(0);
   const [uploadArtPosterBlob, setUploadArtPosterBlob] = useState<Blob | null>(null);
   const [isUploadPreviewPlaying, setIsUploadPreviewPlaying] = useState(false);
+  const [ignoreUploadMetadata, setIgnoreUploadMetadata] = useState(false);
+  const [uploadMetadataState, setUploadMetadataState] = useState<"idle" | "loading" | "ready" | "skipped">("idle");
+  const [uploadMetadataHasTitle, setUploadMetadataHasTitle] = useState(false);
   const uploadFormRef = useRef<HTMLFormElement | null>(null);
   const uploadTitleInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadTitleTouchedRef = useRef(false);
+  const uploadArtistTouchedRef = useRef(false);
+  const uploadTitleAutofilledRef = useRef(false);
+  const uploadArtistAutofilledRef = useRef(false);
+  const uploadArtworkAutofilledRef = useRef(false);
+  const uploadArtRef = useRef<File | null>(null);
 
   const [selectedArtworkTrackId, setSelectedArtworkTrackId] = useState<string>("");
   const [selectedArtworkFile, setSelectedArtworkFile] = useState<File | null>(null);
@@ -541,8 +635,14 @@ export function AdminApp() {
   }, [laneToast]);
 
   useEffect(() => {
+    uploadArtRef.current = uploadArt;
+  }, [uploadArt]);
+
+  useEffect(() => {
     if (!uploadAudio) return;
     if (typeof window === "undefined") return;
+    if (!ignoreUploadMetadata && uploadMetadataState === "loading") return;
+    if (!ignoreUploadMetadata && uploadMetadataHasTitle) return;
     const input = uploadTitleInputRef.current;
     if (!input) return;
     const timer = window.setTimeout(() => {
@@ -550,7 +650,81 @@ export function AdminApp() {
       input.select();
     }, 80);
     return () => window.clearTimeout(timer);
-  }, [uploadAudio]);
+  }, [ignoreUploadMetadata, uploadAudio, uploadMetadataHasTitle, uploadMetadataState]);
+
+  useEffect(() => {
+    if (!uploadAudio) {
+      setUploadMetadataState("idle");
+      setUploadMetadataHasTitle(false);
+      return;
+    }
+
+    if (ignoreUploadMetadata) {
+      setUploadMetadataState("skipped");
+      setUploadMetadataHasTitle(false);
+      if (uploadTitleAutofilledRef.current) {
+        uploadTitleAutofilledRef.current = false;
+        setUploadTitle("");
+      }
+      if (uploadArtistAutofilledRef.current) {
+        uploadArtistAutofilledRef.current = false;
+        setUploadArtist(getStoredArtistName());
+      }
+      if (uploadArtworkAutofilledRef.current) {
+        uploadArtworkAutofilledRef.current = false;
+        setUploadArtworkFile(null);
+      }
+      return;
+    }
+
+    let cancelled = false;
+    setUploadMetadataState("loading");
+    setUploadMetadataHasTitle(false);
+
+    void (async () => {
+      try {
+        const metadata = await parseBlob(uploadAudio);
+        if (cancelled) return;
+        const metadataTitle = cleanMetadataText(metadata.common.title);
+        const metadataArtist = cleanMetadataText(metadata.common.artist || metadata.common.albumartist);
+        const embeddedArtwork = buildEmbeddedArtworkFile(selectCover(metadata.common.picture) ?? null);
+
+        setUploadMetadataHasTitle(Boolean(metadataTitle));
+        setUploadMetadataState("ready");
+
+        if (metadataTitle && !uploadTitleTouchedRef.current) {
+          setUploadTitle((prev) => {
+            const canApply = uploadTitleAutofilledRef.current || prev.trim() === "";
+            if (!canApply) return prev;
+            uploadTitleAutofilledRef.current = true;
+            return metadataTitle;
+          });
+        }
+
+        if (metadataArtist && !uploadArtistTouchedRef.current) {
+          setUploadArtist((prev) => {
+            const canApply = uploadArtistAutofilledRef.current || prev.trim() === "" || prev.trim() === getStoredArtistName();
+            if (!canApply) return prev;
+            uploadArtistAutofilledRef.current = true;
+            return metadataArtist;
+          });
+        }
+
+        if (embeddedArtwork && (!uploadArtRef.current || uploadArtworkAutofilledRef.current)) {
+          uploadArtworkAutofilledRef.current = true;
+          setUploadArtworkFile(embeddedArtwork);
+        }
+      } catch {
+        if (cancelled) return;
+        setUploadMetadataHasTitle(false);
+        setUploadMetadataState("ready");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ignoreUploadMetadata, uploadAudio]);
 
   useEffect(() => {
     if (!selectedTransferTrackId) {
@@ -748,6 +922,18 @@ export function AdminApp() {
   };
 
   const onPickUploadAudio = (file: File | null) => {
+    uploadTitleTouchedRef.current = false;
+    uploadArtistTouchedRef.current = false;
+    uploadTitleAutofilledRef.current = false;
+    uploadArtistAutofilledRef.current = false;
+    if (uploadArtworkAutofilledRef.current) {
+      uploadArtworkAutofilledRef.current = false;
+      setUploadArtworkFile(null);
+    }
+    if (!file) {
+      setUploadMetadataState("idle");
+      setUploadMetadataHasTitle(false);
+    }
     setUploadAudio(file);
   };
 
@@ -785,6 +971,7 @@ export function AdminApp() {
         return;
       }
     }
+    uploadArtworkAutofilledRef.current = false;
     setUploadArtworkFile(file);
   };
 
@@ -1032,6 +1219,7 @@ export function AdminApp() {
     }
 
     const derivedTitle = liveTitle.trim() || titleFromFilename(uploadAudio.name);
+    const derivedArtist = uploadArtist.trim();
     setStatus("Importing...");
     showImportNotice("IMPORTING TRACK...");
 
@@ -1039,15 +1227,26 @@ export function AdminApp() {
       const artwork = await buildArtworkPayload(uploadArt, uploadArtPosterBlob, uploadArtFrameTime);
       await addTrackToDb({
         title: derivedTitle,
+        artist: derivedArtist || null,
         sub: "Imported",
         audio: uploadAudio,
         artPoster: artwork.artPoster,
         artVideo: artwork.artVideo
       });
       notifyUserImported();
+      storeArtistName(derivedArtist);
       setUploadTitle("");
+      setUploadArtist(getStoredArtistName());
       setUploadAudio(null);
       setUploadArtworkFile(null);
+      setIgnoreUploadMetadata(false);
+      setUploadMetadataState("idle");
+      setUploadMetadataHasTitle(false);
+      uploadTitleTouchedRef.current = false;
+      uploadArtistTouchedRef.current = false;
+      uploadTitleAutofilledRef.current = false;
+      uploadArtistAutofilledRef.current = false;
+      uploadArtworkAutofilledRef.current = false;
       setStatus(
         artwork.posterCaptureFailed
           ? "Import complete. Video artwork added (poster frame unavailable on this browser)."
@@ -1998,7 +2197,24 @@ export function AdminApp() {
               <input
                 ref={uploadTitleInputRef}
                 value={uploadTitle}
-                onChange={(event) => setUploadTitle(event.currentTarget.value)}
+                onChange={(event) => {
+                  uploadTitleTouchedRef.current = true;
+                  uploadTitleAutofilledRef.current = false;
+                  setUploadTitle(event.currentTarget.value);
+                }}
+                className="admin-upload-input rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
+              />
+            </label>
+
+            <label className="grid gap-1 text-sm text-slate-300">
+              Artist Name
+              <input
+                value={uploadArtist}
+                onChange={(event) => {
+                  uploadArtistTouchedRef.current = true;
+                  uploadArtistAutofilledRef.current = false;
+                  setUploadArtist(event.currentTarget.value);
+                }}
                 className="admin-upload-input rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
               />
             </label>
@@ -2024,6 +2240,15 @@ export function AdminApp() {
               onPickRequest={CAN_USE_IOS_NATIVE_ARTWORK_IMPORT ? (fallbackPick) => void onPickUploadArtworkNative(fallbackPick) : undefined}
               onFileSelected={(file) => void onPickUploadArtwork(file)}
             />
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={ignoreUploadMetadata}
+                onChange={(event) => setIgnoreUploadMetadata(event.currentTarget.checked)}
+                className="admin-upload-checkbox h-4 w-4 rounded border border-slate-300/30 bg-slate-950/70"
+              />
+              Do not import metadata
+            </label>
             {uploadArtPreviewUrl && (
               <div className="video-frame-picker">
                 <label className="text-xs text-slate-300">Poster frame for static artwork</label>
@@ -2857,6 +3082,7 @@ export function AdminApp() {
         <div className="flex flex-wrap items-center justify-center gap-2 rounded-xl border border-slate-300/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 backdrop-blur-sm">
           <a
             href={PRIVACY_POLICY_URL}
+            onClick={handleAdminLinkClick(PRIVACY_POLICY_URL)}
             target="_blank"
             rel="noopener noreferrer"
             className="rounded-lg px-3 py-2 font-medium text-slate-100 underline decoration-slate-400/60 underline-offset-4"
@@ -2865,6 +3091,7 @@ export function AdminApp() {
           </a>
           <a
             href={TERMS_AND_CONDITIONS_URL}
+            onClick={handleAdminLinkClick(TERMS_AND_CONDITIONS_URL)}
             target="_blank"
             rel="noopener noreferrer"
             className="rounded-lg px-3 py-2 font-medium text-slate-100 underline decoration-slate-400/60 underline-offset-4"
@@ -2873,6 +3100,7 @@ export function AdminApp() {
           </a>
           <a
             href="/support"
+            onClick={handleAdminLinkClick(SUPPORT_URL)}
             target="_blank"
             rel="noopener noreferrer"
             className="rounded-lg px-3 py-2 font-medium text-slate-100 underline decoration-slate-400/60 underline-offset-4"
