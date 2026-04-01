@@ -94,7 +94,7 @@ const THEME_PACK_AURA_COLORS: Record<"crimson" | "teal" | "amber", string> = {
 };
 const PRIVACY_POLICY_URL = "/privacy-policy.html";
 const TERMS_AND_CONDITIONS_URL = "/terms-and-conditions.html";
-const SUPPORT_URL = "/support";
+const SUPPORT_URL = "/support.html";
 const CAN_USE_IOS_NATIVE_AUDIO_IMPORT = canUseIosNativeAudioImport();
 const CAN_USE_IOS_NATIVE_ARTWORK_IMPORT = canUseIosNativeAudioImport();
 const ARTIST_MEMORY_KEY = "polyplay_importArtist_v1";
@@ -152,10 +152,17 @@ function getCapacitorBrowserPlugin(): CapacitorBrowserPlugin | null {
 function openAdminExternalUrl(url: string) {
   if (typeof window === "undefined") return;
   let resolvedUrl = url;
+  let isSameOrigin = false;
   try {
-    resolvedUrl = new URL(url, window.location.origin).toString();
+    const parsedUrl = new URL(url, window.location.origin);
+    resolvedUrl = parsedUrl.toString();
+    isSameOrigin = parsedUrl.origin === window.location.origin;
   } catch {
     // fall back to the provided string
+  }
+  if (isSameOrigin) {
+    window.location.assign(resolvedUrl);
+    return;
   }
   const plugin = getCapacitorBrowserPlugin();
   if (plugin?.open) {
@@ -163,6 +170,15 @@ function openAdminExternalUrl(url: string) {
     return;
   }
   window.open(resolvedUrl, "_blank", "noopener,noreferrer");
+}
+
+function markAdminImportCompleted() {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(HAS_IMPORTED_KEY, "true");
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
 function handleAdminLinkClick(url: string) {
@@ -191,12 +207,76 @@ function cleanMetadataText(value: string | null | undefined): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function sniffEmbeddedArtworkMimeType(bytes: Uint8Array): string | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return "image/png";
+  }
+  if (
+    bytes.length >= 4 &&
+    bytes[0] === 0x47 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x38
+  ) {
+    return "image/gif";
+  }
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+  if (bytes.length >= 2 && bytes[0] === 0x42 && bytes[1] === 0x4d) {
+    return "image/bmp";
+  }
+  return null;
+}
+
+function resolveEmbeddedArtworkMimeType(format: string, bytes: Uint8Array): string | null {
+  const normalized = format.toLowerCase();
+  if (normalized.startsWith("image/")) return normalized;
+
+  const shorthandMap: Record<string, string> = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    jpe: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    webp: "image/webp",
+    bmp: "image/bmp"
+  };
+  if (normalized in shorthandMap) {
+    return shorthandMap[normalized];
+  }
+  return sniffEmbeddedArtworkMimeType(bytes);
+}
+
 function buildEmbeddedArtworkFile(picture: IPicture | null | undefined): File | null {
   if (!picture?.data?.length) return null;
-  const mimeType = cleanMetadataText(picture.format).toLowerCase();
-  if (!mimeType.startsWith("image/")) return null;
-  const extension = mimeType.split("/")[1] || "jpg";
   const bytes = new Uint8Array(picture.data);
+  const mimeType = resolveEmbeddedArtworkMimeType(cleanMetadataText(picture.format), bytes);
+  if (!mimeType?.startsWith("image/")) return null;
+  const extension = mimeType === "image/jpeg" ? "jpg" : mimeType.split("/")[1] || "jpg";
   return new File([bytes], `embedded-artwork.${extension}`, { type: mimeType });
 }
 
@@ -309,7 +389,8 @@ export function AdminApp() {
   const [tracks, setTracks] = useState<DbTrackRecord[]>([]);
   const [status, setStatus] = useState("");
   const [uploadTitle, setUploadTitle] = useState("");
-  const [uploadArtist, setUploadArtist] = useState(() => getStoredArtistName());
+  const [uploadArtist, setUploadArtist] = useState("");
+  const [artistMemoryValue, setArtistMemoryValue] = useState(() => getStoredArtistName());
   const [uploadAudio, setUploadAudio] = useState<File | null>(null);
   const [uploadArt, setUploadArt] = useState<File | null>(null);
   const [uploadArtPreviewUrl, setUploadArtPreviewUrl] = useState("");
@@ -453,6 +534,21 @@ export function AdminApp() {
       }, {}),
     [tracks]
   );
+  const artistSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const suggestions: string[] = [];
+    const push = (value: string | null | undefined) => {
+      const next = cleanMetadataText(value);
+      if (!next) return;
+      const key = next.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      suggestions.push(next);
+    };
+    push(artistMemoryValue);
+    tracks.forEach((track) => push(track.artist));
+    return suggestions;
+  }, [artistMemoryValue, tracks]);
 
   const refreshTracks = async () => {
     try {
@@ -668,7 +764,7 @@ export function AdminApp() {
       }
       if (uploadArtistAutofilledRef.current) {
         uploadArtistAutofilledRef.current = false;
-        setUploadArtist(getStoredArtistName());
+        setUploadArtist("");
       }
       if (uploadArtworkAutofilledRef.current) {
         uploadArtworkAutofilledRef.current = false;
@@ -703,7 +799,7 @@ export function AdminApp() {
 
         if (metadataArtist && !uploadArtistTouchedRef.current) {
           setUploadArtist((prev) => {
-            const canApply = uploadArtistAutofilledRef.current || prev.trim() === "" || prev.trim() === getStoredArtistName();
+            const canApply = uploadArtistAutofilledRef.current || prev.trim() === "";
             if (!canApply) return prev;
             uploadArtistAutofilledRef.current = true;
             return metadataArtist;
@@ -806,8 +902,9 @@ export function AdminApp() {
     if (keepImportPageOpen) return;
     try {
       if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: "polyplay:upload-success" }, window.location.origin);
+        window.parent.postMessage({ type: "polyplay:import-complete" }, window.location.origin);
       } else {
+        markAdminImportCompleted();
         try {
           const audio = new Audio("/hyper-notif.wav");
           audio.volume = 0.85;
@@ -921,19 +1018,23 @@ export function AdminApp() {
     setSelectedArtPreviewUrl(file && isVideoArtwork(file) ? URL.createObjectURL(file) : "");
   };
 
-  const onPickUploadAudio = (file: File | null) => {
+  const resetUploadDraftForNewAudio = (file: File | null) => {
     uploadTitleTouchedRef.current = false;
     uploadArtistTouchedRef.current = false;
     uploadTitleAutofilledRef.current = false;
     uploadArtistAutofilledRef.current = false;
-    if (uploadArtworkAutofilledRef.current) {
-      uploadArtworkAutofilledRef.current = false;
-      setUploadArtworkFile(null);
-    }
+    uploadArtworkAutofilledRef.current = false;
+    setUploadTitle("");
+    setUploadArtist("");
+    setUploadArtworkFile(null);
     if (!file) {
       setUploadMetadataState("idle");
       setUploadMetadataHasTitle(false);
     }
+  };
+
+  const onPickUploadAudio = (file: File | null) => {
+    resetUploadDraftForNewAudio(file);
     setUploadAudio(file);
   };
 
@@ -944,6 +1045,7 @@ export function AdminApp() {
         fallbackPick?.();
         return;
       }
+      resetUploadDraftForNewAudio(file);
       setUploadAudio(file);
     } catch {
       fallbackPick?.();
@@ -1233,10 +1335,11 @@ export function AdminApp() {
         artPoster: artwork.artPoster,
         artVideo: artwork.artVideo
       });
-      notifyUserImported();
+      markAdminImportCompleted();
       storeArtistName(derivedArtist);
+      setArtistMemoryValue(derivedArtist);
       setUploadTitle("");
-      setUploadArtist(getStoredArtistName());
+      setUploadArtist("");
       setUploadAudio(null);
       setUploadArtworkFile(null);
       setIgnoreUploadMetadata(false);
@@ -2209,15 +2312,22 @@ export function AdminApp() {
             <label className="grid gap-1 text-sm text-slate-300">
               Artist Name
               <input
+                list="admin-artist-suggestions"
                 value={uploadArtist}
                 onChange={(event) => {
                   uploadArtistTouchedRef.current = true;
                   uploadArtistAutofilledRef.current = false;
                   setUploadArtist(event.currentTarget.value);
                 }}
+                placeholder="Start typing to see artist suggestions"
                 className="admin-upload-input rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
               />
             </label>
+            <datalist id="admin-artist-suggestions">
+              {artistSuggestions.map((artist) => (
+                <option key={artist} value={artist} />
+              ))}
+            </datalist>
 
             <TransferLaneDropZone
               label="Audio (.wav/.mp3/.mov)"
