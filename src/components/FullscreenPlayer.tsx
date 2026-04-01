@@ -4,6 +4,7 @@ import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
 import { buildPeaksFromAudioBlob, fallbackPeaks } from "../lib/artwork/waveformArtwork";
 import { fireLightHaptic } from "../lib/haptics";
 import { formatTime } from "../lib/time";
+import { isIosSafari } from "../lib/platform";
 import type { LoopMode, LoopRegion, RepeatTrackMode, Track } from "../types";
 import { PlayerControls } from "./PlayerControls";
 import { WaveformLoop } from "./WaveformLoop";
@@ -299,7 +300,10 @@ export function FullscreenPlayer({
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
     return loopGestureActiveRef.current || now < loopGestureSuppressUntilRef.current;
   };
-  const isExitSuppressed = showLoopEditor || loopRegion.editing;
+  const isLoopEditing = loopRegion.editing;
+  const isExitSuppressed = isLoopEditing;
+  const isIosDevice = isIosSafari();
+  const exitHintText = isLoopEditing ? "Loop editing active" : isIosDevice ? "Swipe Down to Exit" : "Exit Fullscreen Player";
 
   const armLoopGestureCooldown = () => {
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -418,8 +422,8 @@ export function FullscreenPlayer({
       {!isCinemaMode && (
         <button
           className={`fullscreen-player-shell__close ${isExitSuppressed ? "is-disabled" : ""}`.trim()}
-          aria-label={isExitSuppressed ? "Finish loop edit before exiting fullscreen player" : "Exit fullscreen player"}
-          title={isExitSuppressed ? "Finish loop edit before exiting fullscreen player" : "Exit fullscreen player"}
+          aria-label={isExitSuppressed ? "Finish loop edit before exiting fullscreen player" : exitHintText}
+          title={isExitSuppressed ? "Finish loop edit before exiting fullscreen player" : exitHintText}
           aria-disabled={isExitSuppressed}
           onClick={() => {
             if (isExitSuppressed) return;
@@ -432,17 +436,17 @@ export function FullscreenPlayer({
 
       <div className={`fullscreen-player-shell__content ${isCinemaMode ? "is-cinema-mode" : ""}`.trim()}>
         {!isCinemaMode && <div className="fullscreen-player-shell__swipe-zone" aria-hidden="true" />}
-        <div
-          className={`fullscreen-player-shell__art ${hasArtworkVideo ? "has-video" : ""} ${
-            isCinemaMode ? "is-cinema-mode" : ""
-          }`.trim()}
-          ref={artRef}
-          style={hasArtworkVideo ? undefined : artStyle}
-          onClick={() => {
-            if (isCinemaMode) return;
+          <div
+            className={`fullscreen-player-shell__art ${hasArtworkVideo ? "has-video" : ""} ${
+              isCinemaMode ? "is-cinema-mode" : ""
+            }`.trim()}
+            ref={artRef}
+            style={hasArtworkVideo ? undefined : artStyle}
+            onClick={() => {
+            if (isCinemaMode || isExitSuppressed) return;
             setIsCinemaMode(true);
-          }}
-        >
+            }}
+          >
           {!hasArtworkVideo && isCinemaMode && (
             <img
               className="fullscreen-player-shell__art-image"
@@ -547,14 +551,14 @@ export function FullscreenPlayer({
           <button
             type="button"
             className={`fullscreen-player-shell__close-bottom ${isExitSuppressed ? "is-disabled" : ""}`.trim()}
-            aria-label={isExitSuppressed ? "Finish loop edit before exiting fullscreen player" : "Exit fullscreen player"}
+            aria-label={isExitSuppressed ? "Finish loop edit before exiting fullscreen player" : exitHintText}
             aria-disabled={isExitSuppressed}
             onClick={() => {
               if (isExitSuppressed) return;
               onClose();
             }}
           >
-            {isExitSuppressed ? "Finish Loop Edit To Exit" : "Exit Fullscreen Player"}
+            {exitHintText}
           </button>
         )}
       </div>

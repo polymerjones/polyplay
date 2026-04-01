@@ -307,13 +307,20 @@ function getAdjacentTrackId(
 
 function parseRepeatTrackMode(raw: string | null): RepeatTrackMode {
   if (raw === "repeat-3" || raw === "threepeat") return "repeat-3";
-  if (raw === "repeat-2" || raw === "loop-one" || raw === "true") return "repeat-2";
+  if (raw === "repeat-2") return "repeat-2";
+  if (raw === "repeat-1") return "repeat-1";
+  if (raw === "repeat" || raw === "loop-one" || raw === "true") return "repeat";
   return "off";
+}
+
+function isCountRepeatMode(mode: RepeatTrackMode): mode is "repeat-1" | "repeat-2" | "repeat-3" {
+  return mode === "repeat-1" || mode === "repeat-2" || mode === "repeat-3";
 }
 
 function getRepeatModeCount(mode: RepeatTrackMode): number {
   if (mode === "repeat-3") return 3;
   if (mode === "repeat-2") return 2;
+  if (mode === "repeat-1") return 1;
   return 0;
 }
 
@@ -608,7 +615,7 @@ export default function App() {
   const [safeTapBursts, setSafeTapBursts] = useState<SafeTapBurst[]>([]);
   const [threepeatDisplayCount, setThreepeatDisplayCount] = useState<number>(() => {
     const storedMode = getStoredRepeatTrackMode();
-    return storedMode === "off" ? 0 : getStoredThreepeatRemaining(storedMode);
+    return storedMode === "off" || storedMode === "repeat" ? 0 : getStoredThreepeatRemaining(storedMode);
   });
   const [threepeatFlashTick, setThreepeatFlashTick] = useState(0);
   const ambientFxRef = useRef<AmbientFxCanvasHandle | null>(null);
@@ -2486,7 +2493,7 @@ export default function App() {
       restartAt: number,
       options?: { onExhausted?: () => void }
     ): boolean => {
-      if (repeatTrackMode === "off") return false;
+      if (!isCountRepeatMode(repeatTrackMode)) return false;
       const remainingBeforeReplay = threepeatRemainingRef.current;
       if (remainingBeforeReplay > 0) {
         audio.currentTime = restartAt;
@@ -3211,21 +3218,42 @@ export default function App() {
 
   const toggleRepeatTrack = () => {
     setRepeatTrackMode((prev) => {
-      const next: RepeatTrackMode = prev === "off" ? "repeat-2" : prev === "repeat-2" ? "repeat-3" : "off";
+      const next: RepeatTrackMode =
+        prev === "off"
+          ? "repeat"
+          : prev === "repeat"
+            ? "repeat-1"
+            : prev === "repeat-1"
+              ? "repeat-2"
+              : prev === "repeat-2"
+                ? "repeat-3"
+                : "off";
       const nextRemaining = getRepeatModeCount(next);
-      if (next !== "off") {
+      if (isCountRepeatMode(next)) {
         threepeatRemainingRef.current = nextRemaining;
         setThreepeatDisplayCount(nextRemaining);
         fireHeavyHaptic();
-        setFxToast(next === "repeat-2" ? "Repeat 2 Activated" : "Repeat 3 Activated");
+        setFxToast(
+          next === "repeat-1"
+            ? "Repeat once activated"
+            : next === "repeat-2"
+              ? "Repeat 2 Activated"
+              : "Repeat 3 Activated"
+        );
+      } else if (next === "repeat") {
+        threepeatRemainingRef.current = 0;
+        setThreepeatDisplayCount(0);
+        fireLightHaptic();
+        setFxToast("Repeat enabled");
       } else {
         threepeatRemainingRef.current = 0;
         setThreepeatDisplayCount(0);
         fireLightHaptic();
+        setFxToast("Repeat disabled");
       }
       try {
         localStorage.setItem(REPEAT_TRACK_KEY, next);
-        if (next !== "off") {
+        if (isCountRepeatMode(next)) {
           localStorage.setItem(THREEPEAT_REMAINING_KEY, String(nextRemaining));
         } else {
           localStorage.removeItem(THREEPEAT_REMAINING_KEY);

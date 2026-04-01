@@ -97,7 +97,7 @@ export function PlayerControls({
   const safeLoopEndCandidate = loopRegion?.end && loopRegion.end > 0 ? loopRegion.end : safeDuration;
   const safeLoopEnd = Math.max(safeLoopStart, Math.min(safeDuration, safeLoopEndCandidate));
   const hasLoopWindow = loopMode !== "off" && safeDuration > 0 && safeLoopEnd > safeLoopStart;
-  const hasLoopBounds = safeDuration > 0 && safeLoopEnd > safeLoopStart;
+  const hasLoopBounds = loopRegion?.active && safeDuration > 0 && safeLoopEnd > safeLoopStart;
   const isLoopEditing = Boolean(loopRegion?.editing);
   const primaryLoopLabel = !hasLoopBounds ? "Set Loop" : isLoopEditing ? "Done" : "Edit Loop";
   const handleLoopButton = () => {
@@ -119,13 +119,18 @@ export function PlayerControls({
       : 0;
   const isMuteOnlyDimControl = dimControlSkipsSoftDim;
   const isRepeatActive = repeatTrackMode !== "off";
-  const isCountRepeat = repeatTrackMode !== "off";
+  const isCountRepeat =
+    repeatTrackMode === "repeat-1" || repeatTrackMode === "repeat-2" || repeatTrackMode === "repeat-3";
   const repeatAriaLabel =
     repeatTrackMode === "off"
-      ? "Enable repeat 2"
-      : repeatTrackMode === "repeat-2"
-        ? "Enable repeat 3"
-        : "Disable repeat";
+      ? "Enable repeat"
+      : repeatTrackMode === "repeat"
+        ? "Switch to repeat once"
+        : repeatTrackMode === "repeat-1"
+          ? "Switch to repeat 2"
+          : repeatTrackMode === "repeat-2"
+            ? "Switch to repeat 3"
+            : "Disable repeat";
   void onVinylScratch;
   void onToggleLoopMode;
 

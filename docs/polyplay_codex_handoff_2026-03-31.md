@@ -46,6 +46,25 @@ Loop creation currently feels like the buggiest part of the app on both iOS and 
 - Maybe a confirm step is not strictly required logically, but from a UX standpoint user seems to need one.
 - Loop creation and loop editing feel like a state machine the user cannot read.
 
+### Loop cleanup pass plan
+- Task: normalize the loop button/toolbar state and exit hints now that editing guards, zoom, and persistence improve. Root causes to address:
+  1. `primaryLoopLabel` is currently based on `hasLoopBounds`, but the fallback for `safeLoopEnd` means the button already shows `Edit Loop` even before the user creates a loop. We need to tie the label/behavior to `loopRegion.active`.
+  2. Magnifying glass controls should truly behave as a toggle (opening/closing the ± controls without disrupting the session); ensure the handler keeps closing the controls cleanly.
+  3. Fullscreen exit hint copy should match iOS vs desktop states and avoid showing exit tips while editing.
+  4. Confirm no residual “Finish Loop Edit” messaging or check button logic leaks into this pass.
+
+### Loop cleanup pass applied
+- Root causes addressed:
+  1. The loop button previously relied on `hasLoopBounds`, which was true anytime the duration was known because `safeLoopEndCandidate` fell back to the track length even without an actual loop. This made the button say `Edit Loop` before any loop existed and never reset to `Set Loop` after clearing.
+  2. The fullscreen exit hint text always said “Exit Fullscreen Player” (or the old “Finish Loop Edit To Exit”) regardless of platform or editing state, so iOS users saw the wrong instruction and editing users still saw an exit hint even when exits were disabled.
+- Fixes:
+  1. Updated `src/components/PlayerControls.tsx` so `hasLoopBounds` now requires `loopRegion.active` before showing `Edit Loop`/`Done`. That keeps the primary button at `Set Loop` until a real loop exists and guarantees it resets to `Set Loop` after `Clear Loop`.
+  2. Updated `src/components/FullscreenPlayer.tsx` to compute an exit hint: `Swipe Down to Exit` on iOS, `Exit Fullscreen Player` elsewhere, and a neutral “Loop editing active” message while editing (so no misleading exit copy). The close buttons now share that text while editing stays suppressed, and the button text only switches back to the platform-specific hint once editing ends.
+  3. The magnifying glass toggle already opened/closed the ± controls without breaking the session, so no additional change was required there.
+- Files changed: `src/components/PlayerControls.tsx`, `src/components/FullscreenPlayer.tsx`.
+- Platform impact: loop controls now reliably show `Set Loop`/`Done`/`Edit Loop` as the user expects, and both the top and bottom fullscreen exit buttons reflect the appropriate platform egress hints while suppressing misleading instructions during loop edits.
+- Regression risk: low (loop button logic tightened, exit hints only change text). Live QA: still needed to confirm the iOS swipe hint shows up when editing is inactive and both exit buttons stay disabled while editing.
+
 ### Session note — loop audit plan
 - Issue: markers stay hard to grab because scrubbing jumps the playhead instead of offering a stable loop edit surface.
 - Files to inspect: `src/components/WaveformLoop.tsx`, `src/components/MiniPlayerBar.tsx`, `src/components/player.css`.
@@ -234,6 +253,15 @@ From the `off` position:
 - First button press from off should **not** immediately imply a numbered repeat count.
 - The first state should clearly mean **standard repeat indefinitely**.
 
+### Repeat button fix plan
+- Task: update the repeat button state machine so it cycles `off -> repeat (indefinite) -> repeat once -> repeat 2 -> repeat 3 -> off`. Currently it jumps straight to numbered counts and keeps using the limited `repeat-2`/`repeat-3` states. We'll extend `RepeatTrackMode` to include a plain `repeat` and `repeat-1` state, adjust storage parsing, and only use the badge/threepeat counter for the numbered modes. This keeps the UX plain when repeat is active but not yet bound to a specific count, then surfaces the numeric badge when the user opts into 1/2/3 repeats.
+
+### Repeat fix applied
+- Root cause: the toggle cycle skipped the plain repeat state and went straight from Off to the numbered `repeat-2` state, so the first press already showed “2 repeat.” The badge and remaining counter also treated every active state as a “count” this prevented showing just the plain repeat state.
+- Fix: expanded `RepeatTrackMode` to include `repeat` and `repeat-1`, updated `parseRepeatTrackMode`/storage handling, and made the new cycle go `off -> repeat -> repeat-1 -> repeat-2 -> repeat-3 -> off`. Only the `repeat-1/2/3` states use the threepeat counter and leave a numeric badge, while `repeat` shows no badge and simply indicates repeat is on. Additionally, the same guard ensures the “Repeat” button now announces the next state (e.g., “Switch to repeat once” after enabling repeat).
+- Files changed: `src/types.ts`, `src/App.tsx`, `src/components/PlayerControls.tsx`, `docs/polyplay_codex_handoff_2026-03-31.md`.
+- Regression risk: medium-high (repeat state machine touches playback/loop hooks). Live QA is still vital to confirm each toggle state behaves correctly, the indefinite repeat is actionable, and the numeric badge shows exactly for the numbered counts.
+
 ---
 
 ## 5. Hero logo / PNG asset uncertainty
@@ -249,6 +277,16 @@ Please verify:
 - whether old cached assets or stale references are still being used
 
 Do not assume the currently visible asset is correct.
+
+### Logo swap note
+- Task: swap in the new horizontal PNG located at `priv mockups/grok mocks/official horz green no shadow alpha.png`. Replace the asset referenced by `src/assets/polyplay-hero-logo.png` and `public/polyplay-hero-logo.png` so both the in-app hero and the support page use the updated wordmark. Keep everything else untouched; this is purely an asset swap.
+
+### Logo swap applied
+- Root cause: Hero and support page still referenced the outdated PNG, so the new horizontal wordmark never appeared live.
+- Fix: copied `priv mockups/grok mocks/official horz green no shadow alpha.png` over `src/assets/polyplay-hero-logo.png` and `public/polyplay-hero-logo.png` so both the React hero bar and `/support` page load the new asset. No code or markup changes were necessary.
+- Files changed: `src/assets/polyplay-hero-logo.png`, `public/polyplay-hero-logo.png`, `docs/polyplay_codex_handoff_2026-03-31.md`.
+- Platform impact: the hero header and support page now show the updated horizontal wordmark with no other UI change.
+- Regression risk: none (asset swap only). Live QA: still needed to confirm the new PNG renders correctly on iOS/desktop at runtime.
 
 ---
 
@@ -366,3 +404,29 @@ This is a morning-build handoff. Several areas are still unstable. Do not treat 
 ## Session Start
 - Priorities noted: (1) stabilize loop creation/editing, (2) audit major play control inactivity, (3) resolve Safari desktop fullscreen loop traps.
 - Next focus: begin with the loop creation/loop editing audit to understand why loop markers are still unwieldy for users.
+
+### New guardrail audit note
+- Issue: Investigate loop edit mode guardrails to ensure Cinema mode/fullscreen exits/swipe-down exits do not trap the user once editing is active. Will diagnose before touching code.
+- Files to inspect: `src/components/WaveformLoop.tsx`, `src/components/FullscreenPlayer.tsx`, `src/components/PlayerControls.tsx`, `src/App.tsx` (navigation/state hooks). Using diagnosis-only approach first.
+
+### Guardrail diagnosis in progress
+- Root cause: entering Cinema mode is not blocked while `loopRegion.editing` is true, yet closing/swipe exits are suppressed via `isExitSuppressed`. That allows the user to open Cinema mid-loop-edit and then get trapped because the close/swipe guards stay active and the UI no longer surfaces loop controls.
+- Transitions that must be guarded: Cinema entry (`setIsCinemaMode(true)` on artwork click), fullscreen close (✕ button) and swipe-down exit (already gated by `isExitSuppressed`), and any UI path that removes the loop controls while editing is still running.
+- Narrow fix idea: gate Cinema entry by `isExitSuppressed` (or `loopRegion.editing`) so the button is disabled while editing, or surface a toast explaining loop editing must finish first. Keep existing exit guards as-is.
+
+### Guardrail fix planned
+- Will update `src/components/FullscreenPlayer.tsx` so the artwork click that enters Cinema mode short-circuits when `isExitSuppressed`/`loopRegion.editing` is true. No other paths should change. This keeps the existing exit suppression intact while preventing the user from opening Cinema mid-edit.
+
+### Guardrail fix applied
+- Root cause: Cinema mode could be activated via the artwork click even while `loopRegion.editing` (or any guard using `isExitSuppressed`) was true, trapping users because exit gestures were then disabled without the loop controls visible. 
+- Fix: added a check in `src/components/FullscreenPlayer.tsx` so the onClick handler returns early when `isExitSuppressed` or `loopRegion.editing` is true before flipping `isCinemaMode`. This means Cinema mode cannot open until loop editing finishes, while the existing exit guards and loop state remain untouched.
+- Files changed: `src/components/FullscreenPlayer.tsx`.
+- Platform impact: Safari/iOS fullscreen now enforces loop guardrails, preventing the runaway Cinema trap.
+- Regression risk: low; only the artwork tap path is gated. Live QA: still recommended to confirm loop editing flows still enter fullscreen when idle.
+
+### Guardrail observation
+- Disclaimer: Cinema remains blocked indefinitely after a loop exists because `isExitSuppressed` still relies on `showLoopEditor`, which stays true for any active loop—even after editing finishes. Need to gate Cinema strictly on `loopRegion.editing` so the user can reopen Cinema once they tap Done.
+
+### Guardrail correction applied
+- Root cause: `isExitSuppressed` used `showLoopEditor`, so reopening Cinema was impossible after a loop was created even though editing had finished. `showLoopEditor` stays true whenever the loop is active, so the guard never released.
+- Fix: `isExitSuppressed` now tracks only `loopRegion.editing`, and the exit buttons always show the live hint text (`Swipe Down to Exit` on iOS, etc.) once editing ends. Cinema entry is now gated exactly by `loopRegion.editing`, so users can drop in/out of Cinema once they are done adjusting the loop.
