@@ -1661,7 +1661,7 @@ export default function App() {
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
       const type = event.data?.type;
-      if (type === "polyplay:upload-success") {
+      if (type === "polyplay:import-complete") {
         try {
           localStorage.setItem(HAS_IMPORTED_KEY, "true");
         } catch {
