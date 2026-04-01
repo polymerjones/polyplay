@@ -31,3 +31,5 @@ export type LoopRegion = {
 export type LoopMode = "off" | "track" | "region";
 
 export type RepeatTrackMode = "off" | "repeat" | "repeat-1" | "repeat-2" | "repeat-3";
+
+export type DimMode = "normal" | "dim" | "mute";

@@ -89,8 +89,10 @@ export function PlayerControls({
   const shuffleFxCooldownRef = useRef(0);
   const shuffleAnimTimeoutRef = useRef<number | null>(null);
   const [shuffleAnimState, setShuffleAnimState] = useState<"on" | "off" | null>(null);
+  const repeatActivationTimeoutRef = useRef<number | null>(null);
   const repeatFlashTimeoutRef = useRef<number | null>(null);
   const [repeatFlashActive, setRepeatFlashActive] = useState(false);
+  const [repeatActivationActive, setRepeatActivationActive] = useState(false);
   const safeDuration = Math.max(0, duration || 0);
   const safeCurrent = clampTime(currentTime, safeDuration);
   const safeLoopStart = Math.max(0, Math.min(safeDuration, loopRegion?.start ?? 0));
@@ -152,6 +154,10 @@ export function PlayerControls({
       if (shuffleAnimTimeoutRef.current !== null) {
         window.clearTimeout(shuffleAnimTimeoutRef.current);
         shuffleAnimTimeoutRef.current = null;
+      }
+      if (repeatActivationTimeoutRef.current !== null) {
+        window.clearTimeout(repeatActivationTimeoutRef.current);
+        repeatActivationTimeoutRef.current = null;
       }
       if (repeatFlashTimeoutRef.current !== null) {
         window.clearTimeout(repeatFlashTimeoutRef.current);
@@ -227,6 +233,35 @@ export function PlayerControls({
       shuffleFxCooldownRef.current = now;
       emitPinkSparkle(button, { sparks: 5, distance: 18, includeFlash: true });
     }
+  };
+
+  const onRepeatClick = (event: MouseEvent<HTMLButtonElement>) => {
+    const nextMode: RepeatTrackMode =
+      repeatTrackMode === "off"
+        ? "repeat"
+        : repeatTrackMode === "repeat"
+          ? "repeat-1"
+          : repeatTrackMode === "repeat-1"
+            ? "repeat-2"
+            : repeatTrackMode === "repeat-2"
+              ? "repeat-3"
+              : "off";
+    onToggleRepeatTrack();
+    if (prefersReducedMotion() || nextMode !== "repeat-3") return;
+    const button = event.currentTarget;
+    setRepeatActivationActive(false);
+    const rafId = window.requestAnimationFrame(() => {
+      setRepeatActivationActive(true);
+      emitPinkSparkle(button, { sparks: 7, distance: 22, includeFlash: true });
+      if (repeatActivationTimeoutRef.current !== null) {
+        window.clearTimeout(repeatActivationTimeoutRef.current);
+      }
+      repeatActivationTimeoutRef.current = window.setTimeout(() => {
+        setRepeatActivationActive(false);
+        repeatActivationTimeoutRef.current = null;
+      }, 380);
+    });
+    window.setTimeout(() => window.cancelAnimationFrame(rafId), 0);
   };
 
   return (
@@ -332,11 +367,13 @@ export function PlayerControls({
             </span>
           }
           active={isRepeatActive}
-          onClick={() => onToggleRepeatTrack()}
+          onClick={onRepeatClick}
           ariaLabel={repeatAriaLabel}
           size="sm"
           className={`${isCountRepeat ? "pc-transport-btn--repeat-threepeat" : ""} ${
             repeatFlashActive && isCountRepeat ? "pc-transport-btn--repeat-flash" : ""
+          } ${
+            repeatActivationActive && repeatTrackMode === "repeat-3" ? "pc-transport-btn--repeat-activation" : ""
           }`.trim()}
         />
         <button

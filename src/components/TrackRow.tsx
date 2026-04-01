@@ -1,15 +1,17 @@
 import { useEffect, useRef, type CSSProperties } from "react";
-import type { Track } from "../types";
+import type { DimMode, Track } from "../types";
+import { BorderTrail } from "./BorderTrail";
 
 type Props = {
   track: Track;
   active: boolean;
   isPlaying: boolean;
+  dimMode: DimMode;
   onSelectTrack: (trackId: string) => void;
   onAuraUp: (trackId: string) => void;
 };
 
-export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: Props) {
+export function TrackRow({ track, active, isPlaying, dimMode, onSelectTrack, onAuraUp }: Props) {
   const thumbRef = useRef<HTMLDivElement | null>(null);
   const rowFallbackArtwork =
     "radial-gradient(140px 120px at 22% 18%, rgba(150,108,244,.52), rgba(150,108,244,0) 62%), radial-gradient(160px 130px at 84% 82%, rgba(88,176,255,.34), rgba(88,176,255,0) 64%), linear-gradient(145deg, #1a2133, #0f1522)";
@@ -41,6 +43,7 @@ export function TrackRow({ track, active, isPlaying, onSelectTrack, onAuraUp }: 
       data-aura={String(track.aura)}
       style={{ "--row-aura-level": auraLevel.toFixed(2) } as CSSProperties}
     >
+      <BorderTrail variant="row" isVisible={active} isPlaying={isPlaying} dimMode={dimMode} />
       <div className="rowAuraAccent" aria-hidden="true" />
       <button
         type="button"

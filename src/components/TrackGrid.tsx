@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import type { Track } from "../types";
+import type { DimMode, Track } from "../types";
 import { TrackRow } from "./TrackRow";
 import { TrackTile } from "./TrackTile";
 
@@ -8,11 +8,12 @@ type Props = {
   currentTrackId: string | null;
   isPlaying: boolean;
   layoutMode: "grid" | "list";
+  dimMode: DimMode;
   onSelectTrack: (trackId: string) => void;
   onAuraUp: (trackId: string) => void;
 };
 
-export function TrackGrid({ tracks, currentTrackId, isPlaying, layoutMode, onSelectTrack, onAuraUp }: Props) {
+export function TrackGrid({ tracks, currentTrackId, isPlaying, layoutMode, dimMode, onSelectTrack, onAuraUp }: Props) {
   const realTracks = useMemo(
     () => tracks.filter((track): track is Track => Boolean(track && (track as Track).id !== undefined)),
     [tracks]
@@ -40,6 +41,7 @@ export function TrackGrid({ tracks, currentTrackId, isPlaying, layoutMode, onSel
               track={track}
               active={active}
               isPlaying={isPlaying}
+              dimMode={dimMode}
               onSelectTrack={(trackId) => onSelectTrack(String(trackId))}
               onAuraUp={(trackId) => onAuraUp(String(trackId))}
             />
@@ -51,16 +53,22 @@ export function TrackGrid({ tracks, currentTrackId, isPlaying, layoutMode, onSel
 
   return (
     <main className="ytm-grid" id="grid">
-      {realTracks.map((track) => (
-        <TrackTile
-          key={String(track.id)}
-          track={track}
-          trackId={String(track.id)}
-          active={String(track.id) === String(currentTrackId) && isPlaying}
-          onSelectTrack={onSelectTrack}
-          onAuraUp={onAuraUp}
-        />
-      ))}
+      {realTracks.map((track) => {
+        const isCurrent = String(track.id) === String(currentTrackId);
+        return (
+          <TrackTile
+            key={String(track.id)}
+            track={track}
+            trackId={String(track.id)}
+            active={isCurrent && isPlaying}
+            isCurrentTrack={isCurrent}
+            dimMode={dimMode}
+            isPlaying={isPlaying}
+            onSelectTrack={onSelectTrack}
+            onAuraUp={onAuraUp}
+          />
+        );
+      })}
     </main>
   );
 }

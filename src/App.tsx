@@ -71,11 +71,10 @@ import { normalizeSaveFilename, promptForSaveFilename, saveBlobWithBestEffort, s
 import { cropAudioBlobToWav } from "./lib/audio/cropAudio";
 import { formatTime } from "./lib/time";
 import type { LibraryState } from "./lib/storage/library";
-import type { LoopMode, LoopRegion, RepeatTrackMode, Track } from "./types";
+import type { DimMode, LoopMode, LoopRegion, RepeatTrackMode, Track } from "./types";
 import type { AmbientFxMode, AmbientFxQuality } from "./fx/ambientFxEngine";
 import { isBusyToastMessage } from "./lib/toastUtils";
 
-type DimMode = "normal" | "dim" | "mute";
 type ThemeMode = "light" | "dark" | "custom";
 type CustomThemeSlot = "crimson" | "teal" | "amber";
 type ThemeSelection = "dark" | "light" | "amber" | "teal" | "crimson";
@@ -92,6 +91,17 @@ type SafeTapBurst = {
   durationMs: number;
   opacity: number;
   sparkleCount: number;
+};
+type LogoSparkle = {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+  driftX: number;
+  driftY: number;
+  durationMs: number;
+  delayMs: number;
+  opacity: number;
 };
 const EMPTY_LOOP: LoopRegion = { start: 0, end: 0, active: false, editing: false };
 const SPLASH_SEEN_KEY = "polyplay_hasSeenSplash";
@@ -130,6 +140,9 @@ const SAFE_TAP_BASE_SIZE = 120;
 const SAFE_TAP_MAX_SIZE = 420;
 const SAFE_TAP_MAX_ACTIVE = 12;
 const SAFE_TAP_SPAWN_THROTTLE_MS = 40;
+const LOGO_SPARKLE_MAX_ACTIVE = 24;
+const LOGO_SPARKLE_MAX_PENDING = 6;
+const LOGO_SPARKLE_TAP_COOLDOWN_MS = 120;
 const UI_CURRENT_TIME_THROTTLE_MS = 80;
 const UI_CURRENT_TIME_MIN_DELTA_SEC = 0.08;
 const FX_ENABLED_KEY = "polyplay_fxEnabled_v1";
@@ -612,7 +625,11 @@ export default function App() {
     typeof performance !== "undefined" ? performance.now() : Date.now()
   );
   const safeTapLastSpawnAtRef = useRef(0);
+  const logoSparkleSeqRef = useRef(0);
+  const logoSparkleCooldownRef = useRef(0);
+  const logoSparkleTimeoutsRef = useRef<number[]>([]);
   const [safeTapBursts, setSafeTapBursts] = useState<SafeTapBurst[]>([]);
+  const [logoSparkles, setLogoSparkles] = useState<LogoSparkle[]>([]);
   const [threepeatDisplayCount, setThreepeatDisplayCount] = useState<number>(() => {
     const storedMode = getStoredRepeatTrackMode();
     return storedMode === "off" || storedMode === "repeat" ? 0 : getStoredThreepeatRemaining(storedMode);
@@ -628,6 +645,13 @@ export default function App() {
   useEffect(() => {
     runtimeLibraryRef.current = runtimeLibrary;
   }, [runtimeLibrary]);
+
+  useEffect(() => {
+    return () => {
+      logoSparkleTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+      logoSparkleTimeoutsRef.current = [];
+    };
+  }, []);
 
   useEffect(() => {
     activePlaylistIdRef.current = activePlaylistId;
@@ -3235,6 +3259,9 @@ export default function App() {
       if (isCountRepeatMode(next)) {
         threepeatRemainingRef.current = nextRemaining;
         setThreepeatDisplayCount(nextRemaining);
+        if (next === "repeat-3") {
+          setThreepeatFlashTick((prev) => prev + 1);
+        }
         fireHeavyHaptic();
         setFxToast(
           next === "repeat-1"
@@ -3441,7 +3468,18 @@ export default function App() {
     return palette[Math.floor(Math.random() * palette.length)] ?? "#b38dff";
   };
 
-  const spawnSafeTapBurstAt = (clientX: number, clientY: number) => {
+  const spawnSafeTapBurstAt = (
+    clientX: number,
+    clientY: number,
+    options?: {
+      color?: string;
+      variant?: SafeTapVariant;
+      size?: number;
+      durationMs?: number;
+      opacity?: number;
+      sparkleCount?: number;
+    }
+  ) => {
     const reducedMotion =
       typeof window !== "undefined" &&
       typeof window.matchMedia === "function" &&
@@ -3455,13 +3493,27 @@ export default function App() {
     const heat = safeTapHeatRef.current;
     const easedHeat = easeOutQuad(heat);
     const jitter = Math.round((Math.random() - 0.5) * 28);
-    const size = Math.max(SAFE_TAP_BASE_SIZE, Math.min(SAFE_TAP_MAX_SIZE, Math.round(SAFE_TAP_BASE_SIZE + (SAFE_TAP_MAX_SIZE - SAFE_TAP_BASE_SIZE) * easedHeat + jitter)));
-    const variant = pickSafeTapVariant(heat);
-    const durationMs = Math.max(460, Math.min(820, Math.round(560 + easedHeat * 200 + (Math.random() - 0.5) * 120)));
-    const opacity = Math.max(0.1, Math.min(0.35, 0.14 + easedHeat * 0.18 + (Math.random() - 0.5) * 0.03));
-    const sparkleCount = variant === "sparkle" ? Math.max(4, Math.min(10, 4 + Math.round(easedHeat * 4) + Math.round(Math.random() * 2))) : 0;
+    const size =
+      options?.size ??
+      Math.max(
+        SAFE_TAP_BASE_SIZE,
+        Math.min(
+          SAFE_TAP_MAX_SIZE,
+          Math.round(SAFE_TAP_BASE_SIZE + (SAFE_TAP_MAX_SIZE - SAFE_TAP_BASE_SIZE) * easedHeat + jitter)
+        )
+      );
+    const variant = options?.variant ?? pickSafeTapVariant(heat);
+    const durationMs =
+      options?.durationMs ??
+      Math.max(460, Math.min(820, Math.round(560 + easedHeat * 200 + (Math.random() - 0.5) * 120)));
+    const opacity =
+      options?.opacity ??
+      Math.max(0.1, Math.min(0.35, 0.14 + easedHeat * 0.18 + (Math.random() - 0.5) * 0.03));
+    const sparkleCount =
+      options?.sparkleCount ??
+      (variant === "sparkle" ? Math.max(4, Math.min(10, 4 + Math.round(easedHeat * 4) + Math.round(Math.random() * 2))) : 0);
     const id = ++safeTapSeqRef.current;
-    const color = pickSafeTapColor(heat);
+    const color = options?.color ?? pickSafeTapColor(heat);
     setSafeTapBursts((prev) => {
       const next = [
         ...prev.slice(-14),
@@ -3473,6 +3525,65 @@ export default function App() {
     window.setTimeout(() => {
       setSafeTapBursts((prev) => prev.filter((burst) => burst.id !== id));
     }, durationMs + 80);
+  };
+
+  const triggerLogoSparkles = (event: MouseEvent<HTMLButtonElement>) => {
+    const reducedMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (now - logoSparkleCooldownRef.current < LOGO_SPARKLE_TAP_COOLDOWN_MS) return;
+    logoSparkleCooldownRef.current = now;
+
+    const button = event.currentTarget;
+    button.classList.remove("topbar-title__logo-button--sparkle");
+    void button.offsetWidth;
+    button.classList.add("topbar-title__logo-button--sparkle");
+
+    const rect = button.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    const spawnSparkles = (count: number, delayMs: number, spread = 1) => {
+      if (logoSparkleTimeoutsRef.current.length >= LOGO_SPARKLE_MAX_PENDING) return;
+      const timeoutId = window.setTimeout(() => {
+        logoSparkleTimeoutsRef.current = logoSparkleTimeoutsRef.current.filter((id) => id !== timeoutId);
+        const nextSparkles = Array.from({ length: count }).map((_, index) => {
+          const progress = count <= 1 ? 0.5 : index / (count - 1);
+          const localX = width * (0.16 + progress * 0.68) + (Math.random() - 0.5) * 18 * spread;
+          const localY = height * (0.38 + (Math.random() - 0.5) * 0.34);
+          return {
+            id: ++logoSparkleSeqRef.current,
+            x: localX,
+            y: localY,
+            size: Math.round(4 + Math.random() * 6),
+            driftX: (Math.random() - 0.5) * 28 * spread,
+            driftY: -(12 + Math.random() * 26),
+            durationMs: Math.round(920 + Math.random() * 520),
+            delayMs: Math.round(Math.random() * 120),
+            opacity: Number((0.45 + Math.random() * 0.35).toFixed(2))
+          } satisfies LogoSparkle;
+        });
+        setLogoSparkles((prev) => {
+          const merged = [...prev, ...nextSparkles];
+          return merged.slice(-LOGO_SPARKLE_MAX_ACTIVE);
+        });
+        const cleanupDelay = Math.max(...nextSparkles.map((sparkle) => sparkle.durationMs + sparkle.delayMs), 0) + 140;
+        const cleanupId = window.setTimeout(() => {
+          logoSparkleTimeoutsRef.current = logoSparkleTimeoutsRef.current.filter((id) => id !== cleanupId);
+          const sparkleIds = new Set(nextSparkles.map((sparkle) => sparkle.id));
+          setLogoSparkles((prev) => prev.filter((sparkle) => !sparkleIds.has(sparkle.id)));
+        }, cleanupDelay);
+        logoSparkleTimeoutsRef.current.push(cleanupId);
+      }, delayMs);
+      logoSparkleTimeoutsRef.current.push(timeoutId);
+    };
+
+    spawnSparkles(reducedMotion ? 5 : 8, 0, 0.9);
+    if (!reducedMotion) {
+      spawnSparkles(6, 140, 0.75);
+      spawnSparkles(5, 320, 0.65);
+    }
   };
 
   const triggerOnboardingSparkle = (event: MouseEvent<HTMLElement>) => {
@@ -3975,7 +4086,34 @@ export default function App() {
             <img className="brand-logo" src={logo} alt="PolyPlay logo" />
           </div>
           <div className="topbar-title">
-            <img className="topbar-title__logo" src={heroLogo} alt="PolyPlay" />
+            <button
+              type="button"
+              className="topbar-title__logo-button"
+              aria-label="PolyPlay logo sparkle"
+              title="PolyPlay"
+              onClick={triggerLogoSparkles}
+            >
+              <img className="topbar-title__logo-image" src={heroLogo} alt="PolyPlay" />
+              {logoSparkles.map((sparkle) => (
+                <span
+                  key={sparkle.id}
+                  className="topbar-title__logo-sparkle"
+                  aria-hidden="true"
+                  style={
+                    {
+                      left: `${sparkle.x}px`,
+                      top: `${sparkle.y}px`,
+                      "--logo-sparkle-size": `${sparkle.size}px`,
+                      "--logo-sparkle-drift-x": `${sparkle.driftX}px`,
+                      "--logo-sparkle-drift-y": `${sparkle.driftY}px`,
+                      "--logo-sparkle-duration": `${sparkle.durationMs}ms`,
+                      "--logo-sparkle-delay": `${sparkle.delayMs}ms`,
+                      "--logo-sparkle-opacity": String(sparkle.opacity)
+                    } as CSSProperties
+                  }
+                />
+              ))}
+            </button>
             <span className="topbar-title__sub">{headerVersion}</span>
           </div>
           <div className="topbar-primary-actions">
@@ -4218,6 +4356,7 @@ export default function App() {
             currentTrackId={currentTrackId}
             isPlaying={isPlaying}
             layoutMode={layoutMode}
+            dimMode={dimMode}
             onSelectTrack={(trackId) => playTrack(trackId, true)}
             onAuraUp={handleAuraUp}
           />

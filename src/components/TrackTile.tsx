@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
-import type { Track } from "../types";
+import type { DimMode, Track } from "../types";
+import { BorderTrail } from "./BorderTrail";
 
 type Props = {
   track: Track;
@@ -8,9 +9,22 @@ type Props = {
   active: boolean;
   onSelectTrack: (trackId: string) => void;
   onAuraUp: (trackId: string) => void;
+  isCurrentTrack: boolean;
+  isPlaying: boolean;
+  dimMode: DimMode;
 };
 
-export function TrackTile({ track, trackId, active, onSelectTrack, onAuraUp }: Props) {
+export function TrackTile({
+  track,
+  trackId,
+  active,
+  onSelectTrack,
+  onAuraUp,
+  isCurrentTrack,
+  isPlaying,
+  dimMode
+}: Props) {
+  const showTrail = isCurrentTrack;
   const [artFailed, setArtFailed] = useState(false);
   const coverRef = useRef<HTMLDivElement | null>(null);
   const artSrc = !artFailed && track.artUrl ? track.artUrl : DEFAULT_ARTWORK_URL;
@@ -46,6 +60,7 @@ export function TrackTile({ track, trackId, active, onSelectTrack, onAuraUp }: P
         aria-label={`Play ${track.title}`}
       >
         <div ref={coverRef} className={`ytm-cover ${isFallback ? "is-fallback" : ""}`.trim()} aria-hidden="true">
+          <BorderTrail variant="tile" isVisible={showTrail} isPlaying={isPlaying} dimMode={dimMode} />
           <img
             className="ytm-cover-media"
             src={artSrc}

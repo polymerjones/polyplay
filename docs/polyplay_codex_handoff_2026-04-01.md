@@ -42,7 +42,7 @@ Raw notes captured from April 1 testing and organized below.
 ## Organized issues
 
 ### 1. Loops / fullscreen / cinema / navigation guards
-**Status:** open
+**Status:** diagnosis in progress
 
 **Observed behavior:**
 - Pressing the magnifying glass can scramble the layout.
@@ -80,6 +80,27 @@ Raw notes captured from April 1 testing and organized below.
 - Audit all loop viewport behavior after marker release.
 - Audit fullscreen exit so X and swipe-down can finalize loop edit instead of trapping the user.
 - Revisit exit hint copy placement and wording.
+
+**Diagnosis note — 2026-04-01 Codex:**
+- `src/components/WaveformLoop.tsx` is still recalculating `viewRange` from loop bounds too aggressively. While loop editing is active, the effect derives a fresh `dragRange` from `buildWindowedViewRange(...)` whenever `dragViewSpanRef` is null, which lets the waveform jump to a newly computed zoom/window instead of preserving the current magnify viewport.
+- The magnify toggle currently resets `manualZoomLevel` back to `0` whenever it is turned off, and loop-edit transitions also clear the zoom state. That makes the magnify glass feel like it scrambles layout rather than preserving the user’s current zoom choice.
+- Default loop markers are created with a wide 15% margin in `src/App.tsx`, and the loop viewport logic treats those bounds the same as any other full window. That leaves little apparent effect for zoom-in controls until the user first adjusts the region.
+- `src/components/FullscreenPlayer.tsx` still hard-suppresses fullscreen exit whenever `loopRegion.editing` is true (`isExitSuppressed`). That directly causes the trap behavior the bug report described.
+- The fullscreen black flash is likely caused by the artwork-video cleanup effect in `src/components/FullscreenPlayer.tsx`, which removes the video `src` and calls `load()` during teardown. Exiting fullscreen unmounts the player and forces the artwork video to blank before the rest of the UI settles.
+
+**Implementation log — 2026-04-01 Codex:**
+- `src/components/WaveformLoop.tsx`: preserve the current view span while loop editing stays active, so marker release re-centers the loop inside the existing viewport instead of re-deriving a new zoom window.
+- `src/components/WaveformLoop.tsx`: stop resetting manual zoom level when the magnify controls are hidden, and allow manual zoom to shrink the viewport below the full loop span so default marker positions still respond to zoom-in.
+- `src/components/FullscreenPlayer.tsx`: exiting fullscreen while editing now finalizes loop editing via `onFinishLoopAdjustment()` and then closes, instead of trapping the user.
+- `src/components/FullscreenPlayer.tsx`: artwork video teardown now pauses the video without clearing the `src`, avoiding the forced blank frame during fullscreen exit.
+
+**Follow-up diagnosis note — 2026-04-01 Codex:**
+- The magnify toolbar in `src/components/WaveformLoop.tsx` is currently rendered whenever `loopRegion.active && hasLoopRange && loopRegion.editing` is true. That makes the magnifying glass appear immediately on `Set Loop`, before the user has done any real refinement.
+- The cleanest reveal trigger is the existing deadzone-crossing event in the handle-drag flow: the moment a pending handle press becomes an actual drag (`pendingHandle` transitions into `draggingHandle` inside `onPointerMove`), the session has clearly entered refinement mode.
+
+**Implementation log — 2026-04-01 Codex:**
+- Follow-up block start: keep magnify hidden on initial `Set Loop`, then reveal it only after the first real loop-handle drag within the current loop-edit session.
+- `src/components/WaveformLoop.tsx`: magnify availability is now unlocked only when a pending loop-handle press crosses the drag deadzone and becomes a real drag. The magnifying glass stays hidden on initial `Set Loop`, then becomes available for the rest of that edit session after first refinement.
 
 ---
 
@@ -135,11 +156,20 @@ Raw notes captured from April 1 testing and organized below.
 - Block 3 complete: embedded artwork import now accepts shorthand image formats such as `jpg`, `jpeg`, and `png`, and falls back to byte-signature sniffing when the tag format string is incomplete.
 - Block 4 start: replace sticky remembered-artist field population with typed suggestion/autocomplete behavior while preserving metadata autofill when available.
 - Block 4 complete: the artist field now starts blank and exposes remembered/library artist names as typed suggestions instead of seeding the prior artist directly into the input.
+- Follow-up block start: inspect remaining embedded-art failure and add a legal/support return path back to Admin.
+
+**Follow-up diagnosis note — 2026-04-01 Codex:**
+- Embedded artwork can still fail even when `metadata.common.picture` exists because the import path still calls `selectCover(...)` before `buildEmbeddedArtworkFile(...)`. The bundled `music-metadata` `selectCover(...)` helper does not reliably return the parsed cover in this environment, so valid picture data can still be dropped before artwork-file creation.
+- The legal/support pages currently have no close/back affordance at all. Because same-origin navigation now loads those pages directly in the admin/settings context, users can read them but have no explicit in-page action that returns them to Admin.
+
+**Follow-up implementation log — 2026-04-01 Codex:**
+- Embedded artwork import now uses an app-local picture selector that prefers front-cover tags but falls back to the first parsed picture instead of relying on `selectCover(...)`.
+- Admin legal/support links now carry a `returnTo` route back to `admin.html`, and Support / Privacy / Terms each render a close button that returns to Admin via browser history or the explicit `returnTo` fallback.
 
 ---
 
 ### 3. Playback / media controls / now playing
-**Status:** open
+**Status:** fix implemented, awaiting QA
 
 **Observed behavior:**
 - Active-track border/strobe effect does not work correctly.
@@ -166,10 +196,21 @@ Raw notes captured from April 1 testing and organized below.
 - Keep this visual-only at first.
 - First fix correctness before adding any additional flourish.
 
+**Diagnosis note — 2026-04-01 Codex:**
+- `src/components/BorderTrail.tsx` currently renders a standalone absolutely positioned span that uses a rotating `conic-gradient` `border-image`. That rotates the gradient as a whole rather than tracing the actual rectangle path, which explains the “weird rotating line on a strange axis” report, especially on rows.
+- The row trail is attached to the outer `.trackRow`, which is correct for scope, but the tile trail is currently attached to the outer `.ytm-tile` article instead of the artwork container itself. That misses the requested perimeter target for tile mode.
+- The state logic in `BorderTrail` is already close to the requested behavior: paused or mute resolves to white + paused animation, while dim keeps aura color at reduced opacity. The main failure is the rendering primitive and where it is mounted.
+
+**Implementation log — 2026-04-01 Codex:**
+- Replaced the old rotating `border-image` trail with an SVG rectangle stroke in `src/components/BorderTrail.tsx`, animated through `stroke-dashoffset` so the trail follows the real perimeter instead of rotating on a detached axis.
+- Tile mode now mounts the trail on `.ytm-cover` in `src/components/TrackTile.tsx`, so the active border runs around the artwork container rather than the whole card.
+- Row mode still mounts on `.trackRow`, but now uses the same perimeter-following SVG stroke so the trail wraps the full row container correctly.
+- Paused or mute still overrides to a white paused stroke, while dim mode keeps the aura-colored animation at reduced opacity.
+
 ---
 
 ### 4. UI polish / hero / sparkles / animation consistency
-**Status:** open
+**Status:** fix implemented, awaiting QA
 
 **Observed behavior:**
 - Fun fix requested: tapping the horizontal PolyPlay logo should flash and emit aura-colored sparkles for a few seconds.
@@ -193,6 +234,26 @@ Raw notes captured from April 1 testing and organized below.
 **Codex notes:**
 - Treat logo sparkles as a fun low-priority polish task after bugs.
 - Reuse existing animation patterns where possible for repeat-three consistency.
+
+**Diagnosis note — 2026-04-01 Codex:**
+- The current horizontal PolyPlay logo in `src/App.tsx` is a plain `img` with no interaction handler, so there is no existing tap target or effect guardrail to build on directly.
+- The app already has a lightweight burst system in `src/App.tsx` (`safeTapBursts`) and an existing button sparkle treatment in `src/components/PlayerControls.tsx` (`emitPinkSparkle(...)`). Reusing those is the narrowest path.
+- Repeat-three currently only gets a small glow class plus the same short flash used for replay countdown updates. There is no dedicated activation effect when the repeat mode first enters `repeat-3`.
+
+**Implementation log — 2026-04-01 Codex:**
+- Block start: reuse the existing burst/effect systems for a guarded logo sparkle effect and a stronger repeat-three activation effect without widening the hero or playback scope.
+- `src/App.tsx` + `styles.css`: the horizontal logo is now a dedicated button that triggers a short flash and a staged sequence of aura-colored sparkle bursts using the existing `safeTapBursts` layer.
+- Logo sparkle guardrails: reduced-motion respects a single lighter burst, taps are throttled, and pending sparkle timeouts are capped so repeated taps stay responsive without stacking unbounded work.
+- `src/components/PlayerControls.tsx` + `src/components/player.css`: repeat-three activation now reuses the existing repeat flash channel plus the same sparkle-burst helper used by shuffle, with a slightly stronger activation pulse only when mode enters `repeat-3`.
+
+**Follow-up diagnosis note — 2026-04-01 Codex:**
+- The logo tap effect is currently using the generic `safeTapBursts` overlay from `src/App.tsx`. That primitive is intentionally large, soft, and bloom-heavy (`--tap-size` around 120px with broad radial fills in `styles.css`), so even the `"sparkle"` variant still reads like a blob/flare instead of pixie dust when reused for the logo.
+- The narrowest fix is to stop using the full-screen burst primitive for the logo and switch to a dedicated tiny-particle sparkle trail localized to the logo button itself.
+
+**Implementation log — 2026-04-01 Codex:**
+- Follow-up block start: replace the oversized logo burst with a dedicated lightweight pixie-dust particle treatment, and replace the broken border-image trail with a perimeter-following stroke attached to the correct tile/row surfaces.
+- `src/App.tsx` + `styles.css`: the logo tap effect no longer uses the generic full-screen `safeTapBursts` primitive. It now spawns small localized logo sparkles with short drift/twinkle motion inside the logo button itself, which reads as pixie dust instead of a large bloom/blob.
+- Logo guardrails remain narrow: taps are still throttled, pending timers are capped, active sparkles are capped, and reduced-motion keeps the sequence lighter.
 
 ---
 

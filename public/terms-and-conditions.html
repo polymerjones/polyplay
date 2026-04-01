@@ -75,6 +75,25 @@
         color: var(--accent);
       }
 
+      .page-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 16px;
+      }
+
+      .page-close {
+        appearance: none;
+        border: 1px solid rgba(207, 111, 130, 0.24);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.78);
+        color: var(--text);
+        font: inherit;
+        font-weight: 700;
+        padding: 10px 16px;
+        cursor: pointer;
+        box-shadow: 0 10px 24px rgba(126, 84, 108, 0.1);
+      }
+
       @media (max-width: 640px) {
         main {
           width: min(100vw - 20px, 860px);
@@ -91,6 +110,9 @@
   </head>
   <body>
     <main>
+      <div class="page-actions">
+        <button type="button" class="page-close" data-admin-return>Close</button>
+      </div>
       <h1>PolyPlay Audio Terms &amp; Conditions</h1>
       <p class="effective-date">Effective date: March 23, 2026</p>
 
@@ -153,5 +175,37 @@
         <a href="/privacy-policy.html">/privacy-policy.html</a>.
       </p>
     </main>
+    <script>
+      (function () {
+        const params = new URLSearchParams(window.location.search);
+        const returnTo = params.get("returnTo") || "/admin.html";
+        const closeButton = document.querySelector("[data-admin-return]");
+        const withReturnTo = (href) => {
+          const target = new URL(href, window.location.origin);
+          if (target.origin !== window.location.origin) return target.toString();
+          target.searchParams.set("returnTo", returnTo);
+          return target.toString();
+        };
+
+        document.querySelectorAll("a[href]").forEach((link) => {
+          const href = link.getAttribute("href");
+          if (!href) return;
+          if (href.startsWith("mailto:") || href.startsWith("tel:") || href.startsWith("#")) return;
+          try {
+            link.setAttribute("href", withReturnTo(href));
+          } catch {
+            // Ignore invalid link rewrites.
+          }
+        });
+
+        closeButton?.addEventListener("click", () => {
+          if (window.history.length > 1) {
+            window.history.back();
+            return;
+          }
+          window.location.assign(withReturnTo(returnTo));
+        });
+      })();
+    </script>
   </body>
 </html>

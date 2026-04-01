@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent } from "react";
-import { parseBlob, selectCover, type IPicture } from "music-metadata-browser";
+import { parseBlob, type IPicture } from "music-metadata-browser";
 import logo from "../../logo.png";
 import { TransferLaneDropZone } from "./TransferLaneDropZone";
 import { GratitudeEntriesModal } from "./GratitudeEntriesModal";
@@ -155,6 +155,12 @@ function openAdminExternalUrl(url: string) {
   let isSameOrigin = false;
   try {
     const parsedUrl = new URL(url, window.location.origin);
+    const currentMode = new URLSearchParams(window.location.search).get("mode")?.trim();
+    if (parsedUrl.origin === window.location.origin) {
+      const returnToUrl = new URL("/admin.html", window.location.origin);
+      if (currentMode) returnToUrl.searchParams.set("mode", currentMode);
+      parsedUrl.searchParams.set("returnTo", `${returnToUrl.pathname}${returnToUrl.search}`);
+    }
     resolvedUrl = parsedUrl.toString();
     isSameOrigin = parsedUrl.origin === window.location.origin;
   } catch {
@@ -278,6 +284,18 @@ function buildEmbeddedArtworkFile(picture: IPicture | null | undefined): File | 
   if (!mimeType?.startsWith("image/")) return null;
   const extension = mimeType === "image/jpeg" ? "jpg" : mimeType.split("/")[1] || "jpg";
   return new File([bytes], `embedded-artwork.${extension}`, { type: mimeType });
+}
+
+function selectEmbeddedArtworkPicture(pictures: IPicture[] | null | undefined): IPicture | null {
+  if (!Array.isArray(pictures) || pictures.length === 0) return null;
+  const preferredName = new Set(["front", "cover", "cover (front)"]);
+  const preferredType = new Set(["cover (front)", "front cover", "front"]);
+  const preferred = pictures.find((picture) => {
+    const name = cleanMetadataText((picture as IPicture & { name?: string }).name).toLowerCase();
+    const type = cleanMetadataText((picture as IPicture & { type?: string }).type).toLowerCase();
+    return preferredName.has(name) || preferredType.has(type);
+  });
+  return preferred ?? pictures[0] ?? null;
 }
 
 function storeArtistName(value: string): void {
@@ -783,7 +801,7 @@ export function AdminApp() {
         if (cancelled) return;
         const metadataTitle = cleanMetadataText(metadata.common.title);
         const metadataArtist = cleanMetadataText(metadata.common.artist || metadata.common.albumartist);
-        const embeddedArtwork = buildEmbeddedArtworkFile(selectCover(metadata.common.picture) ?? null);
+        const embeddedArtwork = buildEmbeddedArtworkFile(selectEmbeddedArtworkPicture(metadata.common.picture));
 
         setUploadMetadataHasTitle(Boolean(metadataTitle));
         setUploadMetadataState("ready");

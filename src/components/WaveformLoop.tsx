@@ -38,9 +38,9 @@ const DRAG_VIEW_TINY_MIN_SPAN_SEC = 1.35;
 const DRAG_VIEW_TINY_BUFFER_RATIO = 0.22;
 const DRAG_VIEW_TINY_MIN_BUFFER_SEC = 0.18;
 const DRAG_START_DEADZONE_PX = 10;
-const MANUAL_ZOOM_BUFFER_SEC = 0.16;
 const MANUAL_ZOOM_FACTORS = [1, 0.86, 0.72, 0.58, 0.46, 0.34, 0.26, 0.18, 0.12] as const;
 const MAX_MANUAL_ZOOM_LEVEL = MANUAL_ZOOM_FACTORS.length - 1;
+const MIN_MANUAL_VIEW_SPAN_SEC = 0.9;
 export function WaveformLoop({
   track,
   currentTime,
@@ -62,9 +62,8 @@ export function WaveformLoop({
   ) => {
     if (level <= 0) return baseRange;
     const zoomFactor = MANUAL_ZOOM_FACTORS[Math.max(0, Math.min(MAX_MANUAL_ZOOM_LEVEL, level))] ?? 1;
-    const loopSpan = Math.max(MIN_LOOP_SECONDS, end - start);
-    const baseSpan = Math.max(loopSpan + MANUAL_ZOOM_BUFFER_SEC * 2, baseRange.end - baseRange.start);
-    const targetSpan = Math.max(loopSpan + MANUAL_ZOOM_BUFFER_SEC * 2, baseSpan * zoomFactor);
+    const baseSpan = Math.max(MIN_LOOP_SECONDS, baseRange.end - baseRange.start);
+    const targetSpan = Math.max(MIN_MANUAL_VIEW_SPAN_SEC, baseSpan * zoomFactor);
     const center = (start + end) * 0.5;
     const nextStart = Math.max(0, Math.min(trackDuration - targetSpan, center - targetSpan * 0.5));
     const nextEnd = Math.min(trackDuration, nextStart + targetSpan);
@@ -80,8 +79,7 @@ export function WaveformLoop({
     end: number,
     targetSpan: number
   ) => {
-    const loopSpan = Math.max(MIN_LOOP_SECONDS, end - start);
-    const span = Math.max(loopSpan + MANUAL_ZOOM_BUFFER_SEC * 2, targetSpan);
+    const span = Math.max(MIN_MANUAL_VIEW_SPAN_SEC, targetSpan);
     const center = (start + end) * 0.5;
     const nextStart = Math.max(0, Math.min(trackDuration - span, center - span * 0.5));
     const nextEnd = Math.min(trackDuration, nextStart + span);
@@ -147,6 +145,7 @@ export function WaveformLoop({
   const [draggingHandle, setDraggingHandle] = useState<Handle | null>(null);
   const [hasAdjustedLoop, setHasAdjustedLoop] = useState(false);
   const [manualZoomLevel, setManualZoomLevel] = useState(0);
+  const [hasUnlockedManualZoom, setHasUnlockedManualZoom] = useState(false);
   const [showManualZoomControls, setShowManualZoomControls] = useState(false);
   const [viewRange, setViewRange] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
   const [shouldPreserveViewRange, setShouldPreserveViewRange] = useState(false);
@@ -187,11 +186,7 @@ export function WaveformLoop({
 
   const toggleManualZoomControls = () => {
     setShowManualZoomControls((prev) => {
-      if (prev) {
-        setManualZoomLevel(0);
-        return false;
-      }
-      return true;
+      return !prev;
     });
   };
 
@@ -199,6 +194,7 @@ export function WaveformLoop({
     if (!track?.id) {
       setHasAdjustedLoop(false);
       setManualZoomLevel(0);
+      setHasUnlockedManualZoom(false);
       dragViewSpanRef.current = null;
       committedLoopDragRef.current = false;
       prevCommittedLoopRef.current = null;
@@ -254,6 +250,11 @@ export function WaveformLoop({
       const lockedSpan = dragViewSpanRef.current;
       if (lockedSpan !== null) {
         setViewRange(centerRangeOnLoop(duration, safeStart, safeEnd, lockedSpan));
+        return;
+      }
+      if (viewRange.end > viewRange.start) {
+        const currentSpan = Math.max(MIN_LOOP_SECONDS, viewRange.end - viewRange.start);
+        setViewRange(centerRangeOnLoop(duration, safeStart, safeEnd, currentSpan));
         return;
       }
       const dragRange = buildWindowedViewRange(duration, safeStart, safeEnd, {
@@ -314,13 +315,14 @@ export function WaveformLoop({
     if (!loopRegion.active) {
       setShouldPreserveViewRange(false);
       lockedViewRangeRef.current = null;
+      setHasUnlockedManualZoom(false);
     }
   }, [loopRegion.active]);
 
   useEffect(() => {
     if (!loopRegion.editing) {
-      setManualZoomLevel(0);
       setShowManualZoomControls(false);
+      setHasUnlockedManualZoom(false);
     }
   }, [loopRegion.editing]);
 
@@ -496,6 +498,7 @@ export function WaveformLoop({
         pendingDragRef.current = null;
         setPendingHandle(null);
         setDraggingHandle(activeHandle);
+        setHasUnlockedManualZoom(true);
         onLoopDragStart?.();
       }
       if (!activeHandle) return;
@@ -630,7 +633,7 @@ export function WaveformLoop({
           </div>
         </div>
       </div>
-      {loopRegion.active && hasLoopRange && loopRegion.editing && (
+      {loopRegion.active && hasLoopRange && loopRegion.editing && hasUnlockedManualZoom && (
         <div className="pc-wave-toolbar" aria-label="Loop zoom controls">
           <button
             type="button"
