@@ -6340,13 +6340,13 @@ html[data-theme="light"] .playlist-selector select {
 
 .track-border-trail__path--base {
   stroke-dasharray: 1 0;
-  opacity: 0.58;
+  opacity: 0.62;
 }
 
 .track-border-trail__path--hot {
-  stroke-dasharray: 0.68 0.32;
+  stroke-dasharray: 0.78 0.22;
   stroke-dashoffset: 0.01;
-  opacity: 0.74;
+  opacity: 0.68;
   animation: border-trail-dash var(--border-trail-duration, 1200ms) linear infinite;
   animation-play-state: var(--border-trail-animation-state, running);
 }

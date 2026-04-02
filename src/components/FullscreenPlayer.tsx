@@ -107,6 +107,7 @@ export function FullscreenPlayer({
   const artStyle = track.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
     : ({ backgroundImage: track.artGrad || `url('${DEFAULT_ARTWORK_URL}')` } as CSSProperties);
+  const artist = track.artist?.trim();
   const cinemaStillSrc = track.artUrl || DEFAULT_ARTWORK_URL;
   const hasArtworkVideo = Boolean(track.artVideoUrl);
   const shouldAnimateGenerated = track.artworkSource === "auto" && !hasArtworkVideo;
@@ -298,6 +299,7 @@ export function FullscreenPlayer({
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
     return loopGestureActiveRef.current || now < loopGestureSuppressUntilRef.current;
   };
+  const shouldBlockGestureDismiss = loopRegion.editing || isLoopGestureSuppressed();
   const exitHintText = "Exit Fullscreen";
 
   const armLoopGestureCooldown = () => {
@@ -307,7 +309,7 @@ export function FullscreenPlayer({
   };
 
   const beginSwipeDismiss = (touch: { clientX: number; clientY: number }) => {
-    if (isLoopGestureSuppressed()) return;
+    if (shouldBlockGestureDismiss) return;
     swipeStartRef.current = {
       x: touch.clientX,
       y: touch.clientY,
@@ -316,7 +318,7 @@ export function FullscreenPlayer({
   };
 
   const endSwipeDismiss = (touch: { clientX: number; clientY: number }) => {
-    if (isLoopGestureSuppressed()) {
+    if (shouldBlockGestureDismiss) {
       swipeStartRef.current = null;
       return;
     }
@@ -341,7 +343,7 @@ export function FullscreenPlayer({
   };
 
   const canStartSwipeDismiss = (target: EventTarget | null, clientY: number) => {
-    if (isLoopGestureSuppressed()) return false;
+    if (shouldBlockGestureDismiss) return false;
     const element = target as HTMLElement | null;
     if (!element) return false;
     if (element.closest("button, input, textarea, select, a, label")) return false;
@@ -359,6 +361,7 @@ export function FullscreenPlayer({
   };
 
   const handleCinemaOutsidePointerUp = (event: ReactPointerEvent<HTMLElement>) => {
+    if (loopRegion.editing) return;
     if (!isCinemaMode) return;
     const target = event.target as HTMLElement | null;
     if (!target) return;
@@ -388,7 +391,7 @@ export function FullscreenPlayer({
           swipeStartRef.current = null;
           return;
         }
-        if (isLoopGestureSuppressed()) {
+        if (shouldBlockGestureDismiss) {
           swipeStartRef.current = null;
           return;
         }
@@ -407,6 +410,7 @@ export function FullscreenPlayer({
         swipeStartRef.current = null;
       }}
       onPointerDown={(event) => {
+        if (loopRegion.editing) return;
         if (isCinemaMode) return;
         const target = event.target as HTMLElement | null;
         if (target?.closest(".fullscreen-player-shell__close, .fullscreen-player-shell__close-bottom")) return;
@@ -475,6 +479,7 @@ export function FullscreenPlayer({
         {!isCinemaMode && (
           <div className="fullscreen-player-shell__meta">
             <h2>{track.title}</h2>
+            {artist && <p>{artist}</p>}
             <p>
               {formatTime(currentTime)} / {formatTime(duration)} • Aura {track.aura}/10
             </p>

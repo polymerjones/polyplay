@@ -20,6 +20,7 @@ export function TrackRow({ track, active, isPlaying, dimMode, onSelectTrack, onA
     : ({ backgroundImage: track.artGrad || rowFallbackArtwork } as CSSProperties);
   const auraLevel = Math.max(0, Math.min(1, track.aura / 10));
   const hasAura = track.aura > 0;
+  const artist = track.artist?.trim();
 
   useEffect(() => {
     const onAuraArtHit = (event: Event) => {
@@ -65,6 +66,7 @@ export function TrackRow({ track, active, isPlaying, dimMode, onSelectTrack, onA
       >
         <div className="trackRow__meta">
           <div className="trackRow__title">{track.title}</div>
+          {artist && <div className="trackRow__sub">{artist}</div>}
           <div className="trackRow__sub">{track.sub || "Imported"}</div>
           <div className="trackRow__aura">Aura {track.aura}/10</div>
         </div>

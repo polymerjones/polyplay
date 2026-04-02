@@ -101,6 +101,7 @@ export function MiniPlayerBar({
 }: Props) {
   const artRef = useRef<HTMLButtonElement | null>(null);
   const swipeStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
+  const artist = track?.artist?.trim();
   const artStyle = track?.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
     : ({ backgroundImage: track?.artGrad || `url('${DEFAULT_ARTWORK_URL}')` } as CSSProperties);
@@ -222,6 +223,7 @@ export function MiniPlayerBar({
         />
         <div className="mini-player-bar__meta">
           <div className="mini-player-bar__title">{track?.title ?? "Select a track"}</div>
+          {artist && <div className="mini-player-bar__sub">{artist}</div>}
           <div className="mini-player-bar__sub">
             {formatTime(currentTime)} / {formatTime(duration)} • Aura {track?.aura ?? 0}/10
           </div>

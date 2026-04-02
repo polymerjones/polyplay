@@ -293,6 +293,14 @@ body.theme-dark .rowAuraGlow {
     inset 0 0 calc(14px + var(--row-aura-level) * 20px) rgba(var(--aura-rgb), calc(0.08 + var(--row-aura-level) * 0.24));
 }
 
+.trackRow.rowAuraGlow.is-playing {
+  border-color: transparent;
+}
+
+.trackRow.rowAuraGlow.is-playing::before {
+  opacity: 0.38;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .rowAuraGlow:hover {
     box-shadow:

@@ -89,6 +89,29 @@ export function WaveformLoop({
     };
   };
 
+  const keepLoopWithinViewRange = (
+    range: { start: number; end: number },
+    trackDuration: number,
+    start: number,
+    end: number
+  ) => {
+    const span = Math.max(MIN_MANUAL_VIEW_SPAN_SEC, range.end - range.start);
+    let nextStart = Math.max(0, Math.min(trackDuration - span, range.start));
+    let nextEnd = Math.min(trackDuration, nextStart + span);
+    if (start < nextStart) {
+      nextStart = Math.max(0, Math.min(trackDuration - span, start));
+      nextEnd = Math.min(trackDuration, nextStart + span);
+    }
+    if (end > nextEnd) {
+      nextEnd = Math.min(trackDuration, Math.max(span, end));
+      nextStart = Math.max(0, nextEnd - span);
+    }
+    return {
+      start: nextStart,
+      end: Math.max(nextStart + MIN_LOOP_SECONDS, nextEnd)
+    };
+  };
+
   const buildWindowedViewRange = (
     trackDuration: number,
     start: number,
@@ -150,6 +173,7 @@ export function WaveformLoop({
   const [viewRange, setViewRange] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
   const [shouldPreserveViewRange, setShouldPreserveViewRange] = useState(false);
   const lockedViewRangeRef = useRef<{ start: number; end: number } | null>(null);
+  const editingViewRangeRef = useRef<{ start: number; end: number } | null>(null);
   const isLightTheme =
     typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "light";
 
@@ -187,6 +211,29 @@ export function WaveformLoop({
   const toggleManualZoomControls = () => {
     setShowManualZoomControls((prev) => {
       return !prev;
+    });
+  };
+
+  const adjustManualZoomLevel = (direction: -1 | 1) => {
+    setManualZoomLevel((prev) => {
+      const nextLevel = Math.max(0, Math.min(MAX_MANUAL_ZOOM_LEVEL, prev + direction));
+      if (
+        nextLevel !== prev &&
+        hasDuration &&
+        loopRegion.active &&
+        hasLoopRange &&
+        loopRegion.editing &&
+        viewRange.end > viewRange.start
+      ) {
+        const currentFactor = MANUAL_ZOOM_FACTORS[Math.max(0, Math.min(MAX_MANUAL_ZOOM_LEVEL, prev))] ?? 1;
+        const nextFactor = MANUAL_ZOOM_FACTORS[nextLevel] ?? 1;
+        const currentSpan = Math.max(MIN_LOOP_SECONDS, viewRange.end - viewRange.start);
+        const nextSpan = Math.max(MIN_MANUAL_VIEW_SPAN_SEC, currentSpan * (nextFactor / currentFactor));
+        const nextRange = centerRangeOnLoop(duration, safeStart, safeEnd, nextSpan);
+        editingViewRangeRef.current = nextRange;
+        setViewRange(nextRange);
+      }
+      return nextLevel;
     });
   };
 
@@ -247,12 +294,7 @@ export function WaveformLoop({
       return;
     }
     if (loopRegion.editing || draggingHandle) {
-      const lockedSpan = dragViewSpanRef.current;
-      if (lockedSpan !== null) {
-        setViewRange(centerRangeOnLoop(duration, safeStart, safeEnd, lockedSpan));
-        return;
-      }
-      const dragRange = buildWindowedViewRange(duration, safeStart, safeEnd, {
+      const fallbackDragRange = buildWindowedViewRange(duration, safeStart, safeEnd, {
         bufferRatio: DRAG_VIEW_BUFFER_RATIO,
         minBufferSec: DRAG_VIEW_MIN_BUFFER_SEC,
         maxScale: MAX_DRAG_VIEW_SCALE,
@@ -260,7 +302,15 @@ export function WaveformLoop({
         tinyLoopBufferRatio: DRAG_VIEW_TINY_BUFFER_RATIO,
         tinyLoopMinBufferSec: DRAG_VIEW_TINY_MIN_BUFFER_SEC
       });
-      setViewRange(applyManualZoomToRange(dragRange, duration, safeStart, safeEnd, manualZoomLevel));
+      const nextEditingRange = keepLoopWithinViewRange(
+        editingViewRangeRef.current ??
+          (viewRange.end > viewRange.start ? viewRange : applyManualZoomToRange(fallbackDragRange, duration, safeStart, safeEnd, manualZoomLevel)),
+        duration,
+        safeStart,
+        safeEnd
+      );
+      editingViewRangeRef.current = nextEditingRange;
+      setViewRange(nextEditingRange);
       return;
     }
     zoomTimerRef.current = window.setTimeout(() => {
@@ -293,6 +343,9 @@ export function WaveformLoop({
   useEffect(() => {
     if (loopRegion.editing) {
       lockedViewRangeRef.current = { start: viewRange.start, end: viewRange.end };
+      if (!editingViewRangeRef.current && viewRange.end > viewRange.start) {
+        editingViewRangeRef.current = { start: viewRange.start, end: viewRange.end };
+      }
       setShouldPreserveViewRange(false);
     } else if (
       prevEditingRef.current &&
@@ -310,6 +363,7 @@ export function WaveformLoop({
     if (!loopRegion.active) {
       setShouldPreserveViewRange(false);
       lockedViewRangeRef.current = null;
+      editingViewRangeRef.current = null;
       setHasUnlockedManualZoom(false);
     }
   }, [loopRegion.active]);
@@ -318,6 +372,7 @@ export function WaveformLoop({
     if (!loopRegion.editing) {
       setShowManualZoomControls(false);
       setHasUnlockedManualZoom(false);
+      editingViewRangeRef.current = null;
     }
   }, [loopRegion.editing]);
 
@@ -486,10 +541,10 @@ export function WaveformLoop({
         activeHandle = pending.handle;
         dragSnapshotRef.current = { start: safeStart, end: safeEnd };
         const fallbackDragRange = buildWindowedViewRange(duration, safeStart, safeEnd);
-        dragViewSpanRef.current =
-          viewRange.end > viewRange.start
-            ? Math.max(MIN_LOOP_SECONDS, viewRange.end - viewRange.start)
-            : Math.max(MIN_LOOP_SECONDS, fallbackDragRange.end - fallbackDragRange.start);
+        const nextEditingRange =
+          viewRange.end > viewRange.start ? { start: viewRange.start, end: viewRange.end } : fallbackDragRange;
+        editingViewRangeRef.current = nextEditingRange;
+        dragViewSpanRef.current = Math.max(MIN_LOOP_SECONDS, nextEditingRange.end - nextEditingRange.start);
         pendingDragRef.current = null;
         setPendingHandle(null);
         setDraggingHandle(activeHandle);
@@ -647,7 +702,7 @@ export function WaveformLoop({
               type="button"
               className="pc-wave-toolbar__btn"
               aria-label="Zoom out loop editor"
-              onClick={() => setManualZoomLevel((prev) => Math.max(0, prev - 1))}
+              onClick={() => adjustManualZoomLevel(-1)}
               disabled={manualZoomLevel <= 0}
             >
               -
@@ -657,7 +712,7 @@ export function WaveformLoop({
               type="button"
               className="pc-wave-toolbar__btn"
               aria-label="Zoom in loop editor"
-              onClick={() => setManualZoomLevel((prev) => Math.min(MAX_MANUAL_ZOOM_LEVEL, prev + 1))}
+              onClick={() => adjustManualZoomLevel(1)}
               disabled={manualZoomLevel >= MAX_MANUAL_ZOOM_LEVEL}
             >
               +
