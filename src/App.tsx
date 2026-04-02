@@ -69,15 +69,23 @@ import {
 } from "./lib/playlistState";
 import { normalizeSaveFilename, promptForSaveFilename, saveBlobWithBestEffort, shouldUseInlineSaveNameStep } from "./lib/saveBlob";
 import { cropAudioBlobToWav } from "./lib/audio/cropAudio";
+import {
+  CUSTOM_THEME_ORDER,
+  THEME_SELECTION_ORDER,
+  THEME_PACK_AURA_COLORS,
+  getCustomThemeClassName,
+  getThemeLabel,
+  getThemeSelection,
+  isCustomThemeSlot,
+  type CustomThemeSlot,
+  type ThemeMode,
+  type ThemeSelection
+} from "./lib/themeConfig";
 import { formatTime } from "./lib/time";
 import type { LibraryState } from "./lib/storage/library";
 import type { DimMode, LoopMode, LoopRegion, RepeatTrackMode, Track } from "./types";
 import type { AmbientFxMode, AmbientFxQuality } from "./fx/ambientFxEngine";
 import { isBusyToastMessage } from "./lib/toastUtils";
-
-type ThemeMode = "light" | "dark" | "custom";
-type CustomThemeSlot = "crimson" | "teal" | "amber";
-type ThemeSelection = "dark" | "light" | "amber" | "teal" | "crimson";
 type QuickTourPhase = "create-playlist" | "upload-track" | null;
 type VaultToastTone = "info" | "success" | "error";
 type SafeTapVariant = "bubble" | "ring" | "blob" | "sparkle";
@@ -102,7 +110,10 @@ type LogoSparkle = {
   durationMs: number;
   delayMs: number;
   opacity: number;
+  color: string;
+  coreColor: string;
 };
+type FxToastPlacement = "default" | "theme";
 const EMPTY_LOOP: LoopRegion = { start: 0, end: 0, active: false, editing: false };
 const SPLASH_SEEN_KEY = "polyplay_hasSeenSplash";
 const SPLASH_SESSION_KEY = "polyplay_hasSeenSplashSession";
@@ -150,11 +161,6 @@ const FX_MODE_KEY = "polyplay_fxMode_v1";
 const FX_QUALITY_KEY = "polyplay_fxQuality_v1";
 const CURRENT_TRACK_ID_KEY = "polyplay_currentTrackId_v1";
 const IOS_NOW_PLAYING_APP_TITLE = "PolyPlay Audio";
-const THEME_PACK_AURA_COLORS: Record<CustomThemeSlot, string> = {
-  crimson: "#cf6f82",
-  teal: "#42c7c4",
-  amber: "#f0b35b"
-};
 const FX_INTERACTIVE_GUARD_SELECTORS = [
   "button",
   "a",
@@ -213,20 +219,6 @@ function auraHexToRgb(value: string): string {
   const g = Number.parseInt(normalized.slice(3, 5), 16);
   const b = Number.parseInt(normalized.slice(5, 7), 16);
   return `${r}, ${g}, ${b}`;
-}
-
-function getThemeSelection(mode: ThemeMode, slot: CustomThemeSlot): ThemeSelection {
-  if (mode === "dark") return "dark";
-  if (mode === "light") return "light";
-  return slot;
-}
-
-function getThemeLabel(selection: ThemeSelection): string {
-  if (selection === "dark") return "Default (Dark)";
-  if (selection === "light") return "Light";
-  if (selection === "amber") return "Amber";
-  if (selection === "teal") return "Teal";
-  return "Crimson";
 }
 
 function getSafeDuration(value: number): number {
@@ -397,6 +389,8 @@ export default function App() {
   const edgeSwipeArmedRef = useRef(false);
   const edgeSwipeFlashTimeoutRef = useRef<number | null>(null);
   const [edgeSwipeFlash, setEdgeSwipeFlash] = useState(false);
+  const playlistNavFlashTimeoutRef = useRef<number | null>(null);
+  const [playlistNavFlash, setPlaylistNavFlash] = useState(false);
   const edgeSwipeIndicatorRef = useRef<"left" | "right" | null>(null);
   const updateEdgeSwipeIndicator = useCallback((edge: "left" | "right" | null) => {
     edgeSwipeIndicatorRef.current = edge;
@@ -440,6 +434,7 @@ export default function App() {
     return "auto";
   });
   const [fxToast, setFxToast] = useState<string | null>(null);
+  const [fxToastPlacement, setFxToastPlacement] = useState<FxToastPlacement>("default");
   const [allTracksCatalog, setAllTracksCatalog] = useState<Track[]>([]);
   const [isPageVisible, setIsPageVisible] = useState<boolean>(() =>
     typeof document === "undefined" ? true : !document.hidden
@@ -628,6 +623,7 @@ export default function App() {
   const logoSparkleSeqRef = useRef(0);
   const logoSparkleCooldownRef = useRef(0);
   const logoSparkleTimeoutsRef = useRef<number[]>([]);
+  const logoButtonRef = useRef<HTMLButtonElement | null>(null);
   const [safeTapBursts, setSafeTapBursts] = useState<SafeTapBurst[]>([]);
   const [logoSparkles, setLogoSparkles] = useState<LogoSparkle[]>([]);
   const [threepeatDisplayCount, setThreepeatDisplayCount] = useState<number>(() => {
@@ -641,6 +637,16 @@ export default function App() {
   const activePlaylistId = runtimeLibrary?.activePlaylistId ?? null;
   const activePlaylistName =
     (activePlaylistId && runtimeLibrary?.playlistsById?.[activePlaylistId]?.name) || "None";
+  const orderedPlaylists = useMemo(
+    () => (runtimeLibrary ? Object.values(runtimeLibrary.playlistsById || {}) : []),
+    [runtimeLibrary]
+  );
+  const activePlaylistIndex = orderedPlaylists.findIndex((playlist) => playlist.id === activePlaylistId);
+  const prevPlaylistId = activePlaylistIndex > 0 ? orderedPlaylists[activePlaylistIndex - 1]?.id ?? null : null;
+  const nextPlaylistId =
+    activePlaylistIndex >= 0 && activePlaylistIndex < orderedPlaylists.length - 1
+      ? orderedPlaylists[activePlaylistIndex + 1]?.id ?? null
+      : null;
 
   useEffect(() => {
     runtimeLibraryRef.current = runtimeLibrary;
@@ -748,7 +754,7 @@ export default function App() {
         setThemeMode(savedTheme);
       }
       const savedCustomThemeSlot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
-      if (savedCustomThemeSlot === "crimson" || savedCustomThemeSlot === "teal" || savedCustomThemeSlot === "amber") {
+      if (isCustomThemeSlot(savedCustomThemeSlot)) {
         setCustomThemeSlot(savedCustomThemeSlot);
       }
       setAuraColor(normalizeAuraColor(localStorage.getItem(AURA_COLOR_KEY)));
@@ -1435,10 +1441,28 @@ export default function App() {
     }, 260);
   }, []);
 
+  const triggerPlaylistNavFlash = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (playlistNavFlashTimeoutRef.current !== null) {
+      window.clearTimeout(playlistNavFlashTimeoutRef.current);
+    }
+    setPlaylistNavFlash(false);
+    window.requestAnimationFrame(() => {
+      setPlaylistNavFlash(true);
+      playlistNavFlashTimeoutRef.current = window.setTimeout(() => {
+        playlistNavFlashTimeoutRef.current = null;
+        setPlaylistNavFlash(false);
+      }, 320);
+    });
+  }, []);
+
   useEffect(() => {
     return () => {
       if (edgeSwipeFlashTimeoutRef.current !== null) {
         window.clearTimeout(edgeSwipeFlashTimeoutRef.current);
+      }
+      if (playlistNavFlashTimeoutRef.current !== null) {
+        window.clearTimeout(playlistNavFlashTimeoutRef.current);
       }
     };
   }, []);
@@ -1453,7 +1477,7 @@ export default function App() {
         localStorage.setItem(THEME_MODE_KEY, "dark");
       }
       const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
-      if (slot === "crimson" || slot === "teal" || slot === "amber") setCustomThemeSlot(slot);
+      if (isCustomThemeSlot(slot)) setCustomThemeSlot(slot);
     } catch {
       // Ignore localStorage failures.
     }
@@ -1565,6 +1589,11 @@ export default function App() {
     };
   }, [fxToast]);
 
+  const showFxToast = (message: string, placement: FxToastPlacement = "default") => {
+    setFxToastPlacement(placement);
+    setFxToast(message);
+  };
+
   useEffect(() => {
     const onVisibilityChange = () => setIsPageVisible(!document.hidden);
     document.addEventListener("visibilitychange", onVisibilityChange);
@@ -1613,9 +1642,9 @@ export default function App() {
     root.setAttribute("data-theme-slot", customThemeSlot);
     document.body.classList.toggle("theme-dark", themeMode === "dark");
     document.body.classList.toggle("theme-custom", themeMode === "custom");
-    document.body.classList.toggle("theme-custom-crimson", themeMode === "custom" && customThemeSlot === "crimson");
-    document.body.classList.toggle("theme-custom-teal", themeMode === "custom" && customThemeSlot === "teal");
-    document.body.classList.toggle("theme-custom-amber", themeMode === "custom" && customThemeSlot === "amber");
+    CUSTOM_THEME_ORDER.forEach((slot) => {
+      document.body.classList.toggle(getCustomThemeClassName(slot), themeMode === "custom" && customThemeSlot === slot);
+    });
     const nextAuraColor = auraColor;
     if (nextAuraColor) {
       root.style.setProperty("--aura-rgb", auraHexToRgb(nextAuraColor));
@@ -1625,9 +1654,9 @@ export default function App() {
     return () => {
       document.body.classList.remove("theme-dark");
       document.body.classList.remove("theme-custom");
-      document.body.classList.remove("theme-custom-crimson");
-      document.body.classList.remove("theme-custom-teal");
-      document.body.classList.remove("theme-custom-amber");
+      CUSTOM_THEME_ORDER.forEach((slot) => {
+        document.body.classList.remove(getCustomThemeClassName(slot));
+      });
       root.removeAttribute("data-theme");
       root.removeAttribute("data-theme-slot");
       if (themeAnimTimeoutRef.current !== null) {
@@ -1738,7 +1767,7 @@ export default function App() {
       }
       if (type === "polyplay:custom-theme-slot-updated") {
         const slot = event.data?.slot;
-        if (slot === "crimson" || slot === "teal" || slot === "amber") {
+        if (isCustomThemeSlot(slot)) {
           setCustomThemeSlot(slot);
           try {
             localStorage.setItem(CUSTOM_THEME_SLOT_KEY, slot);
@@ -2739,6 +2768,7 @@ export default function App() {
     const nextAura = clampAura((targetTrack?.aura ?? 0) + 1);
     fireAuraHaptic(nextAura);
     triggerAuraPulseForTrack(trackId);
+    window.dispatchEvent(new CustomEvent("polyplay:aura-logo-sparkle"));
     void updateAura(trackId, 1, { skipHaptic: true });
   };
 
@@ -3264,7 +3294,7 @@ export default function App() {
           setThreepeatFlashTick((prev) => prev + 1);
         }
         fireHeavyHaptic();
-        setFxToast(
+        showFxToast(
           next === "repeat-1"
             ? "Repeat once activated"
             : next === "repeat-2"
@@ -3275,12 +3305,12 @@ export default function App() {
         threepeatRemainingRef.current = 0;
         setThreepeatDisplayCount(0);
         fireLightHaptic();
-        setFxToast("Repeat enabled");
+        showFxToast("Repeat enabled");
       } else {
         threepeatRemainingRef.current = 0;
         setThreepeatDisplayCount(0);
         fireLightHaptic();
-        setFxToast("Repeat disabled");
+        showFxToast("Repeat disabled");
       }
       try {
         localStorage.setItem(REPEAT_TRACK_KEY, next);
@@ -3327,17 +3357,17 @@ export default function App() {
       }
       return next;
     });
-    setFxToast("Vibe switch.");
+    showFxToast("Vibe switch.");
   };
 
   const setThemeModeExplicit = (nextSelection: ThemeSelection, event?: MouseEvent<HTMLButtonElement>) => {
     const nextMode: ThemeMode = nextSelection === "dark" ? "dark" : nextSelection === "light" ? "light" : "custom";
-    const nextSlot: CustomThemeSlot = nextSelection === "amber" || nextSelection === "teal" || nextSelection === "crimson"
-      ? nextSelection
-      : customThemeSlot;
+    const nextSlot: CustomThemeSlot = isCustomThemeSlot(nextSelection) ? nextSelection : customThemeSlot;
+    const nextThemeLabel = getThemeLabel(nextSelection);
     const nextAuraColor = nextMode === "custom" ? THEME_PACK_AURA_COLORS[nextSlot] : nextSelection === "dark" ? null : auraColor;
     setThemeMode(nextMode);
     setCustomThemeSlot(nextSlot);
+    showFxToast(`Theme changed to ${nextThemeLabel}`, "theme");
     if (nextMode === "custom") {
       setAuraColor(nextAuraColor);
     } else if (nextSelection === "dark") {
@@ -3407,10 +3437,9 @@ export default function App() {
   };
 
   const cycleTheme = (event?: MouseEvent<HTMLButtonElement>) => {
-    const order: ThemeSelection[] = ["dark", "light", "amber", "teal", "crimson"];
     const current = getThemeSelection(themeMode, customThemeSlot);
-    const currentIndex = order.indexOf(current);
-    const next = order[(currentIndex + 1) % order.length] ?? "dark";
+    const currentIndex = THEME_SELECTION_ORDER.indexOf(current);
+    const next = THEME_SELECTION_ORDER[(currentIndex + 1) % THEME_SELECTION_ORDER.length] ?? "dark";
     setThemeModeExplicit(next, event);
   };
 
@@ -3528,16 +3557,17 @@ export default function App() {
     }, durationMs + 80);
   };
 
-  const triggerLogoSparkles = (event: MouseEvent<HTMLButtonElement>) => {
+  const triggerLogoSparklesFromButton = (
+    button: HTMLButtonElement,
+    options?: { bypassCooldown?: boolean; includeAuraBurst?: boolean }
+  ) => {
     const reducedMotion =
       typeof window !== "undefined" &&
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-    if (now - logoSparkleCooldownRef.current < LOGO_SPARKLE_TAP_COOLDOWN_MS) return;
+    if (!options?.bypassCooldown && now - logoSparkleCooldownRef.current < LOGO_SPARKLE_TAP_COOLDOWN_MS) return;
     logoSparkleCooldownRef.current = now;
-
-    const button = event.currentTarget;
     button.classList.remove("topbar-title__logo-button--sparkle");
     void button.offsetWidth;
     button.classList.add("topbar-title__logo-button--sparkle");
@@ -3545,7 +3575,12 @@ export default function App() {
     const rect = button.getBoundingClientRect();
     const width = rect.width;
     const height = rect.height;
-    const spawnSparkles = (count: number, delayMs: number, spread = 1) => {
+    const spawnSparkles = (
+      count: number,
+      delayMs: number,
+      spread = 1,
+      sparkleTone?: { color?: string; coreColor?: string; sizeBoost?: number; opacityBoost?: number }
+    ) => {
       if (logoSparkleTimeoutsRef.current.length >= LOGO_SPARKLE_MAX_PENDING) return;
       const timeoutId = window.setTimeout(() => {
         logoSparkleTimeoutsRef.current = logoSparkleTimeoutsRef.current.filter((id) => id !== timeoutId);
@@ -3557,12 +3592,14 @@ export default function App() {
             id: ++logoSparkleSeqRef.current,
             x: localX,
             y: localY,
-            size: Math.round(4 + Math.random() * 6),
+            size: Math.round(4 + Math.random() * 6 + (sparkleTone?.sizeBoost ?? 0)),
             driftX: (Math.random() - 0.5) * 28 * spread,
             driftY: -(12 + Math.random() * 26),
             durationMs: Math.round(920 + Math.random() * 520),
             delayMs: Math.round(Math.random() * 120),
-            opacity: Number((0.45 + Math.random() * 0.35).toFixed(2))
+            opacity: Number((0.45 + Math.random() * 0.35 + (sparkleTone?.opacityBoost ?? 0)).toFixed(2)),
+            color: sparkleTone?.color ?? "rgba(var(--aura-rgb, 188, 132, 255), 0.9)",
+            coreColor: sparkleTone?.coreColor ?? "rgba(255, 255, 255, 0.98)"
           } satisfies LogoSparkle;
         });
         setLogoSparkles((prev) => {
@@ -3585,7 +3622,29 @@ export default function App() {
       spawnSparkles(6, 140, 0.75);
       spawnSparkles(5, 320, 0.65);
     }
+    if (options?.includeAuraBurst) {
+      spawnSparkles(reducedMotion ? 4 : 6, reducedMotion ? 36 : 92, 0.55, {
+        color: "rgba(var(--aura-rgb, 188, 132, 255), 0.98)",
+        coreColor: "rgba(255, 248, 255, 0.98)",
+        sizeBoost: 2,
+        opacityBoost: 0.18
+      });
+    }
   };
+
+  const triggerLogoSparkles = (event: MouseEvent<HTMLButtonElement>) => {
+    triggerLogoSparklesFromButton(event.currentTarget);
+  };
+
+  useEffect(() => {
+    const onAuraLogoSparkle = () => {
+      const button = logoButtonRef.current;
+      if (!button) return;
+      triggerLogoSparklesFromButton(button, { bypassCooldown: true, includeAuraBurst: true });
+    };
+    window.addEventListener("polyplay:aura-logo-sparkle", onAuraLogoSparkle);
+    return () => window.removeEventListener("polyplay:aura-logo-sparkle", onAuraLogoSparkle);
+  }, []);
 
   const triggerOnboardingSparkle = (event: MouseEvent<HTMLElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -3595,6 +3654,30 @@ export default function App() {
     window.setTimeout(() => {
       spawnSafeTapBurstAt(centerX + Math.min(16, rect.width * 0.14), centerY - Math.min(8, rect.height * 0.12));
     }, 36);
+  };
+
+  const handlePlaylistNav = (targetPlaylistId: string | null, event: MouseEvent<HTMLButtonElement>) => {
+    if (!targetPlaylistId) return;
+    const button = event.currentTarget;
+    button.classList.remove("playlist-selector__action--burst");
+    void button.offsetWidth;
+    button.classList.add("playlist-selector__action--burst");
+    triggerPlaylistNavFlash();
+    fireLightHaptic();
+    const rect = button.getBoundingClientRect();
+    spawnSafeTapBurstAt(rect.left + rect.width / 2, rect.top + rect.height / 2, {
+      color: "rgba(var(--aura-rgb, 188, 132, 255), 0.92)",
+      variant: "sparkle",
+      size: 112,
+      durationMs: 620,
+      opacity: 0.24,
+      sparkleCount: 6
+    });
+    const logoButton = logoButtonRef.current;
+    if (logoButton) {
+      triggerLogoSparklesFromButton(logoButton, { bypassCooldown: true, includeAuraBurst: true });
+    }
+    void setActivePlaylist(targetPlaylistId);
   };
 
   const onGratitudeDoNotSaveChange = (next: boolean) => {
@@ -3976,7 +4059,7 @@ export default function App() {
     const next = order[(currentIndex + 1) % order.length] ?? "gravity";
     setFxMode(next);
     const label = next === "gravity" ? "Gravity" : next === "pop" ? "Pop" : "Splatter";
-    setFxToast(`FX: ${label}`);
+    showFxToast(`FX: ${label}`);
   };
 
   const activeThemeSelection = getThemeSelection(themeMode, customThemeSlot);
@@ -4015,6 +4098,7 @@ export default function App() {
             auraRgb={ambientAuraRgb}
             themeRefreshKey={fxThemeRefreshKey}
           />
+          <div className={`playlist-nav-flash ${playlistNavFlash ? "is-active" : ""}`.trim()} />
           <div
             className={`track-backdrop ${currentTrack?.artUrl || currentTrack?.artGrad ? "is-visible" : ""}`.trim()}
             style={{
@@ -4088,6 +4172,7 @@ export default function App() {
           </div>
           <div className="topbar-title">
             <button
+              ref={logoButtonRef}
               type="button"
               className="topbar-title__logo-button"
               aria-label="PolyPlay logo sparkle"
@@ -4109,7 +4194,9 @@ export default function App() {
                       "--logo-sparkle-drift-y": `${sparkle.driftY}px`,
                       "--logo-sparkle-duration": `${sparkle.durationMs}ms`,
                       "--logo-sparkle-delay": `${sparkle.delayMs}ms`,
-                      "--logo-sparkle-opacity": String(sparkle.opacity)
+                      "--logo-sparkle-opacity": String(sparkle.opacity),
+                      "--logo-sparkle-color": sparkle.color,
+                      "--logo-sparkle-core-color": sparkle.coreColor
                     } as CSSProperties
                   }
                 />
@@ -4250,11 +4337,11 @@ export default function App() {
             </button>
           </div>
           <div className="hint">
-            {hasTracks ? "Tap tiles to play • Tap playbar art for fullscreen" : "Create/select a playlist, then import tracks."}
+            {hasTracks ? "Tap track to play • Tap playbar art for fullscreen" : "Create/select a playlist, then import tracks."}
           </div>
         </header>
 
-        {runtimeLibrary && Object.keys(runtimeLibrary.playlistsById || {}).length > 0 && (
+        {runtimeLibrary && orderedPlaylists.length > 0 && (
           <section
             className={`playlist-selector ${isCreatePlaylistGuidanceActive ? "playlist-selector--guided" : ""}`.trim()}
             data-ui="true"
@@ -4274,7 +4361,7 @@ export default function App() {
                   void setActivePlaylist(value);
                 }}
               >
-                {Object.values(runtimeLibrary.playlistsById).map((playlist) => (
+                {orderedPlaylists.map((playlist) => (
                   <option key={playlist.id} value={playlist.id}>
                     {playlist.name}
                   </option>
@@ -4282,6 +4369,24 @@ export default function App() {
                 <option value="__create__">Create new PolyPlaylist…</option>
               </select>
               <div className="playlist-selector__action-wrap">
+                <button
+                  type="button"
+                  className="playlist-selector__action playlist-selector__nav"
+                  aria-label="Previous playlist"
+                  disabled={!prevPlaylistId}
+                  onClick={(event) => handlePlaylistNav(prevPlaylistId, event)}
+                >
+                  &lt;
+                </button>
+                <button
+                  type="button"
+                  className="playlist-selector__action playlist-selector__nav"
+                  aria-label="Next playlist"
+                  disabled={!nextPlaylistId}
+                  onClick={(event) => handlePlaylistNav(nextPlaylistId, event)}
+                >
+                  &gt;
+                </button>
                 <button
                   type="button"
                   className={`playlist-selector__action onboarding-action ${
@@ -4605,7 +4710,7 @@ export default function App() {
                   <span className="vault-summary__label">View</span>
                   <strong>
                     {layoutMode === "grid" ? "Tiles" : "Rows"} ·{" "}
-                    {themeMode === "dark" ? "Dark" : themeMode === "custom" ? `Custom (${customThemeSlot})` : "Light"}
+                    {themeMode === "dark" ? "Dark" : themeMode === "custom" ? `Custom (${getThemeLabel(customThemeSlot)})` : "Light"}
                   </strong>
                 </div>
                 <div>
@@ -4854,7 +4959,7 @@ export default function App() {
         }}
       />
       {showJournalTapToast && <div className="journal-tap-toast">Journal</div>}
-      {fxToast && <div className="fx-toast">{fxToast}</div>}
+      {fxToast && <div className={`fx-toast ${fxToastPlacement === "theme" ? "fx-toast--theme" : ""}`.trim()}>{fxToast}</div>}
       {vaultToast && (
         <div className={`vault-toast vault-toast--${vaultToast.tone}`.trim()} role="status" aria-live="polite">
           {isBusyToastMessage(vaultToast.message) ? (

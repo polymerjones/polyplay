@@ -63,9 +63,9 @@ function getWaveformArtworkPalette(): WaveformArtworkPalette {
       bgMid: "#23174a",
       bgEnd: "#09101d",
       glow: "rgba(193, 126, 255, 0.42)",
-      barTop: "rgba(124, 229, 255, 0.96)",
-      barMid: "rgba(175, 108, 255, 0.92)",
-      barBottom: "rgba(255, 114, 212, 0.85)"
+      barTop: "rgba(245, 238, 255, 0.96)",
+      barMid: "rgba(196, 154, 255, 0.92)",
+      barBottom: "rgba(118, 92, 238, 0.86)"
     };
   }
 
@@ -126,9 +126,9 @@ function getWaveformArtworkPalette(): WaveformArtworkPalette {
     bgMid: "#23174a",
     bgEnd: "#09101d",
     glow: "rgba(193, 126, 255, 0.42)",
-    barTop: "rgba(124, 229, 255, 0.96)",
-    barMid: "rgba(175, 108, 255, 0.92)",
-    barBottom: "rgba(255, 114, 212, 0.85)"
+    barTop: "rgba(245, 238, 255, 0.96)",
+    barMid: "rgba(196, 154, 255, 0.92)",
+    barBottom: "rgba(118, 92, 238, 0.86)"
   };
 }
 

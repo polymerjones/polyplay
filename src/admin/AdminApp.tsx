@@ -66,6 +66,18 @@ import {
 import { fireHeavyHaptic, fireLightHaptic, fireMediumHaptic, fireSuccessHaptic } from "../lib/haptics";
 import { canUseIosNativeAudioImport, pickIosNativeAudioFile, pickIosNativeArtworkFile } from "../lib/iosMediaImport";
 import { promptForSaveFilename, saveBlobWithBestEffort } from "../lib/saveBlob";
+import {
+  CUSTOM_THEME_ORDER,
+  THEME_PACK_AURA_COLORS,
+  THEME_SELECTION_ORDER,
+  getThemeLabel,
+  getThemeSelectionFromState,
+  isCustomThemeSlot,
+  isThemeSelection,
+  parseCustomThemeSlot,
+  type CustomThemeSlot,
+  type ThemeSelection
+} from "../lib/themeConfig";
 import { titleFromFilename } from "../lib/title";
 import { Button } from "../components/button";
 import { TextShimmer } from "../components/TextShimmer";
@@ -87,18 +99,12 @@ const DIM_MODE_KEY = "polyplay_dimMode_v1";
 const CURRENT_TRACK_ID_KEY = "polyplay_currentTrackId_v1";
 const LOOP_REGION_KEY = "polyplay_loopByTrack";
 const LOOP_MODE_KEY = "polyplay_loopModeByTrack";
-const THEME_PACK_AURA_COLORS: Record<"crimson" | "teal" | "amber", string> = {
-  crimson: "#cf6f82",
-  teal: "#42c7c4",
-  amber: "#f0b35b"
-};
 const PRIVACY_POLICY_URL = "/privacy-policy.html";
 const TERMS_AND_CONDITIONS_URL = "/terms-and-conditions.html";
 const SUPPORT_URL = "/support.html";
 const CAN_USE_IOS_NATIVE_AUDIO_IMPORT = canUseIosNativeAudioImport();
 const CAN_USE_IOS_NATIVE_ARTWORK_IMPORT = canUseIosNativeAudioImport();
 const ARTIST_MEMORY_KEY = "polyplay_importArtist_v1";
-type ThemeSelection = "dark" | "light" | "amber" | "teal" | "crimson";
 type AdminHapticTone = "success" | "heavy";
 type UploadArtworkSource = "manual" | "metadata";
 type UploadMetadataPhase = "idle" | "loading" | "ready" | "skipped";
@@ -138,7 +144,7 @@ function normalizeAuraColor(value: unknown): string | null {
   return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed.toLowerCase() : null;
 }
 
-function getDefaultAuraByTheme(themeMode: string | null, slot: "crimson" | "teal" | "amber"): string {
+function getDefaultAuraByTheme(themeMode: string | null, slot: CustomThemeSlot): string {
   if (themeMode === "light") return "#a066f8";
   if (themeMode === "custom") return THEME_PACK_AURA_COLORS[slot];
   return "#bc84ff";
@@ -210,12 +216,6 @@ function handleAdminLinkClick(url: string) {
     event.preventDefault();
     openAdminExternalUrl(url);
   };
-}
-
-function getThemeSelectionFromState(themeMode: string | null, slot: "crimson" | "teal" | "amber"): ThemeSelection {
-  if (themeMode === "light") return "light";
-  if (themeMode === "custom") return slot;
-  return "dark";
 }
 
 function getStoredArtistName(): string {
@@ -591,10 +591,9 @@ export function AdminApp() {
   const [sortLargestFirst, setSortLargestFirst] = useState(true);
   const uploadPreviewVideoRef = useRef<HTMLVideoElement | null>(null);
   const selectedPreviewVideoRef = useRef<HTMLVideoElement | null>(null);
-  const [customThemeSlot, setCustomThemeSlot] = useState<"crimson" | "teal" | "amber">(() => {
+  const [customThemeSlot, setCustomThemeSlot] = useState<CustomThemeSlot>(() => {
     try {
-      const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
-      return slot === "teal" || slot === "amber" ? slot : "crimson";
+      return parseCustomThemeSlot(localStorage.getItem(CUSTOM_THEME_SLOT_KEY));
     } catch {
       return "crimson";
     }
@@ -602,8 +601,7 @@ export function AdminApp() {
   const [themeSelection, setThemeSelection] = useState<ThemeSelection>(() => {
     try {
       const themeMode = localStorage.getItem(THEME_MODE_KEY);
-      const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
-      const safeSlot: "crimson" | "teal" | "amber" = slot === "teal" || slot === "amber" ? slot : "crimson";
+      const safeSlot = parseCustomThemeSlot(localStorage.getItem(CUSTOM_THEME_SLOT_KEY));
       return getThemeSelectionFromState(themeMode, safeSlot);
     } catch {
       return "dark";
@@ -774,23 +772,23 @@ export function AdminApp() {
   }, []);
 
   useEffect(() => {
-    const applyTheme = (mode: string | null, slot: "crimson" | "teal" | "amber") => {
+    const applyTheme = (mode: string | null, slot: CustomThemeSlot) => {
       const nextMode = mode === "dark" || mode === "custom" ? mode : "light";
       const root = document.documentElement;
       root.setAttribute("data-theme", nextMode);
       root.setAttribute("data-theme-slot", slot);
       document.body.classList.toggle("theme-dark", nextMode === "dark");
       document.body.classList.toggle("theme-custom", nextMode === "custom");
-      document.body.classList.toggle("theme-custom-crimson", nextMode === "custom" && slot === "crimson");
-      document.body.classList.toggle("theme-custom-teal", nextMode === "custom" && slot === "teal");
-      document.body.classList.toggle("theme-custom-amber", nextMode === "custom" && slot === "amber");
+      CUSTOM_THEME_ORDER.forEach((themeSlot) => {
+        document.body.classList.toggle(`theme-custom-${themeSlot}`, nextMode === "custom" && slot === themeSlot);
+      });
     };
     const saved = localStorage.getItem(THEME_MODE_KEY);
     try {
       const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
-      const safeSlot: "crimson" | "teal" | "amber" = slot === "teal" || slot === "amber" ? slot : "crimson";
+      const safeSlot = parseCustomThemeSlot(slot);
       applyTheme(saved, safeSlot);
-      if (slot === "crimson" || slot === "teal" || slot === "amber") setCustomThemeSlot(slot);
+      if (isCustomThemeSlot(slot)) setCustomThemeSlot(slot);
       setThemeSelection(getThemeSelectionFromState(localStorage.getItem(THEME_MODE_KEY), safeSlot));
       const savedAura = normalizeAuraColor(localStorage.getItem(AURA_COLOR_KEY));
       if (savedAura) {
@@ -804,17 +802,17 @@ export function AdminApp() {
     const onStorage = (event: StorageEvent) => {
       if (event.key === THEME_MODE_KEY) {
         const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
-        const safeSlot: "crimson" | "teal" | "amber" = slot === "teal" || slot === "amber" ? slot : "crimson";
+        const safeSlot = parseCustomThemeSlot(slot);
         applyTheme(event.newValue, safeSlot);
       }
       if (event.key === CUSTOM_THEME_SLOT_KEY) {
         const slot = event.newValue;
-        if (slot === "crimson" || slot === "teal" || slot === "amber") setCustomThemeSlot(slot);
+        if (isCustomThemeSlot(slot)) setCustomThemeSlot(slot);
       }
       if (event.key === THEME_MODE_KEY || event.key === CUSTOM_THEME_SLOT_KEY) {
         const mode = localStorage.getItem(THEME_MODE_KEY);
         const slot = localStorage.getItem(CUSTOM_THEME_SLOT_KEY);
-        const safeSlot: "crimson" | "teal" | "amber" = slot === "teal" || slot === "amber" ? slot : "crimson";
+        const safeSlot = parseCustomThemeSlot(slot);
         applyTheme(mode, safeSlot);
         setThemeSelection(getThemeSelectionFromState(mode, safeSlot));
       }
@@ -834,11 +832,7 @@ export function AdminApp() {
       if (event.data?.type !== "polyplay:theme-changed") return;
       const mode = event.data?.themeMode;
       const slot = event.data?.customThemeSlot;
-      const safeSlot: "crimson" | "teal" | "amber" = slot === "teal" || slot === "amber" || slot === "crimson"
-        ? slot
-        : (localStorage.getItem(CUSTOM_THEME_SLOT_KEY) === "teal" || localStorage.getItem(CUSTOM_THEME_SLOT_KEY) === "amber"
-            ? (localStorage.getItem(CUSTOM_THEME_SLOT_KEY) as "teal" | "amber")
-            : "crimson");
+      const safeSlot = parseCustomThemeSlot(slot, parseCustomThemeSlot(localStorage.getItem(CUSTOM_THEME_SLOT_KEY)));
       applyTheme(mode, safeSlot);
       setThemeSelection(getThemeSelectionFromState(mode, safeSlot));
       if (safeSlot) setCustomThemeSlot(safeSlot);
@@ -850,9 +844,9 @@ export function AdminApp() {
       window.removeEventListener("message", onMessage);
       document.body.classList.remove("theme-dark");
       document.body.classList.remove("theme-custom");
-      document.body.classList.remove("theme-custom-crimson");
-      document.body.classList.remove("theme-custom-teal");
-      document.body.classList.remove("theme-custom-amber");
+      CUSTOM_THEME_ORDER.forEach((slot) => {
+        document.body.classList.remove(`theme-custom-${slot}`);
+      });
       document.documentElement.removeAttribute("data-theme");
       document.documentElement.removeAttribute("data-theme-slot");
     };
@@ -2712,17 +2706,17 @@ export function AdminApp() {
             <Button
               variant="primary"
               type="submit"
-              className={`admin-upload-submit ${isImportArmed ? "admin-action-armed" : ""}`.trim()}
+              className={`admin-upload-submit min-h-[54px] px-5 text-base font-semibold ${isImportArmed ? "admin-action-armed" : ""}`.trim()}
             >
               Import
             </Button>
 
-            <label className="flex items-center gap-2 text-sm text-slate-300">
+            <label className="flex items-center gap-3 text-base font-semibold text-slate-200">
               <input
                 type="checkbox"
                 checked={keepImportPageOpen}
                 onChange={(event) => setKeepImportPageOpen(event.currentTarget.checked)}
-                className="admin-upload-checkbox h-4 w-4 rounded border border-slate-300/30 bg-slate-950/70"
+                className="admin-upload-checkbox h-5 w-5 rounded border border-slate-300/30 bg-slate-950/70"
               />
               Keep me on Import page
             </label>
@@ -3110,10 +3104,9 @@ export function AdminApp() {
             value={themeSelection}
             onChange={(event) => {
               const selected = event.currentTarget.value as ThemeSelection;
-              if (selected !== "dark" && selected !== "light" && selected !== "amber" && selected !== "teal" && selected !== "crimson") return;
+              if (!isThemeSelection(selected)) return;
               const nextMode = selected === "dark" ? "dark" : selected === "light" ? "light" : "custom";
-              const nextSlot: "crimson" | "teal" | "amber" =
-                selected === "amber" || selected === "teal" || selected === "crimson" ? selected : customThemeSlot;
+              const nextSlot: CustomThemeSlot = isCustomThemeSlot(selected) ? selected : customThemeSlot;
               setThemeSelection(selected);
               setCustomThemeSlot(nextSlot);
               try {
@@ -3155,23 +3148,23 @@ export function AdminApp() {
               }
               setStatus(
                 nextMode === "custom"
-                  ? `Theme set to ${nextSlot}. Aura matched to pack.`
-                  : `Theme set to ${nextMode === "dark" ? "Default (Dark)" : "Light"}.`
+                  ? `Theme set to ${getThemeLabel(nextSlot)}. Aura matched to pack.`
+                  : `Theme set to ${getThemeLabel(selected)}.`
               );
               fireSuccessHaptic();
               requestParentHaptic("success");
               showSuccessNotice(
                 nextMode === "custom"
-                  ? `Theme set to ${nextSlot}. Aura matched to pack.`
-                  : `Theme set to ${nextMode === "dark" ? "Default (Dark)" : "Light"}.`
+                  ? `Theme set to ${getThemeLabel(nextSlot)}. Aura matched to pack.`
+                  : `Theme set to ${getThemeLabel(selected)}.`
               );
             }}
           >
-            <option value="dark">Default (Dark Mode)</option>
-            <option value="light">Light Mode</option>
-            <option value="amber">Amber</option>
-            <option value="teal">Teal</option>
-            <option value="crimson">Crimson</option>
+            {THEME_SELECTION_ORDER.map((selection) => (
+              <option key={selection} value={selection}>
+                {selection === "dark" ? "Default (Dark Mode)" : selection === "light" ? "Light Mode" : getThemeLabel(selection)}
+              </option>
+            ))}
           </select>
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-[200px_1fr] sm:items-center">

@@ -17,6 +17,7 @@ import {
   type LibraryState,
   type TrackRecord
 } from "./storage/library";
+import { parseCustomThemeSlot, type CustomThemeSlot } from "./themeConfig";
 import { isConstrainedMobileDevice } from "./platform";
 
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
@@ -70,7 +71,7 @@ export type PolyplayConfig = {
   createdAt: string;
   settings: {
     themeMode: "light" | "dark" | "custom";
-    customThemeSlot?: "crimson" | "teal" | "amber";
+    customThemeSlot?: CustomThemeSlot;
     auraColor?: string | null;
     layoutMode: "grid" | "list";
     shuffleEnabled: boolean;
@@ -334,8 +335,8 @@ function asThemeMode(value: unknown): "light" | "dark" | "custom" {
   return asTheme(value);
 }
 
-function asCustomThemeSlot(value: unknown): "crimson" | "teal" | "amber" {
-  return value === "teal" || value === "amber" ? value : "crimson";
+function asCustomThemeSlot(value: unknown): CustomThemeSlot {
+  return parseCustomThemeSlot(value);
 }
 
 function asAuraColor(value: unknown): string | null {

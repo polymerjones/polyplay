@@ -35,7 +35,7 @@ Goals:
 - blocked
 
 ## Active task
-**Current active task:** 7. Screenshot follow-up cleanup
+**Current active task:** 12. Add 3 custom themes
 
 ---
 
@@ -400,6 +400,313 @@ Address the latest screenshot-driven UI bugs without widening into a broad redes
   - Confirm fullscreen and mini-player elapsed seek styling now read in the active aura color instead of amber/gold.
   - Confirm Manage Storage lets the user edit title and artist independently, save both, and see the updated values immediately.
   - Confirm leaving artist blank clears artist text cleanly without breaking row layout elsewhere.
+
+---
+
+### 8. Logo / import / highlight follow-up
+**Status:** fix implemented, awaiting QA
+
+**Goal:**
+Handle the latest polish/follow-up items without widening into unrelated layout changes.
+
+**Observed behavior:**
+- the active-track border still needs a brighter glowing head with a softer, less detectable cutoff
+- the import-page “Keep me on Import page” control reads too small
+- on iOS, tapping the PolyPlay logo shows a black flash before the sparkle
+- aura increases should also kick the logo sparkle with an extra aura-colored accent
+
+**Likely files:**
+- `src/components/BorderTrail.tsx`
+- `styles.css`
+- `src/admin/AdminApp.tsx`
+- `src/App.tsx`
+
+**Codex notes:**
+- Diagnosis start — 2026-04-02 Codex:
+- Files inspected:
+  - `src/components/BorderTrail.tsx`
+  - `styles.css`
+  - `src/admin/AdminApp.tsx`
+  - `src/App.tsx`
+- Suspected root cause:
+  - The current perimeter still only has a base stroke plus one moving segment, so it lacks a clearly brighter leading head and long blended falloff.
+  - The import-page checkbox row is still using compact utility sizing even though it is an important persistent-flow control.
+  - The iOS logo flash is most likely Safari tap highlight/compositing on the logo button rather than the sparkle particles themselves.
+  - Aura increases already flow through `handleAuraUp`, so the narrowest safe way to add aura-colored logo sparkle is to reuse the existing logo sparkle system from there instead of adding a second independent effect path.
+- Exact fix made:
+  - Upgraded the perimeter trail from base + one segment to base + long tail + brighter head on the same exact SVG path, so the line reads as one continuous stream with a hotter leading head and softer cutoff.
+  - Increased the import-page `Import` button and `Keep me on Import page` control sizing for better prominence and tap comfort.
+  - Removed iOS tap-highlight/compositing flash on the top logo button and made the logo sparkle system reusable from non-click triggers.
+  - Added an aura-logo sparkle trigger so any aura increase now kicks the logo sparkle with an additional stronger aura-colored burst.
+- Files changed:
+  - `src/components/BorderTrail.tsx`
+  - `styles.css`
+  - `src/admin/AdminApp.tsx`
+  - `src/App.tsx`
+  - `docs/polyplay_surgical_fix_plan_2026-04-02_notes.md`
+- Regression risk:
+  - Low to medium. The border-trail change adds one more SVG stroke layer, and the logo sparkle path now responds to aura events in addition to direct logo taps.
+- QA still needed:
+  - Confirm the border now reads as one lit perimeter with a brighter glowing head and no visible hard cutoff.
+  - Confirm the import-page checkbox and button feel larger and clearer on desktop and iOS.
+  - Confirm iOS logo tap no longer shows a black flash before the sparkle.
+  - Confirm any aura increase triggers the logo sparkle, including row, mini-player, and fullscreen aura buttons.
+  - Confirm the added aura-colored logo burst still feels lightweight and does not spam when aura is tapped repeatedly.
+- Follow-up tuning note — 2026-04-02 Codex:
+  - Live QA still shows a visible hard cutoff in the moving border cycle.
+  - Likely cause is the contrast jump between the short bright head and the darker tail.
+  - Narrow next pass: keep the same geometry/path, but lengthen the moving tail and reduce the head/tail contrast so the cycle reads more like one continuous LED strip glow.
+- Follow-up tuning fix — 2026-04-02 Codex:
+  - Increased the always-lit base slightly, lengthened and brightened the moving tail, and softened the head width/opacity so the cycle blends more gradually.
+  - Kept the same measured SVG path and same three-layer structure; this was strictly a contrast/gradient tuning pass in `styles.css`.
+- Follow-up glow request — 2026-04-02 Codex:
+  - Added a lightweight aura-colored overall strobe to the active perimeter layer, patterned after the existing hint pulse timing but scoped to the border-trail container.
+  - Kept it CSS-only and tied to the existing active perimeter element so it does not introduce a new geometry system or extra JS.
+- Follow-up blend request — 2026-04-02 Codex:
+  - Live QA still wants a brighter moving line with no readable front/back cutoff.
+  - Narrow next pass: increase the lit band brightness while bringing the head/tail lengths closer together so the motion reads as one seamless gradient band rather than separate segments.
+- Fullscreen title typography pass — 2026-04-02 Codex:
+  - Live QA still shows the fullscreen title reading too close to a black/heavy weight.
+  - Narrow fix: lower the fullscreen title weight and add a slight spacing/size refinement in the title rule only, with no layout changes.
+
+---
+
+### 9. Default auto-art palette correction
+**Status:** fix implemented, awaiting QA
+
+**Goal:**
+Correct the default/factory-theme auto-generated artwork so it stays in the intended purple family instead of drifting pink.
+
+**Observed behavior:**
+- fallback auto art on the default factory theme is showing an ugly pink waveform result
+- this is most visible on tracks using generated waveform artwork instead of imported art
+
+**Likely files:**
+- `src/lib/artwork/waveformArtwork.ts`
+
+**Codex notes:**
+- Diagnosis start — 2026-04-02 Codex:
+- Files inspected:
+  - `src/lib/artwork/waveformArtwork.ts`
+- Suspected root cause:
+  - The default/factory waveform palette still hard-codes a cyan-to-purple-to-pink waveform gradient.
+  - Specifically, the default `barBottom` is pink, so the fallback art is behaving as coded but no longer matches the intended default theme look.
+  - This is a palette bug in the default auto-art generator, not a metadata/import precedence issue.
+- Exact fix made:
+  - Changed only the default/factory waveform auto-art palette from a cyan-to-purple-to-pink bar gradient to a white-lavender-purple gradient.
+  - Kept the default background/glow structure intact and left light/custom theme palettes unchanged.
+- Files changed:
+  - `src/lib/artwork/waveformArtwork.ts`
+  - `docs/polyplay_surgical_fix_plan_2026-04-02_notes.md`
+- Regression risk:
+  - Low. This is a palette-only change scoped to default-theme generated fallback artwork.
+- QA still needed:
+  - Generate fallback auto art on the default/factory theme and confirm it now reads purple instead of pink.
+  - Confirm light theme auto art is unchanged.
+  - Confirm custom crimson/teal/amber auto art palettes are unchanged.
+
+---
+
+### 10. Playlist prev/next nav buttons
+**Status:** fix implemented, awaiting QA
+
+**Goal:**
+Add narrow previous/next playlist buttons beside the current playlist dropdown and the purple `New` button.
+
+**Observed behavior:**
+- current header only exposes the playlist dropdown plus `New`
+- user wants adjacent previous/next buttons for faster playlist stepping
+
+**Likely files:**
+- `src/App.tsx`
+- `styles.css`
+
+**Codex notes:**
+- Diagnosis start — 2026-04-02 Codex:
+- Files inspected:
+  - `src/App.tsx`
+  - `styles.css`
+  - `src/lib/db.ts`
+  - `src/lib/storage/library.ts`
+- Suspected root cause:
+  - The playlist header currently renders the dropdown from `Object.values(runtimeLibrary.playlistsById)` and switches playlists through `setActivePlaylist(...)`, but there are no adjacent navigation controls.
+  - There is no separate stored playlist-order array in current app state; the narrowest correct order source is the same ordered array already used by the dropdown render.
+  - Existing edge-swipe playlist navigation uses `Object.keys(...)`, but that is a separate path and not the right thing to widen here for this task.
+- Exact fix made:
+  - Added `<` and `>` playlist navigation buttons between the dropdown and the purple `New` button.
+  - Wired those buttons to the same `orderedPlaylists` array used by the dropdown render and the existing `setActivePlaylist(...)` switch path.
+  - Disabled prev/next cleanly at the first/last playlist with a greyed-out variant of the existing playlist action styling.
+- Files changed:
+  - `src/App.tsx`
+  - `styles.css`
+  - `docs/polyplay_surgical_fix_plan_2026-04-02_notes.md`
+- Regression risk:
+  - Low. This is a narrow header UI change that reuses existing playlist switching logic and the dropdown’s own render order.
+- QA still needed:
+  - Confirm `<` moves to the previous playlist and `>` moves to the next playlist.
+  - Confirm the left button is disabled on the first playlist and the right button is disabled on the last playlist.
+  - Confirm button order is `dropdown`, `<`, `>`, `New`.
+  - Confirm mobile layout still feels clean and the buttons do not wrap awkwardly in common widths.
+- Follow-up interaction note — 2026-04-02 Codex:
+  - Successful prev/next playlist navigation should feel more affirmative.
+  - Narrow next pass: reuse existing aura-feedback systems so a successful nav click triggers the canvas flash, logo sparkle, and a local nav-button burst without changing playlist logic.
+- Follow-up interaction fix — 2026-04-02 Codex:
+  - Successful prev/next nav now composes the existing aura-feedback family: canvas flash via `triggerEdgeSwipeFlash()`, logo sparkle via the existing logo helper, a centered safe-tap sparkle burst, and a local button burst animation.
+  - Disabled buttons remain inert and do not trigger the effects.
+- Follow-up nav-flash correction — 2026-04-02 Codex:
+  - Live QA shows the wrong canvas flash path was reused: nav clicks are triggering the large edge-swipe side rails.
+  - Narrow correction: keep the button burst/logo sparkle/sparkle burst, but swap the nav success flash to a dedicated full-canvas aura flash overlay instead of `triggerEdgeSwipeFlash()`.
+
+---
+
+### 11. Import-page aura accent sync
+**Status:** fix implemented, awaiting QA
+
+**Goal:**
+Make the default purple import-page accents follow the user’s aura color without changing other import states.
+
+**Observed behavior:**
+- the import page dropzones and import button still use the old default purple
+- user wants those default accents to match the selected aura color on the current theme
+- loaded/armed states and unrelated colors should stay unchanged
+
+**Likely files:**
+- `styles.css`
+- `src/index.css`
+
+**Codex notes:**
+- Diagnosis start — 2026-04-02 Codex:
+- Files inspected:
+  - `styles.css`
+  - `src/index.css`
+  - `src/components/button.tsx`
+- Suspected root cause:
+  - The import dropzones use hard-coded purple values in `.transfer-lane__zone` and related hover/drag-over styling.
+  - The import button inherits the shared primary-button purple gradient, and the narrowest safe override is a page-specific `.admin-upload-submit` accent override rather than changing all primary buttons globally.
+  - The gold `admin-action-armed` state should remain untouched.
+- Exact fix made:
+  - Replaced the default import dropzone purple border/glow/background accents with aura-color-driven values using `--aura-rgb`.
+  - Added a page-specific override for `.admin-upload-submit:not(.admin-action-armed)` so the default import button follows the aura color without changing the armed gold state or other primary buttons.
+- Files changed:
+  - `styles.css`
+  - `src/index.css`
+  - `docs/polyplay_surgical_fix_plan_2026-04-02_notes.md`
+- Regression risk:
+  - Low. This is a styling-only change scoped to the import page’s default dropzone/button accents.
+- QA still needed:
+  - Confirm the default import dropzones follow the current aura color.
+  - Confirm the default import button follows the current aura color.
+  - Confirm loaded/armed states remain gold and unchanged.
+  - Confirm other purple primary buttons elsewhere in the app are unchanged.
+
+---
+
+### 12. Add 3 custom themes
+**Status:** fix implemented, awaiting QA
+
+**Goal:**
+Add `Merica`, `MX`, and `Rasta` as new custom themes and wire them into both the runtime theme cycle and the admin theme select.
+
+**Desired behavior:**
+- new themes appear in the theme cycle button
+- the same themes appear in the admin theme select
+- aura color for each theme matches the provided value exactly
+- existing theme behavior and persisted theme selection continue to work
+
+**Likely files:**
+- `src/App.tsx`
+- `src/admin/AdminApp.tsx`
+- `src/lib/backup.ts`
+- `styles.css`
+- `src/index.css`
+- `src/components/player.css`
+
+**Codex notes:**
+- Diagnosis start — 2026-04-02 Codex:
+- Files inspected:
+  - `src/App.tsx`
+  - `src/admin/AdminApp.tsx`
+  - `src/lib/backup.ts`
+  - `styles.css`
+  - `src/index.css`
+  - `src/components/player.css`
+- Current theme plumbing:
+  - Theme source of truth currently lives mostly in `src/App.tsx`, where custom theme slot names, cycle order, aura mapping, runtime selection labels, and body class toggles are hardcoded.
+  - The same custom-theme slot list and aura mapping are duplicated in `src/admin/AdminApp.tsx` for the admin theme select and parent-frame theme messaging.
+  - Backup import/export support independently hardcodes the allowed custom theme slots in `src/lib/backup.ts`, so new slots currently would not round-trip through config backups without widening that parser.
+  - CSS slot rendering already follows one stable pattern through `html[data-theme="custom"][data-theme-slot="..."]` and `body.theme-custom.theme-custom-...` selectors in `styles.css`, `src/index.css`, and `src/components/player.css`.
+  - Current cycle order is controlled by a hardcoded `order` array in `src/App.tsx`.
+  - Current admin theme options are controlled by a hardcoded `ThemeSelection` union and `<select>` guard logic in `src/admin/AdminApp.tsx`.
+  - Current aura mapping is controlled by duplicated `THEME_PACK_AURA_COLORS` constants in both `src/App.tsx` and `src/admin/AdminApp.tsx`.
+  - Current backup import/export support is controlled by the `customThemeSlot` type plus `asCustomThemeSlot(...)` in `src/lib/backup.ts`.
+- Narrow implementation plan:
+  - Add one shared theme-definition source for custom theme slot names, display labels, cycle order, and exact aura mapping.
+  - Update `src/App.tsx`, `src/admin/AdminApp.tsx`, and `src/lib/backup.ts` to consume that shared source instead of separate hardcoded slot lists.
+  - Extend the existing CSS slot pattern for `merica`, `mx`, and `rasta` without redesigning the theme architecture.
+- Exact fix made:
+  - Added a shared theme-definition source in `src/lib/themeConfig.ts` for custom theme slot names, display labels, cycle order, aura mapping, and slot parsing/validation helpers.
+  - Updated `src/App.tsx` so the runtime theme cycle, saved-slot validation, theme labels, and body class toggles all use that shared source.
+  - Updated `src/admin/AdminApp.tsx` so the admin theme select options, saved-slot validation, parent-frame theme messaging, and status text all use the same shared source.
+  - Updated `src/lib/backup.ts` so config import/export accepts and round-trips the new custom theme slots through the same parser instead of a separate hardcoded three-slot union.
+  - Extended the existing custom-theme CSS slot pattern in `styles.css`, `src/index.css`, and `src/components/player.css` for `merica`, `mx`, and `rasta`.
+- Theme plumbing note:
+  - Theme source of truth now lives in `src/lib/themeConfig.ts`.
+  - Runtime cycle order is driven by `THEME_SELECTION_ORDER`.
+  - Admin theme options are rendered from `THEME_SELECTION_ORDER`.
+  - Aura mapping is driven by `THEME_PACK_AURA_COLORS`.
+  - Backup slot support is driven by `parseCustomThemeSlot(...)`.
+  - CSS rendering still uses the existing `data-theme-slot` / `theme-custom-*` slot architecture.
+- Final cycle order:
+  - `dark`
+  - `light`
+  - `amber`
+  - `teal`
+  - `crimson`
+  - `merica`
+  - `mx`
+  - `rasta`
+- Aura mapping:
+  - `merica` → `#B31942`
+  - `mx` → `#FFFFFF`
+  - `rasta` → `#FCDD09`
+  - existing `crimson`, `teal`, and `amber` mappings are unchanged
+- Files changed:
+  - `src/lib/themeConfig.ts`
+  - `src/App.tsx`
+  - `src/admin/AdminApp.tsx`
+  - `src/lib/backup.ts`
+  - `styles.css`
+  - `src/index.css`
+  - `src/components/player.css`
+  - `docs/polyplay_surgical_fix_plan_2026-04-02_notes.md`
+- Backup compatibility implications:
+  - No migration was required.
+  - Existing saved `crimson`, `teal`, and `amber` custom theme slots remain valid and unchanged.
+  - New backups can now store and restore `merica`, `mx`, and `rasta` through the same config field.
+- Regression risk:
+  - Low to medium. The behavioral change is narrow and centralized, but theme styling spans runtime surfaces, admin theme selection, and backup round-tripping.
+- QA still needed:
+  - Confirm the cycle button walks through the full order above and preserves existing behavior for `dark`, `light`, `amber`, `teal`, and `crimson`.
+  - Confirm the admin theme select shows all eight options in the same order.
+  - Confirm `merica`, `mx`, and `rasta` each apply the expected aura color exactly.
+  - Confirm existing saved `crimson`, `teal`, and `amber` preferences still load correctly after refresh.
+  - Confirm config backup export/import preserves the selected custom theme for both old and new slots.
+- Follow-up theme tuning note — 2026-04-02 Codex:
+  - Live QA shows `merica`, `mx`, and `rasta` still read too close to single-color themes in the main UI, especially in the body background and hero bar.
+  - Narrow follow-up: keep the same theme architecture and slot mapping, but retune only the body/topbar background layers so those three themes visibly blend all three provided colors instead of one dominant tone.
+- Follow-up exact fix made:
+  - Retuned only the `body.theme-custom.theme-custom-merica|mx|rasta` and matching `.topbar` background layers in `styles.css`.
+  - Each of those three themes now uses a tricolor gradient blend across the main UI background and hero bar while preserving the rest of the slot styling.
+- Follow-up files changed:
+  - `styles.css`
+  - `docs/polyplay_surgical_fix_plan_2026-04-02_notes.md`
+- Follow-up regression risk:
+  - Low. This is a background-layer tuning pass limited to the three new themes.
+- Follow-up QA still needed:
+  - Confirm `merica` reads as blue / white / red across the main background and hero bar.
+  - Confirm `mx` reads as green / white / red across the main background and hero bar.
+  - Confirm `rasta` reads as green / yellow / red across the main background and hero bar.
+  - Confirm contrast/readability of header controls and hero logo remains acceptable on all three.
 
 ---
 

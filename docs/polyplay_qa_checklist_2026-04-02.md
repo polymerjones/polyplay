@@ -36,6 +36,8 @@ Use this as the active manual QA checklist for today’s surgical fixes.
 - Confirm the strobing line reads as one continuous blended stream rather than a hard bright segment.
 - Confirm the brighter section has a longer tail and less visible edge.
 - Confirm the faster cycle still feels smooth and not jittery on desktop and iOS.
+- Confirm the moving line now has a clearly brighter glowing head while still blending smoothly into the tail.
+- Confirm you cannot easily see a hard cutoff where the bright head ends.
 
 ## 3b. Aura row follow-up
 - Use a track with aura already added.
@@ -74,6 +76,20 @@ Use this as the active manual QA checklist for today’s surgical fixes.
 - Save a changed artist only and confirm it persists.
 - Clear the artist field and confirm artist removes cleanly after save.
 - Confirm updated title/artist values appear immediately in the storage row and on playback surfaces after refresh.
+
+## 8. Import-page control sizing
+- Open the Import page on desktop and iOS.
+- Confirm the `Import` button feels visibly larger and easier to hit.
+- Confirm the `Keep me on Import page` label and checkbox read larger and remain aligned cleanly.
+
+## 9. Logo sparkle / aura follow-up
+- On desktop, tap the PolyPlay logo and confirm the sparkle still works normally.
+- On iOS, tap the PolyPlay logo and confirm there is no black flash before the sparkle.
+- Increase aura from a row button.
+- Increase aura from the mini player.
+- Increase aura from fullscreen.
+- Confirm each aura increase also triggers the top logo sparkle.
+- Confirm the added aura-colored sparkle burst feels intentional and not too heavy.
 
 ## General regression sweep
 - Confirm playback still starts/stops normally.
