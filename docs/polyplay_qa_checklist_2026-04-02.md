@@ -37,6 +37,12 @@ Use this as the active manual QA checklist for today’s surgical fixes.
 - Confirm the brighter section has a longer tail and less visible edge.
 - Confirm the faster cycle still feels smooth and not jittery on desktop and iOS.
 
+## 3b. Aura row follow-up
+- Use a track with aura already added.
+- Start playback on that row.
+- Confirm the now-playing perimeter stays attached to the true outside edge.
+- Confirm no detached lower segment or partial border appears after aura is present.
+
 ## 4. Artist text on rows and playbars
 - Import or select a track with a non-empty artist value.
 - Confirm artist appears under the title on track rows.
@@ -53,6 +59,21 @@ Use this as the active manual QA checklist for today’s surgical fixes.
 - Confirm title, artist, and artwork all populate on file select.
 - Confirm import preserves the same artwork after submit.
 - If debugging is needed, inspect `[artwork:metadata-import]` logs in Safari console.
+
+## 6. Aura seek color
+- Open fullscreen player on a track with aura color set.
+- Confirm the elapsed seek portion reads in the aura color instead of amber/gold.
+- Check the mini player loop-active progress styling as well.
+- Confirm the progress thumb and loop markers still remain legible against dark and light themes.
+
+## 7. Manage Storage title + artist editing
+- Open Manage Storage for a track with an artist value.
+- Click `Rename`.
+- Confirm separate title and artist inputs appear.
+- Save a changed title only and confirm it persists.
+- Save a changed artist only and confirm it persists.
+- Clear the artist field and confirm artist removes cleanly after save.
+- Confirm updated title/artist values appear immediately in the storage row and on playback surfaces after refresh.
 
 ## General regression sweep
 - Confirm playback still starts/stops normally.

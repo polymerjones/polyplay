@@ -35,7 +35,7 @@ Goals:
 - blocked
 
 ## Active task
-**Current active task:** 6. Sloppy / vibed-coded code audit
+**Current active task:** 7. Screenshot follow-up cleanup
 
 ---
 
@@ -72,9 +72,9 @@ Fix the weird row highlight behavior while preserving the now-playing perimeter 
   - `src/index.css`
   - `styles.css`
 - Suspected root cause:
-  - The row-only bug appears after aura is added because rows with aura already render their own border/glow treatment (`rowAuraGlow` plus `rowAuraGlow::before`).
-  - The active now-playing perimeter trail then draws on top of that same edge, so the row can show a conflicting second edge/artifact once aura styling is present.
-  - This looks like a row-specific layer conflict between aura edge treatment and the active border trail, not a global geometry problem.
+  - The row-only bug appears after aura is added because `.trackRow.rowAuraGlow > *` applies `position: relative` to every direct child, which includes the `BorderTrail` layer.
+  - That means the perimeter layer loses its intended absolute positioning only on aura rows, which explains the detached partial line artifact in live QA.
+  - This is a row-specific stacking/positioning bug triggered by aura-state CSS, not a global geometry problem.
 - Exact fix made:
   - Added a row-only CSS override so aura rows that are actively playing no longer paint their own border edge under the now-playing perimeter trail.
   - Kept the broader aura glow, but made the active perimeter trail the single authoritative edge for aura rows.
@@ -350,6 +350,59 @@ Do a thorough audit of code that may be sloppy, fragile, duplicated, overgrown, 
 
 ---
 
+### 7. Screenshot follow-up cleanup
+**Status:** fix implemented, awaiting QA
+
+**Goal:**
+Address the latest screenshot-driven UI bugs without widening into a broad redesign pass.
+
+**Observed behavior:**
+- aura rows can still show a detached now-playing perimeter artifact
+- fullscreen elapsed seek color still reads gold/orange instead of the user-selected aura color
+- Manage Storage only allows title rename, but needs separate editable title and artist fields
+
+**Expected behavior:**
+- aura rows should keep the clean now-playing perimeter with no detached edge artifact
+- elapsed seek styling should read in the active aura color instead of amber/gold
+- Manage Storage should let the user edit title and artist independently in one compact row editor
+
+**Likely files:**
+- `src/index.css`
+- `src/components/player.css`
+- `src/admin/AdminApp.tsx`
+- `src/lib/db.ts`
+
+**Codex notes:**
+- Diagnosis start — 2026-04-02 Codex:
+- Files inspected:
+  - `src/index.css`
+  - `src/components/player.css`
+  - `src/admin/AdminApp.tsx`
+  - `src/lib/db.ts`
+- Suspected root cause:
+  - The aura row bug is caused by aura-row CSS forcing `position: relative` onto every direct child, which incorrectly affects the absolute-positioned border trail layer.
+  - The elapsed seek color is still inheriting theme-primary / loop-gold styling from `player.css` instead of reading from `--aura-rgb`.
+  - Manage Storage already has a rename path, but it only carries `title`, so the narrowest safe change is to widen that existing path to title + artist rather than building a new editor flow.
+- Exact fix made:
+  - Kept the aura-row child layering fix narrow by excluding `.track-border-trail` from the aura-row direct-child positioning rule, so the active perimeter can stay absolutely positioned after aura is added.
+  - Switched the seek/progress accent path in `player.css` from amber/gold styling to `--aura-rgb`, including the loop-progress fill/marker treatment and loop-active mini-player thumb styling.
+  - Widened Manage Storage’s existing rename flow so the inline editor now saves both title and artist through one DB update path, and shows the current artist under the title in read mode.
+- Files changed:
+  - `src/index.css`
+  - `src/components/player.css`
+  - `src/admin/AdminApp.tsx`
+  - `src/lib/db.ts`
+  - `docs/polyplay_surgical_fix_plan_2026-04-02_notes.md`
+- Regression risk:
+  - Low to medium. The CSS changes are narrow, but the seek accent now follows aura color across player surfaces, and the storage rename flow now updates artist as well as title.
+- QA still needed:
+  - Confirm active aura rows no longer show the detached perimeter artifact.
+  - Confirm fullscreen and mini-player elapsed seek styling now read in the active aura color instead of amber/gold.
+  - Confirm Manage Storage lets the user edit title and artist independently, save both, and see the updated values immediately.
+  - Confirm leaving artist blank clears artist text cleanly without breaking row layout elsewhere.
+
+---
+
 ## Suggested execution order
 1. Loop refinement auto-zoom regression
 2. Fullscreen accidental exit during loop editing
@@ -367,6 +420,8 @@ Use this section for quick real-device notes before sorting them into tasks.
   - fullscreen accidentally exited during loop editing
 - Desktop and iOS:
   - artist should show under title on playbars and rows, but not on tiles
+- Fullscreen:
+  - title font weight looks too heavy / too close to a black weight and clashes with the rest of the fullscreen typography
 
 ## Commit / staging rules
 When a task is done and ready:

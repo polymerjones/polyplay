@@ -228,7 +228,7 @@ body.theme-custom.theme-custom-amber .trackRow {
   filter: blur(18px);
 }
 
-.trackRow.rowAuraGlow > * {
+.trackRow.rowAuraGlow > :not(.track-border-trail) {
   position: relative;
   z-index: 2;
 }
@@ -286,15 +286,11 @@ body.theme-dark .rowAuraGlow {
 }
 
 .trackRow.rowAuraGlow.is-playing {
-  border-color: rgba(var(--aura-rgb), calc(0.28 + var(--row-aura-level) * 0.48));
+  border-color: transparent;
   box-shadow:
     0 12px 22px rgba(7, 9, 14, 0.28),
     0 0 calc(28px + (var(--row-aura-level) * 34px)) rgba(var(--aura-rgb), calc(0.28 + var(--row-aura-level) * 0.52)),
     inset 0 0 calc(14px + var(--row-aura-level) * 20px) rgba(var(--aura-rgb), calc(0.08 + var(--row-aura-level) * 0.24));
-}
-
-.trackRow.rowAuraGlow.is-playing {
-  border-color: transparent;
 }
 
 .trackRow.rowAuraGlow.is-playing::before {

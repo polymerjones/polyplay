@@ -19,13 +19,13 @@ import {
   removeDemoTracksInDb,
   removeTrackFromDb,
   renamePlaylistInDb,
-  renameTrackInDb,
   replaceAudioInDb,
   resetAuraInDb,
   setActivePlaylistInDb,
   type PlaylistRow,
   type StorageUsageSummary,
   type TrackStorageRow,
+  updateTrackTextMetadataInDb,
   updateArtworkInDb,
   type DbTrackRecord
 } from "../lib/db";
@@ -625,6 +625,7 @@ export function AdminApp() {
   });
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
   const [editingTrackTitle, setEditingTrackTitle] = useState("");
+  const [editingTrackArtist, setEditingTrackArtist] = useState("");
   const [renamingTrackId, setRenamingTrackId] = useState<string | null>(null);
   const [removingTrackIds, setRemovingTrackIds] = useState<string[]>([]);
   const [infoModal, setInfoModal] = useState<{ title: string; message: string; openManageStorage?: boolean } | null>(
@@ -677,6 +678,14 @@ export function AdminApp() {
     () =>
       tracks.reduce<Record<string, string>>((acc, track) => {
         if (track.artUrl) acc[track.id] = track.artUrl;
+        return acc;
+      }, {}),
+    [tracks]
+  );
+  const trackArtistById = useMemo(
+    () =>
+      tracks.reduce<Record<string, string>>((acc, track) => {
+        acc[track.id] = track.artist?.trim() || "";
         return acc;
       }, {}),
     [tracks]
@@ -2408,26 +2417,32 @@ export function AdminApp() {
     }
   };
 
-  const onStartTrackRename = (trackId: string, title: string) => {
+  const onStartTrackRename = (trackId: string, title: string, artist: string) => {
     setEditingTrackId(trackId);
     setEditingTrackTitle(title);
+    setEditingTrackArtist(artist);
   };
 
   const onCancelTrackRename = () => {
     setEditingTrackId(null);
     setEditingTrackTitle("");
+    setEditingTrackArtist("");
   };
 
   const onSaveTrackRename = async (trackId: string) => {
-    const trimmed = editingTrackTitle.trim();
-    if (!trimmed) {
+    const trimmedTitle = editingTrackTitle.trim();
+    const trimmedArtist = editingTrackArtist.trim();
+    if (!trimmedTitle) {
       setStatus("Title can't be empty.");
       return;
     }
     setRenamingTrackId(trackId);
     try {
-      await renameTrackInDb(trackId, trimmed);
-      setStatus("Track renamed.");
+      await updateTrackTextMetadataInDb(trackId, {
+        title: trimmedTitle,
+        artist: trimmedArtist || null
+      });
+      setStatus("Track info updated.");
       onCancelTrackRename();
       await refreshTracks();
       await refreshStorage();
@@ -3370,12 +3385,13 @@ export function AdminApp() {
               </div>
               <div className="admin-track-row__main min-w-0">
                 {editingTrackId === row.id ? (
-                  <div className="admin-track-row__edit flex flex-wrap items-center gap-2">
+                  <div className="admin-track-row__edit flex min-w-0 flex-1 flex-col gap-2">
                     <input
                       type="text"
                       className="admin-track-row__edit-input rounded-lg border border-slate-300/25 bg-slate-950/85 px-2 py-1 text-sm font-semibold text-slate-100"
                       value={editingTrackTitle}
                       autoFocus
+                      placeholder="Title"
                       onChange={(event) => setEditingTrackTitle(event.currentTarget.value)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
@@ -3388,12 +3404,31 @@ export function AdminApp() {
                         }
                       }}
                     />
+                    <input
+                      type="text"
+                      className="admin-track-row__edit-input rounded-lg border border-slate-300/25 bg-slate-950/85 px-2 py-1 text-sm text-slate-200"
+                      value={editingTrackArtist}
+                      placeholder="Artist"
+                      onChange={(event) => setEditingTrackArtist(event.currentTarget.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void onSaveTrackRename(row.id);
+                        }
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          onCancelTrackRename();
+                        }
+                      }}
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
                     <Button variant="primary" onClick={() => void onSaveTrackRename(row.id)} disabled={renamingTrackId === row.id}>
                       Save
                     </Button>
                     <Button variant="secondary" onClick={onCancelTrackRename} disabled={renamingTrackId === row.id}>
                       Cancel
                     </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="admin-track-row__title-stack">
@@ -3403,12 +3438,19 @@ export function AdminApp() {
                     >
                       {formatTrackStorageLabel(row, trackTitleById[row.id])}
                     </div>
+                    {(trackArtistById[row.id] || row.artist) && (
+                      <div className="text-xs text-slate-300" title={trackArtistById[row.id] || row.artist || ""}>
+                        {trackArtistById[row.id] || row.artist}
+                      </div>
+                    )}
                     <button
                       type="button"
                       className="admin-track-row__rename inline-flex h-7 items-center gap-1 rounded-md border border-slate-300/20 bg-slate-800/70 px-2 text-xs font-semibold text-slate-100"
                       title="Rename"
                       aria-label={`Rename ${trackTitleById[row.id] || row.title}`}
-                      onClick={() => onStartTrackRename(row.id, trackTitleById[row.id] || row.title)}
+                      onClick={() =>
+                        onStartTrackRename(row.id, trackTitleById[row.id] || row.title, trackArtistById[row.id] || row.artist || "")
+                      }
                     >
                       <span aria-hidden="true">✎</span>
                       Rename

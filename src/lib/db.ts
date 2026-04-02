@@ -711,6 +711,7 @@ export type StorageUsageSummary = {
 export type TrackStorageRow = {
   id: string;
   title: string;
+  artist: string | null;
   totalBytes: number;
   audioBytes: number;
   artworkBytes: number;
@@ -809,13 +810,21 @@ export async function renamePlaylistInDb(playlistId: string, name: string): Prom
 }
 
 export async function renameTrackInDb(trackId: string, newTitle: string): Promise<void> {
+  await updateTrackTextMetadataInDb(trackId, { title: newTitle });
+}
+
+export async function updateTrackTextMetadataInDb(
+  trackId: string,
+  next: { title: string; artist?: string | null }
+): Promise<void> {
   await maybeMigrateLegacyTracks();
   const library = loadLibrary();
   const track = library.tracksById[trackId];
   if (!track) throw new Error("Track not found");
-  const trimmed = newTitle.trim();
+  const trimmed = next.title.trim();
   if (!trimmed) throw new Error("Title can't be empty.");
   track.title = trimmed;
+  track.artist = next.artist?.trim() || null;
   track.updatedAt = now();
   saveLibrary(library);
 }
@@ -921,6 +930,7 @@ export async function getTrackStorageRows(): Promise<TrackStorageRow[]> {
       return {
         id: track.id,
         title: track.title || "Untitled",
+        artist: track.artist?.trim() || null,
         totalBytes: audioBytes + artworkBytes,
         audioBytes,
         artworkBytes,
