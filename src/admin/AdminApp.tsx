@@ -1266,7 +1266,10 @@ export function AdminApp() {
     setUploadMetadataResult(nextResult);
   };
 
-  const resetUploadDraftForNewAudio = (file: File | null) => {
+  const resetUploadDraftForNewAudio = (
+    file: File | null,
+    options?: { preserveManualArtwork?: boolean }
+  ) => {
     uploadMetadataRequestIdRef.current += 1;
     uploadTitleTouchedRef.current = false;
     uploadArtistTouchedRef.current = false;
@@ -1275,14 +1278,17 @@ export function AdminApp() {
     uploadArtworkAutofilledRef.current = false;
     setUploadTitleValue("");
     setUploadArtistValue("");
-    setUploadArtworkFile(null);
+    if (!options?.preserveManualArtwork) {
+      setUploadArtworkFile(null);
+    }
     if (!file) {
       setUploadMetadataResult(createUploadMetadataResult("idle"));
     }
   };
 
   const onPickUploadAudio = async (file: File | null) => {
-    resetUploadDraftForNewAudio(file);
+    const preserveManualArtwork = Boolean(file && !uploadAudio && uploadArtRef.current && !uploadArtworkAutofilledRef.current);
+    resetUploadDraftForNewAudio(file, { preserveManualArtwork });
     setUploadAudio(file);
     await runUploadMetadataPipeline(file, ignoreUploadMetadata);
   };
@@ -1294,7 +1300,8 @@ export function AdminApp() {
         fallbackPick?.();
         return;
       }
-      resetUploadDraftForNewAudio(file);
+      const preserveManualArtwork = Boolean(file && !uploadAudio && uploadArtRef.current && !uploadArtworkAutofilledRef.current);
+      resetUploadDraftForNewAudio(file, { preserveManualArtwork });
       setUploadAudio(file);
       await runUploadMetadataPipeline(file, ignoreUploadMetadata);
     } catch {
@@ -1305,11 +1312,6 @@ export function AdminApp() {
   const onPickUploadArtwork = async (file: File | null) => {
     if (!file) {
       setUploadArtworkFile(null);
-      return;
-    }
-    if (!uploadAudio) {
-      setUploadArtworkFile(null);
-      setStatus("Add an audio source to complete this track.");
       return;
     }
     if (isVideoArtwork(file)) {
@@ -1325,6 +1327,9 @@ export function AdminApp() {
     }
     uploadArtworkAutofilledRef.current = false;
     setUploadArtworkFile(file);
+    if (!uploadAudio) {
+      setStatus("Artwork ready. Add an audio source to complete import.");
+    }
   };
 
   const onPickUploadArtworkNative = async (fallbackPick?: () => void) => {

@@ -35,7 +35,7 @@ Goals:
 - blocked
 
 ## Active task
-**Current active task:** 12. Add 3 custom themes
+**Current active task:** 15. Desktop Safari import-state brick + pre-audio video-art failure
 
 ---
 
@@ -707,6 +707,201 @@ Add `Merica`, `MX`, and `Rasta` as new custom themes and wire them into both the
   - Confirm `mx` reads as green / white / red across the main background and hero bar.
   - Confirm `rasta` reads as green / yellow / red across the main background and hero bar.
   - Confirm contrast/readability of header controls and hero logo remains acceptable on all three.
+- Follow-up FX diagnosis note — 2026-04-02 Codex:
+  - The new themes now render as tricolor backgrounds, but the richer FX layers still mostly derive from a single aura/accent color path.
+  - `src/fx/ambientFxEngine.ts` currently resolves only `accentRgb` and `auraRgb`, so canvas bubbles/splatter cannot express a proper three-color theme gradient.
+  - `src/lib/bubbles.ts` still uses a hardcoded purple/pink/blue/amber hue distribution, which means CSS bubble layers are not theme-aware enough for `merica`, `mx`, or `rasta`.
+  - `.pp-oracle-orb` in `styles.css` is also still using a fixed purple/pink orb recipe instead of theme-derived palette colors.
+  - Narrow fix path: add explicit FX palette CSS variables for the three new themes, feed those into the ambient FX engine and bubble spawn path, and retune only bubbles / paint / orb surfaces to use that palette while leaving aura mapping unchanged.
+- Follow-up FX exact fix made:
+  - Added explicit `--fx-color-1-rgb`, `--fx-color-2-rgb`, and `--fx-color-3-rgb` CSS variables and mapped them for `merica`, `mx`, and `rasta` in `styles.css`.
+  - Updated `src/fx/ambientFxEngine.ts` so canvas bubbles and splatter now read that three-color FX palette from CSS and render gradients from the palette instead of relying only on a single aura/accent hue path.
+  - Updated `src/lib/bubbles.ts` and `src/components/BubbleLayer.tsx` so spawned bubble hues now derive from the active theme FX palette instead of the old hardcoded purple/pink distribution.
+  - Updated the PolyOracle orb and CSS bubble gradients in `styles.css` to use the same theme FX palette variables.
+- Follow-up FX files changed:
+  - `styles.css`
+  - `src/fx/ambientFxEngine.ts`
+  - `src/lib/bubbles.ts`
+  - `src/components/BubbleLayer.tsx`
+  - `docs/polyplay_surgical_fix_plan_2026-04-02_notes.md`
+- Follow-up FX gradient mapping:
+  - `merica`
+    - FX color 1: blue `#0A3161`
+    - FX color 2: white `#FFFFFF`
+    - FX color 3: red `#B31942`
+  - `mx`
+    - FX color 1: green `#006341`
+    - FX color 2: white `#FFFFFF`
+    - FX color 3: red `#C8102E`
+  - `rasta`
+    - FX color 1: green `#078930`
+    - FX color 2: yellow `#FCDD09`
+    - FX color 3: red `#DA121A`
+- Follow-up FX aura note:
+  - Aura mapping remained unchanged.
+  - The existing exact aura values for `merica`, `mx`, and `rasta` are still used anywhere aura color itself is the intended source.
+- Follow-up FX regression risk:
+  - Low to medium. The pass is limited to FX color rendering, but it touches both canvas FX and the CSS bubble/orb layer.
+- Follow-up FX QA still needed:
+  - Confirm `merica` FX reads as blue / white / red instead of mostly red aura.
+  - Confirm `mx` FX reads as green / white / red instead of mostly white aura.
+  - Confirm `rasta` FX reads as green / yellow / red instead of mostly yellow aura.
+  - Confirm orb, bubbles, and splatter/paint all feel richer without hurting readability or looking noisy.
+  - Confirm older themes still look unchanged.
+
+---
+
+### 13. Loop zoom-to-fit button
+**Status:** fix implemented, awaiting QA
+
+**Goal:**
+Add a small manual zoom-to-fit helper in loop editing that neatly fits the active loop inside the waveform viewport.
+
+**Desired behavior:**
+- the button centers the active loop region in the current waveform viewport
+- fit includes about 5% buffer before the start marker and after the end marker
+- it is a manual helper, not an automatic zoom jump
+- it does not fight the current manual zoom controls or loop refinement flow
+
+**Likely files:**
+- `src/components/WaveformLoop.tsx`
+- possibly `src/components/player.css` or `styles.css` for the toolbar button only
+
+**Codex notes:**
+- Diagnosis start — 2026-04-02 Codex:
+- Files inspected:
+  - `src/components/WaveformLoop.tsx`
+- Suspected root cause / integration note:
+  - `WaveformLoop` already owns the editing viewport state via `viewRange`, `editingViewRangeRef`, and `manualZoomLevel`, so the safest place for zoom-to-fit is inside that component’s existing loop toolbar.
+  - The fit action should preserve the current editing session and marker state; it only needs to replace the editing viewport with a neatly centered fitted range.
+  - The 5% buffer should be computed from the current loop span, not from full track duration, so the helper remains useful for short loops.
+  - To avoid fighting the existing `+/-` zoom controls, the fit action should explicitly update the editing viewport refs and reset manual zoom level back to the base fitted state rather than introducing a second competing zoom mode.
+- Exact fix made:
+  - Added a small manual fit button to the existing loop zoom toolbar in `src/components/WaveformLoop.tsx`.
+  - The fit action keeps the current loop editing session and marker positions intact, but replaces the editing viewport with a centered fitted range.
+  - The fitted range uses the active loop span plus a 5% buffer on each side, with the existing minimum readable span guard still applied.
+  - The helper resets `manualZoomLevel` back to `0` when used, so it returns the editor to the base fitted view without fighting the existing `+/-` manual zoom path.
+- Files changed:
+  - `src/components/WaveformLoop.tsx`
+  - `src/components/player.css`
+  - `docs/polyplay_surgical_fix_plan_2026-04-02_notes.md`
+- Exact fit behavior used:
+  - centered on the current loop region
+  - uses a target span of `loopSpan * 1.1`
+  - clamps through the existing `centerRangeOnLoop(...)` helper and `MIN_MANUAL_VIEW_SPAN_SEC`
+- How the 5% buffer was computed:
+  - buffer is based on loop span, not track span
+  - 5% before the start marker and 5% after the end marker
+  - total fit span = `loopSpan + 10%`
+- Zoom-controls preservation note:
+  - existing `+/-` zoom controls were preserved unchanged
+  - zoom-to-fit only updates the same editing viewport state they already use
+  - it does not change loop editing mode or marker state
+- Regression risk:
+  - Low. The change is isolated to the loop-editor toolbar and existing viewport state inside `WaveformLoop`.
+- QA still needed:
+  - Confirm the fit button recenters the current loop cleanly inside the waveform viewport.
+  - Confirm there is visible breathing room before and after the loop, roughly 5% of loop span each side.
+  - Confirm pressing fit does not exit editing mode or move the markers.
+- Confirm `+/-` zoom controls still work before and after using fit.
+- Confirm very short loops still remain readable because the minimum span guard is still respected.
+
+---
+
+### 14. Support page background artifact cleanup
+**Status:** fix implemented, awaiting QA
+
+**Goal:**
+Remove the weird drifting/falling background artifact on the support page while keeping the page polished and calm.
+
+**Desired behavior:**
+- support page background should feel clean and stable
+- no drifting sprite, falling shape, or unintended moving background artifact
+- keep the page visually polished without redesigning it
+
+**Likely files:**
+- `public/support.html`
+
+**Codex notes:**
+- Diagnosis start — 2026-04-02 Codex:
+- Files inspected:
+  - `public/support.html`
+- Suspected root cause:
+  - The support page still had multiple animated decorative overlay layers in `public/support.html`, especially `.support-shell::before`, `.support-shell::after`, and `.support-panel::after`.
+  - Those layers use the `scroll` and `move` keyframes, so instead of reading as subtle polish they can register as a drifting/falling sprite while the page scrolls.
+  - The page also had floating hero orb animation, which added more perceived background movement than the support page needs.
+- Exact fix made:
+  - Kept the support page decorative layers, but removed the background motion from the support shell, support panel overlay, and hero orbs so the page now reads as static and calm.
+  - Left the underlying gradients and glow treatment in place, so the support page still feels polished without the unintended moving artifact.
+- Files changed:
+  - `public/support.html`
+  - `docs/polyplay_surgical_fix_plan_2026-04-02_notes.md`
+- Regression risk:
+  - Low. This is limited to support-page decorative animation and does not touch support content, layout, or form behavior.
+- QA still needed:
+  - Confirm the drifting/falling background artifact is gone on desktop Safari.
+- Confirm the support page still feels polished, not flat.
+- Confirm support form, policy links, and close/back behavior are unchanged.
+
+---
+
+### 15. Desktop Safari import-state brick + pre-audio video-art failure
+**Status:** fix implemented, awaiting QA
+
+**Goal:**
+Diagnose the Safari release-blocking import/admin state failures without widening into unrelated UI work.
+
+**Observed behavior:**
+- after factory reset on desktop Safari:
+  - user uses playlist nav
+  - clicks `New`
+  - names playlist and confirms
+  - clicks `Import`
+  - screen flickers and the site becomes effectively bricked, including loss of access to admin
+- if user selects video artwork before selecting audio, the artwork does not work
+
+**Likely files:**
+- `src/App.tsx`
+- `src/admin/AdminApp.tsx`
+- `src/lib/db.ts`
+- `src/lib/playlistState.ts`
+
+**Codex notes:**
+- Diagnosis start — 2026-04-02 Codex:
+- Files inspected:
+  - `src/App.tsx`
+  - `src/admin/AdminApp.tsx`
+  - `src/lib/db.ts`
+  - `src/lib/playlistState.ts`
+- Suspected root cause:
+  - The video-art-before-audio bug is explicit in the current upload flow: `onPickUploadArtwork(...)` in `src/admin/AdminApp.tsx` clears the artwork and exits early whenever `uploadAudio` is empty, so the current import draft is intentionally audio-first and will not arm artwork ahead of audio.
+  - The Safari “New playlist → Import → flicker / brick” issue does not look like the new prev/next playlist buttons themselves; those buttons only call the existing `setActivePlaylist(...)` path in `src/App.tsx`.
+  - The more likely failure point is the upload/admin render-state path immediately after creating a brand-new empty active playlist. The main app opens the admin iframe in upload mode from a no-tracks / onboarding state, while the import flow and related UI still assume an audio-first draft with a valid active playlist context.
+  - Safari is likely exposing a timing/state issue in that parent/iframe import-open sequence, not a playlist-order bug. The two bugs appear related by the same broader assumption: the import flow is built around “audio first, then everything else,” and behaves poorly when the surrounding playlist/import state is still empty or transitional.
+- Follow-up diagnosis note:
+  - The hardening pass should stay in the parent app / admin boundary and the upload draft setup path only.
+- Exact fix made:
+  - In `src/App.tsx`, added a narrow parent-side guard so the upload/settings iframe will not open while playlist creation or playlist switching is still in flight.
+  - If the user clicks `Import` during that transition window, the requested admin mode is queued and then opened on the next frame after the playlist transition settles. This hardens the Safari `New playlist -> immediate Import` sequence without changing playlist ordering logic.
+  - In `src/admin/AdminApp.tsx`, removed the silent artwork clear on pre-audio artwork selection.
+  - Manual still image and video artwork can now be selected before audio and remain armed when the user picks audio afterward.
+  - The later audio-pick reset path now preserves preselected manual artwork for the specific `art first, audio second` flow, while metadata autofill still clears and rebuilds its own text state normally.
+  - If artwork is selected before audio, the UI now shows a visible status message telling the user that artwork is ready and audio is still needed.
+- Files changed:
+  - `src/App.tsx`
+  - `src/admin/AdminApp.tsx`
+  - `docs/polyplay_surgical_fix_plan_2026-04-02_notes.md`
+- Regression risk:
+  - Low to medium.
+  - The Safari fix is intentionally narrow, but it changes the timing of when the settings/upload iframe opens after playlist transitions.
+  - The art-first change is narrow too, but it changes draft-preservation behavior for manual artwork during audio selection.
+- QA still needed:
+  - Create a new empty playlist and immediately click `Import`; confirm Safari does not flicker/brick and the upload panel opens normally.
+  - Open `Import` from an existing playlist and confirm behavior is unchanged.
+  - Select video artwork first, then audio; confirm the artwork stays armed and imports correctly.
+  - Select still image artwork first, then audio; confirm the artwork stays armed and imports correctly.
+  - Confirm no silent clearing happens when artwork is selected before audio.
+  - Confirm metadata-derived artwork still behaves normally when audio is selected first.
 
 ---
 

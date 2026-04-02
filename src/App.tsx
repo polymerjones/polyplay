@@ -566,6 +566,7 @@ export default function App() {
   const [isCreatePlaylistModalOpen, setIsCreatePlaylistModalOpen] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [isPlaylistRequired, setIsPlaylistRequired] = useState(false);
+  const [isPlaylistTransitionPending, setIsPlaylistTransitionPending] = useState(false);
   const [isEmptyWelcomeDismissed, setIsEmptyWelcomeDismissed] = useState(false);
   const [quickTourPhase, setQuickTourPhase] = useState<QuickTourPhase>(null);
 
@@ -624,6 +625,7 @@ export default function App() {
   const logoSparkleCooldownRef = useRef(0);
   const logoSparkleTimeoutsRef = useRef<number[]>([]);
   const logoButtonRef = useRef<HTMLButtonElement | null>(null);
+  const pendingSettingsPanelModeRef = useRef<"upload" | "manage" | null>(null);
   const [safeTapBursts, setSafeTapBursts] = useState<SafeTapBurst[]>([]);
   const [logoSparkles, setLogoSparkles] = useState<LogoSparkle[]>([]);
   const [threepeatDisplayCount, setThreepeatDisplayCount] = useState<number>(() => {
@@ -863,49 +865,59 @@ export default function App() {
   };
 
   const setActivePlaylist = async (playlistId: string) => {
-    const source = await getLibrary();
-    const applied = setActivePlaylistInLibrary(source, playlistId);
-    if (!applied.library.playlistsById[playlistId]) return;
-    setLibrary(applied.library);
-    setRuntimeLibrary(applied.library);
-    window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
-    await refreshTracks({ allowEmptyDemoFallback: false });
+    setIsPlaylistTransitionPending(true);
+    try {
+      const source = await getLibrary();
+      const applied = setActivePlaylistInLibrary(source, playlistId);
+      if (!applied.library.playlistsById[playlistId]) return;
+      setLibrary(applied.library);
+      setRuntimeLibrary(applied.library);
+      window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
+      await refreshTracks({ allowEmptyDemoFallback: false });
+    } finally {
+      setIsPlaylistTransitionPending(false);
+    }
   };
 
   const createPlaylist = async (name: string) => {
     const nextName = name.trim();
     if (!nextName) return;
-    const source = await getLibrary();
-    const existingUserPlaylistCount = Object.values(source.playlistsById || {}).filter((playlist) => {
-      const normalizedName = playlist.name.trim().toLowerCase();
-      return playlist.id !== DEMO_PLAYLIST_ID && normalizedName !== DEMO_PLAYLIST_NAME;
-    }).length;
-    const isFirstPlaylistInTracklessOnboardingState =
-      quickTourPhase === null &&
-      !hasOnboarded &&
-      !isEmptyWelcomeDismissed &&
-      tracks.length === 0 &&
-      existingUserPlaylistCount === 0;
-    const created = createPlaylistInLibrary(source, nextName);
-    const createdPlaylist = created.library.playlistsById[created.createdPlaylistId];
-    setLibrary(created.library);
-    setRuntimeLibrary(created.library);
-    if (!createdPlaylist?.trackIds?.length) {
-      setTracks([]);
+    setIsPlaylistTransitionPending(true);
+    try {
+      const source = await getLibrary();
+      const existingUserPlaylistCount = Object.values(source.playlistsById || {}).filter((playlist) => {
+        const normalizedName = playlist.name.trim().toLowerCase();
+        return playlist.id !== DEMO_PLAYLIST_ID && normalizedName !== DEMO_PLAYLIST_NAME;
+      }).length;
+      const isFirstPlaylistInTracklessOnboardingState =
+        quickTourPhase === null &&
+        !hasOnboarded &&
+        !isEmptyWelcomeDismissed &&
+        tracks.length === 0 &&
+        existingUserPlaylistCount === 0;
+      const created = createPlaylistInLibrary(source, nextName);
+      const createdPlaylist = created.library.playlistsById[created.createdPlaylistId];
+      setLibrary(created.library);
+      setRuntimeLibrary(created.library);
+      if (!createdPlaylist?.trackIds?.length) {
+        setTracks([]);
+      }
+      setIsCreatePlaylistModalOpen(false);
+      setIsPlaylistRequired(false);
+      setNewPlaylistName("");
+      setQuickTourPhase((current) => {
+        if (current === "create-playlist") return "upload-track";
+        if (current === null && isFirstPlaylistInTracklessOnboardingState) return "upload-track";
+        return current;
+      });
+      if (isFirstPlaylistInTracklessOnboardingState || quickTourPhase === "create-playlist") {
+        fireSuccessHaptic();
+      }
+      window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
+      await refreshTracks();
+    } finally {
+      setIsPlaylistTransitionPending(false);
     }
-    setIsCreatePlaylistModalOpen(false);
-    setIsPlaylistRequired(false);
-    setNewPlaylistName("");
-    setQuickTourPhase((current) => {
-      if (current === "create-playlist") return "upload-track";
-      if (current === null && isFirstPlaylistInTracklessOnboardingState) return "upload-track";
-      return current;
-    });
-    if (isFirstPlaylistInTracklessOnboardingState || quickTourPhase === "create-playlist") {
-      fireSuccessHaptic();
-    }
-    window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
-    await refreshTracks();
   };
 
   const ensureDemoTracksForFirstRun = async (options?: { preferDemoActive?: boolean }) => {
@@ -3841,9 +3853,24 @@ export default function App() {
       // Ignore focus-management failures while opening settings.
     }
     markHasOnboarded();
+    if (isPlaylistTransitionPending || isCreatePlaylistModalOpen) {
+      pendingSettingsPanelModeRef.current = mode;
+      return;
+    }
     setSettingsPanelMode(mode);
     setOverlayPage("settings");
   };
+
+  useEffect(() => {
+    if (isPlaylistTransitionPending || isCreatePlaylistModalOpen) return;
+    const pendingMode = pendingSettingsPanelModeRef.current;
+    if (!pendingMode) return;
+    pendingSettingsPanelModeRef.current = null;
+    window.requestAnimationFrame(() => {
+      setSettingsPanelMode(pendingMode);
+      setOverlayPage("settings");
+    });
+  }, [isCreatePlaylistModalOpen, isPlaylistTransitionPending]);
 
   const openFullscreenFromPlaybarArt = () => {
     if (!currentTrack) return;
