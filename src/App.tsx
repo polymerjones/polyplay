@@ -3063,7 +3063,8 @@ export default function App() {
       return;
     }
     const margin = Math.max(0, Math.min(effectiveDuration * 0.15, effectiveDuration / 2 - 0.05));
-    const safeStart = Math.max(0, Math.min(effectiveDuration - 0.1, margin));
+    const livePlaybackTime = getSafeDuration(currentTime) || getSafeDuration(audio?.currentTime || 0);
+    const safeStart = Math.max(0, Math.min(effectiveDuration - 0.1, livePlaybackTime));
     const safeEnd = Math.min(effectiveDuration, Math.max(safeStart + 0.1, effectiveDuration - margin));
     setLoopByTrack((prev) => ({
       ...prev,

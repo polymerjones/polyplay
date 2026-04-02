@@ -415,6 +415,14 @@ export async function addTrackToDb(params: {
     updatedAt: ts
   };
 
+  console.debug("[artwork:metadata-import]", {
+    phase: "db-store",
+    trackId,
+    storedArtworkMime: artPoster?.type || null,
+    storedArtworkBytes: artPoster?.size || 0,
+    storedArtworkSource: artworkSource
+  });
+
   const playlistId = params.targetPlaylistId && library.playlistsById[params.targetPlaylistId]
     ? params.targetPlaylistId
     : library.activePlaylistId;

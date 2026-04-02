@@ -4,7 +4,6 @@ import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
 import { buildPeaksFromAudioBlob, fallbackPeaks } from "../lib/artwork/waveformArtwork";
 import { fireLightHaptic } from "../lib/haptics";
 import { formatTime } from "../lib/time";
-import { isIosSafari } from "../lib/platform";
 import type { LoopMode, LoopRegion, RepeatTrackMode, Track } from "../types";
 import { PlayerControls } from "./PlayerControls";
 import { WaveformLoop } from "./WaveformLoop";
@@ -299,9 +298,7 @@ export function FullscreenPlayer({
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
     return loopGestureActiveRef.current || now < loopGestureSuppressUntilRef.current;
   };
-  const isLoopEditing = loopRegion.editing;
-  const isIosDevice = isIosSafari();
-  const exitHintText = isLoopEditing ? "Done & Exit" : isIosDevice ? "Swipe Down to Exit" : "Exit Fullscreen Player";
+  const exitHintText = "Exit Fullscreen";
 
   const armLoopGestureCooldown = () => {
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -366,6 +363,11 @@ export function FullscreenPlayer({
     const target = event.target as HTMLElement | null;
     if (!target) return;
     if (target.closest(".fullscreen-player-shell__art, .pc-progress")) return;
+    const isDesktopPointer = event.pointerType === "mouse";
+    if (isDesktopPointer && typeof window !== "undefined" && event.clientY > window.innerHeight * 0.5) {
+      lastCinemaOutsideTapAtRef.current = 0;
+      return;
+    }
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
     if (now - lastCinemaOutsideTapAtRef.current <= CINEMA_OUTSIDE_DOUBLE_TAP_MS) {
       lastCinemaOutsideTapAtRef.current = 0;
@@ -407,6 +409,7 @@ export function FullscreenPlayer({
       onPointerDown={(event) => {
         if (isCinemaMode) return;
         const target = event.target as HTMLElement | null;
+        if (target?.closest(".fullscreen-player-shell__close, .fullscreen-player-shell__close-bottom")) return;
         if (!target?.closest(".fullscreen-player-shell__content")) dismissFullscreenWithFeedback();
       }}
       onPointerUp={handleCinemaOutsidePointerUp}
@@ -418,6 +421,9 @@ export function FullscreenPlayer({
           className="fullscreen-player-shell__close"
           aria-label={exitHintText}
           title={exitHintText}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
           onClick={() => {
             dismissFullscreenWithFeedback();
           }}
@@ -544,11 +550,14 @@ export function FullscreenPlayer({
             type="button"
             className="fullscreen-player-shell__close-bottom"
             aria-label={exitHintText}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+            }}
             onClick={() => {
               dismissFullscreenWithFeedback();
             }}
           >
-            {exitHintText}
+            Exit Fullscreen
           </button>
         )}
       </div>

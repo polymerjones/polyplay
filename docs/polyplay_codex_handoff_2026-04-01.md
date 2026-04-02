@@ -102,6 +102,36 @@ Raw notes captured from April 1 testing and organized below.
 - Follow-up block start: keep magnify hidden on initial `Set Loop`, then reveal it only after the first real loop-handle drag within the current loop-edit session.
 - `src/components/WaveformLoop.tsx`: magnify availability is now unlocked only when a pending loop-handle press crosses the drag deadzone and becomes a real drag. The magnifying glass stays hidden on initial `Set Loop`, then becomes available for the rest of that edit session after first refinement.
 
+**Follow-up diagnosis note — 2026-04-01 Codex:**
+- The recent magnify reveal change introduced an ordering regression in `src/components/WaveformLoop.tsx`: after first real handle drag, `hasUnlockedManualZoom` becomes true, but `showManualZoomControls` stays false. That means the user only sees the magnifying-glass toggle and the actual `+/-` zoom controls remain collapsed until a second separate tap. In practice, this makes loop zoom feel broken in the create-loop workflow even though `manualZoomLevel` itself still works.
+- The confusing fullscreen exit wording is centralized in `src/components/FullscreenPlayer.tsx` via `exitHintText`, which currently switches between `Done & Exit`, `Swipe Down to Exit`, and `Exit Fullscreen Player`. That copy blends loop completion and fullscreen dismissal into one message and is rendered on both the top close button and the bottom exit button.
+
+**Implementation log — 2026-04-01 Codex:**
+- Follow-up block start: auto-open zoom controls at the moment magnify becomes available after first real handle drag, and remove the misleading fullscreen exit copy for now.
+- `src/components/WaveformLoop.tsx`: when a pending loop-handle press crosses the drag deadzone and becomes a real drag, the session now unlocks magnify and opens the `+/-` zoom controls immediately. This restores working loop zoom in the create-loop refinement flow without changing the underlying zoom math.
+- `src/components/FullscreenPlayer.tsx`: removed the blended `Done & Exit` / `Swipe Down to Exit` wording and replaced it with plain `Exit Fullscreen` copy so loop completion and fullscreen dismissal are no longer conflated.
+
+**Follow-up diagnosis note — 2026-04-01 Codex:**
+- Desktop fullscreen/cinema exits can still be triggered too easily by the existing outside double-click path in `src/components/FullscreenPlayer.tsx`. The handler currently treats a second outside pointer-up as an exit regardless of vertical screen region, so accidental lower-screen mouse double-clicks can dismiss cinema/fullscreen unexpectedly.
+
+**Implementation log — 2026-04-01 Codex:**
+- `src/components/FullscreenPlayer.tsx`: narrowed the outside double-click exit path for desktop pointers. Mouse-based outside double-click exit is now ignored in the lower half of the screen, while the existing upper-half desktop behavior and touch behavior remain unchanged.
+
+**Follow-up diagnosis note — 2026-04-01 Codex:**
+- Desktop loop zoom controls in `src/components/WaveformLoop.tsx` are currently updating `manualZoomLevel`, but the editing-state viewport effect can ignore that value and simply re-center the existing `viewRange` span. In practice that makes desktop `+/-` look dead even though the state changes.
+
+**Follow-up diagnosis note — 2026-04-01 Codex:**
+- The top-left fullscreen `X` can miss on first desktop click because `src/components/FullscreenPlayer.tsx` also has a shell-level `onPointerDown` backdrop-dismiss path, and the `X` button sits outside `.fullscreen-player-shell__content`. That means the shell can consume the pointerdown as an outside click instead of cleanly leaving the button to handle its own single-click exit.
+
+**Implementation log — 2026-04-01 Codex:**
+- `src/components/FullscreenPlayer.tsx`: excluded both fullscreen close buttons from the shell-level outside-pointer dismiss path and stopped pointerdown propagation on the buttons themselves. The `X` button should now respond on a single desktop click instead of requiring a second click.
+
+**Follow-up diagnosis note — 2026-04-01 Codex:**
+- Default region-loop creation in `src/App.tsx` still seeds the start marker from a fixed 15% track margin. On long tracks that can place the start marker far away from the live playback position and make the initial loop feel disconnected from what the user was actively hearing when they hit loop.
+
+**Implementation log — 2026-04-01 Codex:**
+- `src/App.tsx`: default region-loop creation now anchors the start marker to the live playback position when the user taps loop, while keeping the existing end-marker behavior. This makes the initial loop start from what the user is actually hearing instead of an arbitrary 15% track offset.
+
 ---
 
 ### 2. Import / metadata / artwork / import-page stability
@@ -166,10 +196,153 @@ Raw notes captured from April 1 testing and organized below.
 - Embedded artwork import now uses an app-local picture selector that prefers front-cover tags but falls back to the first parsed picture instead of relying on `selectCover(...)`.
 - Admin legal/support links now carry a `returnTo` route back to `admin.html`, and Support / Privacy / Terms each render a close button that returns to Admin via browser history or the explicit `returnTo` fallback.
 
+**Diagnosis note — 2026-04-01 Codex:**
+- Starting diagnosis-only pass for the persistent bright-pink artwork issue, scoped to: metadata picture selection, embedded-art file creation, import-time artwork normalization/storage, auto-art fallback precedence, and artwork consumers across tiles/rows/mini-player/fullscreen/iOS now playing.
+- Initial working question: determine whether the pink result originates in parser output itself or in the downstream still-image normalization / storage pipeline after valid embedded bytes are already selected.
+
+**Diagnosis findings — 2026-04-01 Codex:**
+- Most likely root cause is downstream, not parser-level: embedded APIC bytes are selected in `src/admin/AdminApp.tsx` via `selectEmbeddedArtworkPicture(...)` and wrapped into a `File` by `buildEmbeddedArtworkFile(...)`, but import then pushes that file through `buildArtworkPayload(...)`, which always runs still images through `normalizeStillImage(...)`.
+- `src/lib/artwork/normalizeStillImage.ts` always decodes the image into a browser canvas and re-encodes it as JPEG with `alpha: false`. That is the highest-probability corruption point for color-shifted embedded artwork, especially for JPEGs with unusual profiles/encodings that browsers can display but canvas re-rasterization can reinterpret.
+- Auto art does not appear to be outranking valid imported art in the normal import path. When `addTrackToDb(...)` receives a non-null `artPoster`, it stores that poster under `artKey` and leaves `artworkSource` as `"user"`. Auto art is only generated when no poster is available.
+- Surface inconsistency is also unlikely to be the primary cause. Rows, tiles, mini-player, fullscreen, and track backdrop all read the same stored `track.artUrl`, while iOS now-playing prefers the same stored `track.artBlob` and otherwise falls back to `track.artUrl`. If the stored poster is pink once, every consumer will faithfully reuse that same bad asset.
+- Current parser output appears sufficient for diagnosis and likely sufficient for a fix path: the metadata library already exposes picture bytes, declared format, and picture type/name, which is enough to choose the correct cover and preserve the original bytes. No code evidence currently justifies replacing the parser library.
+
+**Narrow fix path proposal — 2026-04-01 Codex:**
+- Safest first fix is to preserve embedded still-image bytes exactly as imported when they came from metadata artwork, instead of always passing them through `normalizeStillImage(...)`.
+- If normalization is still desirable for manual artwork uploads, split the path: keep user-picked external artwork normalization, but bypass it for metadata-derived embedded artwork unless validation proves the original blob is unusable.
+- Add temporary diagnosis logging around embedded-art imports: selected picture `type`/`format`, resolved MIME, byte length, whether normalization ran, normalized blob MIME/size, and final stored `artworkSource`.
+
+**Follow-up diagnosis note — 2026-04-01 Codex:**
+- Embedded artwork is still being surfaced inside the same broad file-select metadata effect as title/artist autofill. Even though current code applies art before submit-time, the structure still treats MP3 metadata as one combined success block after `parseBlob(...)` rather than a clearly independent first-class artwork path.
+
+**Implementation log — 2026-04-01 Codex:**
+- `src/admin/AdminApp.tsx`: split file-select metadata handling into independent branches after `parseBlob(...)`. Embedded artwork is now extracted and applied first on its own path, using the same armed/loaded artwork-dropzone state, and title/artist autofill is attempted separately afterward.
+- Desktop and iOS audio picker paths still share the same draft-reset and metadata effect path, so they continue to behave the same here; the reliability change is in the shared post-select metadata application logic rather than in only one picker path.
+
+**Audit note — 2026-04-01 Codex:**
+- Starting a full metadata import pipeline audit. Scope: desktop picker path, iOS/native picker path, draft reset/touched guards, `parseBlob(...)` trigger timing, parser result handling, title/artist/artwork application rules, dropzone/preview state, and any reset conflicts that could wipe metadata back out after parse.
+
+**Audit note — 2026-04-01 Codex:**
+- Expanding the audit to cover artwork source precedence and fallback rendering, not just metadata field application. Scope now also includes: embedded/user/manual artwork vs auto/generated fallback precedence, the exact pink fallback-art code path, and cross-surface artwork consistency between import preview, grid/list, mini player, fullscreen, and now playing surfaces.
+
+**Audit findings — 2026-04-01 Codex:**
+- Desktop and iOS picker paths already converge correctly before metadata parsing. Both `onPickUploadAudio(...)` and `onPickUploadAudioNative(...)` call the same `resetUploadDraftForNewAudio(file)` helper and then set `uploadAudio`, which means both paths enter the same shared `useEffect(..., [ignoreUploadMetadata, uploadAudio])` metadata parse flow in `src/admin/AdminApp.tsx`.
+- The most likely failure point is not the picker entry path. It is the shared metadata effect in `src/admin/AdminApp.tsx`, specifically how parse failures and partial-success results are handled. `parseBlob(uploadAudio)` is wrapped in a broad `try/catch`, and the catch only sets `uploadMetadataState("ready")` / `uploadMetadataHasTitle(false)` with no user-facing signal and almost no diagnostics. If parsing fails or partially fails, the UI simply looks like nothing was found.
+- Embedded artwork is now logically independent inside that effect, but the overall feature still lacks a real “partial metadata success” model. The state machine only tracks `idle/loading/ready/skipped` plus `uploadMetadataHasTitle`, which means artwork-only success, artist-only success, and total failure all collapse into nearly the same visible state.
+- The current “do not overwrite manual edits” guards are defensible but still brittle. Title/artist application only happens when the relevant field is blank or previously autofilled. If non-empty state survives from any future refactor, hidden autofill reset miss, or browser-native field restoration, valid metadata will be silently blocked. The reset path looks correct now, but the application rules are still fragile rather than explicit.
+- There is no evidence in code that artwork extraction is too late. It already happens on file select, before submit, through the shared metadata effect. The real issue is that success/failure is opaque and lumped together, not that artwork waits until upload submit.
+- There is no current code evidence that the parser library should be replaced. The stronger evidence still points to application-rule/state-model weakness and swallowed failures, not a proven parser defect.
+
+**Narrow refactor plan — 2026-04-01 Codex:**
+- Keep the existing picker entry points, but refactor the shared metadata effect in `src/admin/AdminApp.tsx` into explicit phases/functions:
+  1. prepare/reset draft for new audio
+  2. parse metadata once
+  3. apply embedded artwork result independently
+  4. apply title result independently
+  5. apply artist result independently
+  6. publish a richer result object/state for UI feedback and diagnostics
+- Replace the current coarse `uploadMetadataState` / `uploadMetadataHasTitle` model with a small structured result state such as `{ parsed: boolean, artworkApplied: boolean, titleApplied: boolean, artistApplied: boolean, error?: string }`. That makes artwork-only success a first-class outcome instead of “ready but blank.”
+- Keep the current manual-edit protection, but move it into explicit helper functions like `applyMetadataTitleIfAllowed`, `applyMetadataArtistIfAllowed`, and `applyMetadataArtworkIfAllowed` so the overwrite rules are auditable and testable.
+- Add durable diagnostics around `parseBlob(...)` itself, not just artwork selection, so parser failure vs application blocking is obvious during QA.
+
+**Files to change for the refactor — 2026-04-01 Codex:**
+- `src/admin/AdminApp.tsx`
+- Possibly `docs/polyplay_codex_handoff_2026-04-01.md` for follow-up tracking only
+
+**Testing focus after refactor — 2026-04-01 Codex:**
+- Desktop picker and iOS native picker must both hit the same parse/apply behavior.
+- MP3 with artwork only should arm the artwork dropzone immediately.
+- MP3 with title/artist only should fill text fields without stale previous values.
+- MP3 with artwork + text should populate all available fields.
+- Broken metadata should not brick the flow, should not leave stale prior values, and should surface diagnostics that distinguish parse failure from “no metadata found.”
+
+**Expanded audit findings — 2026-04-01 Codex:**
+- Artwork source precedence in storage is clear and not currently the problem by design:
+  1. manual/imported still or video artwork passed into `addTrackToDb(...)`
+  2. generated poster from imported artwork video
+  3. generated waveform artwork fallback when no poster exists
+  `src/lib/db.ts` already persists the first non-null poster and only marks `artworkSource = "auto"` when fallback generation wins.
+- The pink artwork in the failing grid/tile mode is coming from the real auto-art fallback path, not from `DEFAULT_ARTWORK_URL`. Exact path:
+  `src/admin/AdminApp.tsx` import flow fails to carry valid artwork into `addTrackToDb(...)`
+  -> `src/lib/db.ts` sees no `artPoster` / no surviving artwork
+  -> `generateWaveformArtwork({ audioBlob })` runs
+  -> generated PNG is stored under `artKey` with `artworkSource = "auto"`
+  -> `toTrack(...)` exposes that stored blob as `track.artUrl`
+  -> `src/components/TrackTile.tsx` renders `track.artUrl`
+  This means the pink grid art is most likely “metadata art never made it into storage, so auto art legitimately took over,” not a surface reading the wrong source.
+- The auto-art image itself is generated in `src/lib/artwork/waveformArtwork.ts`, whose default/dark palette explicitly uses pink/purple/cyan waveform colors. That is the source of the bright pink visual language when fallback wins.
+- Surface consistency is largely coherent once a source is stored:
+  - import dropzone uses `uploadArt` armed state in `src/admin/AdminApp.tsx`
+  - grid/tile uses `track.artUrl` in `src/components/TrackTile.tsx`
+  - row/list uses `track.artUrl` in `src/components/TrackRow.tsx`
+  - mini player uses `track.artUrl` in `src/components/MiniPlayerBar.tsx`
+  - fullscreen uses `track.artUrl` / `track.artVideoUrl` in `src/components/FullscreenPlayer.tsx`
+  - iOS now playing prefers `track.artBlob` then `track.artUrl` in `src/App.tsx` + `src/lib/iosNowPlaying.ts`
+  In other words, once storage has the wrong winner, most surfaces consistently propagate that same winner.
+- The most likely structural failure remains in shared metadata application/state handling rather than the parser library itself. The current effect still swallows parse failure, models success too coarsely, and makes it hard to distinguish:
+  - parser failed
+  - artwork-only success
+  - text-only success
+  - nothing found
+  - valid metadata blocked by overwrite guards
+
+**Expanded refactor plan — 2026-04-01 Codex:**
+- Refactor the shared metadata pipeline in `src/admin/AdminApp.tsx` into explicit result phases with a structured metadata outcome object that separately records:
+  - `parseSucceeded`
+  - `embeddedArtworkFound`
+  - `artworkApplied`
+  - `titleFound`
+  - `titleApplied`
+  - `artistFound`
+  - `artistApplied`
+  - `error`
+- Keep artwork extraction first-class and independent, but also make the final import submission path assert source precedence explicitly: if metadata artwork is armed in the dropzone, that source must outrank auto art and be visible in diagnostics before `addTrackToDb(...)` runs.
+- Add a narrow QA/debug signal near the import UI so testers can tell whether the current file produced:
+  - metadata parse failure
+  - artwork-only success
+  - text-only success
+  - full success
+  - fallback auto art at submit-time
+- Do not replace the parser library unless structured diagnostics show `parseBlob(...)` consistently returning empty `common.picture/title/artist` for known-good files.
+
+**Files implicated by the refactor — 2026-04-01 Codex:**
+- `src/admin/AdminApp.tsx`
+- `src/lib/db.ts`
+- Possibly `src/lib/artwork/waveformArtwork.ts` later, but only if product wants the auto-art look changed after metadata reliability is fixed
+
+**Refactor implementation log — 2026-04-01 Codex:**
+- `src/admin/AdminApp.tsx`: replaced the old coarse metadata flags with a structured metadata result object containing:
+  - `phase`
+  - `parseSucceeded`
+  - `embeddedArtworkFound`
+  - `artworkApplied`
+  - `titleFound`
+  - `titleApplied`
+  - `artistFound`
+  - `artistApplied`
+  - `error`
+- `src/admin/AdminApp.tsx`: split the shared file-select metadata effect into explicit phases: reset, parse once, apply artwork independently, apply title independently, apply artist independently, then publish one structured result.
+- `src/admin/AdminApp.tsx`: moved title/artist/artwork application rules into explicit helper functions so manual-edit protection still exists, but application success/failure is now recorded instead of disappearing into one broad effect.
+- `src/admin/AdminApp.tsx`: enforced submit-time artwork precedence by failing closed if artwork is armed in the import draft but no `artPoster`/`artVideo` survives payload preparation. That prevents silent fallback to auto art when user/metadata artwork was supposed to win.
+
+**Follow-up diagnosis note — 2026-04-01 Codex:**
+- Metadata artwork application is still vulnerable to a stale draft-art ref race. `applyMetadataArtworkIfAllowed(...)` gates on `uploadArtRef.current`, but that ref was only synchronized in a later `useEffect`. If `parseBlob(...)` resolves before the ref catches up to the reset state, valid embedded artwork can be incorrectly blocked and auto art will still win at submit-time.
+
+**Implementation log — 2026-04-01 Codex:**
+- `src/admin/AdminApp.tsx`: removed the delayed `uploadArtRef` sync effect and made `setUploadArtworkFile(...)` update `uploadArtRef.current` synchronously. Metadata artwork application now sees the real current draft-art state immediately after reset/select instead of a stale previous file.
+
+**Implementation note — 2026-04-01 Codex:**
+- Narrow fix starting now: carry a metadata-art source flag through the import draft, bypass `normalizeStillImage(...)` only for metadata-derived embedded still artwork, keep manual still uploads on the existing normalization path, and add temporary diagnostics at metadata selection plus final import/storage.
+
+**Implementation log — 2026-04-01 Codex:**
+- `src/admin/AdminApp.tsx`: introduced a narrow upload-art source split for the import form. Metadata-derived embedded still artwork is now tagged as `"metadata"` when autofilled from MP3 metadata, while manually chosen artwork remains `"manual"`.
+- `src/admin/AdminApp.tsx`: `buildArtworkPayload(...)` now bypasses `normalizeStillImage(...)` for metadata-derived still artwork and preserves the original embedded `File` bytes/MIME as-is. Manual still uploads still use the existing normalization path.
+- `src/admin/AdminApp.tsx` + `src/lib/db.ts`: added temporary `console.debug` diagnostics for metadata-art selection, payload build, and final DB store so imports log selected picture type/name, declared format, resolved MIME, original byte size, whether normalization ran, and final stored artwork MIME/size/source.
+
 ---
 
 ### 3. Playback / media controls / now playing
-**Status:** fix implemented, awaiting QA
+**Status:** diagnosis in progress
 
 **Observed behavior:**
 - Active-track border/strobe effect does not work correctly.
@@ -207,10 +380,62 @@ Raw notes captured from April 1 testing and organized below.
 - Row mode still mounts on `.trackRow`, but now uses the same perimeter-following SVG stroke so the trail wraps the full row container correctly.
 - Paused or mute still overrides to a white paused stroke, while dim mode keeps the aura-colored animation at reduced opacity.
 
+**Follow-up diagnosis note — 2026-04-01 Codex:**
+- The border trail still shares space with older active/aura visual layers: `.ytm-tile.is-active::after`, `.ytm-tile.has-aura .ytm-tile-hit`, `.rowAuraGlow::after`, and `.rowAuraAccent` are all still drawing additional geometry. That creates duplicate outlines and “phantom shape” artifacts when Aura+ is active.
+- The row trail path is also being distorted because the SVG currently uses a square `viewBox` with `preserveAspectRatio="none"` for a very wide row container. That stretches the rounded-rect geometry and makes the corners feel loose/curved instead of edge-bound.
+
+**Cleanup diagnosis note — 2026-04-01 Codex:**
+- The remaining perimeter mismatch is now isolated to `src/components/BorderTrail.tsx` itself: both row and tile still rely on hard-coded rect geometry (`1000x100` for rows, `100x100` for tiles) instead of the rendered DOM box, so the stroke can only approximate the real outer edge.
+- The lingering laggy/buggy feel is also concentrated there: the animated stroke is currently running through a filtered SVG that is being rescaled every frame for non-square rows. On iOS that produces visible softness/stutter even after the extra aura layers were removed.
+- Narrow cleanup plan: measure the live trail box and inherited radius, render the stroke in that exact coordinate space, and slightly retune the dash length/speed while keeping the effect otherwise unchanged.
+- Performance constraint for this pass: prioritize CPU efficiency and playback safety over extra flourish. The active-track perimeter must remain lightweight enough that it never degrades playback smoothness on iOS.
+
+**Cleanup implementation log — 2026-04-01 Codex:**
+- `src/components/BorderTrail.tsx`: replaced the remaining hard-coded row/tile rect geometry with a live measured SVG box driven by `ResizeObserver` and the element’s computed border radius. The stroke now renders in the real DOM coordinate space instead of a stretched approximation.
+- `src/components/BorderTrail.tsx`: moved the stroke onto the true outside edge by using half-stroke inset math (`strokeWidth / 2`) against the measured width/height/radius, so the path center sits exactly where the border line belongs.
+- `styles.css`: removed the animated SVG drop-shadow filter, shortened the opacity transition, and retuned the dash animation to a smaller segment with a faster cycle (`1450ms` tile, `1550ms` row) so motion reads cleaner and costs less CPU on iOS.
+- `styles.css` + `src/index.css`: removed the remaining competing active outline rings on `.ytm-tile.is-active` and `.trackRow.is-playing`, leaving one authoritative active perimeter instead of a stacked static ring plus animated trail.
+- Expected remaining QA focus: verify that the measured-radius path still matches correctly across rows, tiles, theme variants, and iOS Safari scaling states, and confirm there is no playback hitching while the active trail animates.
+
+**Refinement diagnosis note — 2026-04-01 Codex:**
+- Requested visual refinement is to make the active perimeter read as one flowing neon stream with a subtle hotter section, without changing geometry correctness or adding noticeable CPU cost.
+- Lightest-weight approach is a second synchronized SVG stroke on the exact same measured rect path. That preserves the edge-bound geometry, avoids extra filters/glow layers, and only adds one more stroke animation over the existing path.
+
+**Refinement implementation log — 2026-04-01 Codex:**
+- `src/components/BorderTrail.tsx`: the measured perimeter SVG now renders two rect strokes on the same exact edge-bound path instead of one.
+- `styles.css`: tuned the two synchronized strokes as one visual stream: a longer softer base segment plus a shorter brighter hot segment with a slight offset on the same motion cycle, without adding blur/filter cost.
+- Geometry, measurement, and edge alignment are unchanged from the cleanup pass; this is only a motion/readability refinement on top of the same exact path.
+
+**Follow-up diagnosis note — 2026-04-01 Codex:**
+- The previous refinement still read too much like two moving segments because the base stroke itself was also dashed/moving. To get the requested “entire edge is lit” effect, the base perimeter needs to stay fully visible while only the brighter section travels.
+
+**Implementation log — 2026-04-01 Codex:**
+- `styles.css`: converted the active perimeter into a full always-lit base stroke plus one moving hot stroke on the same exact measured path. This keeps the whole edge highlighted while preserving a visible traveling brightness section.
+- `src/components/WaveformLoop.tsx`: fixed the desktop loop zoom regression by removing the editing-state branch that kept re-centering the existing `viewRange` span. Manual zoom changes now recompute the zoomed loop window instead of appearing inert.
+
+**Follow-up diagnosis note — 2026-04-01 Codex:**
+- The current full-line + hot-segment perimeter is directionally correct, but the hot segment is still compact enough that the eye can read a harder brightness edge than intended. The next tuning pass should widen the brighter region and reduce the contrast step so the perimeter shows a longer, smoother brightness gradient.
+
+**Implementation log — 2026-04-01 Codex:**
+- `styles.css`: widened the moving hot segment and reduced the contrast jump between base and hot strokes, so the active perimeter now carries a longer, softer brightness ramp instead of a tighter bright section with a harder edge.
+
+**Follow-up diagnosis note — 2026-04-01 Codex:**
+- The perimeter still wants more luxury in the brightness rolloff: the hot section should stay clearly bright, but the glow tail needs to extend farther so the user reads a long luminous gradient instead of a shorter bright patch.
+
+**Implementation log — 2026-04-01 Codex:**
+- `styles.css`: lengthened the moving bright section again and slightly lifted the full-line base level, keeping the peak visibly bright while giving it a longer luminous tail and a softer contrast transition.
+
+**Follow-up diagnosis note — 2026-04-01 Codex:**
+- There is no current beat/downbeat event or BPM-derived timing signal in the playback path that the active-track perimeter can subscribe to. A true “count 1 downbeat” pulse would need a real rhythm source; faking it with a generic CSS pulse would not actually land on musical downbeats.
+
+**Implementation log — 2026-04-01 Codex:**
+- `styles.css`: extended the active perimeter gradient again by lengthening the moving bright section and slightly lifting the full-line base. This keeps the line bright while reducing the remaining visible edge between the peak and its tail.
+- Downbeat pulse intentionally not added in this pass: there is no reliable musical downbeat source yet, and a fake free-running pulse would be visually misleading.
+
 ---
 
 ### 4. UI polish / hero / sparkles / animation consistency
-**Status:** fix implemented, awaiting QA
+**Status:** diagnosis in progress
 
 **Observed behavior:**
 - Fun fix requested: tapping the horizontal PolyPlay logo should flash and emit aura-colored sparkles for a few seconds.
@@ -254,6 +479,16 @@ Raw notes captured from April 1 testing and organized below.
 - Follow-up block start: replace the oversized logo burst with a dedicated lightweight pixie-dust particle treatment, and replace the broken border-image trail with a perimeter-following stroke attached to the correct tile/row surfaces.
 - `src/App.tsx` + `styles.css`: the logo tap effect no longer uses the generic full-screen `safeTapBursts` primitive. It now spawns small localized logo sparkles with short drift/twinkle motion inside the logo button itself, which reads as pixie dust instead of a large bloom/blob.
 - Logo guardrails remain narrow: taps are still throttled, pending timers are capped, active sparkles are capped, and reduced-motion keeps the sequence lighter.
+
+**Follow-up diagnosis note — 2026-04-01 Codex:**
+- The subtle black flash and weird looping hero artifact are not coming from the new sparkles themselves. The remaining problem is the older logo chrome still running underneath: `.topbar-title__logo-button--sparkle` animates a filter on the whole button, `.topbar-title__logo-button::before` adds a broad glow layer with blend behavior, and `.topbar-title__logo-button::after` still runs the old `heroLogoShine` sweep continuously.
+- That legacy shine/glow stack conflicts with the new localized sparkle particles and creates the unintended shimmer/shape in the hero bar.
+
+**Implementation log — 2026-04-01 Codex:**
+- Follow-up block start: remove the leftover hero shine/glow artifacts and collapse the active-track/aura stack down to one clean perimeter trail plus soft aura glow only.
+- `styles.css`: removed the leftover hero logo sweep/shine pseudo-elements and the button-level flash animation so the new sparkle particles no longer compete with a broad glow/filter stack. The logo now keeps the localized pixie-dust effect without the dark flash or looping hero shimmer artifact.
+- `src/components/BorderTrail.tsx` + `styles.css`: tightened the perimeter path by giving row mode its own wide SVG viewBox instead of stretching a square one, and reduced the stroke/offset so the animated segment hugs the true edges more closely.
+- `styles.css` + `src/index.css`: removed old duplicate active/aura geometry (`.ytm-tile.is-active::after`, extra tile inset aura outline, `.rowAuraGlow::after`, and `.rowAuraAccent`) so Aura+ now contributes soft glow only and no longer stacks phantom outlines underneath the active-track trail.
 
 ---
 
@@ -343,3 +578,80 @@ Raw notes captured from April 1 testing and organized below.
 ## Next Codex session starter
 Use this MD as the working source of truth.
 Start by summarizing the top 3 open bugs, propose the single next task, and update this file with a session-start note before editing code.
+
+---
+
+### Metadata pipeline follow-up — 2026-04-01 Codex
+**Session-start note:**
+- Live QA reported that embedded-art MP3 import still did not arm artwork/title/artist on file select, even though the fallback auto art was no longer the oversaturated pink variant.
+- That result means the prior state cleanup was not enough. The remaining likely weakness is the metadata pipeline still living inside a shared `useEffect`, which leaves file-select behavior dependent on async state timing instead of the selected file itself.
+
+**Implementation log:**
+- Replaced the import-form metadata parse trigger with an explicit file-select pipeline in `src/admin/AdminApp.tsx`: `pick file -> reset draft -> set audio -> parse selected file -> apply artwork/title/artist -> publish result`.
+- Desktop picker and iOS native picker now both call the same file-select metadata pipeline directly instead of waiting for `uploadAudio` state to drive parsing later.
+- The `ignore metadata` toggle still re-runs the same pipeline for the already-selected file, so the checkbox path stays aligned with the direct picker path.
+- `npm run typecheck` passed after the refactor.
+
+**Follow-up diagnosis:**
+- Live QA still reports that nothing arms on MP3 file select.
+- At that point the remaining suspect is not the apply state. It is the parser transport path itself.
+- `music-metadata-browser` `parseBlob(...)` depends on the browser `Blob.stream()` / web-stream path. The next narrow hardening step is to parse selected files through `arrayBuffer + parseBuffer(...)` instead, and infer MIME from the filename when the picker leaves `file.type` blank.
+
+**Implementation log:**
+- Swapped import-form metadata parsing from `parseBlob(file)` to `parseBuffer(new Uint8Array(await file.arrayBuffer()), { mimeType, path, size })`.
+- Added `inferAudioMetadataMimeType(file)` so MP3/M4A/AAC/WAV/MP4/MOV files still get a useful parser MIME hint even when the picker returns an empty or generic `file.type`.
+- `npm run typecheck` passed after the parser-path hardening change.
+
+**Instrumentation pass:**
+- Added a direct parser-result debug log in `src/admin/AdminApp.tsx` with:
+  - file name
+  - file type
+  - inferred MIME
+  - parse success/failure
+  - common title
+  - common artist
+  - picture count
+  - first picture format
+  - first picture type
+  - first picture byte length
+- Added a small visible import-form metadata status panel so QA can distinguish:
+  - parse failed
+  - metadata found nothing
+  - artwork found only
+  - text found only
+  - full metadata found
+- `npm run typecheck` passed after the instrumentation pass.
+
+**Direct evidence from live QA:**
+- Safari console for a failing MP3 now shows `error: "ReferenceError: Can't find variable: Buffer"`.
+- That means metadata import is currently blocked by parser runtime compatibility in the browser, not by artwork precedence or apply rules.
+- The next narrow fix is to provide a `Buffer` polyfill for the admin metadata-import runtime before `music-metadata` is used.
+
+**Implementation log:**
+- Added a narrow `Buffer` polyfill in `src/admin-main.tsx` so the admin import runtime exposes `globalThis.Buffer` before the metadata parser runs.
+- Scope is limited to the admin entry bundle instead of changing the main player runtime.
+- `npm run typecheck` passed after the polyfill.
+
+**Follow-up diagnosis from live QA:**
+- A second MP3 now proves the parser returns title/artist/artwork, but `titleApplied` and `artistApplied` can still be `false` even when `titleFound` / `artistFound` are `true`.
+- That points to a remaining application-rule race, not a parser problem.
+- Most likely root cause: `resetUploadDraftForNewAudio()` clears `uploadTitle` / `uploadArtist` with React state, but the metadata pipeline runs immediately afterward and still sees the previous file's non-empty text state before the reset has flushed.
+
+**Implementation log:**
+- Added synchronous `uploadTitleValueRef` / `uploadArtistValueRef` tracking in `src/admin/AdminApp.tsx`.
+- Metadata title/artist apply now checks those live refs instead of waiting on React state updater timing, so a new file-select reset cannot be mistaken for preserved manual text from the previous file.
+- Input change handlers and reset/success paths now keep the refs synchronized with the visible form fields.
+- `npm run typecheck` passed after the text-apply race fix.
+
+**Quick follow-up request:**
+- User requested a narrow border-trail tuning pass only:
+  - blend the strobing highlight gradient more
+  - speed the motion up by about 20%
+
+**Implementation log:**
+- Adjusted `styles.css` border-trail tuning only:
+  - raised the full-line base opacity slightly
+  - lengthened the moving hot segment for a softer blend / longer luminous tail
+  - reduced hot-segment peak contrast slightly
+  - sped the cycle from `1500ms` to `1200ms` (20% faster)
+- `npm run typecheck` passed after the quick border-trail tuning pass.

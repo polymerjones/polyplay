@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent } from "react";
-import { parseBlob, type IPicture } from "music-metadata-browser";
+import { parseBuffer, type IPicture } from "music-metadata-browser";
 import logo from "../../logo.png";
 import { TransferLaneDropZone } from "./TransferLaneDropZone";
 import { GratitudeEntriesModal } from "./GratitudeEntriesModal";
@@ -100,6 +100,24 @@ const CAN_USE_IOS_NATIVE_ARTWORK_IMPORT = canUseIosNativeAudioImport();
 const ARTIST_MEMORY_KEY = "polyplay_importArtist_v1";
 type ThemeSelection = "dark" | "light" | "amber" | "teal" | "crimson";
 type AdminHapticTone = "success" | "heavy";
+type UploadArtworkSource = "manual" | "metadata";
+type UploadMetadataPhase = "idle" | "loading" | "ready" | "skipped";
+type UploadMetadataResult = {
+  phase: UploadMetadataPhase;
+  parseSucceeded: boolean;
+  embeddedArtworkFound: boolean;
+  artworkApplied: boolean;
+  titleFound: boolean;
+  titleApplied: boolean;
+  artistFound: boolean;
+  artistApplied: boolean;
+  error: string | null;
+};
+type UploadMetadataStatusDescriptor = {
+  tone: "neutral" | "loading" | "danger" | "warning" | "success";
+  label: string;
+  detail: string;
+};
 type AdminConfirmState =
   | {
       kind: "delete-playlist";
@@ -211,6 +229,94 @@ function getStoredArtistName(): string {
 
 function cleanMetadataText(value: string | null | undefined): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function createUploadMetadataResult(
+  phase: UploadMetadataPhase,
+  overrides: Partial<Omit<UploadMetadataResult, "phase">> = {}
+): UploadMetadataResult {
+  return {
+    phase,
+    parseSucceeded: false,
+    embeddedArtworkFound: false,
+    artworkApplied: false,
+    titleFound: false,
+    titleApplied: false,
+    artistFound: false,
+    artistApplied: false,
+    error: null,
+    ...overrides
+  };
+}
+
+function getUploadMetadataStatusDescriptor(
+  result: UploadMetadataResult,
+  hasAudio: boolean,
+  ignoreMetadata: boolean
+): UploadMetadataStatusDescriptor {
+  if (!hasAudio) {
+    return {
+      tone: "neutral",
+      label: "Metadata idle",
+      detail: "Select an audio file to inspect title, artist, and embedded artwork."
+    };
+  }
+  if (ignoreMetadata) {
+    return {
+      tone: "neutral",
+      label: "Metadata skipped",
+      detail: "Metadata import is disabled for the current file."
+    };
+  }
+  if (result.phase === "loading") {
+    return {
+      tone: "loading",
+      label: "Reading metadata",
+      detail: "Inspecting the selected file for title, artist, and embedded artwork."
+    };
+  }
+  if (result.error) {
+    return {
+      tone: "danger",
+      label: "Metadata parse failed",
+      detail: result.error
+    };
+  }
+  if (!result.parseSucceeded) {
+    return {
+      tone: "neutral",
+      label: "Metadata idle",
+      detail: "No metadata parse has run yet for this file."
+    };
+  }
+  const foundArtwork = result.embeddedArtworkFound;
+  const foundText = result.titleFound || result.artistFound;
+  if (foundArtwork && foundText) {
+    return {
+      tone: "success",
+      label: "Full metadata found",
+      detail: "Embedded artwork and text metadata were detected."
+    };
+  }
+  if (foundArtwork) {
+    return {
+      tone: "success",
+      label: "Artwork found only",
+      detail: "Embedded artwork was detected, but no title/artist text metadata was found."
+    };
+  }
+  if (foundText) {
+    return {
+      tone: "warning",
+      label: "Text found only",
+      detail: "Title and/or artist metadata was detected, but no embedded artwork was found."
+    };
+  }
+  return {
+    tone: "warning",
+    label: "Metadata found nothing",
+    detail: "The parser ran, but it did not return usable title, artist, or artwork metadata."
+  };
 }
 
 function sniffEmbeddedArtworkMimeType(bytes: Uint8Array): string | null {
@@ -370,6 +476,19 @@ function getDefaultVideoFrameTime(duration: number): number {
   return Math.max(min, Math.min(max, candidate));
 }
 
+function inferAudioMetadataMimeType(file: File): string {
+  const explicitType = cleanMetadataText(file.type).toLowerCase();
+  if (explicitType) return explicitType;
+  const name = cleanMetadataText(file.name).toLowerCase();
+  if (name.endsWith(".mp3")) return "audio/mpeg";
+  if (name.endsWith(".m4a")) return "audio/mp4";
+  if (name.endsWith(".aac")) return "audio/aac";
+  if (name.endsWith(".wav")) return "audio/wav";
+  if (name.endsWith(".mp4")) return "video/mp4";
+  if (name.endsWith(".mov")) return "video/quicktime";
+  return "application/octet-stream";
+}
+
 async function capturePosterFrame(videoFile: File, timeSec: number): Promise<Blob> {
   return generateVideoPoster(videoFile, { timeSec });
 }
@@ -411,22 +530,27 @@ export function AdminApp() {
   const [artistMemoryValue, setArtistMemoryValue] = useState(() => getStoredArtistName());
   const [uploadAudio, setUploadAudio] = useState<File | null>(null);
   const [uploadArt, setUploadArt] = useState<File | null>(null);
+  const [uploadArtSource, setUploadArtSource] = useState<UploadArtworkSource>("manual");
   const [uploadArtPreviewUrl, setUploadArtPreviewUrl] = useState("");
   const [uploadArtDuration, setUploadArtDuration] = useState(0);
   const [uploadArtFrameTime, setUploadArtFrameTime] = useState(0);
   const [uploadArtPosterBlob, setUploadArtPosterBlob] = useState<Blob | null>(null);
   const [isUploadPreviewPlaying, setIsUploadPreviewPlaying] = useState(false);
   const [ignoreUploadMetadata, setIgnoreUploadMetadata] = useState(false);
-  const [uploadMetadataState, setUploadMetadataState] = useState<"idle" | "loading" | "ready" | "skipped">("idle");
-  const [uploadMetadataHasTitle, setUploadMetadataHasTitle] = useState(false);
+  const [uploadMetadataResult, setUploadMetadataResult] = useState<UploadMetadataResult>(() =>
+    createUploadMetadataResult("idle")
+  );
   const uploadFormRef = useRef<HTMLFormElement | null>(null);
   const uploadTitleInputRef = useRef<HTMLInputElement | null>(null);
   const uploadTitleTouchedRef = useRef(false);
   const uploadArtistTouchedRef = useRef(false);
   const uploadTitleAutofilledRef = useRef(false);
   const uploadArtistAutofilledRef = useRef(false);
+  const uploadTitleValueRef = useRef("");
+  const uploadArtistValueRef = useRef("");
   const uploadArtworkAutofilledRef = useRef(false);
   const uploadArtRef = useRef<File | null>(null);
+  const uploadMetadataRequestIdRef = useRef(0);
 
   const [selectedArtworkTrackId, setSelectedArtworkTrackId] = useState<string>("");
   const [selectedArtworkFile, setSelectedArtworkFile] = useState<File | null>(null);
@@ -435,6 +559,11 @@ export function AdminApp() {
   const [selectedArtFrameTime, setSelectedArtFrameTime] = useState(0);
   const [selectedArtPosterBlob, setSelectedArtPosterBlob] = useState<Blob | null>(null);
   const [isSelectedPreviewPlaying, setIsSelectedPreviewPlaying] = useState(false);
+  const uploadMetadataStatus = getUploadMetadataStatusDescriptor(
+    uploadMetadataResult,
+    Boolean(uploadAudio),
+    ignoreUploadMetadata
+  );
 
   const [selectedAudioTrackId, setSelectedAudioTrackId] = useState<string>("");
   const [selectedAudioFile, setSelectedAudioFile] = useState<File | null>(null);
@@ -749,14 +878,10 @@ export function AdminApp() {
   }, [laneToast]);
 
   useEffect(() => {
-    uploadArtRef.current = uploadArt;
-  }, [uploadArt]);
-
-  useEffect(() => {
     if (!uploadAudio) return;
     if (typeof window === "undefined") return;
-    if (!ignoreUploadMetadata && uploadMetadataState === "loading") return;
-    if (!ignoreUploadMetadata && uploadMetadataHasTitle) return;
+    if (!ignoreUploadMetadata && uploadMetadataResult.phase === "loading") return;
+    if (!ignoreUploadMetadata && uploadMetadataResult.titleFound) return;
     const input = uploadTitleInputRef.current;
     if (!input) return;
     const timer = window.setTimeout(() => {
@@ -764,81 +889,12 @@ export function AdminApp() {
       input.select();
     }, 80);
     return () => window.clearTimeout(timer);
-  }, [ignoreUploadMetadata, uploadAudio, uploadMetadataHasTitle, uploadMetadataState]);
+  }, [ignoreUploadMetadata, uploadAudio, uploadMetadataResult.phase, uploadMetadataResult.titleFound]);
 
   useEffect(() => {
-    if (!uploadAudio) {
-      setUploadMetadataState("idle");
-      setUploadMetadataHasTitle(false);
-      return;
-    }
-
-    if (ignoreUploadMetadata) {
-      setUploadMetadataState("skipped");
-      setUploadMetadataHasTitle(false);
-      if (uploadTitleAutofilledRef.current) {
-        uploadTitleAutofilledRef.current = false;
-        setUploadTitle("");
-      }
-      if (uploadArtistAutofilledRef.current) {
-        uploadArtistAutofilledRef.current = false;
-        setUploadArtist("");
-      }
-      if (uploadArtworkAutofilledRef.current) {
-        uploadArtworkAutofilledRef.current = false;
-        setUploadArtworkFile(null);
-      }
-      return;
-    }
-
-    let cancelled = false;
-    setUploadMetadataState("loading");
-    setUploadMetadataHasTitle(false);
-
-    void (async () => {
-      try {
-        const metadata = await parseBlob(uploadAudio);
-        if (cancelled) return;
-        const metadataTitle = cleanMetadataText(metadata.common.title);
-        const metadataArtist = cleanMetadataText(metadata.common.artist || metadata.common.albumartist);
-        const embeddedArtwork = buildEmbeddedArtworkFile(selectEmbeddedArtworkPicture(metadata.common.picture));
-
-        setUploadMetadataHasTitle(Boolean(metadataTitle));
-        setUploadMetadataState("ready");
-
-        if (metadataTitle && !uploadTitleTouchedRef.current) {
-          setUploadTitle((prev) => {
-            const canApply = uploadTitleAutofilledRef.current || prev.trim() === "";
-            if (!canApply) return prev;
-            uploadTitleAutofilledRef.current = true;
-            return metadataTitle;
-          });
-        }
-
-        if (metadataArtist && !uploadArtistTouchedRef.current) {
-          setUploadArtist((prev) => {
-            const canApply = uploadArtistAutofilledRef.current || prev.trim() === "";
-            if (!canApply) return prev;
-            uploadArtistAutofilledRef.current = true;
-            return metadataArtist;
-          });
-        }
-
-        if (embeddedArtwork && (!uploadArtRef.current || uploadArtworkAutofilledRef.current)) {
-          uploadArtworkAutofilledRef.current = true;
-          setUploadArtworkFile(embeddedArtwork);
-        }
-      } catch {
-        if (cancelled) return;
-        setUploadMetadataHasTitle(false);
-        setUploadMetadataState("ready");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ignoreUploadMetadata, uploadAudio]);
+    if (!uploadAudio) return;
+    void runUploadMetadataPipeline(uploadAudio, ignoreUploadMetadata);
+  }, [ignoreUploadMetadata]);
 
   useEffect(() => {
     if (!selectedTransferTrackId) {
@@ -992,6 +1048,16 @@ export function AdminApp() {
     return uploadTitleInputRef.current?.value ?? uploadTitle;
   };
 
+  const setUploadTitleValue = (value: string) => {
+    uploadTitleValueRef.current = value;
+    setUploadTitle(value);
+  };
+
+  const setUploadArtistValue = (value: string) => {
+    uploadArtistValueRef.current = value;
+    setUploadArtist(value);
+  };
+
   const requestParentHaptic = (tone: AdminHapticTone) => {
     try {
       if (window.parent && window.parent !== window) {
@@ -1018,8 +1084,10 @@ export function AdminApp() {
     }
   };
 
-  const setUploadArtworkFile = (file: File | null) => {
+  const setUploadArtworkFile = (file: File | null, source: UploadArtworkSource = "manual") => {
+    uploadArtRef.current = file;
     setUploadArt(file);
+    setUploadArtSource(file ? source : "manual");
     setUploadArtPosterBlob(null);
     setUploadArtDuration(0);
     setUploadArtFrameTime(0);
@@ -1036,24 +1104,184 @@ export function AdminApp() {
     setSelectedArtPreviewUrl(file && isVideoArtwork(file) ? URL.createObjectURL(file) : "");
   };
 
+  const applyMetadataArtworkIfAllowed = (file: File | null): boolean => {
+    if (!file) return false;
+    if (uploadArtRef.current && !uploadArtworkAutofilledRef.current) return false;
+    uploadArtworkAutofilledRef.current = true;
+    setUploadArtworkFile(file, "metadata");
+    return true;
+  };
+
+  const applyMetadataTitleIfAllowed = (value: string): boolean => {
+    if (!value || uploadTitleTouchedRef.current) return false;
+    const canApply = uploadTitleAutofilledRef.current || uploadTitleValueRef.current.trim() === "";
+    if (!canApply) return false;
+    uploadTitleAutofilledRef.current = true;
+    setUploadTitleValue(value);
+    return true;
+  };
+
+  const applyMetadataArtistIfAllowed = (value: string): boolean => {
+    if (!value || uploadArtistTouchedRef.current) return false;
+    const canApply = uploadArtistAutofilledRef.current || uploadArtistValueRef.current.trim() === "";
+    if (!canApply) return false;
+    uploadArtistAutofilledRef.current = true;
+    setUploadArtistValue(value);
+    return true;
+  };
+
+  const clearAutofilledUploadMetadata = () => {
+    if (uploadTitleAutofilledRef.current) {
+      uploadTitleAutofilledRef.current = false;
+      setUploadTitleValue("");
+    }
+    if (uploadArtistAutofilledRef.current) {
+      uploadArtistAutofilledRef.current = false;
+      setUploadArtistValue("");
+    }
+    if (uploadArtworkAutofilledRef.current) {
+      uploadArtworkAutofilledRef.current = false;
+      setUploadArtworkFile(null);
+    }
+  };
+
+  const runUploadMetadataPipeline = async (file: File | null, shouldIgnoreMetadata: boolean) => {
+    const requestId = uploadMetadataRequestIdRef.current + 1;
+    uploadMetadataRequestIdRef.current = requestId;
+
+    if (!file) {
+      setUploadMetadataResult(createUploadMetadataResult("idle"));
+      return;
+    }
+
+    if (shouldIgnoreMetadata) {
+      clearAutofilledUploadMetadata();
+      setUploadMetadataResult(createUploadMetadataResult("skipped"));
+      return;
+    }
+
+    setUploadMetadataResult(createUploadMetadataResult("loading"));
+    const nextResult = createUploadMetadataResult("ready");
+
+    try {
+      const fileBytes = new Uint8Array(await file.arrayBuffer());
+      const effectiveMimeType = inferAudioMetadataMimeType(file);
+      const metadata = await parseBuffer(fileBytes, {
+        mimeType: effectiveMimeType,
+        path: file.name,
+        size: file.size
+      });
+      if (uploadMetadataRequestIdRef.current !== requestId) return;
+      nextResult.parseSucceeded = true;
+      const pictureCount = Array.isArray(metadata.common.picture) ? metadata.common.picture.length : 0;
+      const firstPicture = pictureCount > 0 ? metadata.common.picture?.[0] ?? null : null;
+      console.debug("[artwork:metadata-import]", {
+        phase: "parse-result",
+        fileName: file.name,
+        fileType: file.type || null,
+        inferredMime: effectiveMimeType,
+        parseSucceeded: true,
+        commonTitle: cleanMetadataText(metadata.common.title) || null,
+        commonArtist: cleanMetadataText(metadata.common.artist || metadata.common.albumartist) || null,
+        pictureCount,
+        firstPictureFormat: cleanMetadataText(firstPicture?.format) || null,
+        firstPictureType: cleanMetadataText((firstPicture as IPicture & { type?: string } | null)?.type) || null,
+        firstPictureByteLength: firstPicture?.data?.length ?? 0
+      });
+      try {
+        const embeddedPicture = selectEmbeddedArtworkPicture(metadata.common.picture);
+        const embeddedArtwork = buildEmbeddedArtworkFile(embeddedPicture);
+        nextResult.embeddedArtworkFound = Boolean(embeddedArtwork);
+        if (embeddedArtwork) {
+          console.debug("[artwork:metadata-import]", {
+            phase: "selected-embedded-art",
+            fileName: file.name,
+            fileType: file.type || null,
+            effectiveMimeType,
+            fileBytes: file.size || 0,
+            pictureType: cleanMetadataText((embeddedPicture as IPicture & { type?: string } | null)?.type),
+            pictureName: cleanMetadataText((embeddedPicture as IPicture & { name?: string } | null)?.name),
+            declaredFormat: cleanMetadataText(embeddedPicture?.format),
+            resolvedMime: embeddedArtwork.type || null,
+            originalByteLength: embeddedArtwork.size || 0,
+            normalizationRan: false
+          });
+          nextResult.artworkApplied = applyMetadataArtworkIfAllowed(embeddedArtwork);
+        }
+      } catch (artworkError) {
+        console.debug("[artwork:metadata-import]", {
+          phase: "selected-embedded-art-failed",
+          fileName: file.name,
+          error: String(artworkError)
+        });
+      }
+
+      let metadataTitle = "";
+      let metadataArtist = "";
+      try {
+        metadataTitle = cleanMetadataText(metadata.common.title);
+        metadataArtist = cleanMetadataText(metadata.common.artist || metadata.common.albumartist);
+      } catch (textMetadataError) {
+        console.debug("[artwork:metadata-import]", {
+          phase: "text-metadata-failed",
+          fileName: file.name,
+          error: String(textMetadataError)
+        });
+      }
+
+      nextResult.titleFound = Boolean(metadataTitle);
+      nextResult.artistFound = Boolean(metadataArtist);
+      nextResult.titleApplied = applyMetadataTitleIfAllowed(metadataTitle);
+      nextResult.artistApplied = applyMetadataArtistIfAllowed(metadataArtist);
+    } catch (parseError) {
+      if (uploadMetadataRequestIdRef.current !== requestId) return;
+      nextResult.error = String(parseError);
+      console.debug("[artwork:metadata-import]", {
+        phase: "parse-failed",
+        fileName: file.name,
+        fileType: file.type || null,
+        inferredMime: inferAudioMetadataMimeType(file),
+        parseSucceeded: false,
+        fileBytes: file.size || 0,
+        error: nextResult.error
+      });
+    }
+
+    if (uploadMetadataRequestIdRef.current !== requestId) return;
+    console.debug("[artwork:metadata-import]", {
+      phase: "pipeline-finished",
+      fileName: file.name,
+      parseSucceeded: nextResult.parseSucceeded,
+      embeddedArtworkFound: nextResult.embeddedArtworkFound,
+      artworkApplied: nextResult.artworkApplied,
+      titleFound: nextResult.titleFound,
+      titleApplied: nextResult.titleApplied,
+      artistFound: nextResult.artistFound,
+      artistApplied: nextResult.artistApplied,
+      error: nextResult.error
+    });
+    setUploadMetadataResult(nextResult);
+  };
+
   const resetUploadDraftForNewAudio = (file: File | null) => {
+    uploadMetadataRequestIdRef.current += 1;
     uploadTitleTouchedRef.current = false;
     uploadArtistTouchedRef.current = false;
     uploadTitleAutofilledRef.current = false;
     uploadArtistAutofilledRef.current = false;
     uploadArtworkAutofilledRef.current = false;
-    setUploadTitle("");
-    setUploadArtist("");
+    setUploadTitleValue("");
+    setUploadArtistValue("");
     setUploadArtworkFile(null);
     if (!file) {
-      setUploadMetadataState("idle");
-      setUploadMetadataHasTitle(false);
+      setUploadMetadataResult(createUploadMetadataResult("idle"));
     }
   };
 
-  const onPickUploadAudio = (file: File | null) => {
+  const onPickUploadAudio = async (file: File | null) => {
     resetUploadDraftForNewAudio(file);
     setUploadAudio(file);
+    await runUploadMetadataPipeline(file, ignoreUploadMetadata);
   };
 
   const onPickUploadAudioNative = async (fallbackPick?: () => void) => {
@@ -1065,6 +1293,7 @@ export function AdminApp() {
       }
       resetUploadDraftForNewAudio(file);
       setUploadAudio(file);
+      await runUploadMetadataPipeline(file, ignoreUploadMetadata);
     } catch {
       fallbackPick?.();
     }
@@ -1302,11 +1531,31 @@ export function AdminApp() {
   const buildArtworkPayload = async (
     file: File | null,
     posterBlob: Blob | null,
-    frameTimeSec?: number | null
+    frameTimeSec?: number | null,
+    source: UploadArtworkSource = "manual"
   ): Promise<{ artPoster: Blob | null; artVideo: Blob | null; posterCaptureFailed: boolean }> => {
     if (!file) return { artPoster: null, artVideo: null, posterCaptureFailed: false };
     if (!isVideoArtwork(file)) {
+      if (source === "metadata") {
+        console.debug("[artwork:metadata-import]", {
+          phase: "build-artwork-payload",
+          source,
+          normalizationRan: false,
+          finalMime: file.type || null,
+          finalBytes: file.size || 0
+        });
+        return { artPoster: file, artVideo: null, posterCaptureFailed: false };
+      }
       const normalizedPoster = await normalizeStillImage(file).catch(() => file);
+      console.debug("[artwork:metadata-import]", {
+        phase: "build-artwork-payload",
+        source,
+        normalizationRan: true,
+        originalMime: file.type || null,
+        originalBytes: file.size || 0,
+        finalMime: normalizedPoster.type || null,
+        finalBytes: normalizedPoster.size || 0
+      });
       return { artPoster: normalizedPoster, artVideo: null, posterCaptureFailed: false };
     }
     let effectivePoster = posterBlob;
@@ -1323,7 +1572,7 @@ export function AdminApp() {
     await dismissEditingFocus();
     const liveTitle = readLiveUploadTitle();
     if (liveTitle !== uploadTitle) {
-      setUploadTitle(liveTitle);
+      setUploadTitleValue(liveTitle);
     }
     if (!isSupportedTrackFile(uploadAudio)) {
       setStatus("Select a track file (.wav, .mp3, .m4a, .mp4, or .mov).");
@@ -1344,7 +1593,10 @@ export function AdminApp() {
     showImportNotice("IMPORTING TRACK...");
 
     try {
-      const artwork = await buildArtworkPayload(uploadArt, uploadArtPosterBlob, uploadArtFrameTime);
+      const artwork = await buildArtworkPayload(uploadArt, uploadArtPosterBlob, uploadArtFrameTime, uploadArtSource);
+      if (uploadArt && !artwork.artPoster && !artwork.artVideo) {
+        throw new Error("Armed artwork could not be prepared for import.");
+      }
       await addTrackToDb({
         title: derivedTitle,
         artist: derivedArtist || null,
@@ -1356,13 +1608,12 @@ export function AdminApp() {
       markAdminImportCompleted();
       storeArtistName(derivedArtist);
       setArtistMemoryValue(derivedArtist);
-      setUploadTitle("");
-      setUploadArtist("");
+      setUploadTitleValue("");
+      setUploadArtistValue("");
       setUploadAudio(null);
       setUploadArtworkFile(null);
       setIgnoreUploadMetadata(false);
-      setUploadMetadataState("idle");
-      setUploadMetadataHasTitle(false);
+      setUploadMetadataResult(createUploadMetadataResult("idle"));
       uploadTitleTouchedRef.current = false;
       uploadArtistTouchedRef.current = false;
       uploadTitleAutofilledRef.current = false;
@@ -2321,7 +2572,7 @@ export function AdminApp() {
                 onChange={(event) => {
                   uploadTitleTouchedRef.current = true;
                   uploadTitleAutofilledRef.current = false;
-                  setUploadTitle(event.currentTarget.value);
+                  setUploadTitleValue(event.currentTarget.value);
                 }}
                 className="admin-upload-input rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
               />
@@ -2335,7 +2586,7 @@ export function AdminApp() {
                 onChange={(event) => {
                   uploadArtistTouchedRef.current = true;
                   uploadArtistAutofilledRef.current = false;
-                  setUploadArtist(event.currentTarget.value);
+                  setUploadArtistValue(event.currentTarget.value);
                 }}
                 placeholder="Start typing to see artist suggestions"
                 className="admin-upload-input rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
@@ -2377,6 +2628,24 @@ export function AdminApp() {
               />
               Do not import metadata
             </label>
+            <div
+              className={`rounded-xl border px-3 py-2 text-xs ${
+                uploadMetadataStatus.tone === "danger"
+                  ? "border-rose-400/30 bg-rose-500/10 text-rose-100"
+                  : uploadMetadataStatus.tone === "success"
+                    ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
+                    : uploadMetadataStatus.tone === "warning"
+                      ? "border-amber-400/30 bg-amber-500/10 text-amber-100"
+                      : uploadMetadataStatus.tone === "loading"
+                        ? "border-cyan-400/30 bg-cyan-500/10 text-cyan-100"
+                        : "border-slate-300/20 bg-slate-950/50 text-slate-300"
+              }`.trim()}
+              role="status"
+              aria-live="polite"
+            >
+              <div className="font-semibold">{uploadMetadataStatus.label}</div>
+              <div className="mt-1 opacity-90">{uploadMetadataStatus.detail}</div>
+            </div>
             {uploadArtPreviewUrl && (
               <div className="video-frame-picker">
                 <label className="text-xs text-slate-300">Poster frame for static artwork</label>

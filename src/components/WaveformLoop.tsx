@@ -252,19 +252,14 @@ export function WaveformLoop({
         setViewRange(centerRangeOnLoop(duration, safeStart, safeEnd, lockedSpan));
         return;
       }
-      if (viewRange.end > viewRange.start) {
-        const currentSpan = Math.max(MIN_LOOP_SECONDS, viewRange.end - viewRange.start);
-        setViewRange(centerRangeOnLoop(duration, safeStart, safeEnd, currentSpan));
-        return;
-      }
       const dragRange = buildWindowedViewRange(duration, safeStart, safeEnd, {
-          bufferRatio: DRAG_VIEW_BUFFER_RATIO,
-          minBufferSec: DRAG_VIEW_MIN_BUFFER_SEC,
-          maxScale: MAX_DRAG_VIEW_SCALE,
-          tinyLoopMinSpanSec: DRAG_VIEW_TINY_MIN_SPAN_SEC,
-          tinyLoopBufferRatio: DRAG_VIEW_TINY_BUFFER_RATIO,
-          tinyLoopMinBufferSec: DRAG_VIEW_TINY_MIN_BUFFER_SEC
-        });
+        bufferRatio: DRAG_VIEW_BUFFER_RATIO,
+        minBufferSec: DRAG_VIEW_MIN_BUFFER_SEC,
+        maxScale: MAX_DRAG_VIEW_SCALE,
+        tinyLoopMinSpanSec: DRAG_VIEW_TINY_MIN_SPAN_SEC,
+        tinyLoopBufferRatio: DRAG_VIEW_TINY_BUFFER_RATIO,
+        tinyLoopMinBufferSec: DRAG_VIEW_TINY_MIN_BUFFER_SEC
+      });
       setViewRange(applyManualZoomToRange(dragRange, duration, safeStart, safeEnd, manualZoomLevel));
       return;
     }
@@ -499,6 +494,7 @@ export function WaveformLoop({
         setPendingHandle(null);
         setDraggingHandle(activeHandle);
         setHasUnlockedManualZoom(true);
+        setShowManualZoomControls(true);
         onLoopDragStart?.();
       }
       if (!activeHandle) return;
