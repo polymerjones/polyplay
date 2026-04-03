@@ -2635,6 +2635,25 @@ export default function App() {
       return false;
     };
 
+    const handlePlainRepeatReplay = (restartAt: number): boolean => {
+      if (repeatTrackMode !== "repeat") return false;
+      audio.currentTime = restartAt;
+      setCurrentTime(restartAt);
+      commitUiCurrentTime(restartAt, { force: true });
+      applyDimMode(audio, dimMode);
+      void Promise.resolve(audio.play())
+        .then(() => {
+          setIsPlaying(true);
+        })
+        .catch(() => {
+          audio.currentTime = restartAt;
+          setCurrentTime(restartAt);
+          commitUiCurrentTime(restartAt, { force: true });
+          setIsPlaying(false);
+        });
+      return true;
+    };
+
     const onTime = () => {
       const nextTime = audio.currentTime || 0;
       const loopRegion = currentTrackId ? loopByTrack[currentTrackId] : undefined;
@@ -2719,6 +2738,9 @@ export default function App() {
       }
       if (repeatTrackMode !== "off" && currentLoopMode === "off") {
         if (handleThreepeatReplay(0)) {
+          return;
+        }
+        if (handlePlainRepeatReplay(0)) {
           return;
         }
       }
