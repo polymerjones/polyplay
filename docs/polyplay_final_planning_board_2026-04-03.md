@@ -96,37 +96,40 @@ After reviewing tasks, add a summary for:
 
 ## Active implementation task
 
-### Post-import active playlist view sync bug
+### Desktop track tile spacing audit/fix
 **Status:** fix implemented, awaiting QA
 
 **Goal:**
-Ensure the active playlist view refreshes immediately after successful import, including when “Do not close import” is enabled.
+Tighten desktop tile spacing so the grid feels balanced without changing the correct mobile layout.
 
 **Notes:**
 - Diagnosis start — 2026-04-03 Codex:
 - Files inspected:
-  - `src/admin/AdminApp.tsx`
+  - `styles.css`
+  - `src/components/TrackGrid.tsx`
+  - `src/components/TrackTile.tsx`
   - `src/App.tsx`
-  - `src/lib/playlistState.ts`
   - `docs/polyplay_codex_handoff_2026-04-03.md`
   - `docs/polyplay_final_planning_board_2026-04-03.md`
 - Suspected root cause:
-  - The standard upload-with-metadata success path in `src/admin/AdminApp.tsx` refreshes the admin panel after `addTrackToDb(...)`, but it does not notify the parent app.
-  - When “Do not close import” is enabled, `notifyUploadSuccess()` returns early and does not send `polyplay:import-complete`, so `src/App.tsx` never receives the refresh signal it relies on to run `refreshTracks()`.
-  - The imported tracks exist in storage; the visible main-page playlist stays stale until the user changes playlists and forces a rebind.
+  - The desktop tile layout is using the `ytm-grid` path from `TrackGrid.tsx`, not the older `.track-grid` tile rules.
+  - In `styles.css`, `.ytm-tile` keeps a strict square `aspect-ratio: 1 / 1`, and desktop switches to three columns at `900px+`.
+  - That makes each desktop row physically tall, so the layout reads as having too much vertical space between rows even though the actual grid `gap` is already modest.
+  - Mobile looks correct because the same square tiles render much smaller at phone widths.
 - Exact fix made:
-  - Kept the change limited to the successful standard upload-with-metadata path in `src/admin/AdminApp.tsx`.
-  - Added `notifyUserImported()` immediately after a successful `addTrackToDb(...)` import so the parent app receives the existing `polyplay:user-imported` and `polyplay:library-updated` signals even when “Do not close import” is enabled.
-  - Left the existing admin refresh, success notice, haptics, and `notifyUploadSuccess()` behavior unchanged.
+  - Kept the pass CSS-only and limited to the desktop `ytm-grid` / `ytm-tile` rules in `styles.css`.
+  - Reduced the desktop grid gap from `12px` to `10px`.
+  - Added a desktop-only tile ratio override so `.ytm-tile` no longer stays perfectly square on large screens, which shortens each desktop row without changing mobile tile shape.
+  - Left the mobile grid, tile component structure, and list layout untouched.
 - Exact files changed:
-  - `src/admin/AdminApp.tsx`
+  - `styles.css`
   - `docs/polyplay_final_planning_board_2026-04-03.md`
 - Regression risk:
-  - Low. The change only emits the same parent refresh notifications already used by the other import/edit success paths.
+  - Low. The change is desktop-only and CSS-only, but it does alter tile proportions slightly on wider screens.
 - QA still needed:
-  - Confirm desktop Safari import with “Do not close import” now shows the imported tracks immediately on return to the main page.
-  - Confirm standard import still closes normally when the checkbox is off.
-  - Confirm artwork update / audio replace / lane import flows behave the same as before.
+  - Confirm desktop tile rows feel tighter and more intentional after several imports.
+  - Confirm mobile tile layout still looks unchanged at phone-like widths.
+  - Confirm title overlays and artwork framing still look balanced on desktop.
 
 ### Merica background edge softening + star blur gradient
 **Status:** fix implemented, awaiting QA

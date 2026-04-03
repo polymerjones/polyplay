@@ -7198,5 +7198,10 @@ body.theme-custom.theme-custom-amber .ytm-tile.is-active::after {
 @media (min-width: 900px) {
   .ytm-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .ytm-tile {
+    aspect-ratio: 1 / 0.88;
   }
 }
