@@ -96,6 +96,38 @@ After reviewing tasks, add a summary for:
 
 ## Active implementation task
 
+### Post-import active playlist view sync bug
+**Status:** fix implemented, awaiting QA
+
+**Goal:**
+Ensure the active playlist view refreshes immediately after successful import, including when “Do not close import” is enabled.
+
+**Notes:**
+- Diagnosis start — 2026-04-03 Codex:
+- Files inspected:
+  - `src/admin/AdminApp.tsx`
+  - `src/App.tsx`
+  - `src/lib/playlistState.ts`
+  - `docs/polyplay_codex_handoff_2026-04-03.md`
+  - `docs/polyplay_final_planning_board_2026-04-03.md`
+- Suspected root cause:
+  - The standard upload-with-metadata success path in `src/admin/AdminApp.tsx` refreshes the admin panel after `addTrackToDb(...)`, but it does not notify the parent app.
+  - When “Do not close import” is enabled, `notifyUploadSuccess()` returns early and does not send `polyplay:import-complete`, so `src/App.tsx` never receives the refresh signal it relies on to run `refreshTracks()`.
+  - The imported tracks exist in storage; the visible main-page playlist stays stale until the user changes playlists and forces a rebind.
+- Exact fix made:
+  - Kept the change limited to the successful standard upload-with-metadata path in `src/admin/AdminApp.tsx`.
+  - Added `notifyUserImported()` immediately after a successful `addTrackToDb(...)` import so the parent app receives the existing `polyplay:user-imported` and `polyplay:library-updated` signals even when “Do not close import” is enabled.
+  - Left the existing admin refresh, success notice, haptics, and `notifyUploadSuccess()` behavior unchanged.
+- Exact files changed:
+  - `src/admin/AdminApp.tsx`
+  - `docs/polyplay_final_planning_board_2026-04-03.md`
+- Regression risk:
+  - Low. The change only emits the same parent refresh notifications already used by the other import/edit success paths.
+- QA still needed:
+  - Confirm desktop Safari import with “Do not close import” now shows the imported tracks immediately on return to the main page.
+  - Confirm standard import still closes normally when the checkbox is off.
+  - Confirm artwork update / audio replace / lane import flows behave the same as before.
+
 ### Merica background edge softening + star blur gradient
 **Status:** fix implemented, awaiting QA
 
@@ -507,6 +539,96 @@ Only pursue this if safe and realistic after release blockers are stable.
 - Recommended action: defer
 - Suggested implementation order: after release
 - Notes for implementation: do not pursue before release; the current user-facing issue is the iOS undo prompt, and replacing that with a feature adds new product and platform risk for no release safety gain.
+
+---
+
+### Post-import active playlist view sync bug
+**Status:** fix implemented, awaiting QA
+
+**Observed issue:**
+- Desktop Safari
+- user used “Do not close import”
+- successfully imported 3 tracks with metadata
+- when user returned to the main page, the playlist appeared empty
+- user switched playlists and came back, and the tracks were there
+
+**Desired behavior:**
+- after a successful import, the active playlist should immediately show the newly imported tracks without requiring a playlist switch
+
+**Notes:**
+- imported data exists
+- this appears to be a view sync / refresh / active-playlist binding bug, not failed import
+
+**Planning notes:**
+- Planning status: reviewed
+- Likely root cause:
+  - The most likely issue is stale active-playlist view state caused by missing parent-page notification in the specific "keep import page open" upload path, not failed import persistence.
+  - In `src/admin/AdminApp.tsx`, the standard upload flow that handles direct track import with metadata (`addTrackToDb(...)`) refreshes the admin page's own tables, but it does not call `notifyUserImported()`.
+  - When `keepImportPageOpen` is enabled, `notifyUploadSuccess()` returns early and does not send `polyplay:import-complete`, so the parent `src/App.tsx` never receives any import/update message for that path and does not run its own `refreshTracks()`.
+  - That matches the repro exactly: the data is already in storage, but the main page keeps rendering a stale `runtimeLibrary` / `tracks` snapshot until the user switches playlists, which forces a new active-playlist refresh.
+- Likely files involved:
+  - `src/admin/AdminApp.tsx`
+  - `src/App.tsx`
+  - `src/lib/playlistState.ts`
+- Complexity/risk: low to medium
+- Recommended action: implement now
+- Suggested implementation order: next narrow implementation task
+- Notes for implementation:
+  - Keep the fix narrow to the post-import notification/refresh path for the standard upload lane when "Do not close import" is enabled.
+  - Do not widen into a broader import refactor.
+  - The safest likely fix is to make the successful direct-upload path notify the parent app the same way other import/edit paths already do, then let existing `polyplay:user-imported` / `polyplay:library-updated` handlers in `src/App.tsx` refresh the active playlist view.
+  - Secondary audit item: `src/App.tsx` can launch overlapping `refreshTracks()` calls from multiple message/event sources, so after the narrow fix it is still worth verifying there is no Safari-specific race in request sequencing.
+  - Exact fix made:
+    - Added `notifyUserImported()` to the successful standard upload-with-metadata path in `src/admin/AdminApp.tsx`, immediately after `addTrackToDb(...)` completes.
+    - This ensures the parent app receives the existing import/update events and runs its normal refresh path even when `notifyUploadSuccess()` exits early because “Do not close import” is enabled.
+    - No broader import sequencing or playlist-state logic was changed.
+  - Exact files changed:
+    - `src/admin/AdminApp.tsx`
+    - `docs/polyplay_final_planning_board_2026-04-03.md`
+  - Regression risk:
+    - Low. The fix reuses existing parent notification behavior already exercised by the other admin import/edit flows.
+  - QA still needed:
+    - Confirm the active playlist immediately shows newly imported tracks on desktop Safari with “Do not close import” enabled.
+    - Confirm the imported metadata still lands correctly.
+    - Confirm normal auto-close import behavior is unchanged when the checkbox is off.
+
+---
+
+### iOS vault import delayed refresh audit
+**Status:** open
+
+**Observed issue:**
+- user exported a zip vault on desktop
+- AirDropped it to iPhone
+- imported full backup into iOS version successfully
+- about 6 seconds later, the app screen refreshed lightly
+
+**Desired behavior:**
+- vault import should settle cleanly and predictably
+- no unnecessary delayed refreshes unless they are required and harmless
+
+**Notes:**
+- restore itself worked
+- this is an audit of delayed post-import settle/refresh behavior
+
+**Planning notes:**
+- Planning status: reviewed
+- Likely root cause:
+  - No clear second restore/rewrite bug is obvious from code inspection yet; this looks more like post-import UI settle behavior than failed restore logic.
+  - The full-backup import path in `src/App.tsx` already does several immediate post-import steps in sequence: dispatches `polyplay:library-updated`, runs `refreshTracks()`, refreshes the vault inspector, clears the dirty flag, shows a vault success state, starts an auto-close countdown, and then schedules a playback resync with reason `vault-import-return`.
+  - The most likely visible "light refresh" candidates are the vault success auto-close sequence plus a later focus/visibility/playback resync on iOS after returning from the file-import handoff, rather than the backup being applied twice.
+  - Because the user reported roughly 6 seconds rather than the explicit 2-second vault close timer, there may also be platform timing involved in when iOS restores focus/visibility after the document picker or AirDrop-open handoff.
+- Likely files involved:
+  - `src/App.tsx`
+  - `src/lib/backup.ts`
+  - `src/lib/mediaSession.ts`
+- Complexity/risk: medium
+- Recommended action: defer until after release unless it becomes reproducible and user-visible enough to erode trust
+- Suggested implementation order: after the post-import playlist sync fix
+- Notes for implementation:
+  - Keep this as an audit first, not an implementation task.
+  - Verify whether the visible refresh coincides with the vault success auto-close, `vault-import-return` playback resync, or delayed iOS focus/visibility events.
+  - Only implement before release if a very specific harmless-looking timer or duplicate refresh path is confirmed.
 
 ---
 

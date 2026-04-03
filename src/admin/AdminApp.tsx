@@ -1634,6 +1634,7 @@ export function AdminApp() {
       );
       fireSuccessHaptic();
       requestParentHaptic("success");
+      notifyUserImported();
       showSuccessNotice(
         artwork.posterCaptureFailed
           ? "Import complete. Video artwork added."
