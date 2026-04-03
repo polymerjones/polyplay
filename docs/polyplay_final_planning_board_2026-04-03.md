@@ -110,7 +110,31 @@ Tooltip should anchor correctly to the intended button and remain visually align
 - Complexity/risk: low
 - Recommended action: implement now
 - Suggested implementation order: 2
-- Notes for implementation: keep this CSS-only if possible; anchor from one side consistently on mobile Safari, avoid dual-axis `left/right` switching, and preserve the existing tooltip copy and one-time onboarding behavior.
+- Notes for implementation:
+  - Diagnosis start — 2026-04-03 Codex:
+  - Files inspected:
+    - `src/App.tsx`
+    - `styles.css`
+    - `docs/polyplay_final_planning_board_2026-04-03.md`
+  - Suspected root cause:
+    - The tooltip is rendered as an absolutely positioned sibling inside `.playlist-selector__action-wrap`, so its offset parent is the entire action cluster, not the `New` button.
+    - On mobile Safari, that means the bubble centers against the full `prev / next / New` control row and can look detached from the intended trigger as the wrap width shifts.
+    - This is mostly a positioning-structure problem, not a copy or onboarding-state problem.
+  - Exact fix made:
+    - Wrapped the `New` button and tooltip in a dedicated `.playlist-selector__tutorial-anchor` container in `src/App.tsx`.
+    - Updated `styles.css` so the tooltip and arrow always anchor from `left: 50%` of that button wrapper, removing the earlier cluster-level positioning that was causing the detached Safari mobile alignment.
+    - Kept the tooltip copy, visibility behavior, and onboarding flow unchanged.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `styles.css`
+    - `docs/polyplay_final_planning_board_2026-04-03.md`
+  - Regression risk:
+    - Low. The change is limited to the onboarding tooltip anchor and positioning.
+  - QA still needed:
+    - Confirm the tooltip centers above the `New` button on iPhone Safari.
+    - Confirm the bubble no longer appears centered over the full `prev / next / New` cluster.
+    - Confirm desktop alignment still feels correct.
+    - Confirm the tooltip still appears and dismisses exactly once as before.
 
 ---
 

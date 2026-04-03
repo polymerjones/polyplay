@@ -6271,6 +6271,13 @@ html[data-theme="light"] .playlist-selector select {
   gap: 8px;
 }
 
+.playlist-selector__tutorial-anchor {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .playlist-selector__action {
   border: 1px solid rgba(192, 168, 255, 0.28);
   border-radius: 14px;
@@ -6297,7 +6304,7 @@ html[data-theme="light"] .playlist-selector select {
 
 .playlist-selector__tutorial-tip {
   position: absolute;
-  right: 50%;
+  left: 50%;
   top: calc(100% + 8px);
   max-width: min(280px, 92vw);
   padding: 10px 12px;
@@ -6313,7 +6320,7 @@ html[data-theme="light"] .playlist-selector select {
     0 12px 24px rgba(0, 0, 0, 0.28),
     0 0 22px rgba(240, 179, 91, 0.12);
   z-index: 140;
-  transform: translateX(50%) translateY(0) translateZ(0) scale(0.985);
+  transform: translateX(-50%) translateY(0) translateZ(0) scale(0.985);
   transform-origin: top center;
   animation: onboarding-tooltip-float 2.8s ease-in-out infinite;
 }
@@ -6321,23 +6328,23 @@ html[data-theme="light"] .playlist-selector select {
 .playlist-selector__tutorial-tip::before {
   content: "";
   position: absolute;
-  right: 50%;
+  left: 50%;
   top: -6px;
   width: 10px;
   height: 10px;
   background: rgba(15, 20, 31, 0.96);
   border-left: 1px solid rgba(244, 193, 103, 0.34);
   border-top: 1px solid rgba(244, 193, 103, 0.34);
-  transform: translateX(50%) rotate(45deg);
+  transform: translateX(-50%) rotate(45deg);
 }
 
 @keyframes onboarding-tooltip-float {
   0%,
   100% {
-    transform: translateX(50%) translateY(0) scale(0.985);
+    transform: translateX(-50%) translateY(0) scale(0.985);
   }
   50% {
-    transform: translateX(50%) translateY(-3px) scale(1);
+    transform: translateX(-50%) translateY(-3px) scale(1);
   }
 }
 
@@ -6413,7 +6420,6 @@ html[data-theme="light"] .playlist-selector select {
 
   .playlist-selector__tutorial-tip {
     left: 50%;
-    right: auto;
     top: calc(100% + 2px);
     max-width: 220px;
     transform: translateX(-50%) translateY(0) translateZ(0) scale(0.985);
@@ -6422,7 +6428,6 @@ html[data-theme="light"] .playlist-selector select {
 
   .playlist-selector__tutorial-tip::before {
     left: 50%;
-    right: auto;
     top: -5px;
     transform: translateX(-50%) rotate(45deg);
   }
@@ -6698,7 +6703,6 @@ html[data-theme="light"] .playlist-selector select {
 
   .playlist-selector__tutorial-tip {
     left: 50%;
-    right: auto;
     top: auto;
     bottom: calc(100% + 10px);
     transform: translateX(-50%) translateY(0) scale(0.985);
@@ -6708,7 +6712,6 @@ html[data-theme="light"] .playlist-selector select {
 
   .playlist-selector__tutorial-tip::before {
     left: 50%;
-    right: auto;
     top: auto;
     bottom: -6px;
     border-left: none;

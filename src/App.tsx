@@ -4479,28 +4479,30 @@ export default function App() {
                 >
                   &gt;
                 </button>
-                <button
-                  type="button"
-                  className={`playlist-selector__action onboarding-action ${
-                    shouldShowNewPlaylistHint ? "guided-cta is-onboarding-target" : ""
-                  }`.trim()}
-                  onClick={(event) => {
-                    if (shouldShowNewPlaylistHint) {
-                      fireLightHaptic();
-                      triggerOnboardingSparkle(event);
-                      markNewPlaylistHintSeen();
-                    }
-                    setNewPlaylistName("");
-                    setIsCreatePlaylistModalOpen(true);
-                  }}
-                >
-                  New
-                </button>
-                {shouldShowNewPlaylistHint && (
-                  <div className="playlist-selector__tutorial-tip onboarding-tooltip" role="note">
-                    Start by creating a new PolyPlaylist.
-                  </div>
-                )}
+                <div className="playlist-selector__tutorial-anchor">
+                  <button
+                    type="button"
+                    className={`playlist-selector__action onboarding-action ${
+                      shouldShowNewPlaylistHint ? "guided-cta is-onboarding-target" : ""
+                    }`.trim()}
+                    onClick={(event) => {
+                      if (shouldShowNewPlaylistHint) {
+                        fireLightHaptic();
+                        triggerOnboardingSparkle(event);
+                        markNewPlaylistHintSeen();
+                      }
+                      setNewPlaylistName("");
+                      setIsCreatePlaylistModalOpen(true);
+                    }}
+                  >
+                    New
+                  </button>
+                  {shouldShowNewPlaylistHint && (
+                    <div className="playlist-selector__tutorial-tip onboarding-tooltip" role="note">
+                      Start by creating a new PolyPlaylist.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </section>
