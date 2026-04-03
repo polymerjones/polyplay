@@ -162,6 +162,51 @@ Keep the pass limited to theme FX behavior so Merica uses a fireworks treatment 
   - Confirm Merica fireworks only use blue, white, and red.
   - Confirm MX effects no longer drift purple in splatter, gravity, or pop mode.
   - Confirm performance remains acceptable on iPhone.
+  - Follow-up diagnosis — 2026-04-03 Codex:
+    - The first fireworks pass fixed theme specificity and per-burst color, but the Merica bursts still read too small because the burst radius, particle velocity, and streak geometry are still tuned like compact spark clusters rather than large chrysanthemum-style shells.
+  - Follow-up exact fix made:
+    - Kept the pass limited to `spawnMericaFireworks(...)` in `src/fx/ambientFxEngine.ts`.
+    - Increased the central bloom radius and lifespan, increased burst count, increased outward particle travel and velocity, and stretched the burst ellipses into longer narrow streaks so each shell reads larger and more sky-filling.
+    - Increased Merica sparkle size and speed so the shell perimeter reads more like long fireworks spokes rather than a tight spark cluster.
+  - Follow-up exact files changed:
+    - `src/fx/ambientFxEngine.ts`
+    - `docs/polyplay_final_planning_board_2026-04-03.md`
+  - Follow-up regression risk:
+    - Low to medium. The pass is still Merica-only in behavior, but it increases burst size and on-screen FX occupancy.
+  - Follow-up QA still needed:
+    - Confirm Merica fireworks now feel large enough relative to the screen.
+    - Confirm the bursts read like long-spoke fireworks rather than compact spark blobs.
+    - Confirm performance remains acceptable on iPhone.
+  - Follow-up refinement — 2026-04-03 Codex:
+    - Updated only the Merica sparkle color so every fireworks spawn now carries bright amber spark highlights inspired by the reference image, while the main burst body still stays single-color per spawn.
+  - Follow-up refinement — 2026-04-03 Codex:
+    - Reduced the Merica glitter particle sizes so the amber highlights read as finer sparks rather than chunky glitter pieces.
+  - Follow-up refinement — 2026-04-03 Codex:
+    - Increased the Merica burst travel distance and outward velocity so the shells explode harder and spread farther across the screen.
+  - Follow-up refinement — 2026-04-03 Codex:
+    - Tightened the Merica amber highlights so they render as hotter, sharper spark streaks instead of soft pillowy dots.
+  - Follow-up refinement — 2026-04-03 Codex:
+    - Added a stronger white-hot spawn flash and shortened the Merica shell persistence with slightly fewer long-lived streaks, so repeat taps read sooner and the effect costs less CPU.
+  - Follow-up refinement — 2026-04-03 Codex:
+    - Strengthened the Merica spawn flash with a brighter white core and lifted blue-burst brightness so blue fireworks read more clearly against the background.
+  - Follow-up refinement — 2026-04-03 Codex:
+    - Tightened the Merica shell streak geometry and increased shell alpha so the fireworks read a little skinnier and brighter.
+  - Follow-up refinement — 2026-04-03 Codex:
+    - Added a quick brightness flicker to the Merica shell streaks so the fireworks shimmer briefly instead of holding one flat brightness level.
+  - Follow-up refinement — 2026-04-03 Codex:
+    - Added a fast Merica spawn-scale burst so the shell streaks explode outward quickly on spawn instead of only growing at a steady rate.
+  - Follow-up refinement — 2026-04-03 Codex:
+    - Corrected the Merica spawn-burst timing so the shell now starts tighter and expands fast, instead of starting oversized and shrinking first.
+  - Follow-up refinement — 2026-04-03 Codex:
+    - Reduced how often Merica chooses white-only shells, added alternate blue/red burst shades, and randomized burst rotation/spacing so repeated fireworks do not look identical.
+  - Follow-up refinement — 2026-04-03 Codex:
+    - Changed the Merica shell streak render from smooth solid pills to thinner segmented trail pieces with a brighter tip, so the fireworks feel less like perfect vector lines and closer to broken pyrotechnic streaks.
+  - Follow-up refinement — 2026-04-03 Codex:
+    - Thinned the Merica streak segments further and added a few tiny hard bright ember pixels inside the trails so the burst mix includes sharper spark points instead of only chubbier soft segments.
+  - Follow-up refinement — 2026-04-03 Codex:
+    - Added a few extra-hot Merica crackle particles in flash white and amber so each burst can throw a couple of tiny bright popping points above the normal spark field.
+  - Follow-up refinement — 2026-04-03 Codex:
+    - Lengthened and thinned the Merica shell streaks, brightened the shell-tip read, reduced supporting particle counts slightly for CPU safety, and added a stronger short-lived screen flash at spawn for a more explosive hit.
 
 ---
 
@@ -256,7 +301,36 @@ Should feel smoky, warm, and atmospheric rather than like paint splatter.
 - Complexity/risk: medium
 - Recommended action: split
 - Suggested implementation order: 7
-- Notes for implementation: keep this separate from Merica; the safe version is a theme-specific `splatter` replacement that draws a few soft layered plume clusters instead of many particles, otherwise performance and visual tuning will sprawl.
+- Notes for implementation:
+  - Diagnosis start — 2026-04-03 Codex:
+  - Files inspected:
+    - `src/fx/ambientFxEngine.ts`
+    - `src/components/AmbientFxCanvas.tsx`
+    - `src/App.tsx`
+    - `docs/polyplay_final_planning_board_2026-04-03.md`
+  - Suspected root cause:
+    - Rasta still routes through the generic `splatter` branch, so its tap FX language is paint-like radial blobs rather than plume-shaped smoke clusters.
+    - The current theme-aware FX changes also leave old particles alive across theme switches because theme-token refresh does not clear active particles, which is why Merica fireworks could remain visible until the user cycled FX.
+    - This is still an FX-engine behavior problem, not a background-art problem.
+  - Exact fix made:
+    - Kept the pass limited to the FX engine, FX refresh path, and the toast label path.
+    - Replaced Rasta’s generic splatter tap behavior with a dedicated smoke-plume variant in `src/fx/ambientFxEngine.ts` that spawns 3 large, slow, soft plume clouds using the Rasta green/yellow/red palette.
+    - Updated the splatter-mode toast label in `src/App.tsx` so Rasta now says `FX: Smoke`.
+    - Cleared active FX particles on `themeRefreshKey` changes in `src/components/AmbientFxCanvas.tsx` so old theme-specific particles do not persist after switching themes.
+    - Also tightened Merica fireworks color behavior in the shared FX engine so each burst now uses one randomly chosen theme color for the whole burst instead of mixing multiple theme colors inside one spawn.
+  - Exact files changed:
+    - `src/fx/ambientFxEngine.ts`
+    - `src/components/AmbientFxCanvas.tsx`
+    - `src/App.tsx`
+    - `docs/polyplay_final_planning_board_2026-04-03.md`
+  - Regression risk:
+    - Low to medium. The pass stays within theme FX behavior, but it touches shared engine branching and theme-refresh cleanup.
+  - QA still needed:
+    - Confirm Rasta splatter mode now reads as smoke plumes rather than paint splatter.
+    - Confirm the Rasta toast says `FX: Smoke`.
+    - Confirm the 3 plume colors stay within the Rasta palette.
+    - Confirm switching away from Merica no longer leaves fireworks particles on screen until FX is cycled.
+    - Confirm performance remains acceptable on iPhone.
 
 ---
 

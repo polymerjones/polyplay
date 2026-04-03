@@ -4150,7 +4150,16 @@ export default function App() {
     const currentIndex = order.indexOf(fxMode);
     const next = order[(currentIndex + 1) % order.length] ?? "gravity";
     setFxMode(next);
-    const label = next === "gravity" ? "Gravity" : next === "pop" ? "Pop" : "Splatter";
+    const label =
+      next === "gravity"
+        ? "Gravity"
+        : next === "pop"
+          ? "Pop"
+          : themeMode === "custom" && customThemeSlot === "merica"
+            ? "Fireworks"
+            : themeMode === "custom" && customThemeSlot === "rasta"
+              ? "Smoke"
+              : "Splatter";
     showFxToast(`FX: ${label}`);
   };
 

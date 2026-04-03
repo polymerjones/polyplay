@@ -111,6 +111,12 @@ export const AmbientFxCanvas = forwardRef<AmbientFxCanvasHandle, Props>(function
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;
+    engine.clear();
+  }, [themeRefreshKey]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
     if (allowed && (typeof document === "undefined" || !document.hidden)) {
       engine.start();
       return;
