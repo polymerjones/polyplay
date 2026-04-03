@@ -94,6 +94,77 @@ After reviewing tasks, add a summary for:
 
 ---
 
+## Active implementation task
+
+### Merica background edge softening + star blur gradient
+**Status:** fix implemented, awaiting QA
+
+**Goal:**
+Soften the Merica background seams and give the lower star band a clearer top edge with a downward atmospheric fade.
+
+**Notes:**
+- Diagnosis start — 2026-04-03 Codex:
+- Files inspected:
+  - `styles.css`
+  - `docs/polyplay_codex_handoff_2026-04-03.md`
+  - `docs/polyplay_final_planning_board_2026-04-03.md`
+- Suspected root cause:
+  - The Merica star rows are rendered as crisp repeated SVG tiles in `body.theme-custom.theme-custom-merica::after`, so the lower band reads too literal and too evenly sharp from top to bottom.
+  - The Merica drift field in `body.theme-custom.theme-custom-merica::before` still contains a few hard-stop blue-panel gradients, which creates visible seam lines instead of feathered atmospheric transitions.
+  - This looks like a CSS layering problem inside the existing Merica pseudo-layers, not a broader theme-system problem.
+- Exact fix made:
+  - Kept the pass CSS-only and limited to `body.theme-custom.theme-custom-merica` in `styles.css`.
+  - Replaced the hardest blue field cutoffs in `::before` with feathered horizontal and vertical fade ramps so the drifting base no longer shows sharp rectangular panel edges.
+  - Changed the lower repeated star row in `::after` from a flat-fill SVG tile to a gradient-fill SVG tile whose opacity is strongest near the top of the band and fades down to transparent, so the band stays patriotic but softens downward instead of ending in a harsh cutoff.
+  - Added one low-opacity radial haze layer behind that lower star band and slightly increased the pseudo-layer blur from `0.2px` to `0.35px` to smooth tile seams without changing the Merica palette or widening into a redesign.
+- Exact files changed:
+  - `styles.css`
+  - `docs/polyplay_final_planning_board_2026-04-03.md`
+- Regression risk:
+  - Low to medium. The pass is Merica-only and CSS-only, but it changes how the star band reads and how the blue field transitions feather out.
+- QA still needed:
+  - Confirm the lower star row stays readable enough to feel patriotic while fading downward more atmospherically.
+  - Confirm the previous hard blue panel seams are no longer visible during drift.
+  - Confirm the Merica background still reads beam-first rather than muddy.
+  - Confirm text and controls remain readable on desktop and iPhone.
+
+### Combined theme-effect task: Merica fireworks + MX FX color correction
+**Status:** fix implemented, awaiting QA
+
+**Goal:**
+Keep the pass limited to theme FX behavior so Merica uses a fireworks treatment and MX stops reading purple.
+
+**Notes:**
+- Diagnosis start — 2026-04-03 Codex:
+- Files inspected:
+  - `src/fx/ambientFxEngine.ts`
+  - `src/App.tsx`
+  - `docs/polyplay_codex_handoff_2026-04-03.md`
+  - `docs/polyplay_final_planning_board_2026-04-03.md`
+- Suspected root cause:
+  - Merica currently routes through the same generic `splatter` engine branch as every other theme, so it never gets a theme-specific fireworks spawn/render treatment and the toast still says `Splatter`.
+  - MX still reads purple because the FX engine uses `auraHue(tokens)` and `weightedHue()` in several branches; with MX the aura is white, so `rgbToHue()` falls back to the engine’s default purple hue path instead of staying inside the green/white/red palette.
+- Exact fix made:
+  - Kept the change limited to `src/fx/ambientFxEngine.ts` and the FX toast-label path in `src/App.tsx`.
+  - Added theme-slot awareness to the ambient FX token resolution so the engine can distinguish Merica and MX without widening into the broader theme system.
+  - Replaced Merica’s generic `splatter` tap behavior with a fireworks-style burst inside the existing splatter mode: a brief white flash core, larger palette-colored burst particles, and larger sparkles using only Merica’s blue/white/red palette.
+  - Updated the Merica splatter-mode toast label in `src/App.tsx` so it now reads `FX: Fireworks`.
+  - Removed MX purple contamination by preventing MX hue selection from falling back to the engine’s generic purple ranges and by assigning MX splatter particles directly from the MX green/white/red palette.
+- Exact files changed:
+  - `src/fx/ambientFxEngine.ts`
+  - `src/App.tsx`
+  - `docs/polyplay_final_planning_board_2026-04-03.md`
+- Regression risk:
+  - Low to medium. The pass is contained to ambient FX behavior for Merica and MX, but it changes theme-aware color and splatter rendering logic in the shared engine.
+- QA still needed:
+  - Confirm Merica splatter mode now reads as premium fireworks rather than paint splatter.
+  - Confirm the Merica toast says `FX: Fireworks`.
+  - Confirm Merica fireworks only use blue, white, and red.
+  - Confirm MX effects no longer drift purple in splatter, gravity, or pop mode.
+  - Confirm performance remains acceptable on iPhone.
+
+---
+
 ## Tasks to review
 
 ### 1. Safari mobile tooltip alignment
