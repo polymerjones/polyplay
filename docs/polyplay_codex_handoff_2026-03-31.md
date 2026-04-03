@@ -339,6 +339,12 @@ Add a text field on the Import page for **Artist Name** (not required).
 - Verification: `npm run typecheck` passes after the metadata-import patch.
 - Live QA still needed: confirm metadata parse timing on real MP3s/M4As, confirm embedded still artwork behaves correctly when toggling the bypass checkbox, and confirm the armed artwork state feels consistent with manual artwork selection on both desktop and iOS.
 
+### Active-track border trail (2026-04-XX)
+- Added the new `BorderTrail` helper to both the grid tiles and row list so the current track now features a subtle animated outline that follows the rounded corners of the artwork container (tiles) or the full row wrapper.
+- Playback state behavior: when the track plays normally, the trail animates continuously in the user’s aura color; when paused or muted, the animation halts and the color switches to white until playback resumes.
+- Dim mode behavior: dim overlays keep the trail animating but fade the aura color to ~30% opacity; the paused/muted state takes priority over dimming, so white + paused style still wins when both apply.
+- The trail color/animation state is driven by the new `BorderTrail` helper and the shared aura CSS vars (with fallback to `rgba(var(--aura-rgb, 188, 132, 255), 1)`), so transitions stay smooth and hardware-friendly on iOS.
+
 ---
 
 ## 7. Major play controls inactive bug — iOS and desktop

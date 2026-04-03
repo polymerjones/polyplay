@@ -19,6 +19,12 @@ export type Bubble = {
   shimmer: number;
 };
 
+export type BubblePalette = {
+  primaryHue: number;
+  secondaryHue: number;
+  tertiaryHue: number;
+};
+
 const DESKTOP_MAX = 28;
 const MOBILE_MAX = 18;
 const DESKTOP_COLLISION_LIMIT = 24;
@@ -35,7 +41,13 @@ function weightedKind(): BubbleKind {
   return "fixed";
 }
 
-function weightedHue(): number {
+function weightedHue(palette?: BubblePalette): number {
+  if (palette) {
+    const roll = Math.random();
+    if (roll < 0.42) return rand(palette.primaryHue - 8, palette.primaryHue + 8);
+    if (roll < 0.76) return rand(palette.secondaryHue - 8, palette.secondaryHue + 8);
+    if (roll < 0.94) return rand(palette.tertiaryHue - 10, palette.tertiaryHue + 10);
+  }
   const roll = Math.random();
   if (roll < 0.45) return rand(268, 286); // purple
   if (roll < 0.7) return rand(306, 334); // pink
@@ -44,7 +56,7 @@ function weightedHue(): number {
   return rand(0, 18); // white-ish / warm
 }
 
-function createBubble(id: number, x: number, y: number, now: number, intensity: number): Bubble {
+function createBubble(id: number, x: number, y: number, now: number, intensity: number, palette?: BubblePalette): Bubble {
   const kind = weightedKind();
   const bigRare = Math.random() < 0.08 + intensity * 0.08;
   const size = bigRare ? rand(90, 140) : rand(22, 60) * (1 + intensity * 0.35);
@@ -60,7 +72,7 @@ function createBubble(id: number, x: number, y: number, now: number, intensity: 
     x,
     y,
     size,
-    hue: weightedHue(),
+    hue: weightedHue(palette),
     alpha: rand(0.14, 0.33),
     glow: rand(0.6, 1.35) * (1 + intensity * 0.35),
     kind,
@@ -183,13 +195,20 @@ function applyRealBubbleCollisions(next: Bubble[]): Bubble[] {
   return next;
 }
 
-export function spawnBubblesAt(current: Bubble[], x: number, y: number, intensity: number, now: number): Bubble[] {
+export function spawnBubblesAt(
+  current: Bubble[],
+  x: number,
+  y: number,
+  intensity: number,
+  now: number,
+  palette?: BubblePalette
+): Bubble[] {
   const spawnCount = intensity > 0.66 ? 3 : intensity > 0.28 ? 2 : 1;
   const next = current.slice();
   const baseId = now;
   for (let i = 0; i < spawnCount; i += 1) {
     const offset = spawnCount === 1 ? 0 : (i - (spawnCount - 1) / 2) * rand(18, 34);
-    next.push(createBubble(baseId + i, x + offset, y + rand(-10, 10), now, intensity));
+    next.push(createBubble(baseId + i, x + offset, y + rand(-10, 10), now, intensity, palette));
   }
   return capBubbles(next);
 }

@@ -21,6 +21,7 @@ type Props = {
 };
 
 type Handle = "start" | "end";
+type EditViewportMode = "fit" | "manual" | "locked";
 
 const MIN_LOOP_SECONDS = 0.5;
 const LOOP_VIEW_ZOOM_DELAY_MS = 420;
@@ -41,6 +42,7 @@ const DRAG_START_DEADZONE_PX = 10;
 const MANUAL_ZOOM_FACTORS = [1, 0.86, 0.72, 0.58, 0.46, 0.34, 0.26, 0.18, 0.12] as const;
 const MAX_MANUAL_ZOOM_LEVEL = MANUAL_ZOOM_FACTORS.length - 1;
 const MIN_MANUAL_VIEW_SPAN_SEC = 0.9;
+const LOOP_FIT_BUFFER_RATIO = 0.05;
 export function WaveformLoop({
   track,
   currentTime,
@@ -96,14 +98,15 @@ export function WaveformLoop({
     end: number
   ) => {
     const span = Math.max(MIN_MANUAL_VIEW_SPAN_SEC, range.end - range.start);
+    const edgeBuffer = Math.max(0.14, span * 0.08);
     let nextStart = Math.max(0, Math.min(trackDuration - span, range.start));
     let nextEnd = Math.min(trackDuration, nextStart + span);
-    if (start < nextStart) {
-      nextStart = Math.max(0, Math.min(trackDuration - span, start));
+    if (start < nextStart + edgeBuffer) {
+      nextStart = Math.max(0, Math.min(trackDuration - span, start - edgeBuffer));
       nextEnd = Math.min(trackDuration, nextStart + span);
     }
-    if (end > nextEnd) {
-      nextEnd = Math.min(trackDuration, Math.max(span, end));
+    if (end > nextEnd - edgeBuffer) {
+      nextEnd = Math.min(trackDuration, Math.max(span, end + edgeBuffer));
       nextStart = Math.max(0, nextEnd - span);
     }
     return {
@@ -161,6 +164,7 @@ export function WaveformLoop({
   const prevCommittedLoopRef = useRef<{ start: number; end: number; active: boolean } | null>(null);
   const suppressSeekOnPointerUpRef = useRef(false);
   const pendingDragRef = useRef<{ handle: Handle; clientX: number; clientY: number } | null>(null);
+  const dragPointerRangeRef = useRef<{ start: number; end: number } | null>(null);
   const prevEditingRef = useRef(loopRegion.editing);
 
   const [peaks, setPeaks] = useState<number[]>(() => fallbackPeaks());
@@ -171,6 +175,8 @@ export function WaveformLoop({
   const [hasUnlockedManualZoom, setHasUnlockedManualZoom] = useState(false);
   const [showManualZoomControls, setShowManualZoomControls] = useState(false);
   const [viewRange, setViewRange] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
+  const [draftLoopRange, setDraftLoopRange] = useState<{ start: number; end: number } | null>(null);
+  const [editViewportMode, setEditViewportMode] = useState<EditViewportMode>("fit");
   const [shouldPreserveViewRange, setShouldPreserveViewRange] = useState(false);
   const lockedViewRangeRef = useRef<{ start: number; end: number } | null>(null);
   const editingViewRangeRef = useRef<{ start: number; end: number } | null>(null);
@@ -189,10 +195,13 @@ export function WaveformLoop({
   }, [duration, hasDuration, loopRegion.end, safeStart]);
 
   const hasLoopRange = hasDuration && safeEnd > safeStart;
+  const displayStart = loopRegion.editing && draftLoopRange ? draftLoopRange.start : safeStart;
+  const displayEnd = loopRegion.editing && draftLoopRange ? draftLoopRange.end : safeEnd;
+  const hasDisplayLoopRange = hasDuration && displayEnd > displayStart;
   const safeViewRange = hasDuration && viewRange.end > viewRange.start ? viewRange : { start: 0, end: duration || 0 };
   const viewSpan = Math.max(MIN_LOOP_SECONDS, safeViewRange.end - safeViewRange.start);
-  const rawStartPct = hasDuration ? ((safeStart - safeViewRange.start) / viewSpan) * 100 : 0;
-  const rawEndPct = hasDuration ? ((safeEnd - safeViewRange.start) / viewSpan) * 100 : 0;
+  const rawStartPct = hasDuration ? ((displayStart - safeViewRange.start) / viewSpan) * 100 : 0;
+  const rawEndPct = hasDuration ? ((displayEnd - safeViewRange.start) / viewSpan) * 100 : 0;
   const startPct = Math.max(0, Math.min(100, rawStartPct));
   const endPct = Math.max(startPct, Math.min(100, rawEndPct));
   const rangeWidthPct = Math.max(0, endPct - startPct);
@@ -208,39 +217,99 @@ export function WaveformLoop({
     return safeViewRange.start + ratio * viewSpan;
   };
 
+  const secondsFromClientXInRange = (clientX: number, range: { start: number; end: number }): number => {
+    if (!hasDuration || !waveRef.current) return 0;
+    const rect = waveRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const span = Math.max(MIN_LOOP_SECONDS, range.end - range.start);
+    return range.start + ratio * span;
+  };
+
   const toggleManualZoomControls = () => {
     setShowManualZoomControls((prev) => {
       return !prev;
     });
   };
 
+  const canZoomOut =
+    hasDuration &&
+    loopRegion.active &&
+    loopRegion.editing &&
+    viewRange.end > viewRange.start &&
+    viewRange.end - viewRange.start < duration - 0.0001;
+
   const adjustManualZoomLevel = (direction: -1 | 1) => {
     setManualZoomLevel((prev) => {
       const nextLevel = Math.max(0, Math.min(MAX_MANUAL_ZOOM_LEVEL, prev + direction));
-      if (
-        nextLevel !== prev &&
-        hasDuration &&
-        loopRegion.active &&
-        hasLoopRange &&
-        loopRegion.editing &&
-        viewRange.end > viewRange.start
-      ) {
-        const currentFactor = MANUAL_ZOOM_FACTORS[Math.max(0, Math.min(MAX_MANUAL_ZOOM_LEVEL, prev))] ?? 1;
-        const nextFactor = MANUAL_ZOOM_FACTORS[nextLevel] ?? 1;
+      if (hasDuration && loopRegion.active && hasLoopRange && loopRegion.editing && viewRange.end > viewRange.start) {
         const currentSpan = Math.max(MIN_LOOP_SECONDS, viewRange.end - viewRange.start);
-        const nextSpan = Math.max(MIN_MANUAL_VIEW_SPAN_SEC, currentSpan * (nextFactor / currentFactor));
-        const nextRange = centerRangeOnLoop(duration, safeStart, safeEnd, nextSpan);
-        editingViewRangeRef.current = nextRange;
-        setViewRange(nextRange);
+        let nextRange: { start: number; end: number } | null = null;
+        if (nextLevel !== prev) {
+          const currentFactor = MANUAL_ZOOM_FACTORS[Math.max(0, Math.min(MAX_MANUAL_ZOOM_LEVEL, prev))] ?? 1;
+          const nextFactor = MANUAL_ZOOM_FACTORS[nextLevel] ?? 1;
+          const nextSpan = Math.max(MIN_MANUAL_VIEW_SPAN_SEC, currentSpan * (nextFactor / currentFactor));
+          nextRange = centerRangeOnLoop(duration, displayStart, displayEnd, nextSpan);
+        } else if (direction < 0 && currentSpan < duration - 0.0001) {
+          const baseOutFactor = MANUAL_ZOOM_FACTORS[1] ?? 0.86;
+          const nextSpan = Math.min(duration, currentSpan / baseOutFactor);
+          nextRange = centerRangeOnLoop(duration, displayStart, displayEnd, nextSpan);
+        }
+        if (nextRange) {
+          setEditViewportMode("manual");
+          editingViewRangeRef.current = nextRange;
+          setViewRange(nextRange);
+        } else {
+          return prev;
+        }
       }
       return nextLevel;
     });
   };
 
+  const fitLoopToView = () => {
+    if (!hasDuration || !loopRegion.active || !hasDisplayLoopRange || !loopRegion.editing) return;
+    const loopSpan = Math.max(MIN_LOOP_SECONDS, displayEnd - displayStart);
+    const fittedSpan = Math.max(MIN_MANUAL_VIEW_SPAN_SEC, loopSpan * (1 + LOOP_FIT_BUFFER_RATIO * 2));
+    const nextRange = centerRangeOnLoop(duration, displayStart, displayEnd, fittedSpan);
+    setEditViewportMode("fit");
+    editingViewRangeRef.current = nextRange;
+    setManualZoomLevel(0);
+    setViewRange(nextRange);
+  };
+
+  const buildEditingFocusRange = () =>
+    buildWindowedViewRange(duration, displayStart, displayEnd, {
+      bufferRatio: DRAG_VIEW_BUFFER_RATIO,
+      minBufferSec: DRAG_VIEW_MIN_BUFFER_SEC,
+      maxScale: MAX_DRAG_VIEW_SCALE,
+      tinyLoopMinSpanSec: DRAG_VIEW_TINY_MIN_SPAN_SEC,
+      tinyLoopBufferRatio: DRAG_VIEW_TINY_BUFFER_RATIO,
+      tinyLoopMinBufferSec: DRAG_VIEW_TINY_MIN_BUFFER_SEC
+    });
+
+  useEffect(() => {
+    if (!loopRegion.editing || !hasLoopRange) {
+      setDraftLoopRange(null);
+      return;
+    }
+    if (draggingHandle || pendingHandle) return;
+    setDraftLoopRange((prev) => {
+      if (
+        prev &&
+        Math.abs(prev.start - safeStart) <= 0.0001 &&
+        Math.abs(prev.end - safeEnd) <= 0.0001
+      ) {
+        return prev;
+      }
+      return { start: safeStart, end: safeEnd };
+    });
+  }, [draggingHandle, hasLoopRange, loopRegion.editing, pendingHandle, safeEnd, safeStart]);
+
   useEffect(() => {
     if (!track?.id) {
       setHasAdjustedLoop(false);
       setManualZoomLevel(0);
+      setEditViewportMode("fit");
       setHasUnlockedManualZoom(false);
       dragViewSpanRef.current = null;
       committedLoopDragRef.current = false;
@@ -281,6 +350,34 @@ export function WaveformLoop({
       setViewRange({ start: 0, end: 0 });
       return;
     }
+    if (loopRegion.editing && draggingHandle && editingViewRangeRef.current) {
+      const lockedDragRange = editingViewRangeRef.current;
+      if (
+        Math.abs(lockedDragRange.start - viewRange.start) > 0.0001 ||
+        Math.abs(lockedDragRange.end - viewRange.end) > 0.0001
+      ) {
+        setViewRange(lockedDragRange);
+      }
+      return;
+    }
+    if (loopRegion.editing && loopRegion.active && hasDisplayLoopRange) {
+      const baseEditingRange =
+        editViewportMode === "fit"
+          ? editingViewRangeRef.current ?? buildEditingFocusRange()
+          : editingViewRangeRef.current ?? { start: viewRange.start, end: viewRange.end };
+      const nextEditingRange =
+        editViewportMode === "locked"
+          ? baseEditingRange
+          : keepLoopWithinViewRange(baseEditingRange, duration, displayStart, displayEnd);
+      editingViewRangeRef.current = nextEditingRange;
+      if (
+        Math.abs(nextEditingRange.start - viewRange.start) > 0.0001 ||
+        Math.abs(nextEditingRange.end - viewRange.end) > 0.0001
+      ) {
+        setViewRange(nextEditingRange);
+      }
+      return;
+    }
     if (zoomTimerRef.current !== null) {
       window.clearTimeout(zoomTimerRef.current);
       zoomTimerRef.current = null;
@@ -293,29 +390,9 @@ export function WaveformLoop({
       setViewRange({ start: 0, end: duration });
       return;
     }
-    if (loopRegion.editing || draggingHandle) {
-      const fallbackDragRange = buildWindowedViewRange(duration, safeStart, safeEnd, {
-        bufferRatio: DRAG_VIEW_BUFFER_RATIO,
-        minBufferSec: DRAG_VIEW_MIN_BUFFER_SEC,
-        maxScale: MAX_DRAG_VIEW_SCALE,
-        tinyLoopMinSpanSec: DRAG_VIEW_TINY_MIN_SPAN_SEC,
-        tinyLoopBufferRatio: DRAG_VIEW_TINY_BUFFER_RATIO,
-        tinyLoopMinBufferSec: DRAG_VIEW_TINY_MIN_BUFFER_SEC
-      });
-      const nextEditingRange = keepLoopWithinViewRange(
-        editingViewRangeRef.current ??
-          (viewRange.end > viewRange.start ? viewRange : applyManualZoomToRange(fallbackDragRange, duration, safeStart, safeEnd, manualZoomLevel)),
-        duration,
-        safeStart,
-        safeEnd
-      );
-      editingViewRangeRef.current = nextEditingRange;
-      setViewRange(nextEditingRange);
-      return;
-    }
     zoomTimerRef.current = window.setTimeout(() => {
-      const baseRange = buildWindowedViewRange(duration, safeStart, safeEnd);
-      setViewRange(applyManualZoomToRange(baseRange, duration, safeStart, safeEnd, manualZoomLevel));
+      const baseRange = buildWindowedViewRange(duration, displayStart, displayEnd);
+      setViewRange(applyManualZoomToRange(baseRange, duration, displayStart, displayEnd, manualZoomLevel));
       zoomTimerRef.current = null;
     }, LOOP_VIEW_ZOOM_DELAY_MS);
     return () => {
@@ -327,14 +404,15 @@ export function WaveformLoop({
   }, [
     draggingHandle,
     duration,
+    editViewportMode,
     hasAdjustedLoop,
     hasDuration,
-    hasLoopRange,
+    hasDisplayLoopRange,
     loopRegion.active,
     loopRegion.editing,
     manualZoomLevel,
-    safeEnd,
-    safeStart,
+    displayEnd,
+    displayStart,
     shouldPreserveViewRange,
     viewRange.end,
     viewRange.start
@@ -342,9 +420,30 @@ export function WaveformLoop({
 
   useEffect(() => {
     if (loopRegion.editing) {
-      lockedViewRangeRef.current = { start: viewRange.start, end: viewRange.end };
-      if (!editingViewRangeRef.current && viewRange.end > viewRange.start) {
-        editingViewRangeRef.current = { start: viewRange.start, end: viewRange.end };
+      const loopSpan = Math.max(MIN_LOOP_SECONDS, displayEnd - displayStart);
+      const currentSpan = viewRange.end > viewRange.start ? viewRange.end - viewRange.start : 0;
+      const shouldRefocusEditingRange =
+        !editingViewRangeRef.current ||
+        currentSpan <= 0 ||
+        currentSpan > Math.max(loopSpan * 5, MIN_MANUAL_VIEW_SPAN_SEC * 2.5);
+      const nextEditingRange = shouldRefocusEditingRange
+        ? buildEditingFocusRange()
+        : keepLoopWithinViewRange(
+            editingViewRangeRef.current ?? { start: viewRange.start, end: viewRange.end },
+            duration,
+            displayStart,
+            displayEnd
+          );
+      if (!prevEditingRef.current) {
+        setEditViewportMode("fit");
+      }
+      lockedViewRangeRef.current = nextEditingRange;
+      editingViewRangeRef.current = nextEditingRange;
+      if (
+        Math.abs(nextEditingRange.start - viewRange.start) > 0.0001 ||
+        Math.abs(nextEditingRange.end - viewRange.end) > 0.0001
+      ) {
+        setViewRange(nextEditingRange);
       }
       setShouldPreserveViewRange(false);
     } else if (
@@ -357,14 +456,16 @@ export function WaveformLoop({
       setShouldPreserveViewRange(true);
     }
     prevEditingRef.current = loopRegion.editing;
-  }, [loopRegion.editing, loopRegion.active, hasLoopRange, viewRange.start, viewRange.end]);
+  }, [displayEnd, displayStart, duration, hasDisplayLoopRange, loopRegion.editing, loopRegion.active, viewRange.start, viewRange.end]);
 
   useEffect(() => {
     if (!loopRegion.active) {
       setShouldPreserveViewRange(false);
       lockedViewRangeRef.current = null;
       editingViewRangeRef.current = null;
+      setEditViewportMode("fit");
       setHasUnlockedManualZoom(false);
+      setDraftLoopRange(null);
     }
   }, [loopRegion.active]);
 
@@ -372,7 +473,10 @@ export function WaveformLoop({
     if (!loopRegion.editing) {
       setShowManualZoomControls(false);
       setHasUnlockedManualZoom(false);
+      setEditViewportMode("fit");
       editingViewRangeRef.current = null;
+      dragPointerRangeRef.current = null;
+      dragSnapshotRef.current = null;
     }
   }, [loopRegion.editing]);
 
@@ -432,7 +536,7 @@ export function WaveformLoop({
       const h = Math.max(4, magnitude * height * 0.98);
       const x = i * (barWidth + gap);
       const y = (height - h) / 2;
-      const inLoop = loopRegion.active && hasLoopRange && sampleTime >= safeStart && sampleTime <= safeEnd;
+      const inLoop = loopRegion.active && hasDisplayLoopRange && sampleTime >= displayStart && sampleTime <= displayEnd;
 
       ctx.fillStyle = inLoop
         ? isLightTheme
@@ -444,7 +548,7 @@ export function WaveformLoop({
 
       ctx.fillRect(x, y, barWidth, h);
     }
-  }, [duration, hasLoopRange, isLightTheme, loopRegion.active, peaks, safeEnd, safeStart, safeViewRange.start, viewSpan]);
+  }, [displayEnd, displayStart, duration, hasDisplayLoopRange, isLightTheme, loopRegion.active, peaks, safeViewRange.start, viewSpan]);
 
   useEffect(() => {
     const canvas = decorCanvasRef.current;
@@ -496,7 +600,7 @@ export function WaveformLoop({
       const x = i * (barWidth + gap);
       if (centerRatio > visibleProgress) continue;
       const y = (height - h) / 2;
-      const inLoop = loopRegion.active && hasLoopRange && sampleTime >= safeStart && sampleTime <= safeEnd;
+      const inLoop = loopRegion.active && hasDisplayLoopRange && sampleTime >= displayStart && sampleTime <= displayEnd;
       ctx.fillStyle = inLoop ? loopGrad : progressGrad;
       ctx.fillRect(x, y, barWidth, h);
     }
@@ -514,13 +618,13 @@ export function WaveformLoop({
   }, [
     currentTime,
     duration,
-    hasLoopRange,
+    hasDisplayLoopRange,
     isLightTheme,
     isPlaying,
     loopRegion.active,
     peaks,
-    safeEnd,
-    safeStart,
+    displayEnd,
+    displayStart,
     safeViewRange.start,
     viewSpan
   ]);
@@ -539,29 +643,35 @@ export function WaveformLoop({
         const dy = event.clientY - pending.clientY;
         if (Math.hypot(dx, dy) < DRAG_START_DEADZONE_PX) return;
         activeHandle = pending.handle;
-        dragSnapshotRef.current = { start: safeStart, end: safeEnd };
-        const fallbackDragRange = buildWindowedViewRange(duration, safeStart, safeEnd);
+        dragSnapshotRef.current = { start: displayStart, end: displayEnd };
+        const fallbackDragRange = buildWindowedViewRange(duration, displayStart, displayEnd);
         const nextEditingRange =
           viewRange.end > viewRange.start ? { start: viewRange.start, end: viewRange.end } : fallbackDragRange;
         editingViewRangeRef.current = nextEditingRange;
+        dragPointerRangeRef.current = nextEditingRange;
         dragViewSpanRef.current = Math.max(MIN_LOOP_SECONDS, nextEditingRange.end - nextEditingRange.start);
         pendingDragRef.current = null;
         setPendingHandle(null);
         setDraggingHandle(activeHandle);
+        setEditViewportMode("locked");
         setHasUnlockedManualZoom(true);
         setShowManualZoomControls(true);
         onLoopDragStart?.();
       }
       if (!activeHandle) return;
-      const seconds = secondsFromClientX(event.clientX);
+      const dragRange = dragPointerRangeRef.current ?? editingViewRangeRef.current ?? safeViewRange;
+      const seconds = secondsFromClientXInRange(event.clientX, dragRange);
+      const snapshot = dragSnapshotRef.current ?? { start: displayStart, end: displayEnd };
       if (activeHandle === "start") {
-        const nextStart = Math.min(seconds, safeEnd - MIN_LOOP_SECONDS);
-        dragSnapshotRef.current = { start: nextStart, end: safeEnd };
-        onSetLoopRange(nextStart, safeEnd, true, { persist: false, editing: true });
+        const nextStart = Math.min(seconds, snapshot.end - MIN_LOOP_SECONDS);
+        const nextDraft = { start: nextStart, end: snapshot.end };
+        dragSnapshotRef.current = nextDraft;
+        setDraftLoopRange(nextDraft);
       } else {
-        const nextEnd = Math.max(seconds, safeStart + MIN_LOOP_SECONDS);
-        dragSnapshotRef.current = { start: safeStart, end: nextEnd };
-        onSetLoopRange(safeStart, nextEnd, true, { persist: false, editing: true });
+        const nextEnd = Math.max(seconds, snapshot.start + MIN_LOOP_SECONDS);
+        const nextDraft = { start: snapshot.start, end: nextEnd };
+        dragSnapshotRef.current = nextDraft;
+        setDraftLoopRange(nextDraft);
       }
     };
 
@@ -574,11 +684,14 @@ export function WaveformLoop({
       if (snapshot) {
         committedLoopDragRef.current = true;
         setHasAdjustedLoop(true);
+        setDraftLoopRange(snapshot);
         onSetLoopRange(snapshot.start, snapshot.end, true, { persist: true, editing: true });
         onLoopDragCommit?.(snapshot.start);
       }
       dragSnapshotRef.current = null;
+      dragPointerRangeRef.current = null;
       dragViewSpanRef.current = null;
+      setEditViewportMode("manual");
       setDraggingHandle(null);
       window.requestAnimationFrame(() => {
         suppressSeekOnPointerUpRef.current = false;
@@ -591,7 +704,7 @@ export function WaveformLoop({
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
     };
-  }, [draggingHandle, hasDuration, onLoopDragStart, onLoopDragCommit, onSetLoopRange, pendingHandle, safeEnd, safeStart]);
+  }, [displayEnd, displayStart, draggingHandle, hasDuration, onLoopDragCommit, onLoopDragStart, onSetLoopRange, pendingHandle, safeEnd, safeStart]);
 
   useEffect(() => {
     if (!enableAuraPulse) return;
@@ -653,34 +766,36 @@ export function WaveformLoop({
         <div className="pc-wave__loop-overlay" aria-hidden="true">
           <div className="pc-wave__loop-view-window">
             <div className="pc-wave__loop-range" style={{ left: `${startPct}%`, width: `${rangeWidthPct}%` }} />
-            <div className="pc-wave__loop-marker is-start" style={{ left: `${startPct}%` }} />
-            <div className="pc-wave__loop-marker is-end" style={{ left: `${endPct}%` }} />
-            <button
-              className="pc-wave__loop-handle is-start"
-              style={{ left: `${startPct}%` }}
-              aria-label="Loop start"
-            onPointerDown={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onSetLoopRange(safeStart, safeEnd, true, { persist: false, editing: true });
-              suppressSeekOnPointerUpRef.current = true;
-              pendingDragRef.current = { handle: "start", clientX: event.clientX, clientY: event.clientY };
-              setPendingHandle("start");
-            }}
-            />
-            <button
-              className="pc-wave__loop-handle is-end"
-              style={{ left: `${endPct}%` }}
-              aria-label="Loop end"
-            onPointerDown={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onSetLoopRange(safeStart, safeEnd, true, { persist: false, editing: true });
-              suppressSeekOnPointerUpRef.current = true;
-              pendingDragRef.current = { handle: "end", clientX: event.clientX, clientY: event.clientY };
-              setPendingHandle("end");
-            }}
-            />
+            {loopRegion.editing && (
+              <>
+                <div className="pc-wave__loop-marker is-start" style={{ left: `${startPct}%` }} />
+                <div className="pc-wave__loop-marker is-end" style={{ left: `${endPct}%` }} />
+                <button
+                  className="pc-wave__loop-handle is-start"
+                  style={{ left: `${startPct}%` }}
+                  aria-label="Loop start"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    suppressSeekOnPointerUpRef.current = true;
+                    pendingDragRef.current = { handle: "start", clientX: event.clientX, clientY: event.clientY };
+                    setPendingHandle("start");
+                  }}
+                />
+                <button
+                  className="pc-wave__loop-handle is-end"
+                  style={{ left: `${endPct}%` }}
+                  aria-label="Loop end"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    suppressSeekOnPointerUpRef.current = true;
+                    pendingDragRef.current = { handle: "end", clientX: event.clientX, clientY: event.clientY };
+                    setPendingHandle("end");
+                  }}
+                />
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -697,17 +812,25 @@ export function WaveformLoop({
               ⌕
             </span>
           </button>
+          <button
+            type="button"
+            className="pc-wave-toolbar__fit"
+            aria-label="Zoom to fit active loop"
+            onClick={fitLoopToView}
+          >
+            Fit
+          </button>
           <div className={`pc-wave-toolbar__controls ${showManualZoomControls ? "is-open" : ""}`.trim()}>
+            <span className="pc-wave-toolbar__label">Loop Zoom</span>
             <button
               type="button"
               className="pc-wave-toolbar__btn"
               aria-label="Zoom out loop editor"
               onClick={() => adjustManualZoomLevel(-1)}
-              disabled={manualZoomLevel <= 0}
+              disabled={!canZoomOut}
             >
               -
             </button>
-            <span className="pc-wave-toolbar__label">Loop Zoom</span>
             <button
               type="button"
               className="pc-wave-toolbar__btn"

@@ -6,6 +6,7 @@ type ResolvedQuality = "lite" | "high";
 type ThemeTokens = {
   accentRgb: [number, number, number];
   auraRgb: [number, number, number];
+  fxPaletteRgb: [[number, number, number], [number, number, number], [number, number, number]];
   glowIntensity: number;
 };
 
@@ -95,10 +96,13 @@ function rgbToHue(rgb: [number, number, number], fallback: number): number {
 
 function themedHue(tokens: ThemeTokens): number {
   const roll = Math.random();
-  const auraHue = rgbToHue(tokens.auraRgb, 282);
-  const accentHue = rgbToHue(tokens.accentRgb, 216);
-  if (roll < 0.74) return rand(auraHue - 8, auraHue + 8);
-  if (roll < 0.92) return rand(accentHue - 10, accentHue + 10);
+  const [primary, secondary, tertiary] = tokens.fxPaletteRgb;
+  const primaryHue = rgbToHue(primary, rgbToHue(tokens.auraRgb, 282));
+  const secondaryHue = rgbToHue(secondary, rgbToHue(tokens.accentRgb, 216));
+  const tertiaryHue = rgbToHue(tertiary, rgbToHue(tokens.accentRgb, 216));
+  if (roll < 0.46) return rand(primaryHue - 8, primaryHue + 8);
+  if (roll < 0.8) return rand(secondaryHue - 8, secondaryHue + 8);
+  if (roll < 0.94) return rand(tertiaryHue - 10, tertiaryHue + 10);
   return weightedHue();
 }
 
@@ -150,6 +154,11 @@ class AmbientFxEngine {
   private themeTokens: ThemeTokens = {
     accentRgb: [125, 86, 226],
     auraRgb: [170, 112, 255],
+    fxPaletteRgb: [
+      [188, 132, 255],
+      [255, 255, 255],
+      [170, 112, 255]
+    ],
     glowIntensity: 1
   };
 
@@ -214,6 +223,7 @@ class AmbientFxEngine {
       ...tokens,
       accentRgb: tokens.accentRgb ?? this.themeTokens.accentRgb,
       auraRgb: tokens.auraRgb ?? this.themeTokens.auraRgb,
+      fxPaletteRgb: tokens.fxPaletteRgb ?? this.themeTokens.fxPaletteRgb,
       glowIntensity: Number.isFinite(tokens.glowIntensity)
         ? clamp(tokens.glowIntensity as number, 0.5, 2)
         : this.themeTokens.glowIntensity
@@ -380,10 +390,11 @@ class AmbientFxEngine {
           bubble.y,
           bubble.r
         );
-        gradient.addColorStop(0, `hsla(${bubble.hue} 100% 98% / ${alpha * 0.98})`);
-        gradient.addColorStop(0.48, `hsla(${bubble.hue} 100% 88% / ${alpha * 0.82})`);
-        gradient.addColorStop(0.78, `hsla(${bubble.hue} 96% 72% / ${alpha * 0.34})`);
-        gradient.addColorStop(1, `hsla(${bubble.hue} 92% 60% / 0)`);
+        const [fx1, fx2, fx3] = this.themeTokens.fxPaletteRgb;
+        gradient.addColorStop(0, `rgba(${fx2[0]}, ${fx2[1]}, ${fx2[2]}, ${alpha * 0.98})`);
+        gradient.addColorStop(0.34, `hsla(${bubble.hue} 100% 88% / ${alpha * 0.82})`);
+        gradient.addColorStop(0.72, `rgba(${fx3[0]}, ${fx3[1]}, ${fx3[2]}, ${alpha * 0.34})`);
+        gradient.addColorStop(1, `rgba(${fx1[0]}, ${fx1[1]}, ${fx1[2]}, 0)`);
         this.ctx.fillStyle = gradient;
         this.ctx.beginPath();
         this.ctx.arc(bubble.x, bubble.y, bubble.r, 0, Math.PI * 2);
@@ -401,12 +412,17 @@ class AmbientFxEngine {
 
         this.ctx.beginPath();
         this.ctx.arc(bubble.x, bubble.y, radius, 0, Math.PI * 2);
-        this.ctx.fillStyle = `hsla(${bubble.hue} 100% 96% / ${baseAlpha * 0.18})`;
+        const [fx1, fx2, fx3] = this.themeTokens.fxPaletteRgb;
+        const fillGradient = this.ctx.createRadialGradient(bubble.x, bubble.y, radius * 0.18, bubble.x, bubble.y, radius);
+        fillGradient.addColorStop(0, `rgba(${fx2[0]}, ${fx2[1]}, ${fx2[2]}, ${baseAlpha * 0.2})`);
+        fillGradient.addColorStop(0.56, `hsla(${bubble.hue} 100% 92% / ${baseAlpha * 0.16})`);
+        fillGradient.addColorStop(1, `rgba(${fx1[0]}, ${fx1[1]}, ${fx1[2]}, 0)`);
+        this.ctx.fillStyle = fillGradient;
         this.ctx.fill();
 
         this.ctx.beginPath();
         this.ctx.arc(bubble.x, bubble.y, radius, 0, Math.PI * 2);
-        this.ctx.strokeStyle = `hsla(${bubble.hue} 100% 90% / ${baseAlpha * 0.9})`;
+        this.ctx.strokeStyle = `rgba(${fx3[0]}, ${fx3[1]}, ${fx3[2]}, ${baseAlpha * 0.9})`;
         this.ctx.lineWidth = 1.2;
         this.ctx.stroke();
       }
@@ -433,7 +449,12 @@ class AmbientFxEngine {
           0,
           Math.PI * 2
         );
-        this.ctx.fillStyle = `hsla(${splat.hue} 100% 78% / ${splat.alpha * life * depthAlpha})`;
+        const [fx1, , fx3] = this.themeTokens.fxPaletteRgb;
+        const splatGradient = this.ctx.createRadialGradient(0, 0, Math.max(0.8, splat.rx * 0.18), 0, 0, Math.max(splat.rx, splat.ry) * depthScale);
+        splatGradient.addColorStop(0, `hsla(${splat.hue} 100% 82% / ${splat.alpha * life * depthAlpha})`);
+        splatGradient.addColorStop(0.62, `rgba(${fx3[0]}, ${fx3[1]}, ${fx3[2]}, ${splat.alpha * life * depthAlpha * 0.44})`);
+        splatGradient.addColorStop(1, `rgba(${fx1[0]}, ${fx1[1]}, ${fx1[2]}, 0)`);
+        this.ctx.fillStyle = splatGradient;
         this.ctx.fill();
         this.ctx.restore();
       }
@@ -662,6 +683,9 @@ export function readThemeTokensFromCss(): ThemeTokens {
   const style = getComputedStyle(document.documentElement);
   const accent = style.getPropertyValue("--color-accent").trim();
   const aura = style.getPropertyValue("--aura-rgb").trim();
+  const fx1 = style.getPropertyValue("--fx-color-1-rgb").trim();
+  const fx2 = style.getPropertyValue("--fx-color-2-rgb").trim();
+  const fx3 = style.getPropertyValue("--fx-color-3-rgb").trim();
   const glow = Number(style.getPropertyValue("--glow-intensity").trim());
 
   const accentRgbFallback: [number, number, number] = [125, 86, 226];
@@ -686,6 +710,11 @@ export function readThemeTokensFromCss(): ThemeTokens {
   return {
     accentRgb,
     auraRgb: parseRgb(aura, [170, 112, 255]),
+    fxPaletteRgb: [
+      parseRgb(fx1, accentRgb),
+      parseRgb(fx2, [255, 255, 255]),
+      parseRgb(fx3, parseRgb(aura, [170, 112, 255]))
+    ],
     glowIntensity: Number.isFinite(glow) ? clamp(glow, 0.5, 2) : 1
   };
 }

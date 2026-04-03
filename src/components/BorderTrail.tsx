@@ -86,7 +86,17 @@ export function BorderTrail({ variant, isVisible, isPlaying, dimMode }: Props) {
           pathLength="1"
         />
         <rect
-          className="track-border-trail__path track-border-trail__path--hot"
+          className="track-border-trail__path track-border-trail__path--tail"
+          x={inset}
+          y={inset}
+          width={width}
+          height={height}
+          rx={radius}
+          ry={radius}
+          pathLength="1"
+        />
+        <rect
+          className="track-border-trail__path track-border-trail__path--head"
           x={inset}
           y={inset}
           width={width}

@@ -1756,10 +1756,13 @@ html[data-theme="light"] .pc-wave__loop-handle::after {
   gap: 14px;
   min-height: 72px;
   margin-top: 14px;
+  width: 100%;
+  max-width: 100%;
 }
 
 .pc-wave-toolbar__toggle,
-.pc-wave-toolbar__btn {
+.pc-wave-toolbar__btn,
+.pc-wave-toolbar__fit {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1847,6 +1850,21 @@ html[data-theme="light"] .pc-wave__loop-handle::after {
   color: rgba(255, 227, 166, 0.76);
 }
 
+.pc-wave-toolbar__fit {
+  min-width: 54px;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgba(255, 229, 182, 0.9);
+  background: rgba(18, 22, 28, 0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 8px 18px rgba(0, 0, 0, 0.18);
+}
+
 .fullscreen-player-shell__close.is-disabled,
 .fullscreen-player-shell__close-bottom.is-disabled {
   opacity: 0.46;
@@ -1857,7 +1875,8 @@ html[data-theme="light"] .pc-wave__loop-handle::after {
 }
 
 html[data-theme="light"] .pc-wave-toolbar__toggle,
-html[data-theme="light"] .pc-wave-toolbar__btn {
+html[data-theme="light"] .pc-wave-toolbar__btn,
+html[data-theme="light"] .pc-wave-toolbar__fit {
   color: rgba(91, 46, 68, 0.94);
   background: rgba(255, 246, 249, 0.94);
   box-shadow:
@@ -1874,6 +1893,56 @@ html[data-theme="light"] .pc-wave-toolbar__toggle.is-active {
 
 html[data-theme="light"] .pc-wave-toolbar__label {
   color: rgba(160, 98, 66, 0.72);
+}
+
+@media (max-width: 480px) {
+  .pc-wave-toolbar {
+    gap: 6px;
+    min-height: 52px;
+    margin-top: 12px;
+    justify-content: flex-start;
+    width: min(100%, 332px);
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .pc-wave-toolbar__toggle {
+    width: 48px;
+    height: 48px;
+    font-size: 24px;
+    flex: 0 0 auto;
+  }
+
+  .pc-wave-toolbar__controls {
+    gap: 6px;
+    transform: translateX(-6px) scale(0.98);
+    flex: 1 1 auto;
+    justify-content: flex-start;
+  }
+
+  .pc-wave-toolbar__controls.is-open {
+    max-width: calc(100vw - 108px);
+  }
+
+  .pc-wave-toolbar__btn {
+    min-width: 38px;
+    height: 40px;
+    padding: 0 6px;
+    font-size: 20px;
+  }
+
+  .pc-wave-toolbar__fit {
+    min-width: 38px;
+    height: 34px;
+    padding: 0 8px;
+    border-radius: 10px;
+    font-size: 13px;
+    flex: 0 0 auto;
+  }
+
+  .pc-wave-toolbar__label {
+    display: none;
+  }
 }
 
 .player-controls.is-aura-pulse .pc-progress {

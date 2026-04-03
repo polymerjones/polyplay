@@ -12,7 +12,7 @@ import {
   updateEntry
 } from "../lib/gratitude";
 import { fireHeavyHaptic, fireLightHaptic, fireSuccessHaptic } from "../lib/haptics";
-import { saveTextWithBestEffort } from "../lib/saveBlob";
+import { promptForSaveFilename, saveTextWithBestEffort } from "../lib/saveBlob";
 
 type Props = {
   open: boolean;
@@ -835,9 +835,18 @@ export function JournalModal({ open, onClose }: Props) {
                   void (async () => {
                     setJournalStatus({ message: "Preparing gratitude backup…", tone: "info" });
                     try {
+                      const defaultFilename = getGratitudeBackupFilename();
+                      const filename = promptForSaveFilename(defaultFilename, {
+                        message: "Name this backup before saving.",
+                        requiredExtension: ".json"
+                      });
+                      if (!filename) {
+                        setJournalStatus({ message: "Save gratitude backup canceled.", tone: "info" });
+                        return;
+                      }
                       const saveMode = await saveTextWithBestEffort(
                         serializeGratitudeJson(),
-                        getGratitudeBackupFilename(),
+                        filename,
                         "application/json;charset=utf-8",
                         {
                           description: "Gratitude Backup",

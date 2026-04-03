@@ -114,6 +114,7 @@ type LogoSparkle = {
   coreColor: string;
 };
 type FxToastPlacement = "default" | "theme";
+const MIN_LOOP_REGION_SECONDS = 0.5;
 const EMPTY_LOOP: LoopRegion = { start: 0, end: 0, active: false, editing: false };
 const SPLASH_SEEN_KEY = "polyplay_hasSeenSplash";
 const SPLASH_SESSION_KEY = "polyplay_hasSeenSplashSession";
@@ -567,6 +568,8 @@ export default function App() {
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [isPlaylistRequired, setIsPlaylistRequired] = useState(false);
   const [isPlaylistTransitionPending, setIsPlaylistTransitionPending] = useState(false);
+  const [isStartupReconcilePending, setIsStartupReconcilePending] = useState(true);
+  const [pendingAppSettleCount, setPendingAppSettleCount] = useState(0);
   const [isEmptyWelcomeDismissed, setIsEmptyWelcomeDismissed] = useState(false);
   const [quickTourPhase, setQuickTourPhase] = useState<QuickTourPhase>(null);
 
@@ -626,6 +629,9 @@ export default function App() {
   const logoSparkleTimeoutsRef = useRef<number[]>([]);
   const logoButtonRef = useRef<HTMLButtonElement | null>(null);
   const pendingSettingsPanelModeRef = useRef<"upload" | "manage" | null>(null);
+  const refreshTracksRequestSeqRef = useRef(0);
+  const pendingAppSettleCountRef = useRef(0);
+  const startupReconcileSeqRef = useRef(0);
   const [safeTapBursts, setSafeTapBursts] = useState<SafeTapBurst[]>([]);
   const [logoSparkles, setLogoSparkles] = useState<LogoSparkle[]>([]);
   const [threepeatDisplayCount, setThreepeatDisplayCount] = useState<number>(() => {
@@ -796,72 +802,94 @@ export default function App() {
     });
   };
 
+  const beginAppSettleTask = () => {
+    pendingAppSettleCountRef.current += 1;
+    setPendingAppSettleCount((current) => current + 1);
+    let finished = false;
+    return () => {
+      if (finished) return;
+      finished = true;
+      pendingAppSettleCountRef.current = Math.max(0, pendingAppSettleCountRef.current - 1);
+      setPendingAppSettleCount((current) => Math.max(0, current - 1));
+    };
+  };
+
   const refreshTracks = async (options?: { allowEmptyDemoFallback?: boolean }) => {
+    const requestSeq = ++refreshTracksRequestSeqRef.current;
+    const finishSettling = beginAppSettleTask();
     const allowEmptyDemoFallback = options?.allowEmptyDemoFallback !== false;
-    let librarySnapshot = await getLibrary();
-    const ensured = ensureActivePlaylist(librarySnapshot);
-    librarySnapshot = ensured.library;
-    if (ensured.changed) setLibrary(librarySnapshot);
-    const playlistIds = Object.keys(librarySnapshot.playlistsById || {});
-    const allTracks = await getAllTracksFromDb();
-    const allTracksById = allTracks.reduce<Record<string, Track>>((acc, track) => {
-      acc[track.id] = track;
-      return acc;
-    }, {});
-    allTracksRef.current = allTracks;
-    setAllTracksCatalog(allTracks);
-    let loaded = getVisibleTracksFromLibrary(librarySnapshot, allTracksById);
-    if (loaded.length === 0 && allTracks.length > 0) {
-      // Recovery path: only correct invalid active playlist pointers.
-      // Do not auto-inject all tracks into empty playlists (breaks playlist isolation).
-      const activeId = librarySnapshot.activePlaylistId;
-      const hasValidActive = Boolean(activeId && librarySnapshot.playlistsById[activeId]);
-      if (!hasValidActive) {
-        const firstPlaylistId = Object.keys(librarySnapshot.playlistsById || {})[0] ?? null;
-        if (firstPlaylistId) {
-          librarySnapshot = {
-            ...librarySnapshot,
-            activePlaylistId: firstPlaylistId
-          };
-          setLibrary(librarySnapshot);
-          loaded = getVisibleTracksFromLibrary(librarySnapshot, allTracksById);
-        }
-      } else if (activeId && allowEmptyDemoFallback) {
-        const activePlaylist = librarySnapshot.playlistsById[activeId];
-        const activeName = (activePlaylist?.name || "").trim().toLowerCase();
-        const isEmptyDemo = activePlaylist?.trackIds?.length === 0 && (activeId === DEMO_PLAYLIST_ID || activeName === DEMO_PLAYLIST_NAME);
-        if (isEmptyDemo) {
-          const fallback = Object.values(librarySnapshot.playlistsById || {}).find(
-            (playlist) => playlist.id !== activeId && playlist.trackIds.some((trackId) => Boolean(allTracksById[trackId]))
-          );
-          if (fallback) {
+    try {
+      let librarySnapshot = await getLibrary();
+      const ensured = ensureActivePlaylist(librarySnapshot);
+      librarySnapshot = ensured.library;
+      if (ensured.changed) setLibrary(librarySnapshot);
+      const playlistIds = Object.keys(librarySnapshot.playlistsById || {});
+      const allTracks = await getAllTracksFromDb();
+      if (requestSeq !== refreshTracksRequestSeqRef.current) return false;
+      const allTracksById = allTracks.reduce<Record<string, Track>>((acc, track) => {
+        acc[track.id] = track;
+        return acc;
+      }, {});
+      let loaded = getVisibleTracksFromLibrary(librarySnapshot, allTracksById);
+      if (loaded.length === 0 && allTracks.length > 0) {
+        // Recovery path: only correct invalid active playlist pointers.
+        // Do not auto-inject all tracks into empty playlists (breaks playlist isolation).
+        const activeId = librarySnapshot.activePlaylistId;
+        const hasValidActive = Boolean(activeId && librarySnapshot.playlistsById[activeId]);
+        if (!hasValidActive) {
+          const firstPlaylistId = Object.keys(librarySnapshot.playlistsById || {})[0] ?? null;
+          if (firstPlaylistId) {
             librarySnapshot = {
               ...librarySnapshot,
-              activePlaylistId: fallback.id
+              activePlaylistId: firstPlaylistId
             };
             setLibrary(librarySnapshot);
             loaded = getVisibleTracksFromLibrary(librarySnapshot, allTracksById);
           }
+        } else if (activeId && allowEmptyDemoFallback) {
+          const activePlaylist = librarySnapshot.playlistsById[activeId];
+          const activeName = (activePlaylist?.name || "").trim().toLowerCase();
+          const isEmptyDemo =
+            activePlaylist?.trackIds?.length === 0 && (activeId === DEMO_PLAYLIST_ID || activeName === DEMO_PLAYLIST_NAME);
+          if (isEmptyDemo) {
+            const fallback = Object.values(librarySnapshot.playlistsById || {}).find(
+              (playlist) => playlist.id !== activeId && playlist.trackIds.some((trackId) => Boolean(allTracksById[trackId]))
+            );
+            if (fallback) {
+              librarySnapshot = {
+                ...librarySnapshot,
+                activePlaylistId: fallback.id
+              };
+              setLibrary(librarySnapshot);
+              loaded = getVisibleTracksFromLibrary(librarySnapshot, allTracksById);
+            }
+          }
         }
       }
-    }
-    setRuntimeLibrary(librarySnapshot);
-    setTracks(loaded);
-    setIsPlaylistRequired(playlistIds.length === 0);
-    if (playlistIds.length === 0) {
-      setIsCreatePlaylistModalOpen(true);
-      setNewPlaylistName("");
-    }
-    void refreshVaultInspector();
-    setCurrentTrackId((prev) => {
-      if (prev && allTracksById[prev]) {
-        return prev;
+      if (requestSeq !== refreshTracksRequestSeqRef.current) return false;
+      allTracksRef.current = allTracks;
+      setAllTracksCatalog(allTracks);
+      setRuntimeLibrary(librarySnapshot);
+      setTracks(loaded);
+      setIsPlaylistRequired(playlistIds.length === 0);
+      if (playlistIds.length === 0) {
+        setIsCreatePlaylistModalOpen(true);
+        setNewPlaylistName("");
       }
-      if (prev) {
-        teardownCurrentAudio();
-      }
-      return loaded[0]?.id ?? null;
-    });
+      void refreshVaultInspector();
+      setCurrentTrackId((prev) => {
+        if (prev && allTracksById[prev]) {
+          return prev;
+        }
+        if (prev) {
+          teardownCurrentAudio();
+        }
+        return loaded[0]?.id ?? null;
+      });
+      return true;
+    } finally {
+      finishSettling();
+    }
   };
 
   const setActivePlaylist = async (playlistId: string) => {
@@ -872,7 +900,6 @@ export default function App() {
       if (!applied.library.playlistsById[playlistId]) return;
       setLibrary(applied.library);
       setRuntimeLibrary(applied.library);
-      window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
       await refreshTracks({ allowEmptyDemoFallback: false });
     } finally {
       setIsPlaylistTransitionPending(false);
@@ -913,7 +940,6 @@ export default function App() {
       if (isFirstPlaylistInTracklessOnboardingState || quickTourPhase === "create-playlist") {
         fireSuccessHaptic();
       }
-      window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
       await refreshTracks();
     } finally {
       setIsPlaylistTransitionPending(false);
@@ -1120,6 +1146,9 @@ export default function App() {
 
   useEffect(() => {
     let mounted = true;
+    const finishSettling = beginAppSettleTask();
+    const reconcileSeq = ++startupReconcileSeqRef.current;
+    setIsStartupReconcilePending(true);
 
     (async () => {
       try {
@@ -1137,9 +1166,14 @@ export default function App() {
         }
         await ensureDemoTracksForFirstRun({ preferDemoActive });
       } catch {
-        if (!mounted) return;
+        if (!mounted || reconcileSeq !== startupReconcileSeqRef.current) return;
         setTracks([]);
         setCurrentTrackId(null);
+      } finally {
+        if (mounted && reconcileSeq === startupReconcileSeqRef.current) {
+          setIsStartupReconcilePending(false);
+        }
+        finishSettling();
       }
     })();
 
@@ -3068,7 +3102,7 @@ export default function App() {
     const shouldPersist = options?.persist !== false;
     const isEditing = options?.editing === true;
     const safeStart = Math.max(0, Math.min(effectiveDuration, start));
-    const safeEnd = Math.max(safeStart + 0.1, Math.min(effectiveDuration, end));
+    const safeEnd = Math.max(safeStart + MIN_LOOP_REGION_SECONDS, Math.min(effectiveDuration, end));
     if (active) {
       if (audio && (audio.currentTime < safeStart || audio.currentTime > safeEnd)) {
         audio.currentTime = safeStart;
@@ -3106,8 +3140,11 @@ export default function App() {
     }
     const margin = Math.max(0, Math.min(effectiveDuration * 0.15, effectiveDuration / 2 - 0.05));
     const livePlaybackTime = getSafeDuration(currentTime) || getSafeDuration(audio?.currentTime || 0);
-    const safeStart = Math.max(0, Math.min(effectiveDuration - 0.1, livePlaybackTime));
-    const safeEnd = Math.min(effectiveDuration, Math.max(safeStart + 0.1, effectiveDuration - margin));
+    const safeStart = Math.max(0, Math.min(effectiveDuration - MIN_LOOP_REGION_SECONDS, livePlaybackTime));
+    const safeEnd = Math.min(
+      effectiveDuration,
+      Math.max(safeStart + MIN_LOOP_REGION_SECONDS, effectiveDuration - margin)
+    );
     setLoopByTrack((prev) => ({
       ...prev,
       [currentTrackId]: { start: safeStart, end: safeEnd, active: true, editing: true }
@@ -3843,6 +3880,12 @@ export default function App() {
     importUniverseInputRef.current?.click();
   };
 
+  const isAppSettledForSettingsOpen =
+    !isPlaylistTransitionPending &&
+    !isCreatePlaylistModalOpen &&
+    !isStartupReconcilePending &&
+    pendingAppSettleCount === 0;
+
   const openSettingsPanel = (mode: "upload" | "manage" = "upload") => {
     try {
       const active = document.activeElement;
@@ -3853,7 +3896,7 @@ export default function App() {
       // Ignore focus-management failures while opening settings.
     }
     markHasOnboarded();
-    if (isPlaylistTransitionPending || isCreatePlaylistModalOpen) {
+    if (!isAppSettledForSettingsOpen) {
       pendingSettingsPanelModeRef.current = mode;
       return;
     }
@@ -3862,7 +3905,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (isPlaylistTransitionPending || isCreatePlaylistModalOpen) return;
+    if (!isAppSettledForSettingsOpen) return;
     const pendingMode = pendingSettingsPanelModeRef.current;
     if (!pendingMode) return;
     pendingSettingsPanelModeRef.current = null;
@@ -3870,7 +3913,7 @@ export default function App() {
       setSettingsPanelMode(pendingMode);
       setOverlayPage("settings");
     });
-  }, [isCreatePlaylistModalOpen, isPlaylistTransitionPending]);
+  }, [isAppSettledForSettingsOpen]);
 
   const openFullscreenFromPlaybarArt = () => {
     if (!currentTrack) return;
