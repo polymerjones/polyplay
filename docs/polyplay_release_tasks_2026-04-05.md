@@ -65,7 +65,7 @@ Use alongside any existing planning board already in the repo, but treat this fi
 ---
 
 ## Active task
-**Current active task:** `15. Gratitude Journal export naming`
+**Current active task:** `16. iPhone keyboard overlay accommodation`
 
 ---
 
@@ -481,7 +481,7 @@ Audit all backup file systems for potential issues.
 ---
 
 ### 16. iPhone keyboard overlay accommodation
-**Status:** open
+**Status:** fix implemented, awaiting QA
 
 **Observed issue:**
 - Gratitude Journal and Import page on iPhone 14 with iOS 21 / iOS 26-style large keyboard overlay dominate the screen
@@ -497,12 +497,44 @@ Audit all backup file systems for potential issues.
 - avoid risky keyboard hacks
 
 **Codex notes:**
--  
+- Diagnosis start — 2026-04-05 Codex:
+  - Files inspected:
+    - `src/components/JournalModal.tsx`
+    - `src/admin/AdminApp.tsx`
+    - `styles.css`
+    - `docs/polyplay_codex_handoff_2026-04-03.md`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Likely root cause:
+    - The journal modal still sizes itself from `100dvh` and large min-height rules, so when the iPhone keyboard overlay reduces the visual viewport the shell remains too tall and the editing area feels cramped.
+    - `JournalModal.tsx` already scrolls the active editor into view, but that only helps the focused field, not the overall card density or available viewport height.
+    - The import page in `AdminApp.tsx` does not have a keyboard-aware compact mode at all, so the normal header, toasts, spacing, preview blocks, and card density remain in place while the keyboard consumes most of the visible screen.
+  - Narrow implementation plan:
+    - Add a safe visual-viewport-based height cap for the journal shell on iPhone-width screens while writing/editing.
+    - Add a narrow keyboard-active compact class for the journal and admin import page when an editable control is focused and the visual viewport is clearly reduced.
+    - Use layout/spacing/scroll accommodations only: compress chrome, reduce nonessential density, and keep important actions reachable. No native keyboard hacks.
+  - Exact fix made:
+    - Added a narrow keyboard-overlay detection path in `src/components/JournalModal.tsx` and `src/admin/AdminApp.tsx` based on editable focus plus `visualViewport` shrink on phone-width screens.
+    - In the Gratitude Journal, applied the real visible viewport height to the modal scene while the keyboard is active and added a compact writing-mode class that trims spacing, reduces editor height slightly, and hides the verse card while writing so the editor/actions remain more reachable.
+    - In the import page, added a keyboard-active compact class that reduces header/card density, hides nonessential subtext, hides the video frame preview while typing, and scrolls the focused editable field into clearer view.
+    - Kept the pass layout/scroll focused only. No native keyboard workaround or broader page redesign was introduced.
+  - Exact files changed:
+    - `src/components/JournalModal.tsx`
+    - `src/admin/AdminApp.tsx`
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low to medium. The changes are narrow and mobile-editing-specific, but they do add `visualViewport`-driven compact states in two screens.
+  - QA still needed:
+    - Confirm Gratitude Journal compose/edit is more usable on iPhone 14-class devices with the large keyboard overlay open.
+    - Confirm Save/Cancel remain reachable in the journal while editing.
+    - Confirm the import page title/artist fields stay usable and centered better while typing on iPhone.
+    - Confirm desktop and iPad layout remain unchanged.
+    - Confirm artwork preview still appears normally when the keyboard is not active.
 
 ---
 
 ### 17. Selectable text that should not be selectable
-**Status:** open
+**Status:** fix implemented, awaiting QA
 
 **Observed issue:**
 - some display-only UI text can be highlighted/selected
@@ -513,7 +545,50 @@ Audit all backup file systems for potential issues.
 - inputs and editable/selectable fields must remain untouched
 
 **Codex notes:**
--  
+- Diagnosis start — 2026-04-05 Codex:
+  - Files inspected:
+    - `styles.css`
+    - `src/index.css`
+    - `src/App.tsx`
+    - `src/components/EmptyLibraryWelcome.tsx`
+    - `docs/polyplay_codex_handoff_2026-04-03.md`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Likely root cause:
+    - The app already disables selection in several interactive/button-like areas, but a number of display-only copy blocks still inherit normal text selection behavior.
+    - The safest remaining candidates are narrow presentational selectors: onboarding/welcome text, helper hints, playlist-create copy, toast copy, vault summary labels, and a few secondary subtitles.
+    - Inputs, textareas, search fields, journal editors, backup naming fields, waveform editing, and any intentionally readable/copyable form controls should remain untouched.
+  - Narrow implementation plan:
+    - Add `user-select: none` only to the audited presentational selectors instead of any broad app-level blanket rule.
+    - Keep the change CSS-only and limited to obvious display-only copy blocks.
+    - Leave all real text-entry and intentionally selectable controls unchanged.
+  - Exact areas audited:
+    - onboarding / welcome copy
+    - helper hint text
+    - playlist-create helper copy
+    - vault summary labels and success countdown copy
+    - journal/fx toast copy
+    - admin import toast copy
+    - a few presentational subtitles such as the topbar version/subtitle and playlist-manager subcopy
+  - Exact fix made:
+    - Kept the pass CSS-only.
+    - Added `user-select: none` / `-webkit-touch-callout: none` only to the audited display-only copy selectors.
+    - Did not add any app-wide blanket selection lockout.
+  - Exact files changed:
+    - `src/index.css`
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - What remains intentionally selectable:
+    - all `input`, `textarea`, `select`, and search fields
+    - journal compose/edit textareas
+    - backup naming fields
+    - prompts and other editable form controls
+    - any intentionally copyable/selectable control text not included in the audited presentational selector list
+  - Regression risk:
+    - Low. The change is limited to audited display-only copy selectors and leaves editable fields untouched.
+  - QA still needed:
+    - Confirm onboarding/welcome text no longer highlights accidentally on touch drag.
+    - Confirm vault/journal/admin toasts no longer get accidental text selection.
+    - Confirm all real input and editor fields remain fully selectable/editable.
 
 ---
 

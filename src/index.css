@@ -932,6 +932,9 @@ body.theme-dark .rowAuraGlow {
   font-weight: 800;
   letter-spacing: 0.2px;
   line-height: 1.15;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .open-state-card__body {
@@ -940,6 +943,9 @@ body.theme-dark .rowAuraGlow {
   font-size: 12px;
   line-height: 1.28;
   max-width: 42ch;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .open-state-card__dismiss {
@@ -1013,6 +1019,9 @@ body.theme-dark .rowAuraGlow {
   letter-spacing: -0.02em;
   max-width: 19ch;
   text-wrap: balance;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .empty-library-card__body {
@@ -1021,6 +1030,9 @@ body.theme-dark .rowAuraGlow {
   font-size: 14px;
   line-height: 1.3;
   max-width: 38ch;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .empty-library-card__actions {

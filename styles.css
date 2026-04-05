@@ -998,6 +998,9 @@ main,
   font-size: 11px;
   color: rgba(199, 222, 245, 0.72);
   margin-bottom: 4px;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .vault-summary strong {
@@ -1117,12 +1120,18 @@ main,
   color: #effff7;
   font-size: 18px;
   font-weight: 800;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .vault-success-countdown__sub {
   margin: 0;
   color: rgba(223, 255, 239, 0.86);
   font-size: 13px;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .vault-success-countdown__count {
@@ -3861,7 +3870,7 @@ body.mute-freeze .track-backdrop {
   position: fixed;
   inset: 0;
   width: 100vw;
-  height: 100dvh;
+  height: var(--journal-visible-vh, 100dvh);
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -4700,6 +4709,9 @@ body.mute-freeze .track-backdrop {
   font-weight: 700;
   padding: 6px 10px;
   z-index: 130;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .journal-modal__status {
@@ -4718,6 +4730,9 @@ body.mute-freeze .track-backdrop {
   z-index: 120;
   text-align: center;
   box-shadow: 0 12px 24px rgba(9, 6, 20, 0.3);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .journal-modal__status--info {
@@ -4850,6 +4865,9 @@ body.mute-freeze .track-backdrop {
   font-weight: 700;
   padding: 6px 10px;
   pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .fx-toast--theme {
@@ -5033,6 +5051,42 @@ body.mute-freeze .track-backdrop {
     padding: 10px;
   }
 
+  .journal-modal__card.is-keyboard-active {
+    max-height: calc(var(--journal-visible-vh, 100dvh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 10px);
+    min-height: auto;
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .journal-modal__card.is-keyboard-active .journal-modal__content {
+    gap: 6px;
+  }
+
+  .journal-modal__card.is-keyboard-active .journalControlRow {
+    gap: 8px;
+  }
+
+  .journal-modal__card.is-writing.is-keyboard-active .journalVerseCard {
+    display: none;
+  }
+
+  .journal-modal__card.is-keyboard-active .journal-compose {
+    padding: 6px;
+  }
+
+  .journal-modal__card.is-keyboard-active .journal-entry__editor {
+    min-height: 132px;
+    height: 132px;
+  }
+
+  .journal-modal__card.is-keyboard-active .journal-entry__editor-actions {
+    margin-top: 6px;
+  }
+
+  .journal-modal__card.is-keyboard-active .journal-modal__list {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  }
+
   .journal-modal__head h3 {
     font-size: 18px;
   }
@@ -5073,6 +5127,61 @@ body.mute-freeze .track-backdrop {
     max-height: none;
     box-sizing: border-box;
     resize: none;
+  }
+
+  .admin-v1--keyboard-active {
+    padding-top: max(6px, calc(env(safe-area-inset-top, 0px) + 4px));
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  }
+
+  .admin-v1--keyboard-active > header {
+    margin-bottom: 8px;
+    padding: 8px 10px;
+  }
+
+  .admin-v1--keyboard-active > header p {
+    display: none;
+  }
+
+  .admin-v1--keyboard-active .admin-back-link {
+    padding: 8px 10px;
+  }
+
+  .admin-v1--keyboard-active .admin-back-link span:last-child {
+    display: none;
+  }
+
+  .admin-v1--keyboard-active .admin-v1-section,
+  .admin-v1--keyboard-active .admin-upload-stack {
+    gap: 8px !important;
+  }
+
+  .admin-v1--keyboard-active .admin-v1-card {
+    padding: 10px !important;
+  }
+
+  .admin-v1--keyboard-active .video-frame-picker {
+    display: none;
+  }
+
+  .admin-v1--keyboard-active .admin-upload-submit {
+    min-height: 48px;
+  }
+
+  .admin-v1--keyboard-active .admin-import-toast {
+    padding: 10px 12px 11px;
+  }
+
+  .admin-v1--keyboard-active .admin-import-toast__title {
+    font-size: 16px;
+  }
+
+  .admin-v1--keyboard-active .admin-import-toast__sub {
+    display: none;
+  }
+
+  .admin-v1--keyboard-active .admin-upload-success-toast {
+    padding: 10px 12px;
   }
 }
 
@@ -5208,6 +5317,9 @@ body.mute-freeze .track-backdrop {
   margin: 0;
   font-size: 12px;
   color: rgba(205, 223, 255, 0.78);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .playlist-manager__create {
@@ -5640,6 +5752,9 @@ body.mute-freeze .track-backdrop {
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: rgba(255, 224, 169, 0.78);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .admin-import-toast__title {
@@ -5648,6 +5763,9 @@ body.mute-freeze .track-backdrop {
   line-height: 1.05;
   font-weight: 900;
   letter-spacing: 0.05em;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .admin-import-toast__sub {
@@ -5655,6 +5773,9 @@ body.mute-freeze .track-backdrop {
   font-size: 12px;
   line-height: 1.25;
   color: rgba(255, 241, 214, 0.84);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 @media (min-width: 768px) {
@@ -6088,6 +6209,9 @@ body.nuke-flash::after {
   letter-spacing: 0.12em;
   opacity: 0.55;
   color: rgba(255, 255, 255, 0.72);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .topbar-title__logo-button {
@@ -6594,6 +6718,9 @@ html[data-theme="light"] .playlist-selector select {
   color: var(--muted);
   font-size: 14px;
   line-height: 1.4;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .playlist-create-body input {
@@ -6623,6 +6750,9 @@ html[data-theme="light"] .playlist-selector select {
   z-index: 110;
   width: fit-content;
   max-width: min(320px, calc(100vw - 32px));
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .guided-cta {

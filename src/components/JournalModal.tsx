@@ -100,6 +100,16 @@ function isCompactJournalEditingViewport(): boolean {
   return window.matchMedia("(max-width: 520px)").matches;
 }
 
+function isKeyboardEditableElement(node: Element | null): node is HTMLElement {
+  return Boolean(
+    node &&
+      (node instanceof HTMLInputElement ||
+        node instanceof HTMLTextAreaElement ||
+        node instanceof HTMLSelectElement ||
+        (node instanceof HTMLElement && node.isContentEditable))
+  );
+}
+
 function isNearJournalDismissEdge(event: MouseEvent<HTMLElement>): boolean {
   if (typeof window === "undefined") return false;
   const { clientX, clientY } = event;
@@ -218,6 +228,8 @@ export function JournalModal({ open, onClose }: Props) {
   const [journalStatus, setJournalStatus] = useState<{ message: string; tone: "info" | "success" | "error" } | null>(null);
   const [pendingExportContent, setPendingExportContent] = useState<string | null>(null);
   const [pendingExportFilename, setPendingExportFilename] = useState("");
+  const [isKeyboardOverlayActive, setIsKeyboardOverlayActive] = useState(false);
+  const [keyboardViewportHeight, setKeyboardViewportHeight] = useState<number | null>(null);
   const [verseFxActive, setVerseFxActive] = useState(false);
   const [verseFxBurstKey, setVerseFxBurstKey] = useState(0);
   const [pendingImportPayload, setPendingImportPayload] = useState<GratitudeBackupImportPayload | null>(null);
@@ -246,6 +258,39 @@ export function JournalModal({ open, onClose }: Props) {
     setPendingImportPayload(null);
     setPendingExportContent(null);
     setPendingExportFilename("");
+    setIsKeyboardOverlayActive(false);
+    setKeyboardViewportHeight(null);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const viewport = typeof window !== "undefined" ? window.visualViewport : null;
+    const recomputeKeyboardState = () => {
+      const compact = isCompactJournalEditingViewport();
+      const focusedEditable = isKeyboardEditableElement(document.activeElement);
+      const visibleHeight = viewport?.height ?? window.innerHeight;
+      const keyboardLikelyOpen = compact && focusedEditable && visibleHeight < window.innerHeight - 120;
+      setIsKeyboardOverlayActive(keyboardLikelyOpen);
+      setKeyboardViewportHeight(keyboardLikelyOpen ? visibleHeight : null);
+    };
+    const onFocusChange = () => {
+      window.setTimeout(recomputeKeyboardState, 0);
+    };
+
+    recomputeKeyboardState();
+    document.addEventListener("focusin", onFocusChange);
+    document.addEventListener("focusout", onFocusChange);
+    viewport?.addEventListener("resize", recomputeKeyboardState);
+    viewport?.addEventListener("scroll", recomputeKeyboardState);
+    window.addEventListener("resize", recomputeKeyboardState);
+
+    return () => {
+      document.removeEventListener("focusin", onFocusChange);
+      document.removeEventListener("focusout", onFocusChange);
+      viewport?.removeEventListener("resize", recomputeKeyboardState);
+      viewport?.removeEventListener("scroll", recomputeKeyboardState);
+      window.removeEventListener("resize", recomputeKeyboardState);
+    };
   }, [open]);
 
   useEffect(() => {
@@ -769,6 +814,11 @@ export function JournalModal({ open, onClose }: Props) {
   return (
     <section
       className="journal-modal journalScene"
+      style={
+        keyboardViewportHeight
+          ? ({ "--journal-visible-vh": `${Math.round(keyboardViewportHeight)}px` } as CSSProperties)
+          : undefined
+      }
       role="dialog"
       aria-modal="true"
       aria-label="Gratitude Journal"
@@ -831,7 +881,9 @@ export function JournalModal({ open, onClose }: Props) {
       )}
       <div className="journalUI">
         <div
-          className={`journal-modal__card journalGlassPanel ${isWritingActive ? "is-writing" : ""}`.trim()}
+          className={`journal-modal__card journalGlassPanel ${isWritingActive ? "is-writing" : ""} ${
+            isKeyboardOverlayActive ? "is-keyboard-active" : ""
+          }`.trim()}
           ref={cardRef}
           onTouchStart={(event) => {
             if (event.touches.length !== 1) {

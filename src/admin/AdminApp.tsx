@@ -124,6 +124,16 @@ type UploadMetadataStatusDescriptor = {
   label: string;
   detail: string;
 };
+
+function isAdminKeyboardEditable(node: Element | null): node is HTMLElement {
+  return Boolean(
+    node &&
+      (node instanceof HTMLInputElement ||
+        node instanceof HTMLTextAreaElement ||
+        node instanceof HTMLSelectElement ||
+        (node instanceof HTMLElement && node.isContentEditable))
+  );
+}
 type AdminConfirmState =
   | {
       kind: "delete-playlist";
@@ -575,6 +585,7 @@ export function AdminApp() {
   const [uploadSuccessNotice, setUploadSuccessNotice] = useState<string | null>(null);
   const [importNotice, setImportNotice] = useState<string | null>(null);
   const [keepImportPageOpen, setKeepImportPageOpen] = useState(false);
+  const [isKeyboardOverlayActive, setIsKeyboardOverlayActive] = useState(false);
 
   const [selectedRemoveTrackId, setSelectedRemoveTrackId] = useState<string>("");
   const [gratitudeSettings, setGratitudeSettings] = useState<GratitudeSettings>(DEFAULT_GRATITUDE_SETTINGS);
@@ -763,6 +774,45 @@ export function AdminApp() {
     })();
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const viewport = typeof window !== "undefined" ? window.visualViewport : null;
+    const recomputeKeyboardState = () => {
+      const compactViewport =
+        typeof window !== "undefined" &&
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(max-width: 520px)").matches;
+      const focusedEditable = isAdminKeyboardEditable(document.activeElement);
+      const visibleHeight = viewport?.height ?? window.innerHeight;
+      const keyboardLikelyOpen = compactViewport && focusedEditable && visibleHeight < window.innerHeight - 120;
+      setIsKeyboardOverlayActive(keyboardLikelyOpen);
+
+      if (!keyboardLikelyOpen) return;
+      const active = document.activeElement;
+      if (!(active instanceof HTMLElement)) return;
+      window.requestAnimationFrame(() => {
+        active.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+      });
+    };
+    const onFocusChange = () => {
+      window.setTimeout(recomputeKeyboardState, 0);
+    };
+
+    recomputeKeyboardState();
+    document.addEventListener("focusin", onFocusChange);
+    document.addEventListener("focusout", onFocusChange);
+    viewport?.addEventListener("resize", recomputeKeyboardState);
+    viewport?.addEventListener("scroll", recomputeKeyboardState);
+    window.addEventListener("resize", recomputeKeyboardState);
+
+    return () => {
+      document.removeEventListener("focusin", onFocusChange);
+      document.removeEventListener("focusout", onFocusChange);
+      viewport?.removeEventListener("resize", recomputeKeyboardState);
+      viewport?.removeEventListener("scroll", recomputeKeyboardState);
+      window.removeEventListener("resize", recomputeKeyboardState);
     };
   }, []);
 
@@ -2477,6 +2527,8 @@ export function AdminApp() {
   return (
     <div
       className={`admin-v1 touch-clean mx-auto w-full max-w-5xl px-3 pt-3 sm:px-4 ${
+        isKeyboardOverlayActive ? "admin-v1--keyboard-active" : ""
+      } ${
         isNukePromptOpen ? "admin-v1--nuke-arming" : ""
       }`.trim()}
     >
