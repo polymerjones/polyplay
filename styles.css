@@ -4735,6 +4735,43 @@ body.mute-freeze .track-backdrop {
   color: #ffe1e1;
 }
 
+.journal-save-name-card {
+  margin-top: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(230, 193, 255, 0.22);
+  background:
+    linear-gradient(180deg, rgba(23, 16, 36, 0.96), rgba(18, 13, 28, 0.94));
+  box-shadow:
+    0 18px 36px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  padding: 14px;
+}
+
+.journal-save-name-card p {
+  margin: 0 0 10px;
+  color: rgba(236, 225, 255, 0.86);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.journal-save-name-input {
+  width: 100%;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.journal-save-name-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .journal-confirm {
   position: absolute;
   inset: 0;

@@ -12,7 +12,7 @@ import {
   updateEntry
 } from "../lib/gratitude";
 import { fireHeavyHaptic, fireLightHaptic, fireSuccessHaptic } from "../lib/haptics";
-import { promptForSaveFilename, saveTextWithBestEffort } from "../lib/saveBlob";
+import { normalizeSaveFilename, promptForSaveFilename, saveTextWithBestEffort, shouldUseInlineSaveNameStep } from "../lib/saveBlob";
 
 type Props = {
   open: boolean;
@@ -216,6 +216,8 @@ export function JournalModal({ open, onClose }: Props) {
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
   const [miniToast, setMiniToast] = useState<string | null>(null);
   const [journalStatus, setJournalStatus] = useState<{ message: string; tone: "info" | "success" | "error" } | null>(null);
+  const [pendingExportContent, setPendingExportContent] = useState<string | null>(null);
+  const [pendingExportFilename, setPendingExportFilename] = useState("");
   const [verseFxActive, setVerseFxActive] = useState(false);
   const [verseFxBurstKey, setVerseFxBurstKey] = useState(0);
   const [pendingImportPayload, setPendingImportPayload] = useState<GratitudeBackupImportPayload | null>(null);
@@ -242,6 +244,8 @@ export function JournalModal({ open, onClose }: Props) {
     setNewEntryText("");
     setDraftText("");
     setPendingImportPayload(null);
+    setPendingExportContent(null);
+    setPendingExportFilename("");
   }, [open]);
 
   useEffect(() => {
@@ -446,6 +450,27 @@ export function JournalModal({ open, onClose }: Props) {
     const timer = window.setTimeout(() => setJournalStatus(null), timeoutMs);
     return () => window.clearTimeout(timer);
   }, [journalStatus]);
+
+  const finishGratitudeBackupSave = async (content: string, filename: string) => {
+    const saveMode = await saveTextWithBestEffort(
+      content,
+      filename,
+      "application/json;charset=utf-8",
+      {
+        description: "Gratitude Backup",
+        accept: { "application/json": [".json"] }
+      }
+    );
+    setJournalStatus({
+      message:
+        saveMode === "shared"
+          ? "Gratitude backup ready."
+          : saveMode === "opened-preview"
+            ? "Backup ready. Use iPhone save options to keep the file."
+            : "Gratitude backup saved.",
+      tone: "success"
+    });
+  };
 
   useEffect(() => {
     if (!open || !suspendBackgroundPlaybackRef.current) return;
@@ -835,7 +860,14 @@ export function JournalModal({ open, onClose }: Props) {
                   void (async () => {
                     setJournalStatus({ message: "Preparing gratitude backup…", tone: "info" });
                     try {
+                      const content = serializeGratitudeJson();
                       const defaultFilename = getGratitudeBackupFilename();
+                      if (shouldUseInlineSaveNameStep()) {
+                        setPendingExportContent(content);
+                        setPendingExportFilename(defaultFilename);
+                        setJournalStatus({ message: "Backup ready. Name it, then tap Save backup.", tone: "info" });
+                        return;
+                      }
                       const filename = promptForSaveFilename(defaultFilename, {
                         message: "Name this backup before saving.",
                         requiredExtension: ".json"
@@ -844,24 +876,7 @@ export function JournalModal({ open, onClose }: Props) {
                         setJournalStatus({ message: "Save gratitude backup canceled.", tone: "info" });
                         return;
                       }
-                      const saveMode = await saveTextWithBestEffort(
-                        serializeGratitudeJson(),
-                        filename,
-                        "application/json;charset=utf-8",
-                        {
-                          description: "Gratitude Backup",
-                          accept: { "application/json": [".json"] }
-                        }
-                      );
-                      setJournalStatus({
-                        message:
-                          saveMode === "shared"
-                            ? "Gratitude backup ready."
-                            : saveMode === "opened-preview"
-                              ? "Backup ready. Use iPhone save options to keep the file."
-                              : "Gratitude backup saved.",
-                        tone: "success"
-                      });
+                      await finishGratitudeBackupSave(content, filename);
                     } catch {
                       setJournalStatus({ message: "Gratitude backup failed.", tone: "error" });
                     }
@@ -922,6 +937,55 @@ export function JournalModal({ open, onClose }: Props) {
               })();
             }}
           />
+          {pendingExportContent && (
+            <div className="journal-save-name-card" role="group" aria-label="Name gratitude backup">
+              <p>Name this gratitude backup before saving.</p>
+              <input
+                type="text"
+                value={pendingExportFilename}
+                onChange={(event) => setPendingExportFilename(event.currentTarget.value)}
+                className="journal-save-name-input"
+                placeholder="Gratitude backup"
+                autoCapitalize="none"
+                autoCorrect="off"
+              />
+              <div className="journal-save-name-actions">
+                <button
+                  type="button"
+                  className="journal-modal__export"
+                  onClick={() => {
+                    const filename = normalizeSaveFilename(pendingExportFilename, getGratitudeBackupFilename(), ".json");
+                    if (!filename) {
+                      setJournalStatus({ message: "Enter a backup filename first.", tone: "error" });
+                      return;
+                    }
+                    void (async () => {
+                      try {
+                        await finishGratitudeBackupSave(pendingExportContent, filename);
+                        setPendingExportContent(null);
+                        setPendingExportFilename("");
+                      } catch {
+                        setJournalStatus({ message: "Gratitude backup failed.", tone: "error" });
+                      }
+                    })();
+                  }}
+                >
+                  Save Backup
+                </button>
+                <button
+                  type="button"
+                  className="journal-modal__export"
+                  onClick={() => {
+                    setPendingExportContent(null);
+                    setPendingExportFilename("");
+                    setJournalStatus({ message: "Save gratitude backup canceled.", tone: "info" });
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
           {pendingImportPayload && (
             <div
               className="journal-confirm"
