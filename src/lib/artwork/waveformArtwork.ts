@@ -1,18 +1,10 @@
+import { getWaveformThemePalette } from "../waveformTheme";
+
 type GenerateArtworkInput = {
   audioBlob?: Blob;
   peaks?: number[];
   width?: number;
   height?: number;
-};
-
-type WaveformArtworkPalette = {
-  bgStart: string;
-  bgMid: string;
-  bgEnd: string;
-  glow: string;
-  barTop: string;
-  barMid: string;
-  barBottom: string;
 };
 
 let audioCtx: AudioContext | null = null;
@@ -56,82 +48,6 @@ function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
-function getWaveformArtworkPalette(): WaveformArtworkPalette {
-  if (typeof document === "undefined") {
-    return {
-      bgStart: "#1f1336",
-      bgMid: "#23174a",
-      bgEnd: "#09101d",
-      glow: "rgba(193, 126, 255, 0.42)",
-      barTop: "rgba(245, 238, 255, 0.96)",
-      barMid: "rgba(196, 154, 255, 0.92)",
-      barBottom: "rgba(118, 92, 238, 0.86)"
-    };
-  }
-
-  const root = document.documentElement;
-  const theme = root.getAttribute("data-theme");
-  const slot = root.getAttribute("data-theme-slot");
-
-  if (theme === "custom" && slot === "teal") {
-    return {
-      bgStart: "#0d2130",
-      bgMid: "#123443",
-      bgEnd: "#07131b",
-      glow: "rgba(92, 233, 226, 0.4)",
-      barTop: "rgba(196, 255, 250, 0.96)",
-      barMid: "rgba(110, 241, 233, 0.92)",
-      barBottom: "rgba(64, 187, 214, 0.84)"
-    };
-  }
-
-  if (theme === "custom" && slot === "amber") {
-    return {
-      bgStart: "#2b1808",
-      bgMid: "#3a2410",
-      bgEnd: "#0f1118",
-      glow: "rgba(255, 202, 118, 0.38)",
-      barTop: "rgba(255, 244, 214, 0.96)",
-      barMid: "rgba(255, 210, 120, 0.92)",
-      barBottom: "rgba(232, 145, 62, 0.84)"
-    };
-  }
-
-  if (theme === "custom" && slot === "crimson") {
-    return {
-      bgStart: "#2a121c",
-      bgMid: "#3a1826",
-      bgEnd: "#0f1019",
-      glow: "rgba(232, 126, 160, 0.36)",
-      barTop: "rgba(255, 232, 239, 0.96)",
-      barMid: "rgba(240, 144, 176, 0.9)",
-      barBottom: "rgba(166, 72, 102, 0.84)"
-    };
-  }
-
-  if (theme === "light") {
-    return {
-      bgStart: "#f6dbe8",
-      bgMid: "#eec8df",
-      bgEnd: "#d9e2f2",
-      glow: "rgba(222, 126, 170, 0.26)",
-      barTop: "rgba(255, 255, 255, 0.96)",
-      barMid: "rgba(220, 134, 182, 0.88)",
-      barBottom: "rgba(120, 110, 215, 0.8)"
-    };
-  }
-
-  return {
-    bgStart: "#1f1336",
-    bgMid: "#23174a",
-    bgEnd: "#09101d",
-    glow: "rgba(193, 126, 255, 0.42)",
-    barTop: "rgba(245, 238, 255, 0.96)",
-    barMid: "rgba(196, 154, 255, 0.92)",
-    barBottom: "rgba(118, 92, 238, 0.86)"
-  };
-}
-
 export async function generateWaveformArtwork(input: GenerateArtworkInput): Promise<Blob> {
   const width = Math.max(320, Math.floor(input.width ?? 1200));
   const height = Math.max(320, Math.floor(input.height ?? 1200));
@@ -146,7 +62,7 @@ export async function generateWaveformArtwork(input: GenerateArtworkInput): Prom
   canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Unable to create artwork canvas");
-  const palette = getWaveformArtworkPalette();
+  const palette = getWaveformThemePalette().artwork;
 
   const bg = ctx.createLinearGradient(0, 0, width, height);
   bg.addColorStop(0, palette.bgStart);

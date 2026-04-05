@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildPeaksFromAudioBlob, fallbackPeaks } from "../lib/artwork/waveformArtwork";
+import { getWaveformThemePalette } from "../lib/waveformTheme";
 import type { LoopRegion, Track } from "../types";
 
 type Props = {
@@ -43,6 +44,9 @@ const MANUAL_ZOOM_FACTORS = [1, 0.86, 0.72, 0.58, 0.46, 0.34, 0.26, 0.18, 0.12] 
 const MAX_MANUAL_ZOOM_LEVEL = MANUAL_ZOOM_FACTORS.length - 1;
 const MIN_MANUAL_VIEW_SPAN_SEC = 0.9;
 const LOOP_FIT_BUFFER_RATIO = 0.05;
+const LOOP_REGION_YELLOW = "rgba(255, 214, 92, 0.96)";
+const LOOP_REGION_YELLOW_SOFT = "rgba(255, 232, 150, 0.98)";
+const LOOP_REGION_YELLOW_DEEP = "rgba(255, 196, 76, 0.94)";
 export function WaveformLoop({
   track,
   currentTime,
@@ -180,8 +184,11 @@ export function WaveformLoop({
   const [shouldPreserveViewRange, setShouldPreserveViewRange] = useState(false);
   const lockedViewRangeRef = useRef<{ start: number; end: number } | null>(null);
   const editingViewRangeRef = useRef<{ start: number; end: number } | null>(null);
-  const isLightTheme =
-    typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "light";
+  const themeKey =
+    typeof document === "undefined"
+      ? "dark"
+      : `${document.documentElement.getAttribute("data-theme") ?? "dark"}:${document.documentElement.getAttribute("data-theme-slot") ?? ""}`;
+  const waveformPalette = useMemo(() => getWaveformThemePalette(), [themeKey]);
 
   const hasDuration = duration > 0;
   const safeStart = useMemo(
@@ -250,13 +257,12 @@ export function WaveformLoop({
           const nextSpan = Math.max(MIN_MANUAL_VIEW_SPAN_SEC, currentSpan * (nextFactor / currentFactor));
           nextRange = centerRangeOnLoop(duration, displayStart, displayEnd, nextSpan);
         } else if (direction < 0 && currentSpan < duration - 0.0001) {
-          const baseOutFactor = MANUAL_ZOOM_FACTORS[1] ?? 0.86;
-          const nextSpan = Math.min(duration, currentSpan / baseOutFactor);
-          nextRange = centerRangeOnLoop(duration, displayStart, displayEnd, nextSpan);
+          nextRange = { start: 0, end: duration };
         }
         if (nextRange) {
           setEditViewportMode("manual");
           editingViewRangeRef.current = nextRange;
+          lockedViewRangeRef.current = nextRange;
           setViewRange(nextRange);
         } else {
           return prev;
@@ -422,7 +428,9 @@ export function WaveformLoop({
     if (loopRegion.editing) {
       const loopSpan = Math.max(MIN_LOOP_SECONDS, displayEnd - displayStart);
       const currentSpan = viewRange.end > viewRange.start ? viewRange.end - viewRange.start : 0;
+      const enteringFreshEditSession = !prevEditingRef.current;
       const shouldRefocusEditingRange =
+        enteringFreshEditSession ||
         !editingViewRangeRef.current ||
         currentSpan <= 0 ||
         currentSpan > Math.max(loopSpan * 5, MIN_MANUAL_VIEW_SPAN_SEC * 2.5);
@@ -538,17 +546,11 @@ export function WaveformLoop({
       const y = (height - h) / 2;
       const inLoop = loopRegion.active && hasDisplayLoopRange && sampleTime >= displayStart && sampleTime <= displayEnd;
 
-      ctx.fillStyle = inLoop
-        ? isLightTheme
-          ? "rgba(232, 181, 86, 0.98)"
-          : "rgba(255, 214, 92, 0.95)"
-        : isLightTheme
-          ? "rgba(141, 101, 124, 0.4)"
-          : "rgba(120, 70, 180, 0.55)";
+      ctx.fillStyle = inLoop ? LOOP_REGION_YELLOW : waveformPalette.idleFill;
 
       ctx.fillRect(x, y, barWidth, h);
     }
-  }, [displayEnd, displayStart, duration, hasDisplayLoopRange, isLightTheme, loopRegion.active, peaks, safeViewRange.start, viewSpan]);
+  }, [displayEnd, displayStart, duration, hasDisplayLoopRange, loopRegion.active, peaks, safeViewRange.start, viewSpan, waveformPalette]);
 
   useEffect(() => {
     const canvas = decorCanvasRef.current;
@@ -573,22 +575,14 @@ export function WaveformLoop({
     ctx.clearRect(0, 0, width, height);
 
     const progressGrad = ctx.createLinearGradient(0, 0, width, 0);
-    if (isLightTheme) {
-      progressGrad.addColorStop(0, "rgba(162, 98, 128, 0.92)");
-      progressGrad.addColorStop(1, "rgba(207, 111, 130, 0.94)");
-    } else {
-      progressGrad.addColorStop(0, "rgba(125, 224, 255, 0.95)");
-      progressGrad.addColorStop(1, "rgba(255, 128, 200, 0.9)");
-    }
+    progressGrad.addColorStop(0, waveformPalette.progressStops[0]);
+    progressGrad.addColorStop(0.5, waveformPalette.progressStops[1]);
+    progressGrad.addColorStop(1, waveformPalette.progressStops[2]);
 
     const loopGrad = ctx.createLinearGradient(0, 0, width, 0);
-    if (isLightTheme) {
-      loopGrad.addColorStop(0, "rgba(236, 196, 120, 0.98)");
-      loopGrad.addColorStop(1, "rgba(214, 156, 70, 0.96)");
-    } else {
-      loopGrad.addColorStop(0, "rgba(255, 230, 150, 0.98)");
-      loopGrad.addColorStop(1, "rgba(255, 196, 76, 0.94)");
-    }
+    loopGrad.addColorStop(0, LOOP_REGION_YELLOW_SOFT);
+    loopGrad.addColorStop(0.5, LOOP_REGION_YELLOW);
+    loopGrad.addColorStop(1, LOOP_REGION_YELLOW_DEEP);
 
     for (let i = 0; i < bars; i += 1) {
       const centerRatio = Math.max(0, Math.min(1, (i + 0.5) / Math.max(1, bars)));
@@ -607,26 +601,22 @@ export function WaveformLoop({
 
     const playheadX = visibleProgress * width;
     const glow = isPlaying ? 7 : 5;
-    ctx.fillStyle = isLightTheme
-      ? "rgba(207, 111, 130, 0.28)"
-      : "rgba(255, 65, 186, 0.42)";
+    ctx.fillStyle = waveformPalette.playheadGlow;
     ctx.fillRect(playheadX - glow / 2, 0, glow, height);
-    ctx.fillStyle = isLightTheme
-      ? "rgba(91, 46, 68, 0.9)"
-      : "rgba(255, 180, 235, 0.95)";
+    ctx.fillStyle = waveformPalette.playheadCore;
     ctx.fillRect(playheadX - 1, 0, 2, height);
   }, [
     currentTime,
     duration,
     hasDisplayLoopRange,
-    isLightTheme,
     isPlaying,
     loopRegion.active,
     peaks,
     displayEnd,
     displayStart,
     safeViewRange.start,
-    viewSpan
+    viewSpan,
+    waveformPalette
   ]);
 
   useEffect(() => {

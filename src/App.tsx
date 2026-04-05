@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import logo from "../logo.png";
 import { quickTipsContent } from "./content/quickTips";
 import { APP_TITLE, APP_VERSION } from "./config/version";
@@ -1158,9 +1158,7 @@ export default function App() {
           const nonDemoTrackCount = Object.values(library.tracksById || {}).filter(
             (track) => !(track.isDemo || (track.demoId ? DEMO_TRACK_IDS.has(track.demoId) : false))
           ).length;
-          preferDemoActive =
-            nonDemoTrackCount === 0 ||
-            (localStorage.getItem(HAS_IMPORTED_KEY) !== "true" && localStorage.getItem(HAS_ONBOARDED_KEY) !== "true");
+          preferDemoActive = nonDemoTrackCount === 0;
         } catch {
           preferDemoActive = true;
         }
@@ -1682,7 +1680,7 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement;
     root.setAttribute("data-theme", themeMode);
     root.setAttribute("data-theme-slot", customThemeSlot);
@@ -3435,13 +3433,13 @@ export default function App() {
     const nextMode: ThemeMode = nextSelection === "dark" ? "dark" : nextSelection === "light" ? "light" : "custom";
     const nextSlot: CustomThemeSlot = isCustomThemeSlot(nextSelection) ? nextSelection : customThemeSlot;
     const nextThemeLabel = getThemeLabel(nextSelection);
-    const nextAuraColor = nextMode === "custom" ? THEME_PACK_AURA_COLORS[nextSlot] : nextSelection === "dark" ? null : auraColor;
+    const nextAuraColor = nextMode === "custom" ? THEME_PACK_AURA_COLORS[nextSlot] : null;
     setThemeMode(nextMode);
     setCustomThemeSlot(nextSlot);
     showFxToast(`Theme changed to ${nextThemeLabel}`, "theme");
     if (nextMode === "custom") {
       setAuraColor(nextAuraColor);
-    } else if (nextSelection === "dark") {
+    } else {
       setAuraColor(null);
     }
     try {
@@ -3449,7 +3447,7 @@ export default function App() {
       localStorage.setItem(CUSTOM_THEME_SLOT_KEY, nextSlot);
       if (nextMode === "custom" && nextAuraColor) {
         localStorage.setItem(AURA_COLOR_KEY, nextAuraColor);
-      } else if (nextSelection === "dark") {
+      } else {
         localStorage.removeItem(AURA_COLOR_KEY);
       }
     } catch {

@@ -11,6 +11,8 @@ type ThemeTokens = {
   themeSlot: string | null;
 };
 
+type PaletteTriplet = ThemeTokens["fxPaletteRgb"];
+
 type EngineOptions = {
   mode: AmbientFxMode;
   quality: AmbientFxQuality;
@@ -47,6 +49,8 @@ type Splat = {
   rgb: [number, number, number] | null;
   flash: boolean;
   segmented: boolean;
+  themeSlot: string | null;
+  paletteRgb: PaletteTriplet | null;
 };
 
 type Spark = {
@@ -61,6 +65,7 @@ type Spark = {
   rgb: [number, number, number] | null;
   size: number;
   crackle: boolean;
+  themeSlot: string | null;
 };
 
 const TAP_WINDOW_MS = 1200;
@@ -156,6 +161,14 @@ function brightenRgb(rgb: [number, number, number], amount: number): [number, nu
     clamp(Math.round(rgb[0] + (255 - rgb[0]) * amount), 0, 255),
     clamp(Math.round(rgb[1] + (255 - rgb[1]) * amount), 0, 255),
     clamp(Math.round(rgb[2] + (255 - rgb[2]) * amount), 0, 255)
+  ];
+}
+
+function clonePaletteRgb(palette: PaletteTriplet): PaletteTriplet {
+  return [
+    [...palette[0]] as [number, number, number],
+    [...palette[1]] as [number, number, number],
+    [...palette[2]] as [number, number, number]
   ];
 }
 
@@ -276,13 +289,16 @@ class AmbientFxEngine {
   }
 
   setThemeTokens(tokens: Partial<ThemeTokens>): void {
+    const nextThemeSlot = Object.prototype.hasOwnProperty.call(tokens, "themeSlot")
+      ? (tokens.themeSlot ?? null)
+      : this.themeTokens.themeSlot;
     this.themeTokens = {
       ...this.themeTokens,
       ...tokens,
       accentRgb: tokens.accentRgb ?? this.themeTokens.accentRgb,
       auraRgb: tokens.auraRgb ?? this.themeTokens.auraRgb,
       fxPaletteRgb: tokens.fxPaletteRgb ?? this.themeTokens.fxPaletteRgb,
-      themeSlot: tokens.themeSlot ?? this.themeTokens.themeSlot,
+      themeSlot: nextThemeSlot,
       glowIntensity: Number.isFinite(tokens.glowIntensity)
         ? clamp(tokens.glowIntensity as number, 0.5, 2)
         : this.themeTokens.glowIntensity
@@ -505,12 +521,13 @@ class AmbientFxEngine {
         const life = 1 - splat.age / splat.ttl;
         const depth = 1 - life;
         const depthEase = 1 - Math.pow(1 - depth, 2);
+        const splatThemeSlot = splat.themeSlot;
         const spawnBurstEase =
-          this.themeTokens.themeSlot === "merica" && !splat.flash
+          splatThemeSlot === "merica" && !splat.flash
             ? Math.max(0, Math.min(1, splat.age / Math.max(220, splat.ttl * 0.18)))
             : 0;
         const spawnBurstScale =
-          this.themeTokens.themeSlot === "merica" && !splat.flash
+          splatThemeSlot === "merica" && !splat.flash
             ? 1 + spawnBurstEase * (this.resolvedQuality === "lite" ? 1.05 : 1.32)
             : 1;
         const depthScale = (this.resolvedQuality === "lite" ? 1 + depthEase * 0.22 : 1 + depthEase * 0.48) * spawnBurstScale;
@@ -518,7 +535,7 @@ class AmbientFxEngine {
         this.ctx.save();
         this.ctx.translate(splat.x, splat.y);
         this.ctx.rotate(splat.rot);
-        if (this.themeTokens.themeSlot === "merica" && splat.segmented) {
+        if (splatThemeSlot === "merica" && splat.segmented) {
           const rgb = splat.rgb ?? [255, 255, 255];
           const renderRgb = brightenRgb(rgb, rgb[2] > rgb[0] && rgb[2] > rgb[1] ? 0.26 : 0.14);
           const streakLength = Math.max(10, splat.rx * depthScale * 1.08);
@@ -587,15 +604,15 @@ class AmbientFxEngine {
           0,
           Math.PI * 2
         );
-        const [fx1, , fx3] = this.themeTokens.fxPaletteRgb;
+        const [fx1, , fx3] = splat.paletteRgb ?? this.themeTokens.fxPaletteRgb;
         const rgb = splat.rgb;
         const edgeRgb = rgb ?? fx3;
         const renderRgb =
-          this.themeTokens.themeSlot === "merica" && rgb && !splat.flash
+          splatThemeSlot === "merica" && rgb && !splat.flash
             ? brightenRgb(rgb, rgb[2] > rgb[0] && rgb[2] > rgb[1] ? 0.26 : 0.14)
             : rgb;
         const mericaFlicker =
-          this.themeTokens.themeSlot === "merica" && !splat.flash
+          splatThemeSlot === "merica" && !splat.flash
             ? 0.9 + Math.max(0, Math.sin((1 - life) * 26)) * 0.34
             : 1;
         const coreAlpha = splat.flash
@@ -626,9 +643,9 @@ class AmbientFxEngine {
       }
     }
 
-    if (this.themeTokens.themeSlot === "merica" && this.mode === "splatter") {
+    if (this.mode === "splatter") {
       const activeMericaFlash = this.splatters
-        .filter((splat) => splat.flash)
+        .filter((splat) => splat.flash && splat.themeSlot === "merica")
         .reduce((maxFlash, splat) => Math.max(maxFlash, (1 - splat.age / splat.ttl) * splat.alpha), 0);
       if (activeMericaFlash > 0.02) {
         const flashAlpha = Math.min(0.24, activeMericaFlash * 0.34);
@@ -652,7 +669,7 @@ class AmbientFxEngine {
     for (let i = 0; i < this.sparks.length; i += 1) {
       const spark = this.sparks[i];
       const life = 1 - spark.age / spark.ttl;
-      const isMericaHotSpark = this.themeTokens.themeSlot === "merica" && Boolean(spark.rgb);
+      const isMericaHotSpark = spark.themeSlot === "merica" && Boolean(spark.rgb);
       if (isMericaHotSpark && spark.crackle) {
         const crackleAlpha = Math.min(1, spark.alpha * life * 1.45);
         this.ctx.fillStyle = `rgba(${spark.rgb![0]}, ${spark.rgb![1]}, ${spark.rgb![2]}, ${crackleAlpha})`;
@@ -770,7 +787,9 @@ class AmbientFxEngine {
       hue: 0,
       rgb: null,
       flash: false,
-      segmented: false
+      segmented: false,
+      themeSlot: null,
+      paletteRgb: null
     };
   }
 
@@ -791,7 +810,8 @@ class AmbientFxEngine {
       hue: 0,
       rgb: null,
       size: 1.8,
-      crackle: false
+      crackle: false,
+      themeSlot: null
     };
   }
 
@@ -855,6 +875,8 @@ class AmbientFxEngine {
     splat.rgb = this.themeTokens.themeSlot === "mx" ? pickPaletteRgb(this.themeTokens) : null;
     splat.flash = false;
     splat.segmented = false;
+    splat.themeSlot = this.themeTokens.themeSlot;
+    splat.paletteRgb = clonePaletteRgb(this.themeTokens.fxPaletteRgb);
     this.splatters.push(splat);
   }
 
@@ -887,6 +909,7 @@ class AmbientFxEngine {
       spark.rgb = options?.rgb ?? null;
       spark.size = rand(options?.minSize ?? 1.4, options?.maxSize ?? 2.2);
       spark.crackle = options?.crackle === true;
+      spark.themeSlot = this.themeTokens.themeSlot;
       this.sparks.push(spark);
     }
   }
@@ -914,6 +937,9 @@ class AmbientFxEngine {
     flashCore.hue = 0;
     flashCore.rgb = [255, 255, 255];
     flashCore.flash = true;
+    flashCore.segmented = false;
+    flashCore.themeSlot = this.themeTokens.themeSlot;
+    flashCore.paletteRgb = clonePaletteRgb(this.themeTokens.fxPaletteRgb);
     this.splatters.push(flashCore);
 
     const hotFlash = this.acquireSplat();
@@ -932,6 +958,8 @@ class AmbientFxEngine {
     hotFlash.rgb = [255, 244, 220];
     hotFlash.flash = true;
     hotFlash.segmented = false;
+    hotFlash.themeSlot = this.themeTokens.themeSlot;
+    hotFlash.paletteRgb = clonePaletteRgb(this.themeTokens.fxPaletteRgb);
     this.splatters.push(hotFlash);
 
     const flash = this.acquireSplat();
@@ -950,6 +978,8 @@ class AmbientFxEngine {
     flash.rgb = burstColor;
     flash.flash = true;
     flash.segmented = false;
+    flash.themeSlot = this.themeTokens.themeSlot;
+    flash.paletteRgb = clonePaletteRgb(this.themeTokens.fxPaletteRgb);
     this.splatters.push(flash);
 
     for (let i = 0; i < burstCount; i += 1) {
@@ -971,6 +1001,8 @@ class AmbientFxEngine {
       splat.rgb = burstColor;
       splat.flash = false;
       splat.segmented = true;
+      splat.themeSlot = this.themeTokens.themeSlot;
+      splat.paletteRgb = clonePaletteRgb(this.themeTokens.fxPaletteRgb);
       this.splatters.push(splat);
       this.spawnSparks(
         splat.x,
@@ -1006,21 +1038,26 @@ class AmbientFxEngine {
       [218, 18, 26]
     ];
     const plumeCount = 3;
+    const clusterRotation = rand(-Math.PI, Math.PI);
+    const clusterCos = Math.cos(clusterRotation);
+    const clusterSin = Math.sin(clusterRotation);
 
     for (let i = 0; i < plumeCount; i += 1) {
       const splat = this.acquireSplat();
       const color = plumeColors[i]!;
-      const offsetX = (i - 1) * (12 + intensity * 7) + rand(-4, 4);
-      const offsetY = rand(-6, 8) + i * rand(2, 6);
-      const baseRadius = (this.reducedMotion ? 18 : 22) + intensity * rand(8, 14);
+      const localOffsetX = (i - 1) * (12 + intensity * 7) + rand(-4, 4);
+      const localOffsetY = rand(-6, 8) + i * rand(2, 6);
+      const offsetX = localOffsetX * clusterCos - localOffsetY * clusterSin;
+      const offsetY = localOffsetX * clusterSin + localOffsetY * clusterCos;
+      const baseRadius = (this.reducedMotion ? 24 : 30) + intensity * rand(10, 18);
       splat.x = x + offsetX;
       splat.y = y + offsetY;
       splat.vx = this.reducedMotion ? 0 : rand(-0.03, 0.03);
       splat.vy = this.reducedMotion ? -0.01 : rand(-0.08, -0.03);
       splat.r = baseRadius;
-      splat.rx = baseRadius * rand(1.2, 1.7);
-      splat.ry = baseRadius * rand(0.86, 1.18);
-      splat.rot = rand(-0.4, 0.4);
+      splat.rx = baseRadius * rand(1.35, 1.9);
+      splat.ry = baseRadius * rand(0.96, 1.28);
+      splat.rot = clusterRotation + rand(-0.28, 0.28);
       splat.alpha = rand(0.14, 0.22) * Math.min(1.16, this.themeTokens.glowIntensity);
       splat.ttl = this.resolvedQuality === "lite" ? rand(1500, 2100) : rand(1800, 2600);
       splat.age = 0;
@@ -1028,6 +1065,8 @@ class AmbientFxEngine {
       splat.rgb = color;
       splat.flash = false;
       splat.segmented = false;
+      splat.themeSlot = this.themeTokens.themeSlot;
+      splat.paletteRgb = clonePaletteRgb(this.themeTokens.fxPaletteRgb);
       this.splatters.push(splat);
     }
   }

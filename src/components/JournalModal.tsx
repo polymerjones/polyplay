@@ -100,6 +100,15 @@ function isCompactJournalEditingViewport(): boolean {
   return window.matchMedia("(max-width: 520px)").matches;
 }
 
+function focusWithoutScroll(element: HTMLElement | null): void {
+  if (!element) return;
+  try {
+    element.focus({ preventScroll: true });
+  } catch {
+    element.focus();
+  }
+}
+
 function isKeyboardEditableElement(node: Element | null): node is HTMLElement {
   return Boolean(
     node &&
@@ -229,7 +238,6 @@ export function JournalModal({ open, onClose }: Props) {
   const [pendingExportContent, setPendingExportContent] = useState<string | null>(null);
   const [pendingExportFilename, setPendingExportFilename] = useState("");
   const [isKeyboardOverlayActive, setIsKeyboardOverlayActive] = useState(false);
-  const [keyboardViewportHeight, setKeyboardViewportHeight] = useState<number | null>(null);
   const [verseFxActive, setVerseFxActive] = useState(false);
   const [verseFxBurstKey, setVerseFxBurstKey] = useState(0);
   const [pendingImportPayload, setPendingImportPayload] = useState<GratitudeBackupImportPayload | null>(null);
@@ -237,6 +245,7 @@ export function JournalModal({ open, onClose }: Props) {
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const activeEditEntryRef = useRef<HTMLElement | null>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const pendingExportInputRef = useRef<HTMLInputElement | null>(null);
   const activeEditActionsRef = useRef<HTMLDivElement | null>(null);
   const isResolvingEditRef = useRef(false);
   const deleteTimerRef = useRef<number | null>(null);
@@ -259,7 +268,6 @@ export function JournalModal({ open, onClose }: Props) {
     setPendingExportContent(null);
     setPendingExportFilename("");
     setIsKeyboardOverlayActive(false);
-    setKeyboardViewportHeight(null);
   }, [open]);
 
   useEffect(() => {
@@ -271,7 +279,6 @@ export function JournalModal({ open, onClose }: Props) {
       const visibleHeight = viewport?.height ?? window.innerHeight;
       const keyboardLikelyOpen = compact && focusedEditable && visibleHeight < window.innerHeight - 120;
       setIsKeyboardOverlayActive(keyboardLikelyOpen);
-      setKeyboardViewportHeight(keyboardLikelyOpen ? visibleHeight : null);
     };
     const onFocusChange = () => {
       window.setTimeout(recomputeKeyboardState, 0);
@@ -325,7 +332,7 @@ export function JournalModal({ open, onClose }: Props) {
 
   useEffect(() => {
     if (!isComposerOpen) return;
-    composerRef.current?.focus();
+    focusWithoutScroll(composerRef.current);
   }, [isComposerOpen]);
 
   useEffect(() => {
@@ -340,15 +347,15 @@ export function JournalModal({ open, onClose }: Props) {
       const entryRect = entry.getBoundingClientRect();
       const actionsRect = actions?.getBoundingClientRect() ?? null;
       const isCompact = isCompactJournalEditingViewport();
-      const topInset = isCompact ? 22 : 18;
-      const bottomInset = isCompact ? 20 : 18;
+      const topInset = isCompact ? 12 : 18;
+      const bottomInset = isCompact ? 12 : 18;
       const entryTop = list.scrollTop + (entryRect.top - listRect.top);
       const entryBottom = list.scrollTop + ((actionsRect?.bottom ?? entryRect.bottom) - listRect.top);
       const visibleTop = list.scrollTop + topInset;
       const visibleBottom = list.scrollTop + list.clientHeight - bottomInset;
       let nextTop = list.scrollTop;
 
-      if (entryTop < visibleTop) {
+      if (!isCompact && entryTop < visibleTop) {
         nextTop = Math.max(0, entryTop - topInset);
       } else if (entryBottom > visibleBottom) {
         nextTop = Math.max(0, entryBottom - list.clientHeight + bottomInset);
@@ -366,16 +373,12 @@ export function JournalModal({ open, onClose }: Props) {
 
     const rafId = window.requestAnimationFrame(() => {
       scrollActiveEntryIntoComfortableView();
-      editTextareaRef.current?.focus();
+      focusWithoutScroll(editTextareaRef.current);
     });
 
     const settleTimer = window.setTimeout(() => {
       scrollActiveEntryIntoComfortableView();
-    }, 320);
-
-    const lateSettleTimer = window.setTimeout(() => {
-      scrollActiveEntryIntoComfortableView();
-    }, 650);
+    }, 220);
 
     const viewport = typeof window !== "undefined" ? window.visualViewport : null;
     const onViewportResize = () => scrollActiveEntryIntoComfortableView();
@@ -384,7 +387,6 @@ export function JournalModal({ open, onClose }: Props) {
     return () => {
       window.cancelAnimationFrame(rafId);
       window.clearTimeout(settleTimer);
-      window.clearTimeout(lateSettleTimer);
       viewport?.removeEventListener("resize", onViewportResize);
     };
   }, [editingEntryId]);
@@ -495,6 +497,21 @@ export function JournalModal({ open, onClose }: Props) {
     const timer = window.setTimeout(() => setJournalStatus(null), timeoutMs);
     return () => window.clearTimeout(timer);
   }, [journalStatus]);
+
+  useEffect(() => {
+    if (!pendingExportContent) return;
+    const frameId = window.requestAnimationFrame(() => {
+      const input = pendingExportInputRef.current;
+      focusWithoutScroll(input);
+      if (!input) return;
+      try {
+        input.setSelectionRange(0, input.value.length);
+      } catch {
+        // Ignore selection failures on unsupported inputs.
+      }
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [pendingExportContent]);
 
   const finishGratitudeBackupSave = async (content: string, filename: string) => {
     const saveMode = await saveTextWithBestEffort(
@@ -814,11 +831,6 @@ export function JournalModal({ open, onClose }: Props) {
   return (
     <section
       className="journal-modal journalScene"
-      style={
-        keyboardViewportHeight
-          ? ({ "--journal-visible-vh": `${Math.round(keyboardViewportHeight)}px` } as CSSProperties)
-          : undefined
-      }
       role="dialog"
       aria-modal="true"
       aria-label="Gratitude Journal"
@@ -993,6 +1005,7 @@ export function JournalModal({ open, onClose }: Props) {
             <div className="journal-save-name-card" role="group" aria-label="Name gratitude backup">
               <p>Name this gratitude backup before saving.</p>
               <input
+                ref={pendingExportInputRef}
                 type="text"
                 value={pendingExportFilename}
                 onChange={(event) => setPendingExportFilename(event.currentTarget.value)}

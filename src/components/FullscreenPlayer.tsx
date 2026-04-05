@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
 import { buildPeaksFromAudioBlob, fallbackPeaks } from "../lib/artwork/waveformArtwork";
 import { fireLightHaptic } from "../lib/haptics";
 import { formatTime } from "../lib/time";
+import { getWaveformThemePalette } from "../lib/waveformTheme";
 import type { LoopMode, LoopRegion, RepeatTrackMode, Track } from "../types";
 import { PlayerControls } from "./PlayerControls";
 import { WaveformLoop } from "./WaveformLoop";
@@ -115,6 +116,11 @@ export function FullscreenPlayer({
   const [peaks, setPeaks] = useState<number[]>(() => fallbackPeaks(120));
   const [isArtworkVideoReady, setIsArtworkVideoReady] = useState(false);
   const [isCinemaMode, setIsCinemaMode] = useState(false);
+  const themeKey =
+    typeof document === "undefined"
+      ? "dark"
+      : `${document.documentElement.getAttribute("data-theme") ?? "dark"}:${document.documentElement.getAttribute("data-theme-slot") ?? ""}`;
+  const waveformPalette = useMemo(() => getWaveformThemePalette(), [themeKey]);
 
   useEffect(() => {
     setIsArtworkVideoReady(false);
@@ -239,9 +245,9 @@ export function FullscreenPlayer({
       const sway = Math.sin(t) * 0.08 + 1;
 
       const grad = ctx.createLinearGradient(0, centerY - height * 0.24, 0, centerY + height * 0.24);
-      grad.addColorStop(0, "rgba(124, 229, 255, 0.45)");
-      grad.addColorStop(0.6, "rgba(176, 110, 255, 0.4)");
-      grad.addColorStop(1, "rgba(255, 112, 214, 0.35)");
+      grad.addColorStop(0, waveformPalette.decorStops[0]);
+      grad.addColorStop(0.5, waveformPalette.decorStops[1]);
+      grad.addColorStop(1, waveformPalette.decorStops[2]);
       ctx.fillStyle = grad;
 
       for (let i = 0; i < bars; i += 1) {
@@ -263,7 +269,7 @@ export function FullscreenPlayer({
 
     raf = window.requestAnimationFrame(draw);
     return () => window.cancelAnimationFrame(raf);
-  }, [shouldAnimateGenerated, peaks]);
+  }, [shouldAnimateGenerated, peaks, waveformPalette]);
 
   const triggerArtworkFlash = () => {
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
