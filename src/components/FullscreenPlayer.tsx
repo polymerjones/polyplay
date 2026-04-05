@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
-import { buildPeaksFromAudioBlob, fallbackPeaks } from "../lib/artwork/waveformArtwork";
+import {
+  buildPeaksFromAudioBlob,
+  fallbackPeaks,
+  getRuntimeWaveformPeaks,
+  setRuntimeWaveformPeaks
+} from "../lib/artwork/waveformArtwork";
 import { fireLightHaptic } from "../lib/haptics";
 import { formatTime } from "../lib/time";
 import { getWaveformThemePalette } from "../lib/waveformTheme";
@@ -113,7 +118,17 @@ export function FullscreenPlayer({
   const hasArtworkVideo = Boolean(track.artVideoUrl);
   const shouldAnimateGenerated = track.artworkSource === "auto" && !hasArtworkVideo;
   const showLoopEditor = loopMode === "region" && loopRegion.active;
-  const [peaks, setPeaks] = useState<number[]>(() => fallbackPeaks(120));
+  const [peaks, setPeaks] = useState<number[]>(() => {
+    if (track.waveformPeaks?.length) return track.waveformPeaks;
+    const cached = getRuntimeWaveformPeaks(track.id);
+    if (cached?.length) return cached;
+    return fallbackPeaks(120);
+  });
+  const [hasResolvedPeaks, setHasResolvedPeaks] = useState<boolean>(() => {
+    if (track.waveformPeaks?.length) return true;
+    if (getRuntimeWaveformPeaks(track.id)?.length) return true;
+    return !track.audioBlob;
+  });
   const [isArtworkVideoReady, setIsArtworkVideoReady] = useState(false);
   const [isCinemaMode, setIsCinemaMode] = useState(false);
   const themeKey =
@@ -188,21 +203,43 @@ export function FullscreenPlayer({
 
   useEffect(() => {
     let canceled = false;
-    if (!shouldAnimateGenerated || !track.audioBlob) {
-      setPeaks(fallbackPeaks(120));
+    if (track.waveformPeaks?.length) {
+      setRuntimeWaveformPeaks(track.id, track.waveformPeaks);
+      setPeaks(track.waveformPeaks);
+      setHasResolvedPeaks(true);
       return;
     }
+    if (!shouldAnimateGenerated || !track.audioBlob) {
+      setPeaks(fallbackPeaks(120));
+      setHasResolvedPeaks(true);
+      return;
+    }
+    const cached = getRuntimeWaveformPeaks(track.id);
+    if (cached?.length) {
+      setPeaks(cached);
+      setHasResolvedPeaks(true);
+      return;
+    }
+    setPeaks(fallbackPeaks(120));
+    setHasResolvedPeaks(false);
     buildPeaksFromAudioBlob(track.audioBlob, 120)
       .then((next) => {
-        if (!canceled) setPeaks(next);
+        if (!canceled) {
+          setRuntimeWaveformPeaks(track.id, next);
+          setPeaks(next);
+          setHasResolvedPeaks(true);
+        }
       })
       .catch(() => {
-        if (!canceled) setPeaks(fallbackPeaks(120));
+        if (!canceled) {
+          setPeaks(fallbackPeaks(120));
+          setHasResolvedPeaks(true);
+        }
       });
     return () => {
       canceled = true;
     };
-  }, [shouldAnimateGenerated, track.audioBlob, track.id]);
+  }, [shouldAnimateGenerated, track.audioBlob, track.id, track.waveformPeaks]);
 
   useEffect(() => {
     if (!shouldAnimateGenerated) return;
@@ -245,9 +282,15 @@ export function FullscreenPlayer({
       const sway = Math.sin(t) * 0.08 + 1;
 
       const grad = ctx.createLinearGradient(0, centerY - height * 0.24, 0, centerY + height * 0.24);
-      grad.addColorStop(0, waveformPalette.decorStops[0]);
-      grad.addColorStop(0.5, waveformPalette.decorStops[1]);
-      grad.addColorStop(1, waveformPalette.decorStops[2]);
+      if (hasResolvedPeaks) {
+        grad.addColorStop(0, waveformPalette.decorStops[0]);
+        grad.addColorStop(0.5, waveformPalette.decorStops[1]);
+        grad.addColorStop(1, waveformPalette.decorStops[2]);
+      } else {
+        grad.addColorStop(0, "rgba(102, 108, 116, 0.46)");
+        grad.addColorStop(0.5, "rgba(132, 138, 146, 0.58)");
+        grad.addColorStop(1, "rgba(96, 102, 110, 0.42)");
+      }
       ctx.fillStyle = grad;
 
       for (let i = 0; i < bars; i += 1) {
@@ -269,7 +312,7 @@ export function FullscreenPlayer({
 
     raf = window.requestAnimationFrame(draw);
     return () => window.cancelAnimationFrame(raf);
-  }, [shouldAnimateGenerated, peaks, waveformPalette]);
+  }, [hasResolvedPeaks, shouldAnimateGenerated, peaks, waveformPalette]);
 
   const triggerArtworkFlash = () => {
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();

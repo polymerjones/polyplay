@@ -129,28 +129,11 @@
       }
 
       .support-logo {
-        width: clamp(360px, 72vw, 940px);
+        width: clamp(180px, 30vw, 280px);
         height: auto;
         display: block;
-        margin: 0 auto 12px;
-        filter:
-          drop-shadow(0 52px 74px rgba(6, 4, 8, 0.85))
-          drop-shadow(0 0 44px rgba(255, 190, 110, 0.85))
-          drop-shadow(0 0 82px rgba(255, 206, 140, 0.45));
-        mix-blend-mode: screen;
-        position: relative;
-      }
-
-      .support-logo::after {
-        content: "";
-        position: absolute;
-        inset: -4% 0% 10% 0%;
-        background: linear-gradient(120deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0));
-        opacity: 0.6;
-        transform: skewX(-15deg) translateX(-125%);
-        filter: blur(2px);
-        animation: supportLogoShine 5.5s linear infinite;
-        pointer-events: none;
+        margin: 0 auto 18px;
+        filter: drop-shadow(0 16px 30px rgba(4, 4, 10, 0.42));
       }
 
       .support-subhead {
@@ -455,15 +438,6 @@
         }
       }
 
-      @keyframes supportLogoShine {
-        0% {
-          transform: skewX(-15deg) translateX(-120%);
-        }
-        100% {
-          transform: skewX(-15deg) translateX(120%);
-        }
-      }
-
       @keyframes float {
         from {
           transform: translateY(0);
@@ -525,7 +499,7 @@
           <span class="orb orb-two"></span>
           <span class="orb orb-three"></span>
         </div>
-        <img src="polyplay-hero-logo.png" alt="PolyPlay Audio" class="support-logo" />
+        <img src="polyplay-hero-logo.png" alt="PolyPlay logo" class="support-logo" />
         <p class="support-subhead">
           Portable offline experiences for audio, playlists, notes, and reflection.
         </p>

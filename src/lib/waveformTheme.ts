@@ -1,6 +1,4 @@
-import type { CustomThemeSlot } from "./themeConfig";
-
-type ThemeSelection = "dark" | "light" | CustomThemeSlot;
+import type { CustomThemeSlot, ThemeSelection } from "./themeConfig";
 
 export type WaveformThemePalette = {
   idleFill: string;

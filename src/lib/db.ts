@@ -6,6 +6,7 @@ import { getMediaUrl, revokeAllMediaUrls, revokeMediaUrl } from "./player/media"
 import { isConstrainedMobileDevice } from "./platform";
 import { deleteBlob, getBlob, initDB, listBlobStats, putBlob } from "./storage/db";
 import { clearCompetingLibraryCandidates, loadLibrary, saveLibrary, type LibraryState, type TrackRecord } from "./storage/library";
+import type { ThemeSelection } from "./themeConfig";
 import { titleFromFilename } from "./title";
 
 export type DbTrackRecord = {
@@ -617,6 +618,46 @@ export async function resetAuraInDb(): Promise<number> {
     }
   }
   saveLibrary(library);
+  return updated;
+}
+
+export async function regenerateAutoArtworkForThemeChangeInDb(themeSelection: ThemeSelection): Promise<number> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  let updated = 0;
+
+  for (const track of Object.values(library.tracksById)) {
+    if (track.artworkSource !== "auto" || !track.audioKey) continue;
+    const sourceAudio = await getBlob(track.audioKey).catch(() => null);
+    if (!sourceAudio) continue;
+
+    const nextPoster = await generateWaveformArtwork({ audioBlob: sourceAudio, themeSelection }).catch(() => null);
+    if (!nextPoster) continue;
+
+    const oldArtKey = track.artKey;
+    const oldPosterBytes = track.posterBytes ?? 0;
+    const nextPosterBytes = nextPoster.size ?? 0;
+    await ensureStorageCapacity(nextPosterBytes - oldPosterBytes);
+
+    const nextArtKey = makeId();
+    await putBlob(nextArtKey, nextPoster, { type: "image", createdAt: now() });
+
+    track.artKey = nextArtKey;
+    track.posterBytes = nextPosterBytes;
+    track.artworkBytes = Math.max(0, (track.artworkBytes ?? oldPosterBytes) - oldPosterBytes + nextPosterBytes);
+    track.updatedAt = now();
+    updated += 1;
+
+    if (oldArtKey) {
+      await deleteBlob(oldArtKey);
+      revokeMediaUrl(oldArtKey);
+    }
+  }
+
+  if (updated > 0) {
+    saveLibrary(library);
+  }
+
   return updated;
 }
 

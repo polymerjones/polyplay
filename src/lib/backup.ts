@@ -24,6 +24,7 @@ const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const THEME_MODE_KEY = "polyplay_themeMode";
 const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
 const AURA_COLOR_KEY = "polyplay_auraColor_v1";
+const TRACK_THEME_AURA_ORIGINS_KEY = "polyplay_trackThemeAuraOrigins_v1";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackMode";
 const LEGACY_REPEAT_TRACK_KEY = "polyplay_repeatTrackEnabled";
@@ -73,6 +74,7 @@ export type PolyplayConfig = {
     themeMode: "light" | "dark" | "custom";
     customThemeSlot?: CustomThemeSlot;
     auraColor?: string | null;
+    preserveTrackThemeAuraOrigins?: boolean;
     layoutMode: "grid" | "list";
     shuffleEnabled: boolean;
     repeatTrackMode?: "off" | "repeat-2" | "repeat-3" | "loop-one" | "threepeat";
@@ -537,6 +539,7 @@ export function buildConfigSnapshot(): PolyplayConfig {
       themeMode: asThemeMode(localStorage.getItem(THEME_MODE_KEY)),
       customThemeSlot: asCustomThemeSlot(localStorage.getItem(CUSTOM_THEME_SLOT_KEY)),
       auraColor: asAuraColor(localStorage.getItem(AURA_COLOR_KEY)),
+      preserveTrackThemeAuraOrigins: localStorage.getItem(TRACK_THEME_AURA_ORIGINS_KEY) !== "false",
       layoutMode: asLayout(localStorage.getItem(LAYOUT_MODE_KEY)),
       shuffleEnabled: asBoolean(localStorage.getItem(SHUFFLE_ENABLED_KEY)),
       repeatTrackMode: getStoredRepeatTrackMode(),
@@ -613,6 +616,7 @@ function normalizeImportedConfig(input: unknown): PolyplayConfig {
     themeMode: "light",
     customThemeSlot: "crimson",
     auraColor: null,
+    preserveTrackThemeAuraOrigins: true,
     layoutMode: "grid",
     shuffleEnabled: false,
     repeatTrackMode: "off",
@@ -664,6 +668,7 @@ function normalizeImportedConfig(input: unknown): PolyplayConfig {
       themeMode: asThemeMode(settings.themeMode),
       customThemeSlot: asCustomThemeSlot(settings.customThemeSlot),
       auraColor: asAuraColor(settings.auraColor),
+      preserveTrackThemeAuraOrigins: settings.preserveTrackThemeAuraOrigins !== false,
       layoutMode: asLayout(settings.layoutMode),
       shuffleEnabled: asBoolean(settings.shuffleEnabled),
       repeatTrackMode: asRepeatTrackMode(
@@ -709,6 +714,10 @@ export function applyImportedConfig(config: PolyplayConfig): ImportConfigSummary
   const auraColor = asAuraColor(config.settings.auraColor);
   if (auraColor) localStorage.setItem(AURA_COLOR_KEY, auraColor);
   else localStorage.removeItem(AURA_COLOR_KEY);
+  localStorage.setItem(
+    TRACK_THEME_AURA_ORIGINS_KEY,
+    config.settings.preserveTrackThemeAuraOrigins === false ? "false" : "true"
+  );
   localStorage.setItem(LAYOUT_MODE_KEY, config.settings.layoutMode);
   localStorage.setItem(SHUFFLE_ENABLED_KEY, config.settings.shuffleEnabled ? "true" : "false");
   const repeatTrackMode = asRepeatTrackMode(config.settings.repeatTrackMode ?? config.settings.repeatTrackEnabled);

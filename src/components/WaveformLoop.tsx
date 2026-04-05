@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { buildPeaksFromAudioBlob, fallbackPeaks } from "../lib/artwork/waveformArtwork";
+import {
+  buildPeaksFromAudioBlob,
+  fallbackPeaks,
+  getRuntimeWaveformPeaks,
+  setRuntimeWaveformPeaks
+} from "../lib/artwork/waveformArtwork";
 import { getWaveformThemePalette } from "../lib/waveformTheme";
 import type { LoopRegion, Track } from "../types";
 
@@ -22,7 +27,7 @@ type Props = {
 };
 
 type Handle = "start" | "end";
-type EditViewportMode = "fit" | "manual" | "locked";
+type EditViewportMode = "fit" | "manual" | "locked" | "full";
 
 const MIN_LOOP_SECONDS = 0.5;
 const LOOP_VIEW_ZOOM_DELAY_MS = 420;
@@ -44,6 +49,8 @@ const MANUAL_ZOOM_FACTORS = [1, 0.86, 0.72, 0.58, 0.46, 0.34, 0.26, 0.18, 0.12] 
 const MAX_MANUAL_ZOOM_LEVEL = MANUAL_ZOOM_FACTORS.length - 1;
 const MIN_MANUAL_VIEW_SPAN_SEC = 0.9;
 const LOOP_FIT_BUFFER_RATIO = 0.05;
+const MANUAL_ZOOM_OUT_EXPAND_FACTOR = 1.45;
+const MANUAL_ZOOM_OUT_FULL_THRESHOLD = 0.9;
 const LOOP_REGION_YELLOW = "rgba(255, 214, 92, 0.96)";
 const LOOP_REGION_YELLOW_SOFT = "rgba(255, 232, 150, 0.98)";
 const LOOP_REGION_YELLOW_DEEP = "rgba(255, 196, 76, 0.94)";
@@ -171,12 +178,21 @@ export function WaveformLoop({
   const dragPointerRangeRef = useRef<{ start: number; end: number } | null>(null);
   const prevEditingRef = useRef(loopRegion.editing);
 
-  const [peaks, setPeaks] = useState<number[]>(() => fallbackPeaks());
+  const [peaks, setPeaks] = useState<number[]>(() => {
+    if (track?.waveformPeaks?.length) return track.waveformPeaks;
+    const cached = getRuntimeWaveformPeaks(track?.id);
+    if (cached?.length) return cached;
+    return fallbackPeaks();
+  });
+  const [hasResolvedPeaks, setHasResolvedPeaks] = useState<boolean>(() => {
+    if (track?.waveformPeaks?.length) return true;
+    if (getRuntimeWaveformPeaks(track?.id)?.length) return true;
+    return !track?.audioBlob;
+  });
   const [pendingHandle, setPendingHandle] = useState<Handle | null>(null);
   const [draggingHandle, setDraggingHandle] = useState<Handle | null>(null);
   const [hasAdjustedLoop, setHasAdjustedLoop] = useState(false);
   const [manualZoomLevel, setManualZoomLevel] = useState(0);
-  const [hasUnlockedManualZoom, setHasUnlockedManualZoom] = useState(false);
   const [showManualZoomControls, setShowManualZoomControls] = useState(false);
   const [viewRange, setViewRange] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
   const [draftLoopRange, setDraftLoopRange] = useState<{ start: number; end: number } | null>(null);
@@ -257,10 +273,16 @@ export function WaveformLoop({
           const nextSpan = Math.max(MIN_MANUAL_VIEW_SPAN_SEC, currentSpan * (nextFactor / currentFactor));
           nextRange = centerRangeOnLoop(duration, displayStart, displayEnd, nextSpan);
         } else if (direction < 0 && currentSpan < duration - 0.0001) {
-          nextRange = { start: 0, end: duration };
+          const expandedSpan = Math.min(duration, currentSpan * MANUAL_ZOOM_OUT_EXPAND_FACTOR);
+          nextRange =
+            expandedSpan >= duration * MANUAL_ZOOM_OUT_FULL_THRESHOLD
+              ? { start: 0, end: duration }
+              : centerRangeOnLoop(duration, displayStart, displayEnd, expandedSpan);
         }
         if (nextRange) {
-          setEditViewportMode("manual");
+          setEditViewportMode(
+            nextRange.start <= 0.0001 && Math.abs(nextRange.end - duration) <= 0.0001 ? "full" : "manual"
+          );
           editingViewRangeRef.current = nextRange;
           lockedViewRangeRef.current = nextRange;
           setViewRange(nextRange);
@@ -279,6 +301,17 @@ export function WaveformLoop({
     const nextRange = centerRangeOnLoop(duration, displayStart, displayEnd, fittedSpan);
     setEditViewportMode("fit");
     editingViewRangeRef.current = nextRange;
+    setManualZoomLevel(0);
+    setViewRange(nextRange);
+  };
+
+  const zoomToFullWaveform = () => {
+    if (!hasDuration || !loopRegion.active || !loopRegion.editing) return;
+    const nextRange = { start: 0, end: duration };
+    setEditViewportMode("full");
+    editingViewRangeRef.current = nextRange;
+    lockedViewRangeRef.current = nextRange;
+    setShowManualZoomControls(true);
     setManualZoomLevel(0);
     setViewRange(nextRange);
   };
@@ -316,7 +349,6 @@ export function WaveformLoop({
       setHasAdjustedLoop(false);
       setManualZoomLevel(0);
       setEditViewportMode("fit");
-      setHasUnlockedManualZoom(false);
       dragViewSpanRef.current = null;
       committedLoopDragRef.current = false;
       prevCommittedLoopRef.current = null;
@@ -370,9 +402,11 @@ export function WaveformLoop({
       const baseEditingRange =
         editViewportMode === "fit"
           ? editingViewRangeRef.current ?? buildEditingFocusRange()
+          : editViewportMode === "full"
+            ? { start: 0, end: duration }
           : editingViewRangeRef.current ?? { start: viewRange.start, end: viewRange.end };
       const nextEditingRange =
-        editViewportMode === "locked"
+        editViewportMode === "locked" || editViewportMode === "full"
           ? baseEditingRange
           : keepLoopWithinViewRange(baseEditingRange, duration, displayStart, displayEnd);
       editingViewRangeRef.current = nextEditingRange;
@@ -430,12 +464,14 @@ export function WaveformLoop({
       const currentSpan = viewRange.end > viewRange.start ? viewRange.end - viewRange.start : 0;
       const enteringFreshEditSession = !prevEditingRef.current;
       const shouldRefocusEditingRange =
-        enteringFreshEditSession ||
+        (editViewportMode !== "full" && enteringFreshEditSession) ||
         !editingViewRangeRef.current ||
         currentSpan <= 0 ||
-        currentSpan > Math.max(loopSpan * 5, MIN_MANUAL_VIEW_SPAN_SEC * 2.5);
+        (editViewportMode !== "full" && currentSpan > Math.max(loopSpan * 5, MIN_MANUAL_VIEW_SPAN_SEC * 2.5));
       const nextEditingRange = shouldRefocusEditingRange
-        ? buildEditingFocusRange()
+        ? editViewportMode === "full"
+          ? { start: 0, end: duration }
+          : buildEditingFocusRange()
         : keepLoopWithinViewRange(
             editingViewRangeRef.current ?? { start: viewRange.start, end: viewRange.end },
             duration,
@@ -444,6 +480,7 @@ export function WaveformLoop({
           );
       if (!prevEditingRef.current) {
         setEditViewportMode("fit");
+        setShowManualZoomControls(true);
       }
       lockedViewRangeRef.current = nextEditingRange;
       editingViewRangeRef.current = nextEditingRange;
@@ -472,7 +509,6 @@ export function WaveformLoop({
       lockedViewRangeRef.current = null;
       editingViewRangeRef.current = null;
       setEditViewportMode("fit");
-      setHasUnlockedManualZoom(false);
       setDraftLoopRange(null);
     }
   }, [loopRegion.active]);
@@ -480,7 +516,6 @@ export function WaveformLoop({
   useEffect(() => {
     if (!loopRegion.editing) {
       setShowManualZoomControls(false);
-      setHasUnlockedManualZoom(false);
       setEditViewportMode("fit");
       editingViewRangeRef.current = null;
       dragPointerRangeRef.current = null;
@@ -492,21 +527,41 @@ export function WaveformLoop({
     let canceled = false;
 
     if (track?.waveformPeaks?.length) {
+      setRuntimeWaveformPeaks(track.id, track.waveformPeaks);
       setPeaks(track.waveformPeaks);
+      setHasResolvedPeaks(true);
       return;
     }
 
     if (!track?.audioBlob) {
       setPeaks(fallbackPeaks());
+      setHasResolvedPeaks(true);
       return;
     }
 
+    const cached = getRuntimeWaveformPeaks(track?.id);
+    if (cached?.length) {
+      setPeaks(cached);
+      setHasResolvedPeaks(true);
+      return;
+    }
+
+    setPeaks(fallbackPeaks());
+    setHasResolvedPeaks(false);
+
     buildPeaksFromAudioBlob(track.audioBlob)
       .then((nextPeaks) => {
-        if (!canceled) setPeaks(nextPeaks);
+        if (!canceled) {
+          setRuntimeWaveformPeaks(track.id, nextPeaks);
+          setPeaks(nextPeaks);
+          setHasResolvedPeaks(true);
+        }
       })
       .catch(() => {
-        if (!canceled) setPeaks(fallbackPeaks());
+        if (!canceled) {
+          setPeaks(fallbackPeaks());
+          setHasResolvedPeaks(true);
+        }
       });
 
     return () => {
@@ -531,7 +586,11 @@ export function WaveformLoop({
     const minBarWidth = 1.2;
     const gap = 1.2;
     const maxBarsByWidth = Math.max(24, Math.floor((width + gap) / (minBarWidth + gap)));
-    const bars = Math.max(1, Math.min(peaks.length, maxBarsByWidth));
+    if (!peaks.length) {
+      ctx.clearRect(0, 0, width, height);
+      return;
+    }
+    const bars = Math.min(peaks.length, maxBarsByWidth);
     const barWidth = Math.max(0.8, (width - gap * (bars - 1)) / bars);
     ctx.clearRect(0, 0, width, height);
 
@@ -546,11 +605,15 @@ export function WaveformLoop({
       const y = (height - h) / 2;
       const inLoop = loopRegion.active && hasDisplayLoopRange && sampleTime >= displayStart && sampleTime <= displayEnd;
 
-      ctx.fillStyle = inLoop ? LOOP_REGION_YELLOW : waveformPalette.idleFill;
+      ctx.fillStyle = inLoop
+        ? LOOP_REGION_YELLOW
+        : hasResolvedPeaks
+          ? waveformPalette.idleFill
+          : "rgba(108, 112, 118, 0.48)";
 
       ctx.fillRect(x, y, barWidth, h);
     }
-  }, [displayEnd, displayStart, duration, hasDisplayLoopRange, loopRegion.active, peaks, safeViewRange.start, viewSpan, waveformPalette]);
+  }, [displayEnd, displayStart, duration, hasDisplayLoopRange, hasResolvedPeaks, loopRegion.active, peaks, safeViewRange.start, viewSpan, waveformPalette]);
 
   useEffect(() => {
     const canvas = decorCanvasRef.current;
@@ -569,7 +632,11 @@ export function WaveformLoop({
     const minBarWidth = 1.2;
     const gap = 1.2;
     const maxBarsByWidth = Math.max(24, Math.floor((width + gap) / (minBarWidth + gap)));
-    const bars = Math.max(1, Math.min(peaks.length, maxBarsByWidth));
+    if (!peaks.length) {
+      ctx.clearRect(0, 0, width, height);
+      return;
+    }
+    const bars = Math.min(peaks.length, maxBarsByWidth);
     const barWidth = Math.max(0.8, (width - gap * (bars - 1)) / bars);
     const visibleProgress = viewSpan > 0 ? Math.max(0, Math.min(1, (currentTime - safeViewRange.start) / viewSpan)) : 0;
     ctx.clearRect(0, 0, width, height);
@@ -592,7 +659,7 @@ export function WaveformLoop({
       const magnitude = peaks[peakIndex] ?? 0.3;
       const h = Math.max(4, magnitude * height * 0.98);
       const x = i * (barWidth + gap);
-      if (centerRatio > visibleProgress) continue;
+      if (centerRatio > visibleProgress || !hasResolvedPeaks) continue;
       const y = (height - h) / 2;
       const inLoop = loopRegion.active && hasDisplayLoopRange && sampleTime >= displayStart && sampleTime <= displayEnd;
       ctx.fillStyle = inLoop ? loopGrad : progressGrad;
@@ -609,6 +676,7 @@ export function WaveformLoop({
     currentTime,
     duration,
     hasDisplayLoopRange,
+    hasResolvedPeaks,
     isPlaying,
     loopRegion.active,
     peaks,
@@ -644,7 +712,6 @@ export function WaveformLoop({
         setPendingHandle(null);
         setDraggingHandle(activeHandle);
         setEditViewportMode("locked");
-        setHasUnlockedManualZoom(true);
         setShowManualZoomControls(true);
         onLoopDragStart?.();
       }
@@ -789,7 +856,7 @@ export function WaveformLoop({
           </div>
         </div>
       </div>
-      {loopRegion.active && hasLoopRange && loopRegion.editing && hasUnlockedManualZoom && (
+      {loopRegion.active && hasLoopRange && loopRegion.editing && (
         <div className="pc-wave-toolbar" aria-label="Loop zoom controls">
           <button
             type="button"
@@ -809,6 +876,14 @@ export function WaveformLoop({
             onClick={fitLoopToView}
           >
             Fit
+          </button>
+          <button
+            type="button"
+            className="pc-wave-toolbar__fit"
+            aria-label="Zoom to full waveform"
+            onClick={zoomToFullWaveform}
+          >
+            Full
           </button>
           <div className={`pc-wave-toolbar__controls ${showManualZoomControls ? "is-open" : ""}`.trim()}>
             <span className="pc-wave-toolbar__label">Loop Zoom</span>

@@ -1,3 +1,4 @@
+import type { ThemeSelection } from "../themeConfig";
 import { getWaveformThemePalette } from "../waveformTheme";
 
 type GenerateArtworkInput = {
@@ -5,9 +6,11 @@ type GenerateArtworkInput = {
   peaks?: number[];
   width?: number;
   height?: number;
+  themeSelection?: ThemeSelection;
 };
 
 let audioCtx: AudioContext | null = null;
+const runtimeWaveformPeakCache = new Map<string, number[]>();
 
 function getAudioContext(): AudioContext {
   if (!audioCtx) {
@@ -39,6 +42,17 @@ export async function buildPeaksFromAudioBlob(blob: Blob, bars = 220): Promise<n
   });
 }
 
+export function getRuntimeWaveformPeaks(trackId: string | null | undefined): number[] | null {
+  if (!trackId) return null;
+  const cached = runtimeWaveformPeakCache.get(trackId);
+  return cached?.length ? cached : null;
+}
+
+export function setRuntimeWaveformPeaks(trackId: string | null | undefined, peaks: number[]): void {
+  if (!trackId || !peaks.length) return;
+  runtimeWaveformPeakCache.set(trackId, peaks);
+}
+
 function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -62,7 +76,8 @@ export async function generateWaveformArtwork(input: GenerateArtworkInput): Prom
   canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Unable to create artwork canvas");
-  const palette = getWaveformThemePalette().artwork;
+  const themePalette = getWaveformThemePalette(input.themeSelection);
+  const palette = themePalette.artwork;
 
   const bg = ctx.createLinearGradient(0, 0, width, height);
   bg.addColorStop(0, palette.bgStart);
@@ -77,15 +92,34 @@ export async function generateWaveformArtwork(input: GenerateArtworkInput): Prom
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, width, height);
 
+  const waveformLift = ctx.createRadialGradient(
+    width * 0.5,
+    height * 0.56,
+    height * 0.06,
+    width * 0.5,
+    height * 0.56,
+    width * 0.62
+  );
+  waveformLift.addColorStop(0, "rgba(255, 255, 255, 0.18)");
+  waveformLift.addColorStop(0.42, "rgba(255, 255, 255, 0.08)");
+  waveformLift.addColorStop(1, "rgba(255, 255, 255, 0)");
+  ctx.fillStyle = waveformLift;
+  ctx.fillRect(0, 0, width, height);
+
   const bars = 140;
   const gap = 4;
   const barWidth = (width - (bars - 1) * gap) / bars;
   const baseline = height * 0.55;
-  const waveformGrad = ctx.createLinearGradient(0, baseline - height * 0.28, 0, baseline + height * 0.28);
-  waveformGrad.addColorStop(0, palette.barTop);
-  waveformGrad.addColorStop(0.55, palette.barMid);
-  waveformGrad.addColorStop(1, palette.barBottom);
+  const waveformGrad = ctx.createLinearGradient(0, 0, width, 0);
+  waveformGrad.addColorStop(0, themePalette.progressStops[0]);
+  waveformGrad.addColorStop(0.5, themePalette.progressStops[1]);
+  waveformGrad.addColorStop(1, themePalette.progressStops[2]);
   ctx.fillStyle = waveformGrad;
+
+  const waveformShadow = ctx.createLinearGradient(0, 0, width, 0);
+  waveformShadow.addColorStop(0, "rgba(8, 10, 18, 0.22)");
+  waveformShadow.addColorStop(0.5, "rgba(8, 10, 18, 0.12)");
+  waveformShadow.addColorStop(1, "rgba(8, 10, 18, 0.22)");
 
   for (let i = 0; i < bars; i += 1) {
     const peakIndex = bars > 1 ? Math.round((i / (bars - 1)) * (safePeaks.length - 1)) : 0;
@@ -94,6 +128,9 @@ export async function generateWaveformArtwork(input: GenerateArtworkInput): Prom
     const barHeight = Math.max(height * 0.08, height * heightScale);
     const x = i * (barWidth + gap);
     const y = baseline - barHeight * 0.5;
+    ctx.fillStyle = waveformShadow;
+    ctx.fillRect(x, y + 1, barWidth, barHeight);
+    ctx.fillStyle = waveformGrad;
     ctx.fillRect(x, y, barWidth, barHeight);
   }
 
@@ -106,7 +143,7 @@ export async function generateWaveformArtwork(input: GenerateArtworkInput): Prom
 
   const vignette = ctx.createRadialGradient(width * 0.5, height * 0.5, height * 0.2, width * 0.5, height * 0.5, height * 0.8);
   vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
-  vignette.addColorStop(1, "rgba(0, 0, 0, 0.46)");
+  vignette.addColorStop(1, "rgba(0, 0, 0, 0.34)");
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, width, height);
 

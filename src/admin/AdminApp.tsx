@@ -11,6 +11,7 @@ import {
   deletePlaylistInDb,
   getStorageUsageSummary,
   getPlaylistsFromDb,
+  regenerateAutoArtworkForThemeChangeInDb,
   getTrackStorageRows,
   getTrackRowsFromDb,
   IMPORT_REQUIRES_PLAYLIST_MESSAGE,
@@ -91,6 +92,7 @@ const OPEN_STATE_SEEN_KEY = "polyplay_open_state_seen_v102";
 const THEME_MODE_KEY = "polyplay_themeMode";
 const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
 const AURA_COLOR_KEY = "polyplay_auraColor_v1";
+const TRACK_THEME_AURA_ORIGINS_KEY = "polyplay_trackThemeAuraOrigins_v1";
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackMode";
@@ -632,6 +634,13 @@ export function AdminApp() {
       return "#bc84ff";
     }
   });
+  const [preserveTrackThemeAuraOrigins, setPreserveTrackThemeAuraOrigins] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(TRACK_THEME_AURA_ORIGINS_KEY) !== "false";
+    } catch {
+      return true;
+    }
+  });
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
   const [editingTrackTitle, setEditingTrackTitle] = useState("");
   const [editingTrackArtist, setEditingTrackArtist] = useState("");
@@ -668,6 +677,22 @@ export function AdminApp() {
     window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
     if (window.parent && window.parent !== window) {
       window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
+    }
+  };
+
+  const applyTrackThemeOriginSetting = (preserve: boolean) => {
+    setPreserveTrackThemeAuraOrigins(preserve);
+    try {
+      localStorage.setItem(TRACK_THEME_AURA_ORIGINS_KEY, preserve ? "true" : "false");
+    } catch {
+      // Ignore localStorage failures.
+    }
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:track-theme-origins-updated", preserve }, window.location.origin);
+      }
+    } catch {
+      // Ignore postMessage failures.
     }
   };
 
@@ -845,6 +870,7 @@ export function AdminApp() {
         setAuraColor(savedAura);
         setSavedAuraColor(savedAura);
       }
+      setPreserveTrackThemeAuraOrigins(localStorage.getItem(TRACK_THEME_AURA_ORIGINS_KEY) !== "false");
     } catch {
       // Ignore storage read failures.
     }
@@ -875,6 +901,9 @@ export function AdminApp() {
           setAuraColor("#bc84ff");
           setSavedAuraColor("#bc84ff");
         }
+      }
+      if (event.key === TRACK_THEME_AURA_ORIGINS_KEY) {
+        setPreserveTrackThemeAuraOrigins(event.newValue !== "false");
       }
     };
     const onMessage = (event: MessageEvent) => {
@@ -2038,6 +2067,7 @@ export function AdminApp() {
       localStorage.setItem(THEME_MODE_KEY, "dark");
       localStorage.setItem(CUSTOM_THEME_SLOT_KEY, "crimson");
       localStorage.removeItem(AURA_COLOR_KEY);
+      localStorage.removeItem(TRACK_THEME_AURA_ORIGINS_KEY);
       localStorage.setItem(LAYOUT_MODE_KEY, "grid");
       localStorage.setItem(SHUFFLE_ENABLED_KEY, "false");
       localStorage.setItem(REPEAT_TRACK_KEY, "off");
@@ -2056,6 +2086,7 @@ export function AdminApp() {
       setCustomThemeSlot("crimson");
       setAuraColor("#bc84ff");
       setSavedAuraColor("#bc84ff");
+      setPreserveTrackThemeAuraOrigins(true);
       setGratitudeSettings(DEFAULT_GRATITUDE_SETTINGS);
       setGratitudeEntries([]);
       setSelectedGratitudeEntry(null);
@@ -3165,6 +3196,7 @@ export function AdminApp() {
               if (!isThemeSelection(selected)) return;
               const nextMode = selected === "dark" ? "dark" : selected === "light" ? "light" : "custom";
               const nextSlot: CustomThemeSlot = isCustomThemeSlot(selected) ? selected : customThemeSlot;
+              const shouldPreserveTrackVisualOrigins = preserveTrackThemeAuraOrigins;
               setThemeSelection(selected);
               setCustomThemeSlot(nextSlot);
               try {
@@ -3173,7 +3205,7 @@ export function AdminApp() {
               } catch {
                 // Ignore localStorage failures.
               }
-              if (nextMode === "custom") {
+              if (!shouldPreserveTrackVisualOrigins && nextMode === "custom") {
                 const auraForSlot = THEME_PACK_AURA_COLORS[nextSlot];
                 setAuraColor(auraForSlot);
                 setSavedAuraColor(auraForSlot);
@@ -3182,7 +3214,7 @@ export function AdminApp() {
                 } catch {
                   // Ignore localStorage failures.
                 }
-              } else if (selected === "dark") {
+              } else if (!shouldPreserveTrackVisualOrigins) {
                 setAuraColor("#bc84ff");
                 setSavedAuraColor("#bc84ff");
                 try {
@@ -3195,24 +3227,35 @@ export function AdminApp() {
                 if (window.parent && window.parent !== window) {
                   window.parent.postMessage({ type: "polyplay:theme-mode-updated", themeMode: nextMode }, window.location.origin);
                   window.parent.postMessage({ type: "polyplay:custom-theme-slot-updated", slot: nextSlot }, window.location.origin);
-                  if (nextMode === "custom") {
+                  if (!shouldPreserveTrackVisualOrigins && nextMode === "custom") {
                     window.parent.postMessage({ type: "polyplay:aura-color-updated", color: THEME_PACK_AURA_COLORS[nextSlot] }, window.location.origin);
-                  } else if (selected === "dark") {
+                  } else if (!shouldPreserveTrackVisualOrigins) {
                     window.parent.postMessage({ type: "polyplay:aura-color-updated", color: null }, window.location.origin);
                   }
                 }
               } catch {
                 // Ignore postMessage failures.
               }
+              if (!shouldPreserveTrackVisualOrigins) {
+                void regenerateAutoArtworkForThemeChangeInDb(selected)
+                  .then(async (updated) => {
+                    if (updated <= 0) return;
+                    await refreshTracks();
+                    emitLibraryUpdated();
+                  })
+                  .catch(() => {
+                    // Ignore auto-art regeneration failures during theme switching.
+                  });
+              }
               setStatus(
-                nextMode === "custom"
+                !shouldPreserveTrackVisualOrigins && nextMode === "custom"
                   ? `Theme set to ${getThemeLabel(nextSlot)}. Aura matched to pack.`
                   : `Theme set to ${getThemeLabel(selected)}.`
               );
               fireSuccessHaptic();
               requestParentHaptic("success");
               showSuccessNotice(
-                nextMode === "custom"
+                !shouldPreserveTrackVisualOrigins && nextMode === "custom"
                   ? `Theme set to ${getThemeLabel(nextSlot)}. Aura matched to pack.`
                   : `Theme set to ${getThemeLabel(selected)}.`
               );
@@ -3295,6 +3338,39 @@ export function AdminApp() {
               </Button>
             </div>
           </div>
+        </div>
+        <div className="mt-3 space-y-2">
+          <label className="block text-sm text-slate-200" htmlFor="track-theme-origins">
+            Track Theme / Aura Origins
+          </label>
+          <label className="flex items-start gap-3 rounded-xl border border-slate-300/20 bg-slate-950/50 px-3 py-3 text-sm text-slate-100">
+            <input
+              id="track-theme-origins"
+              type="checkbox"
+              className="mt-1 h-4 w-4 shrink-0 rounded border border-slate-300/30 bg-slate-950/70"
+              checked={preserveTrackThemeAuraOrigins}
+              onChange={(event) => {
+                const preserve = event.currentTarget.checked;
+                applyTrackThemeOriginSetting(preserve);
+                setStatus(
+                  preserve
+                    ? "Tracks will keep their original theme-derived auto art and aura color on theme switch."
+                    : "Tracks will convert theme-derived auto art and aura color when themes change."
+                );
+                showSuccessNotice(
+                  preserve
+                    ? "Track theme/aura origins preserved."
+                    : "Track theme/aura origins will now follow theme changes."
+                );
+              }}
+            />
+            <span>
+              <strong className="block text-slate-100">Tracks maintain theme and aura origins</strong>
+              <span className="mt-1 block text-slate-300">
+                On by default. When off, theme-derived auto artwork and aura color convert when the theme changes.
+              </span>
+            </span>
+          </label>
         </div>
       </section>
 

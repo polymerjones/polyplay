@@ -19,6 +19,7 @@ import {
   duplicateTrackWithAudioInDb,
   getAllTracksFromDb,
   hardResetLibraryInDb,
+  regenerateAutoArtworkForThemeChangeInDb,
   replaceAudioInDb,
   saveAuraToDb
 } from "./lib/db";
@@ -126,6 +127,7 @@ const LAYOUT_MODE_KEY = "polyplay_layoutMode";
 const THEME_MODE_KEY = "polyplay_themeMode";
 const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
 const AURA_COLOR_KEY = "polyplay_auraColor_v1";
+const TRACK_THEME_AURA_ORIGINS_KEY = "polyplay_trackThemeAuraOrigins_v1";
 const SHUFFLE_ENABLED_KEY = "polyplay_shuffleEnabled";
 const REPEAT_TRACK_KEY = "polyplay_repeatTrackMode";
 const THREEPEAT_REMAINING_KEY = "polyplay_threepeatRemaining_v1";
@@ -157,6 +159,9 @@ const LOGO_SPARKLE_MAX_PENDING = 6;
 const LOGO_SPARKLE_TAP_COOLDOWN_MS = 120;
 const UI_CURRENT_TIME_THROTTLE_MS = 80;
 const UI_CURRENT_TIME_MIN_DELTA_SEC = 0.08;
+const DEFAULT_SET_LOOP_SPAN_MIN_SECONDS = 6;
+const DEFAULT_SET_LOOP_SPAN_MAX_SECONDS = 12;
+const DEFAULT_SET_LOOP_SPAN_RATIO = 0.18;
 const FX_ENABLED_KEY = "polyplay_fxEnabled_v1";
 const FX_MODE_KEY = "polyplay_fxMode_v1";
 const FX_QUALITY_KEY = "polyplay_fxQuality_v1";
@@ -404,6 +409,13 @@ export default function App() {
       return normalizeAuraColor(localStorage.getItem(AURA_COLOR_KEY));
     } catch {
       return null;
+    }
+  });
+  const [preserveTrackThemeAuraOrigins, setPreserveTrackThemeAuraOrigins] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(TRACK_THEME_AURA_ORIGINS_KEY) !== "false";
+    } catch {
+      return true;
     }
   });
   const [themeToggleAnim, setThemeToggleAnim] = useState<"on" | "off" | null>(null);
@@ -766,6 +778,7 @@ export default function App() {
         setCustomThemeSlot(savedCustomThemeSlot);
       }
       setAuraColor(normalizeAuraColor(localStorage.getItem(AURA_COLOR_KEY)));
+      setPreserveTrackThemeAuraOrigins(localStorage.getItem(TRACK_THEME_AURA_ORIGINS_KEY) !== "false");
       setIsShuffleEnabled(localStorage.getItem(SHUFFLE_ENABLED_KEY) === "true");
       const storedRepeatTrackMode = getStoredRepeatTrackMode();
       const storedThreepeatRemaining = getStoredThreepeatRemaining(storedRepeatTrackMode);
@@ -1847,6 +1860,16 @@ export default function App() {
         }
         return;
       }
+      if (type === "polyplay:track-theme-origins-updated") {
+        const preserve = event.data?.preserve !== false;
+        setPreserveTrackThemeAuraOrigins(preserve);
+        try {
+          localStorage.setItem(TRACK_THEME_AURA_ORIGINS_KEY, preserve ? "true" : "false");
+        } catch {
+          // Ignore localStorage failures.
+        }
+        return;
+      }
       if (type === "polyplay:haptic") {
         const tone = event.data?.tone;
         if (tone === "heavy") fireHeavyHaptic();
@@ -1858,6 +1881,7 @@ export default function App() {
           localStorage.removeItem(THEME_MODE_KEY);
           localStorage.removeItem(CUSTOM_THEME_SLOT_KEY);
           localStorage.removeItem(AURA_COLOR_KEY);
+          localStorage.removeItem(TRACK_THEME_AURA_ORIGINS_KEY);
           localStorage.removeItem(SHUFFLE_ENABLED_KEY);
           localStorage.removeItem(REPEAT_TRACK_KEY);
           localStorage.removeItem(THREEPEAT_REMAINING_KEY);
@@ -3158,13 +3182,19 @@ export default function App() {
       markActivePlaylistDirty();
       return;
     }
-    const margin = Math.max(0, Math.min(effectiveDuration * 0.15, effectiveDuration / 2 - 0.05));
     const livePlaybackTime = getSafeDuration(currentTime) || getSafeDuration(audio?.currentTime || 0);
-    const safeStart = Math.max(0, Math.min(effectiveDuration - MIN_LOOP_REGION_SECONDS, livePlaybackTime));
-    const safeEnd = Math.min(
-      effectiveDuration,
-      Math.max(safeStart + MIN_LOOP_REGION_SECONDS, effectiveDuration - margin)
+    const targetSpan = Math.max(
+      MIN_LOOP_REGION_SECONDS,
+      Math.min(
+        effectiveDuration,
+        Math.max(
+          DEFAULT_SET_LOOP_SPAN_MIN_SECONDS,
+          Math.min(DEFAULT_SET_LOOP_SPAN_MAX_SECONDS, effectiveDuration * DEFAULT_SET_LOOP_SPAN_RATIO)
+        )
+      )
     );
+    const safeStart = Math.max(0, Math.min(effectiveDuration - targetSpan, livePlaybackTime));
+    const safeEnd = Math.min(effectiveDuration, Math.max(safeStart + MIN_LOOP_REGION_SECONDS, safeStart + targetSpan));
     setLoopByTrack((prev) => ({
       ...prev,
       [currentTrackId]: { start: safeStart, end: safeEnd, active: true, editing: true }
@@ -3434,24 +3464,35 @@ export default function App() {
     const nextSlot: CustomThemeSlot = isCustomThemeSlot(nextSelection) ? nextSelection : customThemeSlot;
     const nextThemeLabel = getThemeLabel(nextSelection);
     const nextAuraColor = nextMode === "custom" ? THEME_PACK_AURA_COLORS[nextSlot] : null;
+    const shouldPreserveTrackVisualOrigins = preserveTrackThemeAuraOrigins;
     setThemeMode(nextMode);
     setCustomThemeSlot(nextSlot);
     showFxToast(`Theme changed to ${nextThemeLabel}`, "theme");
-    if (nextMode === "custom") {
+    if (!shouldPreserveTrackVisualOrigins && nextMode === "custom") {
       setAuraColor(nextAuraColor);
-    } else {
+    } else if (!shouldPreserveTrackVisualOrigins) {
       setAuraColor(null);
     }
     try {
       localStorage.setItem(THEME_MODE_KEY, nextMode);
       localStorage.setItem(CUSTOM_THEME_SLOT_KEY, nextSlot);
-      if (nextMode === "custom" && nextAuraColor) {
+      if (!shouldPreserveTrackVisualOrigins && nextMode === "custom" && nextAuraColor) {
         localStorage.setItem(AURA_COLOR_KEY, nextAuraColor);
-      } else {
+      } else if (!shouldPreserveTrackVisualOrigins) {
         localStorage.removeItem(AURA_COLOR_KEY);
       }
     } catch {
       // Ignore localStorage failures.
+    }
+    if (!shouldPreserveTrackVisualOrigins) {
+      void regenerateAutoArtworkForThemeChangeInDb(nextSelection)
+        .then((updated) => {
+          if (updated <= 0) return;
+          window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
+        })
+        .catch(() => {
+          // Ignore auto-art regeneration failures during theme switching.
+        });
     }
     markActivePlaylistDirty();
     try {

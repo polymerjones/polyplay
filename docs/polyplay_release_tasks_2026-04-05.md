@@ -65,7 +65,7 @@ Use alongside any existing planning board already in the repo, but treat this fi
 ---
 
 ## Active task
-**Current active task:** `3. Edit loop default-seed bug`
+**Current active task:** `9. Theme-based waveform recoloring`
 
 ---
 
@@ -296,6 +296,210 @@ A way for the user to experience the song without normal UI controls — mostly 
     - Confirm base-level `-` now cleanly returns to the full waveform viewport.
     - Confirm the selected loop region always stays yellow, both before and after the playhead passes through it.
     - Confirm drag/edit/manual zoom behavior otherwise remains unchanged.
+  - Follow-up diagnosis for missing immediate zoom controls + explicit full zoom — 2026-04-05 Codex:
+    - Files inspected:
+      - `src/components/WaveformLoop.tsx`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely root cause:
+      - The loop zoom toolbar is still gated behind `hasUnlockedManualZoom`, which is only set after handle dragging begins.
+      - That means a fresh loop-edit session can still feel unreasonably zoomed or tight while hiding the very controls needed to escape that state.
+      - The current toolbar also exposes `Fit` plus `+/-`, but there is still no explicit `Full` action that guarantees a full-track viewport reset in one press.
+  - Narrow implementation plan:
+      - Keep the pass inside `src/components/WaveformLoop.tsx` only.
+      - Make loop zoom controls available immediately when loop edit mode opens.
+      - Add a `Full` button that always resets the editor viewport to `{ start: 0, end: duration }`.
+      - Do not redesign loop seed math, drag behavior, or broader player controls in this pass.
+  - Exact fix made:
+    - In `src/components/WaveformLoop.tsx`, the loop zoom toolbar is no longer hidden until after a handle drag. It now appears immediately whenever an active loop enters edit mode.
+    - Added a `Full` button next to `Fit` that always resets the editor viewport to the full waveform range in one press.
+    - Kept the pass narrow to loop-editor viewport controls only. No broader player-control or loop-seed redesign was added.
+  - Exact files changed:
+    - `src/components/WaveformLoop.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. The pass only changes loop-toolbar availability and adds an explicit full-range viewport action.
+  - QA still needed:
+    - Confirm the loop toolbar now appears immediately on a fresh Set Loop/edit-loop entry.
+    - Confirm `Full` always returns the waveform viewport to the entire track.
+    - Confirm `Fit`, `+`, `-`, and handle dragging still behave normally after the toolbar is shown immediately.
+    - Confirm the initial loop markers still feel reasonable when entering edit mode on both desktop and Safari.
+  - Follow-up diagnosis for oversized default loop seed — 2026-04-05 Codex:
+    - Files inspected:
+      - `src/App.tsx`
+      - `src/components/WaveformLoop.tsx`
+      - `src/components/PlayerControls.tsx`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely root cause:
+      - The viewport controls are now available, but `setLoopFromCurrent()` in `src/App.tsx` is still seeding the loop from the current playhead almost all the way to the end of the track.
+      - That makes the initial selected loop region visually huge and unreasonable, which reads like the same bug to the user even after zoom controls are fixed.
+  - Narrow implementation plan:
+      - Keep the pass surgical in `src/App.tsx`.
+      - Change `Set Loop` so it seeds a tighter default region near the current playhead instead of extending nearly to track end.
+      - Preserve existing edit-mode entry and broader loop editor behavior.
+  - Exact fix made:
+    - In `src/App.tsx`, `setLoopFromCurrent()` no longer seeds from the current playhead almost to the track end.
+    - It now creates a tighter default loop window near the current playhead using a bounded target span, while still clamping safely near track end.
+    - Kept the pass limited to initial loop seed sizing only. No broader loop editor or toolbar behavior was changed in this step.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. This only changes the initial loop bounds created by `Set Loop`.
+  - QA still needed:
+    - Confirm a fresh `Set Loop` now creates a much more reasonable initial loop region.
+    - Confirm `Set Loop` still behaves correctly near the end of a track.
+    - Confirm the new default seed still works with `Fit`, `Full`, `+`, `-`, and handle dragging.
+  - Follow-up diagnosis for `Full` not sticking — 2026-04-05 Codex:
+    - Files inspected:
+      - `src/components/WaveformLoop.tsx`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely root cause:
+      - The `Full` button is setting the viewport to the full track, but the edit-session refocus effect is immediately treating that full-span range as "too wide" and rebuilding a tighter loop-centered range.
+      - So `Full` is landing briefly, then getting overridden by the existing refocus heuristic.
+  - Narrow implementation plan:
+      - Keep the pass inside `src/components/WaveformLoop.tsx`.
+      - Add an explicit full-range viewport mode so `Full` can persist without being auto-refocused back around the loop.
+      - Leave `Fit`, drag, and default edit-entry behavior intact.
+  - Exact fix made:
+    - In `src/components/WaveformLoop.tsx`, `Full` now switches the editor into an explicit full-range viewport mode instead of reusing the generic manual mode.
+    - The loop-edit refocus logic now respects that full-range mode and no longer immediately re-centers the viewport around the loop after `Full` is clicked.
+    - Kept the pass narrow to viewport-mode handling only.
+  - Exact files changed:
+    - `src/components/WaveformLoop.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. The change is localized to the loop editor’s viewport-mode state machine.
+  - QA still needed:
+    - Confirm `Full` now truly stays at the full waveform viewport after click.
+    - Confirm `Fit` still re-centers around the loop correctly after using `Full`.
+    - Confirm dragging a handle after `Full` still transitions back into normal edit behavior.
+  - Follow-up diagnosis for `-` zoom-out stepping — 2026-04-05 Codex:
+    - Files inspected:
+      - `src/components/WaveformLoop.tsx`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely root cause:
+      - The manual zoom model still uses discrete inward zoom levels only.
+      - Once the user reaches the outermost manual level, pressing `-` jumps straight to full range instead of allowing a few wider intermediate zoom-out steps.
+  - Narrow implementation plan:
+      - Keep the pass inside `src/components/WaveformLoop.tsx`.
+      - Let repeated `-` presses progressively expand the current viewport toward the full waveform.
+      - Keep `Full` as the explicit one-press full reset.
+  - Exact fix made:
+    - In `src/components/WaveformLoop.tsx`, the `-` zoom-out control no longer jumps straight from the outer manual level to full range.
+    - Repeated `-` presses now progressively widen the current viewport, and only snap to the full waveform when the expanded range is already close enough.
+    - `Full` remains the explicit one-press full reset.
+  - Exact files changed:
+    - `src/components/WaveformLoop.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. The change is localized to manual loop-editor zoom-out stepping.
+  - QA still needed:
+    - Confirm repeated `-` presses now widen the loop viewport in visible steps.
+    - Confirm repeated `-` eventually reaches the full waveform.
+    - Confirm `Full` still jumps straight to the full waveform immediately.
+  - Follow-up diagnosis for auto-art gradient mismatch — 2026-04-05 Codex:
+    - Files inspected:
+      - `src/lib/artwork/waveformArtwork.ts`
+      - `src/lib/waveformTheme.ts`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely root cause:
+      - The live waveform now uses the shared per-theme waveform palette, but auto-generated waveform artwork still renders bars with a separate artwork-specific bar gradient.
+      - That leaves the auto art visually adjacent to, but not actually matching, the live waveform theme gradient.
+  - Narrow implementation plan:
+      - Keep the pass inside `src/lib/artwork/waveformArtwork.ts`.
+      - Make generated waveform bars use the same shared per-theme gradient stops as the live waveform.
+      - Leave the artwork background/glow treatment intact.
+  - Exact fix made:
+    - In `src/lib/artwork/waveformArtwork.ts`, auto-generated waveform artwork now uses the same shared per-theme waveform gradient stops as the live waveform renderer.
+    - Kept the existing artwork background and glow treatment intact, so only the generated bar coloration changed.
+  - Exact files changed:
+    - `src/lib/artwork/waveformArtwork.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. The pass is limited to generated waveform art coloring.
+  - QA still needed:
+    - Confirm auto-generated waveform art now matches the live waveform gradient for Merica, MX, Rasta, and default themes.
+    - Confirm background/glow treatment still looks intentional and readable behind the recolored bars.
+  - Follow-up diagnosis for auto-art waveform contrast — 2026-04-05 Codex:
+    - Files inspected:
+      - `src/lib/artwork/waveformArtwork.ts`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely root cause:
+      - The generated waveform bars now match the live theme gradients, but the auto-art background and vignette are still dark enough that the waveform does not separate as strongly as it should.
+      - The current art has enough theme atmosphere, but not quite enough local contrast around the waveform.
+  - Narrow implementation plan:
+      - Keep the pass inside `src/lib/artwork/waveformArtwork.ts`.
+      - Lighten the background/glow slightly and add a subtle local contrast lift behind the waveform band.
+      - Do not redesign the auto-art composition.
+  - Exact fix made:
+    - In `src/lib/artwork/waveformArtwork.ts`, the generated auto-art now has a lighter central lift behind the waveform, a softer outer vignette, and a subtle shadow pass behind the bars.
+    - Kept the overall composition intact while making the waveform read more clearly against the background.
+  - Exact files changed:
+    - `src/lib/artwork/waveformArtwork.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. The pass is limited to generated waveform artwork contrast treatment.
+  - QA still needed:
+    - Confirm the waveform stands out more clearly in auto art across Merica, MX, Rasta, and default themes.
+    - Confirm the background still feels premium and not washed out.
+  - Follow-up diagnosis for preserve-origins admin toggle — 2026-04-05 Codex:
+    - Files inspected:
+      - `src/App.tsx`
+      - `src/admin/AdminApp.tsx`
+      - `src/lib/db.ts`
+      - `src/lib/artwork/waveformArtwork.ts`
+      - `src/lib/backup.ts`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely root cause:
+      - Theme-aware waveform recoloring exists, but there is no persisted app setting that decides whether theme-derived visuals should stay with their original theme or be regenerated when the user switches themes.
+      - The app also lacked a small DB helper for re-generating stored auto artwork on theme change.
+    - Narrow implementation plan:
+      - Add one persisted admin/app toggle: `Tracks maintain theme and aura origins`, default ON.
+      - When ON, theme switching preserves stored auto artwork and the current aura color.
+      - When OFF, theme switching regenerates auto artwork for tracks whose artwork source is `auto` and updates the theme-derived aura color.
+      - Keep the change surgical; do not redesign track metadata or the broader theme engine.
+  - Exact fix made:
+    - Added a persisted `Tracks maintain theme and aura origins` setting, defaulting to ON.
+    - Added an admin checkbox for that setting in `src/admin/AdminApp.tsx`.
+    - Updated `src/App.tsx` theme switching so OFF regenerates theme-derived auto artwork and updates aura color, while ON preserves them.
+    - Added `regenerateAutoArtworkForThemeChangeInDb(...)` in `src/lib/db.ts` to re-render stored auto posters from the source audio using the target theme selection.
+    - Extended `src/lib/artwork/waveformArtwork.ts` so generated waveform art can be rendered for an explicit theme selection.
+    - Added the setting to config backup/import in `src/lib/backup.ts`.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `src/admin/AdminApp.tsx`
+    - `src/lib/db.ts`
+    - `src/lib/artwork/waveformArtwork.ts`
+    - `src/lib/waveformTheme.ts`
+    - `src/lib/backup.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Medium. The pass is still bounded, but it touches theme switching, admin settings, stored auto artwork regeneration, and config persistence.
+  - QA still needed:
+    - With the setting ON, switch themes and confirm existing auto artwork and aura color stay unchanged.
+    - With the setting OFF, switch themes and confirm existing auto artwork regenerates and aura color updates to the new theme behavior.
+    - Confirm Merica, MX, Rasta, and default themes all behave correctly.
+    - Confirm the setting persists across reload and config backup/import.
+  - Follow-up diagnosis for admin checkbox layout spacing — 2026-04-05 Codex:
+    - Files inspected:
+      - `src/admin/AdminApp.tsx`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely root cause:
+      - The setting row was placed inside the same two-column settings grid used for label/value controls.
+      - That layout pushed the checkbox card into the right column while leaving the left label column mostly empty, making the checkbox feel visually detached from its text.
+  - Narrow implementation plan:
+      - Keep the pass inside `src/admin/AdminApp.tsx`.
+      - Render this setting as a single-column stacked setting block instead of forcing it through the two-column label/value grid.
+  - Exact fix made:
+    - In `src/admin/AdminApp.tsx`, the setting was moved out of the two-column label/value layout and into a stacked single-column block so the checkbox sits directly beside its explanatory text.
+    - Kept the pass layout-only. Setting behavior was not changed.
+  - Exact files changed:
+    - `src/admin/AdminApp.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. This is a layout-only admin UI adjustment.
+  - QA still needed:
+    - Confirm the checkbox and text now read as one setting block on desktop and mobile widths.
 
 ---
 
@@ -643,6 +847,32 @@ A way for the user to experience the song without normal UI controls — mostly 
     - Confirm the new leaf silhouette now reads much closer to the provided reference image.
     - Confirm the leaf still feels clean and readable at the background scale used in the Rasta theme.
     - Confirm the Rasta background motion/performance is unchanged.
+  - Follow-up diagnosis for PNG leaf swap + stronger Rasta field — 2026-04-05 Codex:
+    - Files inspected:
+      - `gfxdesign/rastaweed.png`
+      - `styles.css`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Likely root cause:
+      - The SVG correction still leaves room for silhouette drift, while the actual provided PNG already has the exact reference geometry the user wants.
+      - The Rasta field itself is currently more smoke/neutral-brown forward than color-forward, so the green/yellow/red read is less unmistakable than MX.
+  - Narrow implementation plan:
+    - Replace the current SVG leaf layer in the Rasta background with the provided PNG as a subtle static image layer.
+    - Slightly strengthen the Rasta tricolor atmosphere in `styles.css` only, without widening into FX or broader theme redesign.
+  - Exact follow-up fix made:
+    - Copied the provided reference PNG into `public/rastaweed.png` and switched the Rasta background leaf layer in `styles.css` from the SVG assets to two subtle static PNG instances.
+    - Tightened the Rasta background atmosphere so the green/yellow/red field reads more unmistakably, with slightly stronger tricolor radial color presence and less gray/neutral smoke dominance.
+    - Kept the pass narrow to the Rasta background asset source and background color field only.
+  - Exact files changed:
+    - `public/rastaweed.png`
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. This remains a static background-layer swap plus a local Rasta-only color-balance adjustment.
+  - QA still needed:
+    - Confirm the Rasta leaf now uses the actual provided PNG silhouette.
+    - Confirm the PNG reads subtle and integrated, not pasted on.
+    - Confirm the Rasta tricolor field now reads more unmistakably like the MX theme does.
+    - Confirm background performance remains unchanged.
 
 ---
 
@@ -714,6 +944,39 @@ Waveform colors should match themes instead of always feeling blue/purple-based.
     - Confirm Rasta shows a smooth green/yellow/red blend while staying readable.
     - Confirm loop highlights and playhead still stand out clearly in all themes.
     - Confirm fullscreen decorative waveform and generated waveform artwork now match the active theme.
+  - Follow-up diagnosis for pre-play waveform readiness — 2026-04-05 Codex:
+    - Files inspected:
+      - `src/components/WaveformLoop.tsx`
+      - `src/components/FullscreenPlayer.tsx`
+      - `src/lib/artwork/waveformArtwork.ts`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Likely root cause:
+      - The waveform components still initialize local peak state from `fallbackPeaks(...)`, so users briefly see fake undeveloped bars before real peaks land.
+      - Real peaks are resolved asynchronously from `track.waveformPeaks` or `buildPeaksFromAudioBlob(...)`, but that happens after the first paint.
+      - The desired behavior is not “fully themed before play”; it is “waveform shape visible before play,” even if the base state is neutral/dark and playback adds the reveal.
+    - Narrow implementation plan:
+      - Keep the pass inside waveform readiness only.
+      - Add a small runtime waveform peak cache keyed by track id.
+      - Prefer stored peaks or cached peaks immediately on mount/track change.
+      - When an audio-backed waveform is still loading, render the neutral/base waveform state instead of fake fallback bars.
+  - Exact follow-up fix made for pre-play waveform readiness — 2026-04-05 Codex:
+    - Added a small runtime waveform peak cache in `src/lib/artwork/waveformArtwork.ts` so previously resolved peaks can render immediately on revisit instead of waiting for a fresh decode.
+    - Updated `src/components/WaveformLoop.tsx` to prefer stored/cached peaks on first render and otherwise show a subdued neutral placeholder waveform before real audio-backed peaks finish resolving.
+    - Guarded `WaveformLoop` against the zero-peaks giant-block state by skipping draw when no peaks exist instead of forcing a single full-width bar.
+    - Updated `src/components/FullscreenPlayer.tsx` to use the same stored/cached peak preference and to render a neutral grey decorative waveform while real peaks are still resolving, so the auto-art area no longer feels blank or undeveloped before playback.
+    - Kept the pass narrow to waveform readiness/rendering only. No playback, theme engine, or loop behavior was changed.
+  - Exact files changed for the follow-up:
+    - `src/components/WaveformLoop.tsx`
+    - `src/components/FullscreenPlayer.tsx`
+    - `src/lib/artwork/waveformArtwork.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. This is limited to pre-play waveform rendering state and peak reuse.
+  - QA still needed:
+    - Confirm the waveform is visible before first play instead of feeling blank or undeveloped.
+    - Confirm unresolved pre-play state reads as neutral/grey rather than a giant solid block.
+    - Confirm real peaks replace the neutral placeholder once available.
+    - Confirm theme-aware waveform colors still appear correctly after peaks resolve.
 
 ---
 
@@ -773,6 +1036,44 @@ Clean up remaining onboarding issues before release.
     - `src/index.css`
     - `styles.css`
   - Known low-risk issues already addressed in earlier passes:
+
+---
+
+### 13. Support page logo polish + systems findings doc
+**Status:** open
+
+**Desired behavior:**
+- support page should use the simpler original PolyPlay logo treatment, not a theme-highlighted/glowing hero treatment
+- current release-batch findings should be documented in one clean summary doc
+
+**Important:**
+- keep the support-page pass visual-only and narrow
+- documentation should summarize systems changed, current behavior, and QA still needed
+
+**Codex notes:**
+- Diagnosis start — 2026-04-05 Codex:
+  - Files inspected:
+    - `public/support.html`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Likely root cause:
+    - The support page is still using the hero logo asset plus glow/shimmer treatment, which makes the page feel theme-styled instead of neutral support-facing branding.
+    - Findings from the current release-safe batch are spread across the active release task board and ad-hoc handoffs rather than one concise system summary.
+  - Narrow implementation plan:
+    - Keep the support-page change inside `public/support.html`.
+    - Replace the logo treatment with a simpler original-logo presentation and remove the extra highlight effects.
+    - Add one summary doc under `docs/` covering the systems changed in this batch and the remaining QA focus.
+  - Exact fix made:
+    - In `public/support.html`, replaced the glowing theme-treated hero wordmark presentation with a simpler original-logo treatment and removed the extra highlight/shimmer styling.
+    - Added `/Users/paulfisher/Polyplay/docs/polyplay_release_systems_findings_2026-04-05.md` to summarize the main systems changed in this release-safe batch, their intended behavior, and the remaining QA priorities.
+  - Exact files changed:
+    - `public/support.html`
+    - `docs/polyplay_release_systems_findings_2026-04-05.md`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. This pass is limited to support-page visual treatment and documentation.
+  - QA still needed:
+    - Confirm the support page now uses the simpler logo treatment cleanly on desktop and mobile.
+    - Confirm the systems findings doc reflects the current batch accurately.
     - tooltip alignment
     - accidental selection/highlighting of onboarding copy
   - Remaining issue family:
