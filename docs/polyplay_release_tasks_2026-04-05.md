@@ -491,7 +491,8 @@ A way for the user to experience the song without normal UI controls — mostly 
       - Keep the pass inside `src/admin/AdminApp.tsx`.
       - Render this setting as a single-column stacked setting block instead of forcing it through the two-column label/value grid.
   - Exact fix made:
-    - In `src/admin/AdminApp.tsx`, the setting was moved out of the two-column label/value layout and into a stacked single-column block so the checkbox sits directly beside its explanatory text.
+    - In `src/admin/AdminApp.tsx`, the setting was moved out of the two-column label/value layout and into a stacked single-column block.
+    - The setting card now uses an explicit two-column mini-grid for checkbox + copy, with a constrained full-width container and `minmax(0,1fr)` text column so the explanatory text cannot collapse into a thin far-right strip.
     - Kept the pass layout-only. Setting behavior was not changed.
   - Exact files changed:
     - `src/admin/AdminApp.tsx`

@@ -328,6 +328,95 @@
     color: rgba(250, 250, 255, 0.5);
   }
 
+  .support-feature-list {
+    display: grid;
+    gap: 14px;
+    margin-top: 14px;
+  }
+
+  .support-feature-item {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 14px;
+    align-items: start;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    padding: 14px 16px;
+  }
+
+  .support-feature-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background:
+      radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 38%),
+      rgba(18, 22, 36, 0.92);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 12px 28px rgba(2, 4, 10, 0.28);
+    color: #f4f6ff;
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .support-feature-icon--playback {
+    color: #d8e5ff;
+    background:
+      radial-gradient(circle at 30% 24%, rgba(185, 214, 255, 0.28), rgba(185, 214, 255, 0) 36%),
+      linear-gradient(135deg, rgba(26, 44, 80, 0.94), rgba(17, 24, 42, 0.94));
+  }
+
+  .support-feature-icon--playlist {
+    color: #ffe3b7;
+    background:
+      radial-gradient(circle at 30% 24%, rgba(255, 220, 158, 0.24), rgba(255, 220, 158, 0) 36%),
+      linear-gradient(135deg, rgba(66, 44, 18, 0.94), rgba(28, 22, 18, 0.94));
+  }
+
+  .support-feature-icon--loop {
+    color: #ffe298;
+    background:
+      radial-gradient(circle at 30% 24%, rgba(255, 238, 170, 0.24), rgba(255, 238, 170, 0) 36%),
+      linear-gradient(135deg, rgba(72, 56, 18, 0.94), rgba(31, 26, 18, 0.94));
+  }
+
+  .support-feature-icon--art {
+    color: #f2d7ff;
+    background:
+      radial-gradient(circle at 30% 24%, rgba(232, 176, 255, 0.24), rgba(232, 176, 255, 0) 36%),
+      linear-gradient(135deg, rgba(60, 28, 70, 0.94), rgba(23, 18, 38, 0.94));
+  }
+
+  .support-feature-icon--vibe {
+    color: #ffd4ea;
+    background:
+      radial-gradient(circle at 30% 24%, rgba(255, 184, 220, 0.24), rgba(255, 184, 220, 0) 36%),
+      linear-gradient(135deg, rgba(84, 28, 52, 0.94), rgba(27, 17, 33, 0.94));
+  }
+
+  .support-feature-icon--notes {
+    color: #ddf3ff;
+    background:
+      radial-gradient(circle at 30% 24%, rgba(180, 231, 255, 0.24), rgba(180, 231, 255, 0) 36%),
+      linear-gradient(135deg, rgba(22, 58, 72, 0.94), rgba(16, 24, 34, 0.94));
+  }
+
+  .support-feature-icon--backup {
+    color: #dfffd8;
+    background:
+      radial-gradient(circle at 30% 24%, rgba(191, 255, 178, 0.22), rgba(191, 255, 178, 0) 36%),
+      linear-gradient(135deg, rgba(28, 70, 32, 0.94), rgba(18, 28, 19, 0.94));
+  }
+
+  .support-feature-copy p {
+    margin: 6px 0 0;
+    color: rgba(245, 246, 255, 0.74);
+  }
+
   @media (min-width: 720px) {
     .support-contact {
       flex-direction: row;
@@ -542,13 +631,57 @@
           </ul>
 
           <h2>Core Features</h2>
-          <p><strong>Offline playback</strong><br />PolyPlay is built around your own files. Once imported, your library is meant to stay available for local playback without relying on streaming services.</p>
-          <p><strong>Playlists</strong><br />Create playlists, switch between them, and shape a listening flow that feels deliberate instead of random.</p>
-          <p><strong>Looping</strong><br />Use loops for close listening, repetition, writing, reviewing, or staying inside a section you want to study.</p>
-          <p><strong>Artwork</strong><br />Pair your tracks with artwork or supported visual media so the app feels more immersive and expressive.</p>
-          <p><strong>Vibe and Aura</strong><br />Vibe and Aura help shape the visual feel around playback so the experience feels more personal and atmospheric.</p>
-          <p><strong>Notes and Gratitude Journal</strong><br />PolyPlay includes space for thoughts, notes, and reflection, including gratitude entries, so listening can live beside ideas and meaning.</p>
-          <p><strong>Backups</strong><br />Your playlists, notes, settings, and local media setup are designed to be portable, so regular backups are an important part of using the app safely.</p>
+          <div class="support-feature-list">
+            <div class="support-feature-item">
+              <div class="support-feature-icon support-feature-icon--playback" aria-hidden="true">▶</div>
+              <div class="support-feature-copy">
+                <strong>Offline playback</strong>
+                <p>PolyPlay is built around your own files. Once imported, your library is meant to stay available for local playback without relying on streaming services.</p>
+              </div>
+            </div>
+            <div class="support-feature-item">
+              <div class="support-feature-icon support-feature-icon--playlist" aria-hidden="true">≡</div>
+              <div class="support-feature-copy">
+                <strong>Playlists</strong>
+                <p>Create playlists, switch between them, and shape a listening flow that feels deliberate instead of random.</p>
+              </div>
+            </div>
+            <div class="support-feature-item">
+              <div class="support-feature-icon support-feature-icon--loop" aria-hidden="true">↻</div>
+              <div class="support-feature-copy">
+                <strong>Looping</strong>
+                <p>Use loops for close listening, repetition, writing, reviewing, or staying inside a section you want to study.</p>
+              </div>
+            </div>
+            <div class="support-feature-item">
+              <div class="support-feature-icon support-feature-icon--art" aria-hidden="true">▣</div>
+              <div class="support-feature-copy">
+                <strong>Artwork</strong>
+                <p>Pair your tracks with artwork or supported visual media so the app feels more immersive and expressive.</p>
+              </div>
+            </div>
+            <div class="support-feature-item">
+              <div class="support-feature-icon support-feature-icon--vibe" aria-hidden="true">✦</div>
+              <div class="support-feature-copy">
+                <strong>Vibe and Aura</strong>
+                <p>Vibe and Aura help shape the visual feel around playback so the experience feels more personal and atmospheric.</p>
+              </div>
+            </div>
+            <div class="support-feature-item">
+              <div class="support-feature-icon support-feature-icon--notes" aria-hidden="true">✎</div>
+              <div class="support-feature-copy">
+                <strong>Notes and Gratitude Journal</strong>
+                <p>PolyPlay includes space for thoughts, notes, and reflection, including gratitude entries, so listening can live beside ideas and meaning.</p>
+              </div>
+            </div>
+            <div class="support-feature-item">
+              <div class="support-feature-icon support-feature-icon--backup" aria-hidden="true">⬒</div>
+              <div class="support-feature-copy">
+                <strong>Backups</strong>
+                <p>Your playlists, notes, settings, and local media setup are designed to be portable, so regular backups are an important part of using the app safely.</p>
+              </div>
+            </div>
+          </div>
 
           <h2>How To Use Key Features</h2>
           <p><strong>Importing audio</strong><br />Import supported local audio files from your device. If a file contains useful metadata or artwork, PolyPlay may use it to help populate the track.</p>

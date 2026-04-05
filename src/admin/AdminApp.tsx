@@ -3343,34 +3343,39 @@ export function AdminApp() {
           <label className="block text-sm text-slate-200" htmlFor="track-theme-origins">
             Track Theme / Aura Origins
           </label>
-          <label className="flex items-start gap-3 rounded-xl border border-slate-300/20 bg-slate-950/50 px-3 py-3 text-sm text-slate-100">
-            <input
-              id="track-theme-origins"
-              type="checkbox"
-              className="mt-1 h-4 w-4 shrink-0 rounded border border-slate-300/30 bg-slate-950/70"
-              checked={preserveTrackThemeAuraOrigins}
-              onChange={(event) => {
-                const preserve = event.currentTarget.checked;
-                applyTrackThemeOriginSetting(preserve);
-                setStatus(
-                  preserve
-                    ? "Tracks will keep their original theme-derived auto art and aura color on theme switch."
-                    : "Tracks will convert theme-derived auto art and aura color when themes change."
-                );
-                showSuccessNotice(
-                  preserve
-                    ? "Track theme/aura origins preserved."
-                    : "Track theme/aura origins will now follow theme changes."
-                );
-              }}
-            />
-            <span>
-              <strong className="block text-slate-100">Tracks maintain theme and aura origins</strong>
-              <span className="mt-1 block text-slate-300">
-                On by default. When off, theme-derived auto artwork and aura color convert when the theme changes.
+          <div className="w-full max-w-3xl rounded-xl border border-slate-300/20 bg-slate-950/50 px-3 py-3">
+            <label
+              className="grid w-full grid-cols-[auto_minmax(0,1fr)] items-start gap-3 text-sm text-slate-100"
+              htmlFor="track-theme-origins"
+            >
+              <input
+                id="track-theme-origins"
+                type="checkbox"
+                className="mt-1 h-4 w-4 shrink-0 rounded border border-slate-300/30 bg-slate-950/70"
+                checked={preserveTrackThemeAuraOrigins}
+                onChange={(event) => {
+                  const preserve = event.currentTarget.checked;
+                  applyTrackThemeOriginSetting(preserve);
+                  setStatus(
+                    preserve
+                      ? "Tracks will keep their original theme-derived auto art and aura color on theme switch."
+                      : "Tracks will convert theme-derived auto art and aura color when themes change."
+                  );
+                  showSuccessNotice(
+                    preserve
+                      ? "Track theme/aura origins preserved."
+                      : "Track theme/aura origins will now follow theme changes."
+                  );
+                }}
+              />
+              <span className="min-w-0">
+                <strong className="block text-slate-100">Tracks maintain theme and aura origins</strong>
+                <span className="mt-1 block text-slate-300">
+                  On by default. When off, theme-derived auto artwork and aura color convert when the theme changes.
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+          </div>
         </div>
       </section>
 
