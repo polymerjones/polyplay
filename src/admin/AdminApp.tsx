@@ -1168,7 +1168,6 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
     try {
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type: "polyplay:user-imported" }, window.location.origin);
-        window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
       }
     } catch {
       // Ignore postMessage failures.

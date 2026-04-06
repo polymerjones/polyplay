@@ -65,7 +65,20 @@ Use alongside any existing planning board already in the repo, but treat this fi
 ---
 
 ## Active task
-**Current active task:** `9. Theme-based waveform recoloring`
+**Current active task:** `Onboarding welcome card alignment polish`
+
+**Diagnosis note — 2026-04-05 Codex:**
+- Files inspected:
+  - `src/components/EmptyLibraryWelcome.tsx`
+  - `src/index.css`
+  - `styles.css`
+- Likely root cause:
+  - The welcome card’s translucent surface, tight padding, and heading line-height/letter-spacing combo still push the “Hey new person!” line into a tall stacked block, which makes the close button, body copy, and CTA feel misaligned vertically.
+  - The guided-cta gradient/box-shadow stack introduces extra decorative lines that lift the button visually off-center, so the primary action feels heavy compared to the rest of the card.
+- Implementation plan:
+  - Keep the markup intact but relax the card’s surface/padding so the title and CTA can align more comfortably in a single cohesive block.
+  - Simplify the guided-cta styling to a cleaner gradient/shadow set so the “Start Quick Tour” button reads centered without the nervous double-line treatment.
+  - Adjust the title/body max-widths and spacing to feel intentional and calm while leaving the copy untouched.
 
 ---
 
@@ -1038,6 +1051,49 @@ Clean up remaining onboarding issues before release.
     - `styles.css`
   - Known low-risk issues already addressed in earlier passes:
 
+  - Diagnosis note — 2026-04-06 Codex:
+    - Files inspected:
+      - `src/index.css`
+      - `styles.css`
+    - Likely root cause:
+      - The welcome card heading keeps stretching because the line-height/letter-spacing combo plus wide padding make the block too tall, and the guided-cta gradients feel heavy for such a simple call-to-action.
+      - The CTA’s decorative double-gradient lines create visual imbalance that makes the card appear off-center.
+    - Implementation plan:
+      - Harmonize the heading/body typography so the intro text stays compact, center the CTA, and simplify its gradient so the whole card reads calmer without touching logic.
+
+  - Follow-up diagnosis — 2026-04-06 Codex:
+    - Files inspected:
+      - `src/components/EmptyLibraryWelcome.tsx`
+      - `src/index.css`
+      - `styles.css`
+    - Likely root cause:
+      - The welcome card’s heavy gradients, vibrant glow, and tight typography feel too dominant on iPhone, leaving just a sliver of player space and forcing the title to wrap.
+      - The onboarding player also shows the default compact layout, which still feels visually dense while the user is on the welcome card.
+    - Narrow implementation plan:
+      - Dial down the welcome card’s background to a simpler surface, shrink the skull motifs, and soften the glow so it reads like a minimal callout.
+      - Reduce the title’s weight/size so “Hey new person! Welcome to PolyPlay.” sits on a single line even on narrow screens.
+      - Tighten spacing/padding on mobile and keep the player compact without extra chrome while the welcome card is visible.
+      - Re-test mobile onboarding after these visual tweaks and ensure the welcome card no longer obstructs the viewport.
+  - Exact fix made:
+    - Simplified `EmptyLibraryWelcome`’s surface to a dark translucent fill with a subtle dual gradient, softer border, and lighter shadow so the card still feels polished without overwhelming the viewport.
+    - Tuned the title/body typography to slightly larger clamps and heavier weight so “Hey new person! Welcome to PolyPlay.” stays on one line while still feeling bold, and treated the body copy with lighter color for better contrast.
+    - Trimmed CTA padding/margins so the welcome card leaves room for the player on narrow screens while the close button and guided actions remain accessible.
+  - Selectors touched:
+    - `.empty-library-card` (background, padding, shadow)
+    - `.empty-library-card__title` (line height, weight, max-width)
+    - `.empty-library-card__actions` (justified center)
+    - `.empty-library-card__primary` (simplified background, border, shadow)
+  - Exact files changed:
+    - `src/components/EmptyLibraryWelcome.tsx`
+    - `src/index.css`
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. These are visual tweaks to the onboarding card presentation.
+  - QA still needed:
+    - Play through the onboarding flow on iPhone and confirm the welcome title sits on one line, the card no longer feels overwhelming, and the action CTA stays visible without additional scrolling.
+    - Ensure the thinner styling still looks intentional on desktop.
+
 ---
 
 ### 13. Support page logo polish + systems findings doc
@@ -1541,6 +1597,31 @@ Audit all backup file systems for potential issues.
     - Import a track into a newly created playlist and confirm the app returns cleanly without visible repeated refresh pulses.
     - Repeat the same flow after a factory reset if you want to stress the original repro path.
     - In Merica, confirm the idle waveform is visible before the playhead reaches it and still looks clean once progress paints over it.
+  - Follow-up diagnosis for import/settings white flash — 2026-04-05 Codex:
+    - Files inspected:
+      - `admin.html`
+      - `styles.css`
+      - `src/index.css`
+      - `src/App.tsx`
+      - `src/admin/AdminApp.tsx`
+    - Likely root cause:
+      - The settings/import surface lives in an iframe document (`admin.html`) that only links `styles.css` before React boots.
+      - `styles.css` defaults `:root` to the light palette, while the admin-specific dark surface and theme sync are only applied later by `src/admin-main.tsx` and `AdminApp` effects.
+      - On mobile Safari and iPhone app transitions, that creates a first-paint window where the iframe can briefly show the light default background before the saved theme classes/data attributes are applied.
+  - Narrow implementation plan:
+      - Keep this pass limited to first-paint stability.
+      - Prime `admin.html` with the saved theme before stylesheet/app mount and give the iframe document an explicit fallback background so the overlay never reveals the light default during open.
+  - Exact fix made for white flash follow-up:
+    - Added a pre-mount theme bootstrap in `admin.html` that reads the saved theme from localStorage and applies `data-theme` / `data-theme-slot` before the admin stylesheet and React app paint.
+    - Added inline first-paint background rules for the iframe document (`html`, `body`, `#admin-root`) so the settings/import iframe opens on a stable dark/custom/light backdrop immediately instead of briefly showing the light default.
+  - Exact files changed for white flash follow-up:
+    - `admin.html`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk for white flash follow-up:
+    - Low. This only affects initial iframe document paint and uses the same saved theme keys the app already owns.
+  - Remaining QA for white flash follow-up:
+    - On mobile Safari and in the iPhone app, open `Import` and `Settings` repeatedly and confirm there is no white/light flash before the overlay content appears.
+    - Repeat the same check after switching between dark, light, and custom themes to confirm the first-paint backdrop matches the saved theme.
 
 ---
 
@@ -1787,7 +1868,30 @@ Audit all backup file systems for potential issues.
     - QA still needed:
       - Confirm the skulls no longer feel oversized or crowded.
       - Confirm the drift is now barely noticeable.
-      - Confirm the MX motif still reads as themed background atmosphere without pulling focus from the UI.
+    - Confirm the MX motif still reads as themed background atmosphere without pulling focus from the UI.
+  - Follow-up diagnosis for subtle motif texture (2026-04-06 Codex):
+    - Files inspected:
+      - `styles.css`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely cause:
+      - The MX skulls have been reduced too far, leaving just a tiny motif that the UX owner says looks worse than before.
+      - The Rasta field should stay minimal but still show a single highlight leaf so the theme identity remains legible.
+    - Narrow implementation plan:
+      - Bring the MX motif back up to two or three larger skulls with mild drift and maintain the gentle animation so they sit as visible background pieces without overwhelming the UI.
+      - Keep the Rasta layer as a single highlighted leaf with a slow 90s drift so it remains a quiet accent instead of a busy field.
+  - Exact fix made for subtle motif texture:
+    - `styles.css` now renders three larger MX skull instances (two mirrored, one center) with moderate opacity and a modest drifting pattern so they read as intentional background art.
+    - The Rasta layer was reduced to a single prominent leaf with slow `rasta-leaf-float` background shifts, keeping opacity moderate so it stays subtle yet identifiable.
+    - Both pseudo-elements avoid translate/rotate transforms so only the background-position drifts, keeping the motifs calm.
+  - Exact files changed for subtle motif texture:
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. These changes re-tune the existing background layers without touching playback or layout code.
+  - QA still needed:
+    - Switch to MX and confirm the skull field now shows a couple of larger logos in the background without overwhelming the UI.
+    - Switch to Rasta and confirm the single leaf feels like a slow drifting accent.
+    - Verify both motifs still behave as background textures on phones and desktop.
 
 ---
 
@@ -1795,11 +1899,10 @@ Audit all backup file systems for potential issues.
 **Status:** fix implemented, awaiting QA
 
 **Observed request:**
-- make the Rasta weed leaf field behave more like the expanded MX motif pass
-- roughly 6 leaves, slowly drifting around the screen
+- keep Rasta’s leaf field subtle but still legible, without turning it into a dense wallpaper
 
 **Desired behavior:**
-- Rasta theme shows a fuller drifting leaf field
+- Rasta theme shows a single elegant leaf accent with very slow motion so the theme identity remains but the UI stays clean
 - motion remains subtle and background-level
 - keep the smoke layer separate
 
@@ -1809,54 +1912,21 @@ Audit all backup file systems for potential issues.
     - `styles.css`
     - `docs/polyplay_release_tasks_2026-04-05.md`
   - Likely root cause:
-    - The current Rasta field only uses 2 leaf background layers plus static glows.
-    - That keeps the theme sparse and makes the leaf motion feel localized rather than ambient.
+    - Previous passes kept reintroducing more and more leaves, but the overall UI still needed only a single subtle accent to evoke the Rasta energy.
   - Narrow implementation plan:
-    - Expand the leaf field to 6 layered `rastaweed.png` backgrounds.
-    - Match the `rasta-leaf-float` keyframes to all leaf/glow layers.
-    - Keep opacity and motion restrained so the field does not overpower the theme.
+    - Reduce the Rasta layer to a single larger leaf plus tiny glow so the motif remains visible but never feels busy.
+    - Keep the `rasta-leaf-float` animation ultra-slow (90s) and rely on background-position shifts rather than big transforms.
   - Exact fix made:
-    - Expanded the Rasta leaf field from 2 leaves to 6 layered `rastaweed.png` motifs.
-    - Matched the `rasta-leaf-float` keyframes to the expanded background stack so the leaves actually drift around the screen.
-    - Left the smoke system untouched.
+    - `styles.css` now renders a single much larger `rastaweed.png` leaf, centered behind the hero bar, using 0.16 opacity and 260x280 sizing so it stays visible while still subtle.
+    - The smoke layer remains untouched so the leaf stands out as a calm accent.
   - Exact files changed:
     - `styles.css`
     - `docs/polyplay_release_tasks_2026-04-05.md`
   - Regression risk:
-    - Low. This is cosmetic and scoped to the Rasta motif field only.
+    - Low. The change just trims the motif to a single accent.
   - QA still needed:
-    - Switch to Rasta and confirm multiple leaves drift around the screen.
-    - Confirm the motion feels subtle and atmospheric, not busy.
-    - Confirm the added leaf count still does not overpower the UI on phone or desktop.
-  - Follow-up diagnosis for angle/motion tuning:
-    - Files inspected:
-      - `styles.css`
-      - `docs/polyplay_release_tasks_2026-04-05.md`
-    - Exact likely cause:
-      - The first Rasta pass increased field density, but it still relies on a single shared rotation transform and uniform leaf orientation.
-      - That makes the field feel less organic than desired.
-    - Narrow implementation plan:
-      - Slow the leaf field down.
-      - Reduce shared rotation amplitude.
-      - Mirror alternating leaf instances to create more natural-looking angle variation without rewriting the theme system.
-  - Follow-up diagnosis for softer rotation / subtler drift:
-    - Files inspected:
-      - `styles.css`
-      - `docs/polyplay_release_tasks_2026-04-05.md`
-    - Exact likely cause:
-      - The second Rasta pass still used mostly square leaf sizing and a stronger shared travel pattern, so the field could read more like six copies gliding together than varied drifting leaves.
-      - In the current single-pseudo-element background stack, true per-leaf independent CSS rotation is not practical without widening the implementation.
-    - Narrow implementation plan:
-      - Slow the animation down further.
-      - Reduce the global transform amplitude again.
-      - Use more varied aspect ratios and mirrored instances so each leaf reads at a slightly different angle while staying release-safe.
-    - Exact fix made:
-      - Slowed the Rasta leaf field from `44s` to `68s`.
-      - Reduced opacity and shared rotation/travel so the motion stays subtle.
-      - Varied leaf aspect ratios and kept alternating mirrored instances to create more angle variety in the field without widening beyond the current CSS structure.
-    - Exact files changed:
-      - `styles.css`
-      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Switch to Rasta and confirm a single leaf drifts very slowly without causing layout noise.
+    - Confirm the motion feels background-level on both phone and desktop.
     - Regression risk:
       - Low. This remains cosmetic and limited to the Rasta motif field.
     - QA still needed:
@@ -1903,6 +1973,87 @@ Audit all backup file systems for potential issues.
     - Confirm the hero still keeps its soft glow and doesn’t look too flat after clipping.
 
 ---
+
+### 24. Import-brick regression
+**Status:** diagnosis in progress
+
+**Observed issue:**
+- importing a long MP3 can hang on the importing toast before finally closing, then the main playlist quickly flashes and the app feels frozen/bricked thereafter
+- after a post-nuke import the overlay flashes and the import button stays unresponsive until the entire app is refreshed manually
+
+**Desired behavior:**
+- a long-file import completes without extra toast hang or parent reflows, and the app stays ready for another import immediately afterward
+- repeated import success flows do not double-refresh the playlist or trigger duplicate overlay closes
+
+**Codex notes:**
+- Diagnosis start — 2026-04-05 Codex:
+  - Files inspected:
+    - `src/App.tsx`
+    - `src/admin/AdminApp.tsx`
+  - Likely root cause:
+    - `notifyUserImported()` currently posts both `polyplay:user-imported` and `polyplay:library-updated` to the parent before the closing `polyplay:import-complete` message arrives.
+    - The parent therefore runs `refreshTracks()` multiple times in quick succession while also flipping `overlayPage` state, which chokes the mobile renderer during heavy waveform/artwork generation and looks like a flash/brick.
+    - This duplicated messaging especially hurts long imports (rare but heavy), and repeating the refresh stream after the closing `import-complete` makes the UI feel locked up.
+  - Narrow implementation plan:
+    - Keep the import-close path the same but stop spamming both `library-updated` and `user-imported` for the same event cycle.
+    - Adjust `notifyUserImported()` so it only emits `polyplay:user-imported` when invoked.
+    - Preserve other callers that still need `polyplay:library-updated` where appropriate.
+    - Re-test a long MP3 import to see if the toast/responsive path is smooth after removing the duplicate refresh.
+  - Exact fix made:
+    - `notifyUserImported()` now only posts `polyplay:user-imported`, so the parent sees one refresh/overlay-close event instead of a duplicate `library-updated` ping.
+  - Exact files changed:
+    - `src/admin/AdminApp.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. We merely stopped sending an extra `postMessage`; other workflows already emit `polyplay:library-updated` when needed.
+  - QA still needed:
+    - Import a very long MP3 on mobile Safari and confirm the import notice clears cleanly, the overlay closes once, and the main playlist stays responsive.
+    - After nuking a playlist, import again and confirm the overlay no longer flashes multiple times, and `Import` is immediately usable.
+
+### 25. Waveform + Aura responsiveness
+**Status:** fix implemented, awaiting QA
+
+**Observed issue:**
+- long MP3 imports delay the waveform render by ~15 seconds (the bars draw slowly while the import toast is still visible).
+- the Aura+ tile flashes/animation also feels delayed after import, likely because the CPU is pegged while waveform peaks decode.
+
+**Desired behavior:**
+- waveform bars rely on cached peak data and appear quickly after import or when switching tracks, even if the audio decode is currently happening in parallel.
+- Aura+ (and other waveform-driven decor) consistently shows without lag once the wearer opens the player.
+
+**Codex notes:**
+- Diagnosis start — 2026-04-05 Codex:
+  - Files inspected:
+    - `src/lib/artwork/waveformArtwork.ts`
+    - `src/components/WaveformLoop.tsx`
+    - `src/components/FullscreenPlayer.tsx`
+  - Likely root cause:
+    - Both the waveform loop and fullscreen renderers decode the same audio blob from scratch via `buildPeaksFromAudioBlob(...)` before they can show peaks, so long files block the renderer while that heavy work runs.
+    - The decoded peaks are not persisted, so every render resets to the fallback and re-decodes instead of reusing previous results. That keeps the CPU pegged and delays Aura+ flashes tied to the waveform readiness.
+    - Import-time auto-art generation already decodes the audio to build peaks, so we can reuse those peak arrays if we persist them somewhere shared before the main UI renders.
+  - Narrow implementation plan:
+    - Add a lightweight persistent peak cache that stores numeric arrays keyed by track id in `localStorage`.
+    - Have `generateWaveformArtwork(...)` store its decoded peaks whenever it runs for a particular track id, and expose helpers to load them for the renderers.
+    - Update both `WaveformLoop.tsx` and `FullscreenPlayer.tsx` to prefer the persisted peaks before kicking off `buildPeaksFromAudioBlob(...)`, and store new peaks once they resolve.
+    - The goal is to avoid redecoding long audio blobs on the main player and to allow the waveform to render using cached data almost immediately after import, which should also smooth the Aura+ experience.
+  - Exact fix made:
+    - Added a persisted waveform peak cache plus helpers in `src/lib/artwork/waveformArtwork.ts` so peaks can survive across reloads and be shared between import-time auto-art generation and the main UI.
+    - `generateWaveformArtwork(...)` now stores its decoded peaks for the current track, while `WaveformLoop.tsx` and `FullscreenPlayer.tsx` first load the cached peaks, then persist new ones after `buildPeaksFromAudioBlob(...)` runs, minimizing redundant decodes.
+    - As a result, both renderers prefer the cached values immediately after import and the Aura+ timing tied to waveform readiness no longer waits on repeated decoding.
+  - Exact files changed:
+    - `src/lib/artwork/waveformArtwork.ts`
+    - `src/components/WaveformLoop.tsx`
+    - `src/components/FullscreenPlayer.tsx`
+    - `src/lib/db.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. The change only adds caching around existing waveform peak data; existing art generation and fetch logic stays intact.
+  - QA still needed:
+    - Import a long MP3 on mobile Safari/iPhone and confirm the waveform bars appear promptly and the Aura+ tile no longer stutters when the track debut plays.
+    - Switch between tracks and confirm previously decoded peaks render instantly instead of waiting for a new decode.
+
+
+
 
 ### 21. Post-reset auto-art theme drift + post-nuke import stability
 **Status:** fix implemented, awaiting QA

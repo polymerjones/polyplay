@@ -1646,12 +1646,11 @@ body.theme-custom.theme-custom-mx::after {
     url("/mx-dayofdead-lines.png"),
     url("/mx-dayofdead-lines.png"),
     url("/mx-dayofdead-lines.png"),
-    url("/mx-dayofdead-lines.png"),
-    radial-gradient(18% 16% at 18% 24%, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 76%),
-    radial-gradient(18% 16% at 76% 68%, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 76%);
-  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
-  background-size: 118px 100px, -104px 90px, 92px 78px, -112px 96px, auto, auto;
-  background-position: 6% 18%, 82% 20%, 22% 74%, 74% 82%, 18% 24%, 76% 68%;
+    radial-gradient(18% 16% at 20% 30%, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 90%),
+    radial-gradient(18% 16% at 78% 70%, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 90%);
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+  background-size: 110px 90px, 110px 90px, 92px 70px, auto, auto;
+  background-position: 8% 24%, 72% 60%, 38% 40%, 20% 20%, 76% 68%;
   filter: none;
   animation: mx-motif-float 88s ease-in-out infinite;
 }
@@ -1675,22 +1674,16 @@ body.theme-custom.theme-custom-rasta::before {
 }
 
 body.theme-custom.theme-custom-rasta::after {
-  opacity: 0.12;
+  opacity: 0.16;
   background:
     url("/rastaweed.png"),
-    url("/rastaweed.png"),
-    url("/rastaweed.png"),
-    url("/rastaweed.png"),
-    url("/rastaweed.png"),
-    url("/rastaweed.png"),
-    radial-gradient(18% 16% at 18% 14%, rgba(255, 221, 126, 0.07), rgba(255, 221, 126, 0) 76%),
-    radial-gradient(24% 18% at 76% 72%, rgba(7, 137, 48, 0.1), rgba(7, 137, 48, 0) 74%),
-    radial-gradient(28% 18% at 60% 24%, rgba(218, 18, 26, 0.08), rgba(218, 18, 26, 0) 74%);
-  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
-  background-size: 94px 108px, -128px 118px, 82px 96px, -118px 104px, 70px 84px, -98px 90px, auto, auto, auto;
-  background-position: 82% 56%, 88% 16%, 20% 70%, 64% 80%, 34% 24%, 56% 14%, 18% 14%, 76% 72%, 60% 24%;
-  filter: saturate(0.92) brightness(0.72) blur(0.1px);
-  animation: rasta-leaf-float 68s ease-in-out infinite;
+    radial-gradient(22% 20% at 18% 20%, rgba(255, 221, 126, 0.12), rgba(255, 221, 126, 0) 86%),
+    radial-gradient(24% 18% at 76% 72%, rgba(7, 137, 48, 0.12), rgba(7, 137, 48, 0) 86%);
+  background-repeat: no-repeat, no-repeat, no-repeat;
+  background-size: 260px 280px, auto, auto;
+  background-position: 50% 50%, 50% 50%, 76% 68%;
+  filter: saturate(0.92) brightness(0.78);
+  animation: rasta-leaf-float 110s ease-in-out infinite;
 }
 
 @keyframes rasta-smoke-rise {
@@ -1707,22 +1700,13 @@ body.theme-custom.theme-custom-rasta::after {
 
 @keyframes rasta-leaf-float {
   0% {
-    background-position: 82% 56%, 88% 16%, 20% 70%, 64% 80%, 34% 24%, 56% 14%, 18% 14%, 76% 72%, 60% 24%;
-    transform: translate3d(0, 0, 0) rotate(0deg);
-  }
-  25% {
-    background-position: 78% 52%, 84% 12%, 24% 64%, 60% 76%, 40% 20%, 52% 18%, 18% 14%, 76% 72%, 60% 24%;
+    background-position: 50% 50%, 50% 50%, 76% 68%;
   }
   50% {
-    background-position: 74% 48%, 80% 10%, 28% 60%, 56% 72%, 46% 18%, 48% 22%, 18% 14%, 76% 72%, 60% 24%;
-    transform: translate3d(0.18%, -0.28%, 0) rotate(0.16deg);
-  }
-  75% {
-    background-position: 76% 50%, 82% 12%, 26% 62%, 58% 74%, 42% 20%, 50% 20%, 18% 14%, 76% 72%, 60% 24%;
+    background-position: 52% 54%, 20% 20%, 76% 68%;
   }
   100% {
-    background-position: 70% 44%, 76% 8%, 32% 56%, 52% 68%, 50% 16%, 44% 24%, 18% 14%, 76% 72%, 60% 24%;
-    transform: translate3d(0, 0, 0) rotate(-0.08deg);
+    background-position: 48% 46%, 20% 20%, 76% 68%;
   }
 }
 
@@ -1740,22 +1724,13 @@ body.theme-custom.theme-custom-rasta::after {
 
 @keyframes mx-motif-float {
   0% {
-    background-position: 6% 18%, 82% 20%, 22% 74%, 74% 82%, 18% 24%, 76% 68%;
-    transform: translate3d(0, 0, 0) rotate(0deg);
-  }
-  25% {
-    background-position: 10% 20%, 78% 22%, 26% 70%, 70% 78%, 18% 24%, 76% 68%;
+    background-position: 10% 28%, 72% 64%, 20% 20%, 76% 68%;
   }
   50% {
-    background-position: 14% 24%, 74% 26%, 30% 66%, 66% 74%, 18% 24%, 76% 68%;
-    transform: translate3d(-0.18%, 0.24%, 0) rotate(-0.12deg);
-  }
-  75% {
-    background-position: 10% 22%, 76% 24%, 28% 68%, 68% 76%, 18% 24%, 76% 68%;
+    background-position: 12% 32%, 68% 60%, 20% 20%, 76% 68%;
   }
   100% {
-    background-position: 2% 26%, 70% 30%, 34% 62%, 62% 70%, 18% 24%, 76% 68%;
-    transform: translate3d(0, 0, 0) rotate(0.06deg);
+    background-position: 8% 24%, 74% 60%, 20% 20%, 76% 68%;
   }
 }
 

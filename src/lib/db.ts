@@ -385,7 +385,8 @@ export async function addTrackToDb(params: {
   if (!artPoster && params.artVideo) {
     artPoster = await generateWaveformArtwork({
       audioBlob: params.audio,
-      themeSelection: getStoredArtworkThemeSelection()
+      themeSelection: getStoredArtworkThemeSelection(),
+      trackId
     }).catch(() => null);
     if (artPoster) artworkSource = "auto";
   }
@@ -405,7 +406,8 @@ export async function addTrackToDb(params: {
   if (!artKey && !artVideoKey) {
     const generatedPoster = await generateWaveformArtwork({
       audioBlob: params.audio,
-      themeSelection: getStoredArtworkThemeSelection()
+      themeSelection: getStoredArtworkThemeSelection(),
+      trackId
     }).catch(() => null);
     if (generatedPoster) {
       artKey = makeId();
@@ -517,7 +519,8 @@ export async function updateArtworkInDb(
     if (sourceAudio) {
       nextArtPoster = await generateWaveformArtwork({
         audioBlob: sourceAudio,
-        themeSelection: getStoredArtworkThemeSelection()
+        themeSelection: getStoredArtworkThemeSelection(),
+        trackId
       }).catch(() => null);
     }
   }
@@ -655,7 +658,11 @@ export async function regenerateAutoArtworkForThemeChangeInDb(themeSelection: Th
     const sourceAudio = await getBlob(track.audioKey).catch(() => null);
     if (!sourceAudio) continue;
 
-    const nextPoster = await generateWaveformArtwork({ audioBlob: sourceAudio, themeSelection }).catch(() => null);
+    const nextPoster = await generateWaveformArtwork({
+      audioBlob: sourceAudio,
+      themeSelection,
+      trackId: track.id
+    }).catch(() => null);
     if (!nextPoster) continue;
 
     const oldArtKey = track.artKey;

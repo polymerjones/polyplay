@@ -3,7 +3,55 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#070b12" />
     <title>Polyplay Admin</title>
+    <script>
+      (() => {
+        try {
+          const themeMode = localStorage.getItem("polyplay_themeMode");
+          const customThemeSlot = localStorage.getItem("polyplay_customThemeSlot_v1") || "crimson";
+          const safeTheme = themeMode === "dark" || themeMode === "custom" ? themeMode : "light";
+          const root = document.documentElement;
+          root.setAttribute("data-theme", safeTheme);
+          root.setAttribute("data-theme-slot", customThemeSlot);
+        } catch {
+          document.documentElement.setAttribute("data-theme", "dark");
+          document.documentElement.setAttribute("data-theme-slot", "crimson");
+        }
+      })();
+    </script>
+    <style>
+      html.admin-frame-html,
+      body.admin-frame-body,
+      body.admin-frame-body #admin-root {
+        height: 100%;
+        min-height: 100%;
+      }
+
+      html.admin-frame-html,
+      body.admin-frame-body,
+      body.admin-frame-body #admin-root {
+        background: #070b12;
+      }
+
+      html[data-theme="light"].admin-frame-html,
+      html[data-theme="light"] body.admin-frame-body,
+      html[data-theme="light"] body.admin-frame-body #admin-root {
+        background: #f6f4fb;
+      }
+
+      html[data-theme="custom"].admin-frame-html,
+      html[data-theme="custom"] body.admin-frame-body,
+      html[data-theme="custom"] body.admin-frame-body #admin-root {
+        background: #151013;
+      }
+
+      body.admin-frame-body {
+        margin: 0;
+        overflow: hidden;
+        color: #eef4ff;
+      }
+    </style>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body class="admin-frame-body">

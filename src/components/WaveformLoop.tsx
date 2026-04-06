@@ -3,7 +3,9 @@ import {
   buildPeaksFromAudioBlob,
   fallbackPeaks,
   getRuntimeWaveformPeaks,
-  setRuntimeWaveformPeaks
+  loadStoredWaveformPeaks,
+  setRuntimeWaveformPeaks,
+  storeWaveformPeaks
 } from "../lib/artwork/waveformArtwork";
 import { getWaveformThemePalette } from "../lib/waveformTheme";
 import type { LoopRegion, Track } from "../types";
@@ -180,12 +182,15 @@ export function WaveformLoop({
 
   const [peaks, setPeaks] = useState<number[]>(() => {
     if (track?.waveformPeaks?.length) return track.waveformPeaks;
+    const stored = loadStoredWaveformPeaks(track?.id);
+    if (stored?.length) return stored;
     const cached = getRuntimeWaveformPeaks(track?.id);
     if (cached?.length) return cached;
     return fallbackPeaks();
   });
   const [hasResolvedPeaks, setHasResolvedPeaks] = useState<boolean>(() => {
     if (track?.waveformPeaks?.length) return true;
+    if (loadStoredWaveformPeaks(track?.id)?.length) return true;
     if (getRuntimeWaveformPeaks(track?.id)?.length) return true;
     return !track?.audioBlob;
   });
@@ -526,9 +531,16 @@ export function WaveformLoop({
   useEffect(() => {
     let canceled = false;
 
+    const stored = loadStoredWaveformPeaks(track?.id);
     if (track?.waveformPeaks?.length) {
       setRuntimeWaveformPeaks(track.id, track.waveformPeaks);
       setPeaks(track.waveformPeaks);
+      setHasResolvedPeaks(true);
+      return;
+    }
+    if (stored?.length) {
+      if (track?.id) setRuntimeWaveformPeaks(track.id, stored);
+      setPeaks(stored);
       setHasResolvedPeaks(true);
       return;
     }
@@ -553,6 +565,7 @@ export function WaveformLoop({
       .then((nextPeaks) => {
         if (!canceled) {
           setRuntimeWaveformPeaks(track.id, nextPeaks);
+          storeWaveformPeaks(track.id, nextPeaks);
           setPeaks(nextPeaks);
           setHasResolvedPeaks(true);
         }

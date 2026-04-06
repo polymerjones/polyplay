@@ -5,7 +5,9 @@ import {
   buildPeaksFromAudioBlob,
   fallbackPeaks,
   getRuntimeWaveformPeaks,
-  setRuntimeWaveformPeaks
+  loadStoredWaveformPeaks,
+  setRuntimeWaveformPeaks,
+  storeWaveformPeaks
 } from "../lib/artwork/waveformArtwork";
 import { fireLightHaptic } from "../lib/haptics";
 import { formatTime } from "../lib/time";
@@ -209,6 +211,13 @@ export function FullscreenPlayer({
       setHasResolvedPeaks(true);
       return;
     }
+    const stored = loadStoredWaveformPeaks(track.id);
+    if (stored?.length) {
+      setRuntimeWaveformPeaks(track.id, stored);
+      setPeaks(stored);
+      setHasResolvedPeaks(true);
+      return;
+    }
     if (!shouldAnimateGenerated || !track.audioBlob) {
       setPeaks(fallbackPeaks(120));
       setHasResolvedPeaks(true);
@@ -226,6 +235,7 @@ export function FullscreenPlayer({
       .then((next) => {
         if (!canceled) {
           setRuntimeWaveformPeaks(track.id, next);
+          storeWaveformPeaks(track.id, next);
           setPeaks(next);
           setHasResolvedPeaks(true);
         }

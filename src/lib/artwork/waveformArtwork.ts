@@ -7,7 +7,57 @@ type GenerateArtworkInput = {
   width?: number;
   height?: number;
   themeSelection?: ThemeSelection;
+  trackId?: string;
 };
+
+const WAVEFORM_PEAK_CACHE_KEY = "polyplay_waveform_peaks_v1";
+type WaveformPeakCache = Record<string, number[]>;
+
+function readWaveformPeakCache(): WaveformPeakCache {
+  if (typeof window === "undefined" || typeof window.localStorage === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(WAVEFORM_PEAK_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    const cache: WaveformPeakCache = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (Array.isArray(value)) {
+        const sanitized = value.filter((entry): entry is number => Number.isFinite(entry) && entry >= 0);
+        if (sanitized.length) cache[key] = sanitized;
+      }
+    }
+    return cache;
+  } catch {
+    return {};
+  }
+}
+
+function writeWaveformPeakCache(cache: WaveformPeakCache): void {
+  if (typeof window === "undefined" || typeof window.localStorage === "undefined") return;
+  try {
+    window.localStorage.setItem(WAVEFORM_PEAK_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+export function loadStoredWaveformPeaks(trackId: string | null | undefined): number[] | null {
+  if (!trackId) return null;
+  const cache = readWaveformPeakCache();
+  const stored = cache[trackId];
+  if (!stored || !stored.length) return null;
+  return stored.slice(0, 512);
+}
+
+export function storeWaveformPeaks(trackId: string | null | undefined, peaks: number[]): void {
+  if (!trackId || !Array.isArray(peaks) || !peaks.length) return;
+  const sanitized = peaks.filter((value): value is number => Number.isFinite(value) && value >= 0);
+  if (!sanitized.length) return;
+  const cache = readWaveformPeakCache();
+  cache[trackId] = sanitized.slice(0, 512);
+  writeWaveformPeakCache(cache);
+}
 
 let audioCtx: AudioContext | null = null;
 const runtimeWaveformPeakCache = new Map<string, number[]>();
@@ -147,5 +197,6 @@ export async function generateWaveformArtwork(input: GenerateArtworkInput): Prom
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, width, height);
 
+  storeWaveformPeaks(input.trackId, safePeaks);
   return canvasToPngBlob(canvas);
 }
