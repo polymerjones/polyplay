@@ -146,8 +146,8 @@ export function getWaveformThemePalette(selection = resolveThemeSelection()): Wa
       });
     case "merica":
       return paletteFromThemeColors(["#0A3161", "#FFFFFF", "#B31942"], {
-        idleMix: 0.3,
-        idleAlpha: 0.54,
+        idleMix: 0.16,
+        idleAlpha: 0.82,
         bgStart: "#081a3d",
         bgMid: "#213a6a",
         bgEnd: "#3b1426"

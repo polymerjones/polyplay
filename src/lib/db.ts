@@ -6,7 +6,7 @@ import { getMediaUrl, revokeAllMediaUrls, revokeMediaUrl } from "./player/media"
 import { isConstrainedMobileDevice } from "./platform";
 import { deleteBlob, getBlob, initDB, listBlobStats, putBlob } from "./storage/db";
 import { clearCompetingLibraryCandidates, loadLibrary, saveLibrary, type LibraryState, type TrackRecord } from "./storage/library";
-import type { ThemeSelection } from "./themeConfig";
+import { getThemeSelectionFromState, parseCustomThemeSlot, type ThemeSelection } from "./themeConfig";
 import { titleFromFilename } from "./title";
 
 export type DbTrackRecord = {
@@ -54,6 +54,8 @@ const LEGACY_MIGRATION_FLAG = "showoff_legacy_migrated_v1";
 const STORAGE_CAP_BYTES_MOBILE = 750 * 1024 * 1024;
 const STORAGE_CAP_BYTES_DESKTOP = 4 * 1024 * 1024 * 1024;
 const STORAGE_CAP_HEADROOM_BYTES = 128 * 1024 * 1024;
+const THEME_MODE_KEY = "polyplay_themeMode";
+const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
 
 function clampAura(aura: number): number {
   return Math.max(0, Math.min(10, Math.round(aura)));
@@ -61,6 +63,17 @@ function clampAura(aura: number): number {
 
 function now(): number {
   return Date.now();
+}
+
+function getStoredArtworkThemeSelection(): ThemeSelection {
+  if (typeof localStorage === "undefined") return "dark";
+  try {
+    const mode = localStorage.getItem(THEME_MODE_KEY);
+    const slot = parseCustomThemeSlot(localStorage.getItem(CUSTOM_THEME_SLOT_KEY));
+    return getThemeSelectionFromState(mode, slot);
+  } catch {
+    return "dark";
+  }
 }
 
 function makeId(): string {
@@ -370,7 +383,10 @@ export async function addTrackToDb(params: {
     artPoster = await generateVideoPoster(params.artVideo).catch(() => null);
   }
   if (!artPoster && params.artVideo) {
-    artPoster = await generateWaveformArtwork({ audioBlob: params.audio }).catch(() => null);
+    artPoster = await generateWaveformArtwork({
+      audioBlob: params.audio,
+      themeSelection: getStoredArtworkThemeSelection()
+    }).catch(() => null);
     if (artPoster) artworkSource = "auto";
   }
   const audioBytes = params.audio.size || 0;
@@ -387,7 +403,10 @@ export async function addTrackToDb(params: {
     await putBlob(artVideoKey, params.artVideo, { type: "video", createdAt: ts });
   }
   if (!artKey && !artVideoKey) {
-    const generatedPoster = await generateWaveformArtwork({ audioBlob: params.audio }).catch(() => null);
+    const generatedPoster = await generateWaveformArtwork({
+      audioBlob: params.audio,
+      themeSelection: getStoredArtworkThemeSelection()
+    }).catch(() => null);
     if (generatedPoster) {
       artKey = makeId();
       await putBlob(artKey, generatedPoster, { type: "image", createdAt: ts });
@@ -495,7 +514,12 @@ export async function updateArtworkInDb(
   }
   if (!nextArtPoster && artwork.artVideo) {
     const sourceAudio = track.audioKey ? await getBlob(track.audioKey) : null;
-    if (sourceAudio) nextArtPoster = await generateWaveformArtwork({ audioBlob: sourceAudio }).catch(() => null);
+    if (sourceAudio) {
+      nextArtPoster = await generateWaveformArtwork({
+        audioBlob: sourceAudio,
+        themeSelection: getStoredArtworkThemeSelection()
+      }).catch(() => null);
+    }
   }
   const nextPosterBytes = nextArtPoster?.size ?? 0;
   const nextVideoBytes = artwork.artVideo?.size ?? 0;

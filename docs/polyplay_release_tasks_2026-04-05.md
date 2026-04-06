@@ -1468,6 +1468,487 @@ Audit all backup file systems for potential issues.
     - Confirm onboarding/welcome text no longer highlights accidentally on touch drag.
     - Confirm vault/journal/admin toasts no longer get accidental text selection.
     - Confirm all real input and editor fields remain fully selectable/editable.
+  - Follow-up diagnosis for live player title selection — 2026-04-05 Codex:
+    - Files inspected:
+      - `src/components/player.css`
+      - `src/components/MiniPlayerBar.tsx`
+      - `src/components/FullscreenPlayer.tsx`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely cause:
+      - The mini player title was explicitly restored to `user-select: text` for pointer-fine environments.
+      - In practice, that creates conflict with fast player gestures and FX interactions because drag/tap movement near the active title can begin text selection instead of staying purely interactive.
+      - The same tradeoff is not worth carrying in the live player for release; explicit copy affordances can be added later in Admin or another non-transport surface.
+  - Narrow implementation plan:
+    - Remove live-player title selection behavior from the mini player.
+    - Keep fullscreen player metadata non-selectable as well so the active playback surfaces remain gesture-safe and consistent.
+    - Do not add a new copy button in the playbar for this release.
+  - Exact follow-up fix made:
+    - Removed the mini-player title `user-select: text` behavior that had been restored for pointer-fine environments.
+    - Marked mini-player title/subtitle and fullscreen player metadata as non-selectable so the active playback surfaces stay tap/drag safe.
+    - Deliberately did not add a new copy affordance in the playbar for this release pass.
+  - Exact files changed:
+    - `src/components/player.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. This only removes live-player text selection and does not touch editable/admin surfaces.
+  - QA still needed:
+    - Confirm dragging/tapping around the active player title no longer starts text selection.
+    - Confirm fullscreen player metadata also no longer highlights accidentally.
+    - Confirm Admin/manage surfaces still allow rename/copy workflows where expected.
+
+---
+
+### 18. iPhone import-page flashing + Merica idle waveform visibility
+**Status:** fix implemented, awaiting QA
+
+**Observed issue:**
+- on iPhone, pressing `Import` can flash the settings/import page instead of keeping it open reliably
+- after successful import, the main UI can appear to refresh multiple times
+- Merica waveform can look nearly invisible until playback progress paints it
+
+**Desired behavior:**
+- import page should open and stay open reliably on iPhone
+- successful import should trigger one clean parent refresh/close path, not stacked refresh flashes
+- Merica waveform should remain visible before playback progress reaches it
+
+**Codex notes:**
+- Diagnosis start — 2026-04-05 Codex:
+  - Files inspected:
+    - `src/App.tsx`
+    - `src/admin/AdminApp.tsx`
+    - `src/lib/waveformTheme.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Likely root cause:
+    - The admin header has a swipe-to-dismiss gesture with a low velocity threshold. On iPhone, a normal tap/finger drift during the iframe transition can plausibly register as a dismiss gesture and immediately close the page.
+    - Track import success in upload mode currently posts overlapping parent messages (`user-imported`, `library-updated`, then `import-complete`), which can stack multiple `refreshTracks()` passes and look like UI flashing on slower devices.
+    - Merica idle waveform bars are using a lighter, lower-alpha idle fill than the darker themes, so the unplayed portion can wash out against the Merica player shell until the progress gradient paints over it.
+  - Narrow implementation plan:
+    - Keep swipe-dismiss out of the upload/import route so opening Import is stable on iPhone.
+    - Collapse upload success messaging to one parent refresh/close path when the page is supposed to close, while preserving the keep-import-open path.
+    - Increase only the Merica idle waveform visibility without changing the shared progress gradient behavior.
+  - Exact fix made:
+    - Disabled the settings-header swipe-dismiss path while the admin page is in `upload` mode, and tightened the velocity-based close rule for the remaining manage-mode swipe so a short tap drift is less likely to count as a dismissal.
+    - Collapsed upload-mode success messaging so closing the import page uses one parent close/refresh path instead of stacking `user-imported` + `library-updated` + `import-complete` on the same successful track import.
+    - Increased Merica idle waveform contrast by making its unplayed bars more opaque and slightly less washed toward white.
+  - Exact files changed:
+    - `src/admin/AdminApp.tsx`
+    - `src/lib/waveformTheme.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low to medium. The import-page change is limited to upload-mode dismiss behavior and upload success messaging only. The waveform change is Merica-only.
+  - QA still needed:
+    - On iPhone, tap `Import` repeatedly and confirm the page stays open instead of flashing closed.
+    - Import a track into a newly created playlist and confirm the app returns cleanly without visible repeated refresh pulses.
+    - Repeat the same flow after a factory reset if you want to stress the original repro path.
+    - In Merica, confirm the idle waveform is visible before the playhead reaches it and still looks clean once progress paints over it.
+
+---
+
+### 19. Rename-before-nuke playlist flow
+**Status:** fix implemented, awaiting QA
+
+**Observed issue:**
+- `Nuke Playlist` cleared the active playlist immediately after the arm/confirm flow
+- there was no chance to name the replacement empty playlist before the clear happened
+
+**Desired behavior:**
+- before the nuke countdown completes, show a text field seeded with the current playlist name
+- when the user confirms, the active playlist should first take that name, then be cleared
+- after the nuke, the new empty playlist should be titled whatever the user entered
+
+**Codex notes:**
+- Diagnosis start — 2026-04-05 Codex:
+  - Files inspected:
+    - `src/admin/AdminApp.tsx`
+    - `src/lib/db.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Likely root cause:
+    - The current nuke path only arms a countdown and then runs `clearPlaylistInDb(activePlaylist.id)`.
+    - The playlist object itself survives the clear, which means the cleanest fix is to rename that active playlist first and then clear it, rather than introducing a new replacement-playlist architecture.
+  - Narrow implementation plan:
+    - Seed a playlist-name field when the nuke modal opens.
+    - Require a non-empty name in the nuke modal.
+    - On confirm, rename the active playlist if needed, then run the existing clear flow.
+  - Exact fix made:
+    - Added a rename field to the existing `Nuke Playlist` modal, prefilled with the current active playlist name.
+    - The destructive confirm action is disabled if the rename field is blank.
+    - On confirm, the active playlist is renamed first if needed, then cleared using the existing `clearPlaylistInDb(...)` path.
+    - Updated the completion status text so it reflects the resulting empty playlist name.
+  - Exact files changed:
+    - `src/admin/AdminApp.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. This stays inside the existing nuke modal and reuses the current rename + clear helpers.
+  - QA still needed:
+    - Open `Nuke Playlist` and confirm the text field is prefilled with the current playlist name.
+    - Change the name, complete the nuke flow, and confirm the resulting empty playlist keeps the new name.
+    - Leave the default name unchanged and confirm the old behavior still works, now with the explicit prompt.
+    - Confirm blank name blocks the destructive confirm button.
+  - Follow-up diagnosis for nuke sequence order — 2026-04-05 Codex:
+    - Files inspected:
+      - `src/admin/AdminApp.tsx`
+      - `src/App.tsx`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely cause:
+      - The first pass put the rename field inside the already-armed countdown modal, which is the wrong sequence.
+      - On successful playlist clear, Admin was only refreshing its own data and emitting a generic library update. It was not posting the dedicated nuke success signal the parent app already knows how to animate, and it was not closing Settings afterward.
+    - Narrow implementation plan:
+      - Split playlist nuke into two steps:
+        - rename prompt modal first
+        - countdown/armed modal second
+      - If rename is canceled, abort the whole sequence.
+      - On successful nuke, post `polyplay:nuke-success` and `polyplay:close-settings` so the parent app returns to the main player and runs the existing nuke animation.
+  - Exact follow-up fix made:
+    - Split the playlist nuke flow into two modals:
+      - rename confirmation first
+      - countdown/armed state second
+    - Cancel at the rename step now aborts the entire sequence.
+    - Successful playlist nuke now posts `polyplay:nuke-success` and `polyplay:close-settings` to the parent app so the existing main-player nuke animation can run and Settings closes afterward.
+    - The countdown modal now treats the playlist name as already locked in, instead of editing it mid-arm.
+  - Exact files changed:
+    - `src/admin/AdminApp.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low to medium. The change stays inside the existing nuke UI flow and reuses the same clear helper, but it does alter the sequence and adds parent-app signaling.
+  - QA still needed:
+    - Press `Nuke Playlist` and confirm the rename prompt appears first with the current playlist name.
+    - Press `Cancel` from the rename prompt and confirm the whole sequence is aborted.
+    - Press `OK`, confirm the countdown starts only after that, then complete the nuke and confirm Settings closes and the main player shows the nuke animation/return flow.
+    - After the nuke, confirm the empty playlist has the chosen name and import works normally.
+  - Follow-up fix for accidental outside-close:
+    - Removed backdrop-click dismissal from the rename-first nuke prompt.
+    - The rename modal should now exit only through `Escape`, `Cancel`, or `OK`.
+  - Exact files changed:
+    - `src/admin/AdminApp.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Follow-up diagnosis for demo-playlist nuke regression:
+    - Files inspected:
+      - `src/admin/AdminApp.tsx`
+      - `src/App.tsx`
+      - `styles.css`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely cause:
+      - Playlist nuke success was posting `polyplay:nuke-success`, but the parent app was treating that like the full app-data nuke path and calling `hardResetLibraryInDb()` after the shake animation.
+      - That is the wrong behavior for playlist clear. It can briefly show stale art, then wipe/reseed state, and it can also destroy the intended renamed empty playlist result, especially around the demo playlist.
+  - Narrow implementation plan:
+      - Split playlist-nuke visuals from full app-data nuke behavior.
+      - On playlist-nuke success, immediately blank the main player UI, run the green flash/shake animation, then refresh from DB without wiping storage.
+      - Keep the full hard-reset nuke path only for actual app-data reset use cases.
+  - Exact follow-up fix made:
+    - Split `polyplay:nuke-success` away from the full app-data nuke path in the parent app.
+    - Added a playlist-nuke visual sequence that immediately blanks tracks/player state, runs the shake animation plus a bright green flash overlay, then refreshes from DB without calling `hardResetLibraryInDb()`.
+    - Kept the full hard-reset nuke sequence intact for actual app-data wipe scenarios only.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Medium. The change is still surgical, but it alters the parent-side destructive animation flow.
+  - QA still needed:
+    - Nuke the demo playlist and confirm the UI blanks immediately instead of briefly showing old art.
+    - Confirm the bright green flash/shake plays and then the app returns to the main player cleanly.
+    - Confirm the renamed empty playlist name survives after the nuke, including for the former demo playlist.
+    - Confirm importing into the renamed empty playlist works normally afterward.
+
+---
+
+### 20. MX skull background motif
+**Status:** fix implemented, awaiting QA
+
+**Observed request:**
+- replace the generic MX skull motif with the user-provided sombrero skull concept
+- keep it as white lines over transparent so it can sit cleanly in the MX background
+
+**Desired behavior:**
+- MX theme background uses a transparent white-line skull motif
+- no solid background box, just line art
+- keep the change cosmetic and scoped to the MX theme background layer only
+
+**Codex notes:**
+- Diagnosis start — 2026-04-05 Codex:
+  - Files inspected:
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Likely root cause / current state:
+    - The MX theme currently uses an inline SVG skull motif embedded directly in CSS `body.theme-custom.theme-custom-mx::after`.
+    - For the new art direction, a dedicated transparent SVG asset is cleaner than trying to force a raster cleanup pipeline during a release pass.
+  - Narrow implementation plan:
+    - Create a standalone transparent white-stroke SVG motif for MX.
+    - Swap the inline CSS data-URI motif to the new asset.
+    - Keep positions/sizing/animation structure intact unless tiny tuning is needed after visual QA.
+  - Exact fix made:
+    - Added a dedicated transparent white-line SVG skull-with-sombrero motif for MX.
+    - Replaced the old inline MX skull data-URI backgrounds with the new asset.
+    - Slightly increased the motif sizing and adjusted positions so the new art reads as a background element rather than a tiny badge.
+  - Exact files changed:
+    - `public/mx-skull-sombrero-lines.svg`
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. This is cosmetic and scoped to the MX theme background pseudo-element only.
+  - QA still needed:
+    - Switch to MX theme and confirm the skull reads as white lines over transparent with no dark box/background.
+    - Confirm the scale feels intentional on both phone and desktop.
+    - Confirm the motif does not overpower the topbar, track tiles, or player chrome.
+  - Follow-up diagnosis for real user asset:
+    - Files inspected:
+      - `gfxdesign/dayofdead.png`
+      - `styles.css`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely cause:
+      - The current MX motif is still using the temporary placeholder line asset instead of the user-provided skull artwork.
+      - The provided PNG already matches the intended treatment closely enough to use directly as the themed background element.
+  - Narrow implementation plan:
+      - Copy the provided skull PNG into `public/`.
+      - Repoint the MX theme background to the new raster asset.
+      - Keep the same background-layer structure and only retune sizing/position if needed.
+  - Exact follow-up fix made:
+    - Copied the user-provided `dayofdead.png` into `public/` as the MX background asset.
+    - Swapped the MX theme motif from the temporary placeholder asset to the real PNG.
+    - Tuned MX motif size/position slightly for the new raster proportions.
+  - Exact files changed:
+    - `public/mx-dayofdead-lines.png`
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. This remains cosmetic and scoped to the MX background pseudo-element only.
+  - QA still needed:
+    - Switch to MX theme and confirm the provided skull art appears instead of the placeholder.
+    - Confirm the linework reads cleanly and does not show a visible rectangular box.
+    - Confirm sizing/placement feels right on phone and desktop.
+  - Follow-up diagnosis for motion density:
+    - Files inspected:
+      - `styles.css`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely cause:
+      - The current MX motif field only uses 2 skull background layers and a gentle transform on the whole pseudo-element.
+      - That makes the art feel pinned near the top instead of drifting around the screen as a repeating atmospheric motif field.
+  - Narrow implementation plan:
+      - Increase the MX skull motif count to 6 layered backgrounds.
+      - Animate the background-position values directly so the field drifts across the screen over time.
+      - Keep opacity subtle so the extra density does not overpower the UI.
+  - Exact follow-up fix made:
+    - Expanded the MX motif field to 6 skull background layers instead of the sparse 2-layer setup.
+    - Matched the MX keyframes to all motif/background layers so the skull field actually drifts around the screen.
+    - Kept the opacity subtle while increasing density and travel distance.
+  - Exact files changed:
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. This is cosmetic and scoped to MX theme background motion only.
+  - QA still needed:
+    - Switch to MX and confirm multiple skulls are visible across the screen, not stuck at the top.
+    - Confirm the drift feels subtle and atmospheric rather than busy.
+    - Confirm the increased motif count still does not overpower the UI on phone or desktop.
+  - Follow-up diagnosis for speed/angle:
+    - Files inspected:
+      - `styles.css`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely cause:
+      - The first motion pass increased MX field density and travel distance, but the combined effect still reads too fast.
+      - CSS background layers do not support independent arbitrary rotation transforms per layer, so the current whole-layer transform is too blunt for the desired look.
+  - Narrow implementation plan:
+      - Slow the MX animation down significantly.
+      - Reduce whole-layer rotation amplitude.
+      - Add more visual angle variety with mirrored background instances and varied proportions rather than aggressive shared rotation.
+  - Exact follow-up fix made:
+    - Slowed the MX motif animation from 38s to 68s.
+    - Reduced whole-layer rotation/translation amplitude so the field feels calmer.
+    - Added more angle variety by mirroring alternating skull background instances instead of pushing more shared rotation.
+  - Exact files changed:
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. This is still cosmetic and scoped to MX background motion only.
+  - QA still needed:
+    - Confirm the skull field now feels slower and less busy.
+    - Confirm mirrored/varied instances feel more natural than the previous uniform angles.
+    - Confirm the field still reads as background atmosphere rather than static decoration.
+  - Follow-up diagnosis for size/crowding:
+    - Files inspected:
+      - `styles.css`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely cause:
+      - The expanded MX field is still using too many large skull instances for the current screen real estate, so the motifs overlap and read as a crowded wallpaper rather than subtle atmosphere.
+      - Independent per-skull CSS rotation is not practical in the current single pseudo-element background stack, so pushing harder on shared rotation would make the whole field feel glitchier rather than better.
+    - Narrow implementation plan:
+      - Reduce the active skull count.
+      - Shrink each instance.
+      - Increase spacing and slow the drift further so the field stays barely noticeable.
+    - Exact follow-up fix made:
+      - Reduced the MX skull field from 6 skull layers to 4.
+      - Shrunk the skull instances and spread them farther apart.
+      - Lowered opacity and slowed the drift from `68s` to `88s`, while reducing shared transform amplitude again.
+    - Exact files changed:
+      - `styles.css`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Regression risk:
+      - Low. This remains cosmetic and scoped to the MX background motif only.
+    - QA still needed:
+      - Confirm the skulls no longer feel oversized or crowded.
+      - Confirm the drift is now barely noticeable.
+      - Confirm the MX motif still reads as themed background atmosphere without pulling focus from the UI.
+
+---
+
+### 22. Rasta drifting leaf field
+**Status:** fix implemented, awaiting QA
+
+**Observed request:**
+- make the Rasta weed leaf field behave more like the expanded MX motif pass
+- roughly 6 leaves, slowly drifting around the screen
+
+**Desired behavior:**
+- Rasta theme shows a fuller drifting leaf field
+- motion remains subtle and background-level
+- keep the smoke layer separate
+
+**Codex notes:**
+- Diagnosis start — 2026-04-05 Codex:
+  - Files inspected:
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Likely root cause:
+    - The current Rasta field only uses 2 leaf background layers plus static glows.
+    - That keeps the theme sparse and makes the leaf motion feel localized rather than ambient.
+  - Narrow implementation plan:
+    - Expand the leaf field to 6 layered `rastaweed.png` backgrounds.
+    - Match the `rasta-leaf-float` keyframes to all leaf/glow layers.
+    - Keep opacity and motion restrained so the field does not overpower the theme.
+  - Exact fix made:
+    - Expanded the Rasta leaf field from 2 leaves to 6 layered `rastaweed.png` motifs.
+    - Matched the `rasta-leaf-float` keyframes to the expanded background stack so the leaves actually drift around the screen.
+    - Left the smoke system untouched.
+  - Exact files changed:
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. This is cosmetic and scoped to the Rasta motif field only.
+  - QA still needed:
+    - Switch to Rasta and confirm multiple leaves drift around the screen.
+    - Confirm the motion feels subtle and atmospheric, not busy.
+    - Confirm the added leaf count still does not overpower the UI on phone or desktop.
+  - Follow-up diagnosis for angle/motion tuning:
+    - Files inspected:
+      - `styles.css`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely cause:
+      - The first Rasta pass increased field density, but it still relies on a single shared rotation transform and uniform leaf orientation.
+      - That makes the field feel less organic than desired.
+    - Narrow implementation plan:
+      - Slow the leaf field down.
+      - Reduce shared rotation amplitude.
+      - Mirror alternating leaf instances to create more natural-looking angle variation without rewriting the theme system.
+  - Follow-up diagnosis for softer rotation / subtler drift:
+    - Files inspected:
+      - `styles.css`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Exact likely cause:
+      - The second Rasta pass still used mostly square leaf sizing and a stronger shared travel pattern, so the field could read more like six copies gliding together than varied drifting leaves.
+      - In the current single-pseudo-element background stack, true per-leaf independent CSS rotation is not practical without widening the implementation.
+    - Narrow implementation plan:
+      - Slow the animation down further.
+      - Reduce the global transform amplitude again.
+      - Use more varied aspect ratios and mirrored instances so each leaf reads at a slightly different angle while staying release-safe.
+    - Exact fix made:
+      - Slowed the Rasta leaf field from `44s` to `68s`.
+      - Reduced opacity and shared rotation/travel so the motion stays subtle.
+      - Varied leaf aspect ratios and kept alternating mirrored instances to create more angle variety in the field without widening beyond the current CSS structure.
+    - Exact files changed:
+      - `styles.css`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Regression risk:
+      - Low. This remains cosmetic and limited to the Rasta motif field.
+    - QA still needed:
+      - Switch to Rasta and confirm the leaves now drift more slowly.
+      - Confirm the leaf field feels calmer and less synchronized.
+      - Confirm the varied leaf instances read like different angles instead of identical copies.
+
+---
+
+### 23. Hero bar theme-switch white flash
+**Status:** fix implemented, awaiting QA
+
+**Observed issue:**
+- during theme cycling, the hero/topbar can briefly show a white offset rectangle flash
+
+**Desired behavior:**
+- theme switch should feel clean
+- no pale rectangular repaint/glitch around the hero bar
+
+**Codex notes:**
+- Diagnosis start — 2026-04-05 Codex:
+  - Files inspected:
+    - `styles.css`
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Likely root cause:
+    - The `.topbar::after` halo layer extends outside the rounded card with `inset: -16px` and includes pale white side glows.
+    - The topbar container itself allows overflow, so during rapid theme repaint the halo can briefly show as a misaligned light rectangle.
+  - Narrow implementation plan:
+    - Clip the hero bar to its rounded bounds.
+    - Pull the `::after` glow layer back inside the card.
+    - Reduce the pale white edge contribution while preserving the soft hero glow.
+  - Exact fix made:
+    - Changed the topbar container to clip overflow to the rounded card.
+    - Pulled the `::after` hero glow layer back inside the card bounds by using `inset: 0` and `border-radius: inherit`.
+    - Reduced the pale white side-glow intensity to remove the rectangular flash feel during theme repaint.
+  - Exact files changed:
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low. This is scoped to the topbar visual halo only.
+  - QA still needed:
+    - Cycle themes repeatedly and confirm the hero bar no longer shows a white offset rectangle flash.
+    - Confirm the hero still keeps its soft glow and doesn’t look too flat after clipping.
+
+---
+
+### 21. Post-reset auto-art theme drift + post-nuke import stability
+**Status:** fix implemented, awaiting QA
+
+**Observed issue:**
+- after factory reset, importing in default dark can still generate the old pink/light auto art until the user cycles themes
+- user also reported a post-nuke import path that felt bricked / unstable
+
+**Desired behavior:**
+- auto-generated artwork should always match the actual saved active theme immediately after reset/import
+- nukeing a playlist should not leave import flows in a stale or broken state
+
+**Codex notes:**
+- Diagnosis start — 2026-04-05 Codex:
+  - Files inspected:
+    - `src/lib/db.ts`
+    - `src/lib/artwork/waveformArtwork.ts`
+    - `src/lib/themeConfig.ts`
+    - `src/admin/AdminApp.tsx`
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Likely root cause:
+    - DB-side auto-art generation still calls `generateWaveformArtwork(...)` without an explicit `themeSelection`, which falls back to live DOM/theme state.
+    - After factory reset, Admin updates localStorage to dark but can still have stale live theme DOM/state in the current page, so imports can inherit the old visual palette until the user cycles themes.
+    - The post-nuke import report is likely the same family of stale-state instability around empty playlist/import transitions, so the first safe fix is to remove theme-state ambiguity from import-time artwork generation.
+  - Narrow implementation plan:
+    - Resolve theme selection for DB-side auto artwork from saved theme storage, not current DOM.
+    - Use that stored theme selection for import-time and fallback waveform art generation in the DB layer.
+    - Keep the change surgical and re-test nuke -> import and factory reset -> import flows after the theme drift is removed.
+  - Exact fix made:
+    - Added a DB-side stored-theme resolver so auto-generated artwork now uses the saved app theme from localStorage rather than the current page DOM/theme state.
+    - Wired that stored theme selection into import-time and fallback waveform-art generation paths in the DB layer.
+    - Hardened Admin factory reset so it also resets live theme selection state and immediately notifies the parent app of the dark/crimson-slot reset state, instead of only changing localStorage.
+  - Exact files changed:
+    - `src/lib/db.ts`
+    - `src/admin/AdminApp.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Why this bug kept recurring:
+    - The artwork generator itself was fine, but some DB import paths still relied on implicit theme resolution from the live document.
+    - After reset, saved theme state and live page theme state could temporarily disagree, so imports sometimes generated art from the stale page theme until a later theme cycle realigned everything.
+  - Regression risk:
+    - Low to medium. The DB change is centralized and only affects auto-art generation; the factory-reset change only adds explicit live-theme sync messaging.
+  - QA still needed:
+    - After factory reset, import a track immediately in default dark and confirm the auto art is dark on the first try.
+    - Cycle themes, return to dark, import again, and confirm the result stays correct.
+    - Re-test nuke playlist -> import flow and confirm the app no longer feels stuck or visually bricked afterward.
 
 ---
 

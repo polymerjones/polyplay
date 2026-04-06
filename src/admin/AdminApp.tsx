@@ -533,7 +533,8 @@ function getPreferredCurrentTrackId(rows: DbTrackRecord[]): string {
 export function AdminApp() {
   const SETTINGS_HERO_SWIPE_CLOSE_DISTANCE_PX = 120;
   const SETTINGS_HERO_SWIPE_CLOSE_MAX_SIDEWAYS_PX = 72;
-  const SETTINGS_HERO_SWIPE_CLOSE_MIN_VELOCITY = 0.38;
+const SETTINGS_HERO_SWIPE_CLOSE_MIN_VELOCITY = 0.6;
+const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
   const [isInitialHydrationPending, setIsInitialHydrationPending] = useState(true);
   const [tracks, setTracks] = useState<DbTrackRecord[]>([]);
   const [status, setStatus] = useState("");
@@ -649,7 +650,9 @@ export function AdminApp() {
   const [infoModal, setInfoModal] = useState<{ title: string; message: string; openManageStorage?: boolean } | null>(
     null
   );
+  const [isNukeRenamePromptOpen, setIsNukeRenamePromptOpen] = useState(false);
   const [isNukePromptOpen, setIsNukePromptOpen] = useState(false);
+  const [nukePlaylistName, setNukePlaylistName] = useState("");
   const [nukeCountdownMs, setNukeCountdownMs] = useState(2000);
   const [isNukeRunning, setIsNukeRunning] = useState(false);
   const [isJournalNukePromptOpen, setIsJournalNukePromptOpen] = useState(false);
@@ -1040,16 +1043,22 @@ export function AdminApp() {
   };
 
   const endSettingsHeroSwipeDismiss = (touch: { clientX: number; clientY: number }) => {
+    const currentMode =
+      typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("mode")?.trim() : null;
     const start = settingsHeroSwipeStartRef.current;
     settingsHeroSwipeStartRef.current = null;
     if (!start) return;
+    if (currentMode === "upload") return;
     const dx = touch.clientX - start.x;
     const dy = touch.clientY - start.y;
     if (dy <= 0) return;
     if (Math.abs(dx) > SETTINGS_HERO_SWIPE_CLOSE_MAX_SIDEWAYS_PX) return;
     const elapsedMs = Math.max(1, performance.now() - start.at);
     const velocity = dy / elapsedMs;
-    if (dy >= SETTINGS_HERO_SWIPE_CLOSE_DISTANCE_PX || velocity >= SETTINGS_HERO_SWIPE_CLOSE_MIN_VELOCITY) {
+    if (
+      dy >= SETTINGS_HERO_SWIPE_CLOSE_DISTANCE_PX ||
+      (dy >= SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX && velocity >= SETTINGS_HERO_SWIPE_CLOSE_MIN_VELOCITY)
+    ) {
       requestCloseSettings();
     }
   };
@@ -1713,7 +1722,6 @@ export function AdminApp() {
       );
       fireSuccessHaptic();
       requestParentHaptic("success");
-      notifyUserImported();
       showSuccessNotice(
         artwork.posterCaptureFailed
           ? "Import complete. Video artwork added."
@@ -1721,6 +1729,9 @@ export function AdminApp() {
       );
       await refreshTracks();
       await refreshStorage();
+      if (keepImportPageOpen) {
+        notifyUserImported();
+      }
       await notifyUploadSuccess();
     } catch (error) {
       clearImportNotice();
@@ -1885,12 +1896,30 @@ export function AdminApp() {
     try {
       const activePlaylist = playlists.find((playlist) => playlist.isActive);
       if (!activePlaylist) throw new Error("No active playlist");
+      const nextPlaylistName = nukePlaylistName.trim() || activePlaylist.name;
+      if (nextPlaylistName !== activePlaylist.name) {
+        await renamePlaylistInDb(activePlaylist.id, nextPlaylistName);
+      }
       const result = await clearPlaylistInDb(activePlaylist.id);
       setStatus(
         result.deletedTracks > 0
-          ? `Playlist cleared. Removed ${result.deletedTracks} unshared track${result.deletedTracks === 1 ? "" : "s"}.`
-          : "Playlist cleared."
+          ? `Playlist cleared as "${nextPlaylistName}". Removed ${result.deletedTracks} unshared track${
+              result.deletedTracks === 1 ? "" : "s"
+            }.`
+          : `Playlist cleared as "${nextPlaylistName}".`
       );
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: "polyplay:nuke-success" }, window.location.origin);
+          window.parent.postMessage({ type: "polyplay:close-settings" }, window.location.origin);
+        }
+      } catch {
+        // Ignore postMessage failures.
+      }
+      setNukePlaylistName("");
+      setIsNukePromptOpen(false);
+      setIsNukeRenamePromptOpen(false);
+      setNukeCountdownMs(2000);
       await refreshTracks();
       await refreshStorage();
       await refreshPlaylists();
@@ -1902,8 +1931,27 @@ export function AdminApp() {
   };
 
   const onNuke = () => {
-    if (!hasTracks || isNukeRunning || isNukePromptOpen) return;
+    if (!hasTracks || isNukeRunning || isNukePromptOpen || isNukeRenamePromptOpen) return;
+    const activePlaylist = playlists.find((playlist) => playlist.isActive);
+    if (!activePlaylist) {
+      setStatus("No active playlist to nuke.");
+      return;
+    }
+    setNukePlaylistName(activePlaylist.name);
+    setIsNukeRenamePromptOpen(true);
+    setStatus("Name the replacement empty playlist or cancel.");
+    fireLightHaptic();
+    requestParentHaptic("success");
+  };
+
+  const confirmNukeRename = () => {
+    if (isNukeRunning) return;
+    if (!nukePlaylistName.trim()) {
+      setStatus("Name the replacement playlist first.");
+      return;
+    }
     nukeGenerationRef.current += 1;
+    setIsNukeRenamePromptOpen(false);
     setNukeCountdownMs(2000);
     setIsNukePromptOpen(true);
     setStatus("Nuke Playlist arming.");
@@ -1918,6 +1966,8 @@ export function AdminApp() {
       nukeTimerRef.current = null;
     }
     setIsNukePromptOpen(false);
+    setIsNukeRenamePromptOpen(false);
+    setNukePlaylistName("");
     setNukeCountdownMs(2000);
     setStatus("Nuke aborted.");
   };
@@ -2083,6 +2133,7 @@ export function AdminApp() {
       localStorage.removeItem(GRATITUDE_LAST_PROMPT_KEY);
       localStorage.setItem(GRATITUDE_SETTINGS_KEY, JSON.stringify(DEFAULT_GRATITUDE_SETTINGS));
       sessionStorage.removeItem(SPLASH_SESSION_KEY);
+      setThemeSelection("dark");
       setCustomThemeSlot("crimson");
       setAuraColor("#bc84ff");
       setSavedAuraColor("#bc84ff");
@@ -2095,6 +2146,9 @@ export function AdminApp() {
       await refreshPlaylists();
       emitLibraryUpdated();
       if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:theme-mode-updated", themeMode: "dark" }, window.location.origin);
+        window.parent.postMessage({ type: "polyplay:custom-theme-slot-updated", slot: "crimson" }, window.location.origin);
+        window.parent.postMessage({ type: "polyplay:aura-color-updated", color: null }, window.location.origin);
         window.parent.postMessage({ type: "polyplay:factory-reset" }, window.location.origin);
       }
       setStatus("Factory reset complete. Defaults and demo tracks restored.");
@@ -3693,6 +3747,41 @@ export function AdminApp() {
         </div>
       )}
 
+      {isNukeRenamePromptOpen && (
+        <section
+          className="admin-nuke-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Rename playlist before nuke"
+        >
+          <div className="admin-nuke-modal__card">
+            <h3 className="admin-nuke-modal__title">Rename Before Nuke</h3>
+            <label className="grid gap-1 text-sm text-slate-300">
+              New empty playlist name
+              <input
+                type="text"
+                value={nukePlaylistName}
+                onChange={(event) => setNukePlaylistName(event.currentTarget.value)}
+                className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
+                placeholder="Playlist name"
+                autoFocus
+              />
+            </label>
+            <p className="admin-nuke-modal__sub">
+              Confirm the name first. Cancel aborts the entire nuke sequence.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button variant="secondary" onClick={abortNuke}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={confirmNukeRename} disabled={nukePlaylistName.trim().length === 0}>
+                OK
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
+
       {isNukePromptOpen && (
         <section
           className="admin-nuke-modal"
@@ -3706,7 +3795,9 @@ export function AdminApp() {
           <div className="admin-nuke-modal__card">
             <h3 className="admin-nuke-modal__title">Nuke Playlist Armed</h3>
             <p className="admin-nuke-modal__sub">
-              {nukeCountdownMs > 0 ? "Arming playlist clear in" : "Playlist clear is armed."}
+              {nukeCountdownMs > 0
+                ? `Arming playlist clear in. "${nukePlaylistName}" will be the new empty playlist name.`
+                : `Playlist clear is armed. "${nukePlaylistName}" will be the new empty playlist name.`}
             </p>
             <div className="admin-nuke-modal__count">
               {nukeCountdownMs > 0 ? `${(nukeCountdownMs / 1000).toFixed(1)}s` : "READY"}
@@ -3715,7 +3806,11 @@ export function AdminApp() {
               <Button variant="secondary" onClick={abortNuke}>
                 Cancel
               </Button>
-              <Button variant="danger" onClick={() => void runNuke()} disabled={nukeCountdownMs > 0 || isNukeRunning}>
+              <Button
+                variant="danger"
+                onClick={() => void runNuke()}
+                disabled={nukeCountdownMs > 0 || isNukeRunning}
+              >
                 Nuke Playlist
               </Button>
             </div>

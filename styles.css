@@ -319,6 +319,19 @@ main,
   animation: app-nuke-quake 860ms cubic-bezier(0.18, 0.7, 0.28, 1.02);
 }
 
+.app.is-nuking::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(170, 255, 86, 0.4) 0%, rgba(170, 255, 86, 0.18) 34%, rgba(170, 255, 86, 0) 72%),
+    rgba(114, 255, 84, 0.2);
+  mix-blend-mode: screen;
+  animation: app-nuke-flash 860ms ease-out forwards;
+}
+
 @keyframes app-nuke-quake {
   0% {
     transform: translate3d(0, 0, 0) rotate(0);
@@ -343,6 +356,21 @@ main,
   }
   100% {
     transform: translate3d(0, 0, 0) rotate(0);
+  }
+}
+
+@keyframes app-nuke-flash {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  34% {
+    opacity: 0.72;
+  }
+  100% {
+    opacity: 0;
   }
 }
 
@@ -383,7 +411,7 @@ main,
     0 16px 34px rgba(8, 10, 16, 0.32),
     0 28px 64px rgba(8, 10, 16, 0.18);
   position: relative;
-  overflow: visible;
+  overflow: hidden;
   isolation: isolate;
 }
 
@@ -1613,17 +1641,19 @@ body.theme-custom.theme-custom-mx::before {
 }
 
 body.theme-custom.theme-custom-mx::after {
-  opacity: 0.12;
+  opacity: 0.1;
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 140'%3E%3Cg fill='none' stroke='%23f7f2ec' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M34 55c2-20 18-33 26-33s24 13 26 33c1 13-4 23-14 31-7 6-10 15-12 29-2-14-5-23-12-29-10-8-15-18-14-31Z'/%3E%3Ccircle cx='48' cy='58' r='6'/%3E%3Ccircle cx='72' cy='58' r='6'/%3E%3Cpath d='M48 88c6 5 18 5 24 0'/%3E%3Cpath d='M60 92v18'/%3E%3Cpath d='M42 114c6-4 12-5 18-5s12 1 18 5'/%3E%3Cpath d='M34 46c8-5 16-8 26-8s18 3 26 8'/%3E%3C/g%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 140'%3E%3Cg fill='none' stroke='%23f7f2ec' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M34 55c2-20 18-33 26-33s24 13 26 33c1 13-4 23-14 31-7 6-10 15-12 29-2-14-5-23-12-29-10-8-15-18-14-31Z'/%3E%3Ccircle cx='48' cy='58' r='6'/%3E%3Ccircle cx='72' cy='58' r='6'/%3E%3Cpath d='M48 88c6 5 18 5 24 0'/%3E%3Cpath d='M60 92v18'/%3E%3Cpath d='M42 114c6-4 12-5 18-5s12 1 18 5'/%3E%3Cpath d='M34 46c8-5 16-8 26-8s18 3 26 8'/%3E%3C/g%3E%3C/svg%3E"),
+    url("/mx-dayofdead-lines.png"),
+    url("/mx-dayofdead-lines.png"),
+    url("/mx-dayofdead-lines.png"),
+    url("/mx-dayofdead-lines.png"),
     radial-gradient(18% 16% at 18% 24%, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 76%),
     radial-gradient(18% 16% at 76% 68%, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 76%);
-  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat;
-  background-size: 98px 114px, 84px 98px, auto, auto;
-  background-position: 10% 18%, 74% 66%, 18% 24%, 76% 68%;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+  background-size: 118px 100px, -104px 90px, 92px 78px, -112px 96px, auto, auto;
+  background-position: 6% 18%, 82% 20%, 22% 74%, 74% 82%, 18% 24%, 76% 68%;
   filter: none;
-  animation: mx-motif-float 38s ease-in-out infinite;
+  animation: mx-motif-float 88s ease-in-out infinite;
 }
 
 body.theme-custom.theme-custom-rasta::before {
@@ -1645,18 +1675,22 @@ body.theme-custom.theme-custom-rasta::before {
 }
 
 body.theme-custom.theme-custom-rasta::after {
-  opacity: 0.14;
+  opacity: 0.12;
   background:
+    url("/rastaweed.png"),
+    url("/rastaweed.png"),
+    url("/rastaweed.png"),
+    url("/rastaweed.png"),
     url("/rastaweed.png"),
     url("/rastaweed.png"),
     radial-gradient(18% 16% at 18% 14%, rgba(255, 221, 126, 0.07), rgba(255, 221, 126, 0) 76%),
     radial-gradient(24% 18% at 76% 72%, rgba(7, 137, 48, 0.1), rgba(7, 137, 48, 0) 74%),
     radial-gradient(28% 18% at 60% 24%, rgba(218, 18, 26, 0.08), rgba(218, 18, 26, 0) 74%);
-  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
-  background-size: 96px 96px, 132px 132px, auto, auto, auto;
-  background-position: 84% 54%, 90% 14%, 18% 14%, 76% 72%, 60% 24%;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+  background-size: 94px 108px, -128px 118px, 82px 96px, -118px 104px, 70px 84px, -98px 90px, auto, auto, auto;
+  background-position: 82% 56%, 88% 16%, 20% 70%, 64% 80%, 34% 24%, 56% 14%, 18% 14%, 76% 72%, 60% 24%;
   filter: saturate(0.92) brightness(0.72) blur(0.1px);
-  animation: rasta-leaf-float 26s ease-in-out infinite;
+  animation: rasta-leaf-float 68s ease-in-out infinite;
 }
 
 @keyframes rasta-smoke-rise {
@@ -1673,15 +1707,22 @@ body.theme-custom.theme-custom-rasta::after {
 
 @keyframes rasta-leaf-float {
   0% {
-    background-position: 84% 54%, 90% 14%, 18% 14%, 76% 72%, 60% 24%;
+    background-position: 82% 56%, 88% 16%, 20% 70%, 64% 80%, 34% 24%, 56% 14%, 18% 14%, 76% 72%, 60% 24%;
     transform: translate3d(0, 0, 0) rotate(0deg);
   }
+  25% {
+    background-position: 78% 52%, 84% 12%, 24% 64%, 60% 76%, 40% 20%, 52% 18%, 18% 14%, 76% 72%, 60% 24%;
+  }
   50% {
-    transform: translate3d(0.6%, -1%, 0) rotate(1.1deg);
+    background-position: 74% 48%, 80% 10%, 28% 60%, 56% 72%, 46% 18%, 48% 22%, 18% 14%, 76% 72%, 60% 24%;
+    transform: translate3d(0.18%, -0.28%, 0) rotate(0.16deg);
+  }
+  75% {
+    background-position: 76% 50%, 82% 12%, 26% 62%, 58% 74%, 42% 20%, 50% 20%, 18% 14%, 76% 72%, 60% 24%;
   }
   100% {
-    background-position: 82% 46%, 88% 8%, 18% 14%, 76% 72%, 60% 24%;
-    transform: translate3d(0, 0, 0) rotate(-0.7deg);
+    background-position: 70% 44%, 76% 8%, 32% 56%, 52% 68%, 50% 16%, 44% 24%, 18% 14%, 76% 72%, 60% 24%;
+    transform: translate3d(0, 0, 0) rotate(-0.08deg);
   }
 }
 
@@ -1699,15 +1740,22 @@ body.theme-custom.theme-custom-rasta::after {
 
 @keyframes mx-motif-float {
   0% {
-    background-position: 8% 16%, 78% 18%, 62% 72%, 16% 22%, 50% 18%, 82% 68%;
+    background-position: 6% 18%, 82% 20%, 22% 74%, 74% 82%, 18% 24%, 76% 68%;
     transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  25% {
+    background-position: 10% 20%, 78% 22%, 26% 70%, 70% 78%, 18% 24%, 76% 68%;
   }
   50% {
-    transform: translate3d(-0.8%, 1%, 0) rotate(-0.8deg);
+    background-position: 14% 24%, 74% 26%, 30% 66%, 66% 74%, 18% 24%, 76% 68%;
+    transform: translate3d(-0.18%, 0.24%, 0) rotate(-0.12deg);
+  }
+  75% {
+    background-position: 10% 22%, 76% 24%, 28% 68%, 68% 76%, 18% 24%, 76% 68%;
   }
   100% {
-    background-position: 10% 12%, 76% 24%, 58% 66%, 16% 22%, 50% 18%, 82% 68%;
-    transform: translate3d(0, 0, 0) rotate(0deg);
+    background-position: 2% 26%, 70% 30%, 34% 62%, 62% 70%, 18% 24%, 76% 68%;
+    transform: translate3d(0, 0, 0) rotate(0.06deg);
   }
 }
 
@@ -5838,14 +5886,14 @@ body.mute-freeze .track-backdrop {
 .topbar::after {
   content: "";
   position: absolute;
-  inset: -16px;
-  border-radius: 30px;
-  opacity: 0.28;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0.2;
   background:
     radial-gradient(120% 80% at 50% 0%, rgba(255, 200, 130, 0.09), transparent 62%),
     radial-gradient(120% 120% at 50% 100%, rgba(var(--aura-rgb, 188, 132, 255), 0.08), transparent 70%),
-    radial-gradient(90% 140% at 0% 50%, rgba(255, 255, 255, 0.035), transparent 72%),
-    radial-gradient(90% 140% at 100% 50%, rgba(255, 255, 255, 0.035), transparent 72%);
+    radial-gradient(90% 140% at 0% 50%, rgba(255, 255, 255, 0.018), transparent 72%),
+    radial-gradient(90% 140% at 100% 50%, rgba(255, 255, 255, 0.018), transparent 72%);
   pointer-events: none;
   z-index: 0;
 }

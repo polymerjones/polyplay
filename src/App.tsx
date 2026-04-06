@@ -483,6 +483,7 @@ export default function App() {
   });
   const [isSplashDismissing, setIsSplashDismissing] = useState(false);
   const [isNuking, setIsNuking] = useState(false);
+  const [isPlaylistNuking, setIsPlaylistNuking] = useState(false);
   const [isActivePlaylistDirty, setIsActivePlaylistDirty] = useState<boolean>(() => {
     try {
       return localStorage.getItem(ACTIVE_PLAYLIST_DIRTY_KEY) === "true";
@@ -599,6 +600,7 @@ export default function App() {
   const nukeTimeoutRef = useRef<number | null>(null);
   const isNukingRef = useRef(false);
   const nukeFinalizeStartedRef = useRef(false);
+  const playlistNukeFinalizeStartedRef = useRef(false);
   const teardownAudioListenersRef = useRef<(() => void) | null>(null);
   const lastPlayedAtByTrackRef = useRef<Record<string, number>>({});
   const audioInstanceSeqRef = useRef(0);
@@ -1144,6 +1146,34 @@ export default function App() {
     }, animationMs);
   };
 
+  const beginPlaylistNukeSequence = () => {
+    if (isNukingRef.current) return;
+    isNukingRef.current = true;
+    playlistNukeFinalizeStartedRef.current = false;
+    teardownCurrentAudio();
+    pendingAutoPlayRef.current = false;
+    setTracks([]);
+    setCurrentTrackId(null);
+    setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(false);
+    setIsFullscreenPlayerOpen(false);
+    setShowOpenState(false);
+    setIsPlaylistNuking(true);
+    setIsNuking(true);
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const animationMs = prefersReducedMotion ? 140 : 860;
+    if (nukeTimeoutRef.current !== null) {
+      window.clearTimeout(nukeTimeoutRef.current);
+    }
+    nukeTimeoutRef.current = window.setTimeout(() => {
+      void completePlaylistNukeSequence("fallback-timeout");
+    }, animationMs);
+  };
+
   const completeNukeSequence = async (source: "animationend" | "fallback-timeout") => {
     if (nukeFinalizeStartedRef.current) return;
     nukeFinalizeStartedRef.current = true;
@@ -1153,6 +1183,20 @@ export default function App() {
     }
     logAudioDebug("nuke:complete", { source });
     await nukeAppData();
+    setIsNuking(false);
+    isNukingRef.current = false;
+  };
+
+  const completePlaylistNukeSequence = async (source: "animationend" | "fallback-timeout") => {
+    if (playlistNukeFinalizeStartedRef.current) return;
+    playlistNukeFinalizeStartedRef.current = true;
+    if (nukeTimeoutRef.current !== null) {
+      window.clearTimeout(nukeTimeoutRef.current);
+      nukeTimeoutRef.current = null;
+    }
+    logAudioDebug("playlist-nuke:complete", { source });
+    await refreshTracks({ allowEmptyDemoFallback: false });
+    setIsPlaylistNuking(false);
     setIsNuking(false);
     isNukingRef.current = false;
   };
@@ -1792,8 +1836,12 @@ export default function App() {
         }
         return;
       }
-      if (type === "polyplay:nuke-request" || type === "polyplay:nuke-success") {
+      if (type === "polyplay:nuke-request") {
         beginNukeSequence();
+        return;
+      }
+      if (type === "polyplay:nuke-success") {
+        beginPlaylistNukeSequence();
         return;
       }
       if (type === "polyplay:close-settings") {
@@ -4302,6 +4350,10 @@ export default function App() {
             onAnimationEnd={(event) => {
               if (!isNuking) return;
               if (event.target !== event.currentTarget) return;
+              if (isPlaylistNuking) {
+                void completePlaylistNukeSequence("animationend");
+                return;
+              }
               void completeNukeSequence("animationend");
             }}
           >

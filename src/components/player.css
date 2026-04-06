@@ -1027,19 +1027,15 @@ html[data-theme="light"] .mini-player-bar::before {
   font-size: 12px;
 }
 
-@media (pointer: fine) {
-  .mini-player-bar__title {
-    -webkit-user-select: text;
-    user-select: text;
-    cursor: text;
-  }
-
-  .mini-player-bar__sub,
-  .mini-player-bar__header-actions,
-  .mini-player-bar__compact-toggle {
-    -webkit-user-select: none;
-    user-select: none;
-  }
+.mini-player-bar__title,
+.mini-player-bar__sub,
+.fullscreen-player-shell__meta h2,
+.fullscreen-player-shell__meta p,
+.mini-player-bar__header-actions,
+.mini-player-bar__compact-toggle {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .mini-player-bar__compact-toggle {
