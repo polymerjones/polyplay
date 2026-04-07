@@ -65,20 +65,65 @@ Use alongside any existing planning board already in the repo, but treat this fi
 ---
 
 ## Active task
-**Current active task:** `Onboarding welcome card alignment polish`
+**Current active task:** `Long MP3 import failure containment`
 
-**Diagnosis note — 2026-04-05 Codex:**
-- Files inspected:
-  - `src/components/EmptyLibraryWelcome.tsx`
-  - `src/index.css`
-  - `styles.css`
-- Likely root cause:
-  - The welcome card’s translucent surface, tight padding, and heading line-height/letter-spacing combo still push the “Hey new person!” line into a tall stacked block, which makes the close button, body copy, and CTA feel misaligned vertically.
-  - The guided-cta gradient/box-shadow stack introduces extra decorative lines that lift the button visually off-center, so the primary action feels heavy compared to the rest of the card.
-- Implementation plan:
-  - Keep the markup intact but relax the card’s surface/padding so the title and CTA can align more comfortably in a single cohesive block.
-  - Simplify the guided-cta styling to a cleaner gradient/shadow set so the “Start Quick Tour” button reads centered without the nervous double-line treatment.
-  - Adjust the title/body max-widths and spacing to feel intentional and calm while leaving the copy untouched.
+**Diagnosis note — 2026-04-06 Codex:**
+- Files inspected so far:
+  - `src/admin/AdminApp.tsx`
+  - `src/lib/db.ts`
+  - `src/lib/artwork/waveformArtwork.ts`
+  - `src/lib/storage/db.ts`
+  - `src/lib/storage/library.ts`
+  - `src/lib/iosMediaImport.ts`
+  - `src/App.tsx`
+  - `ios/App/App/PolyplayBridgeViewController.swift`
+- Working hypothesis:
+  - The highest-risk path is long-audio import without user/embedded artwork. `addTrackToDb(...)` writes the large audio blob first, then falls back to auto artwork generation via `generateWaveformArtwork(...)`, which decodes the entire audio file in Web Audio.
+  - For hour-plus MP3s, that decode step is likely far larger in memory than the compressed file size and can plausibly crash/reload the webview, which matches the observed long importing toast followed by screen refresh and failed import.
+  - The parent/overlay refresh path in `src/App.tsx` looks more like a secondary amplifier after success messaging, not the first obvious root cause.
+- Narrow audit plan:
+  - Confirm whether metadata parse, auto-waveform artwork generation, IndexedDB/localStorage writes, or parent refresh is the first dangerous step for long files.
+  - Keep scope limited to the long-audio import path only.
+  - Do not implement until the root cause is tight enough for a surgical fix.
+- Diagnosis update:
+  - User clarified the bug appears iOS-only. That matches the code path: iOS uses the native picker bridge and then re-materializes the selected file into JS with `fetch(...).blob()` in `src/lib/iosMediaImport.ts` before metadata parse or import begin.
+  - Primary likely root cause is memory pressure, not timeout and not a logical refresh loop. The most dangerous step is the no-artwork fallback inside `src/lib/db.ts`, where `addTrackToDb(...)` stores the large audio blob and then calls `generateWaveformArtwork(...)`. That path runs `blob.arrayBuffer()` and `decodeAudioData(...)` in `src/lib/artwork/waveformArtwork.ts`, which is a poor fit for hour-plus audio on iOS/WKWebView.
+  - Metadata parse in `src/admin/AdminApp.tsx` is also heavy because it reads the whole file into a `Uint8Array`, but it happens earlier during file selection. The observed "long importing toast -> screen refresh" lines up better with the import-submit path than with metadata inspection.
+  - The overlay/app refresh path in `src/App.tsx` is a secondary amplifier only after success messaging. It eagerly reloads all track blobs on refresh, which can worsen iOS memory pressure, but it does not appear to be the first failure trigger here.
+  - There is an additional risk multiplier: `addTrackToDb(...)` writes the audio blob to IndexedDB before the auto-artwork fallback finishes. If iOS reloads/crashes during waveform-art generation, the library row is never saved but the large blob may already exist as orphaned storage, which fits the report that the app can feel bricked afterward.
+- Safest next implementation step:
+  - Keep the fix surgical to iOS long-audio import.
+  - Skip waveform-based auto artwork generation for imports above a conservative size/duration threshold on iOS and fall back directly to a cheap static placeholder poster, or allow no poster and let existing UI handle missing art.
+  - In the same narrow pass, reorder or guard the import write so a failure before `saveLibrary(...)` does not leave a large orphaned blob behind.
+- Containment plan — 2026-04-06 Codex:
+  - Files to change:
+    - `src/lib/db.ts`
+    - `src/lib/artwork/waveformArtwork.ts` only if a tiny helper is needed
+  - Narrow implementation plan:
+    - Add an iOS-only long-audio guard in `addTrackToDb(...)` so imports above a conservative byte threshold do not call waveform-based auto-art generation.
+    - Keep fallback behavior cheap: allow no generated poster rather than decoding the full audio blob on iOS.
+    - Wrap blob writes in cleanup so if import fails after audio/blob storage begins, any newly written blob keys are deleted before the error escapes.
+- Fix implemented — 2026-04-06 Codex:
+  - Exact fix made:
+    - Added an iOS-only long-audio containment guard in `src/lib/db.ts` so imports with no provided artwork skip waveform-based auto-art generation when the audio file is larger than `25 MB` or longer than `20 minutes`.
+    - The guard checks file size first, then only falls back to a metadata-only duration probe when the size threshold did not already trigger.
+    - The guarded path now allows the track import to continue without generated poster art instead of decoding the full audio blob in Web Audio on iOS.
+    - `addTrackToDb(...)` now resolves/validates the target playlist before blob writes begin.
+    - `addTrackToDb(...)` now tracks newly written blob keys and deletes them if any later import step fails before the library save completes, including failures during blob writes and failures in `saveLibrary(...)`.
+  - Exact files changed:
+    - `src/lib/db.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low to moderate.
+    - Main behavior change is intentional: some long iOS imports without artwork will now land with no generated poster instead of auto waveform art.
+    - The guard is scoped to iOS plus long audio plus no supplied artwork, so shorter imports and imports with embedded/manual art keep their old behavior.
+    - Blob cleanup touches import persistence, so failed-import recovery should be checked once on device.
+  - QA still needed:
+    - Repro the original 1h+ MP3 import on iOS with no manual artwork and confirm import succeeds without webview refresh.
+    - Repeat on both a new playlist and an existing playlist.
+    - Confirm the imported track remains playable and visible after closing/reopening the app.
+    - Confirm smaller iOS imports without artwork still get generated poster art.
+    - Confirm imports with embedded artwork still preserve that artwork.
 
 ---
 

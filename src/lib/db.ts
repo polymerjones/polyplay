@@ -3,7 +3,7 @@ import { DEMO_WAVEFORM_PEAKS_BY_ID } from "../assets/demo/demoPeaks";
 import { generateWaveformArtwork } from "./artwork/waveformArtwork";
 import { generateVideoPoster } from "./artwork/videoPoster";
 import { getMediaUrl, revokeAllMediaUrls, revokeMediaUrl } from "./player/media";
-import { isConstrainedMobileDevice } from "./platform";
+import { isConstrainedMobileDevice, isIosSafari } from "./platform";
 import { deleteBlob, getBlob, initDB, listBlobStats, putBlob } from "./storage/db";
 import { clearCompetingLibraryCandidates, loadLibrary, saveLibrary, type LibraryState, type TrackRecord } from "./storage/library";
 import { getThemeSelectionFromState, parseCustomThemeSlot, type ThemeSelection } from "./themeConfig";
@@ -56,6 +56,9 @@ const STORAGE_CAP_BYTES_DESKTOP = 4 * 1024 * 1024 * 1024;
 const STORAGE_CAP_HEADROOM_BYTES = 128 * 1024 * 1024;
 const THEME_MODE_KEY = "polyplay_themeMode";
 const CUSTOM_THEME_SLOT_KEY = "polyplay_customThemeSlot_v1";
+const IOS_LONG_AUDIO_AUTO_ARTWORK_SKIP_BYTES = 25 * 1024 * 1024;
+const IOS_LONG_AUDIO_AUTO_ARTWORK_SKIP_DURATION_SEC = 20 * 60;
+const AUDIO_METADATA_LOAD_TIMEOUT_MS = 5000;
 
 function clampAura(aura: number): number {
   return Math.max(0, Math.min(10, Math.round(aura)));
@@ -63,6 +66,40 @@ function clampAura(aura: number): number {
 
 function now(): number {
   return Date.now();
+}
+
+async function getAudioDurationFromBlob(blob: Blob): Promise<number | null> {
+  if (typeof document === "undefined" || typeof URL === "undefined" || typeof Audio === "undefined") return null;
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    return await new Promise<number | null>((resolve) => {
+      const audio = new Audio();
+      let settled = false;
+      const cleanup = () => {
+        audio.removeAttribute("src");
+        audio.load();
+        URL.revokeObjectURL(objectUrl);
+      };
+      const finish = (duration: number | null) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeoutId);
+        cleanup();
+        resolve(duration);
+      };
+      const timeoutId = window.setTimeout(() => finish(null), AUDIO_METADATA_LOAD_TIMEOUT_MS);
+      audio.preload = "metadata";
+      audio.onloadedmetadata = () => {
+        const duration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : null;
+        finish(duration);
+      };
+      audio.onerror = () => finish(null);
+      audio.src = objectUrl;
+    });
+  } catch {
+    URL.revokeObjectURL(objectUrl);
+    return null;
+  }
 }
 
 function getStoredArtworkThemeSelection(): ThemeSelection {
@@ -373,11 +410,29 @@ export async function addTrackToDb(params: {
   const ts = now();
   const trackId = params.trackId?.trim() || makeId();
   const audioKey = makeId();
+  const audioBytes = params.audio.size || 0;
+  const artVideoBytes = params.artVideo?.size || 0;
+  const shouldEvaluateLongIosAudioGuard = isIosSafari() && !params.artPoster && !params.artVideo;
+  const longIosAudioBySize = shouldEvaluateLongIosAudioGuard && audioBytes > IOS_LONG_AUDIO_AUTO_ARTWORK_SKIP_BYTES;
+  const audioDurationSec =
+    shouldEvaluateLongIosAudioGuard && !longIosAudioBySize ? await getAudioDurationFromBlob(params.audio) : null;
+  const longIosAudioByDuration =
+    shouldEvaluateLongIosAudioGuard &&
+    Number.isFinite(audioDurationSec) &&
+    (audioDurationSec ?? 0) > IOS_LONG_AUDIO_AUTO_ARTWORK_SKIP_DURATION_SEC;
+  const skipWaveformArtworkForLongIosAudio = longIosAudioBySize || longIosAudioByDuration;
   let artKey: string | null = null;
   let artVideoKey: string | null = null;
   let artworkSource: "auto" | "user" = "user";
   let artPoster = params.artPoster ?? null;
   let posterBytes = 0;
+  const library = loadLibrary();
+  const playlistId =
+    params.targetPlaylistId && library.playlistsById[params.targetPlaylistId] ? params.targetPlaylistId : library.activePlaylistId;
+  const playlist = playlistId ? library.playlistsById[playlistId] : undefined;
+  if (!playlist && !params.isDemo) {
+    throw new Error(IMPORT_REQUIRES_PLAYLIST_MESSAGE);
+  }
 
   if (!artPoster && params.artVideo) {
     artPoster = await generateVideoPoster(params.artVideo).catch(() => null);
@@ -390,33 +445,56 @@ export async function addTrackToDb(params: {
     }).catch(() => null);
     if (artPoster) artworkSource = "auto";
   }
-  const audioBytes = params.audio.size || 0;
-  const artVideoBytes = params.artVideo?.size || 0;
   posterBytes = artPoster?.size || 0;
   await ensureStorageCapacity(audioBytes + artVideoBytes + posterBytes);
-  await putBlob(audioKey, params.audio, { type: "audio", createdAt: ts });
-  if (artPoster) {
-    artKey = makeId();
-    await putBlob(artKey, artPoster, { type: "image", createdAt: ts });
-  }
-  if (params.artVideo) {
-    artVideoKey = makeId();
-    await putBlob(artVideoKey, params.artVideo, { type: "video", createdAt: ts });
-  }
-  if (!artKey && !artVideoKey) {
-    const generatedPoster = await generateWaveformArtwork({
-      audioBlob: params.audio,
-      themeSelection: getStoredArtworkThemeSelection(),
-      trackId
-    }).catch(() => null);
-    if (generatedPoster) {
+  const createdBlobKeys = new Set<string>();
+  try {
+    await putBlob(audioKey, params.audio, { type: "audio", createdAt: ts });
+    createdBlobKeys.add(audioKey);
+    if (artPoster) {
       artKey = makeId();
-      await putBlob(artKey, generatedPoster, { type: "image", createdAt: ts });
-      artworkSource = "auto";
+      await putBlob(artKey, artPoster, { type: "image", createdAt: ts });
+      createdBlobKeys.add(artKey);
     }
+    if (params.artVideo) {
+      artVideoKey = makeId();
+      await putBlob(artVideoKey, params.artVideo, { type: "video", createdAt: ts });
+      createdBlobKeys.add(artVideoKey);
+    }
+    if (!artKey && !artVideoKey && !skipWaveformArtworkForLongIosAudio) {
+      const generatedPoster = await generateWaveformArtwork({
+        audioBlob: params.audio,
+        themeSelection: getStoredArtworkThemeSelection(),
+        trackId
+      }).catch(() => null);
+      if (generatedPoster) {
+        artKey = makeId();
+        posterBytes = generatedPoster.size || 0;
+        await putBlob(artKey, generatedPoster, { type: "image", createdAt: ts });
+        createdBlobKeys.add(artKey);
+        artworkSource = "auto";
+      }
+    }
+    if (skipWaveformArtworkForLongIosAudio) {
+      console.debug("[artwork:metadata-import]", {
+        phase: "ios-long-audio-auto-art-skipped",
+        trackId,
+        audioBytes,
+        audioDurationSec,
+        thresholdBytes: IOS_LONG_AUDIO_AUTO_ARTWORK_SKIP_BYTES,
+        thresholdDurationSec: IOS_LONG_AUDIO_AUTO_ARTWORK_SKIP_DURATION_SEC
+      });
+    }
+  } catch (error) {
+    await Promise.allSettled(
+      Array.from(createdBlobKeys).map(async (key) => {
+        await deleteBlob(key).catch(() => undefined);
+        revokeMediaUrl(key);
+      })
+    );
+    throw error;
   }
 
-  const library = loadLibrary();
   library.tracksById[trackId] = {
     id: trackId,
     demoId: params.demoId || null,
@@ -440,18 +518,10 @@ export async function addTrackToDb(params: {
   console.debug("[artwork:metadata-import]", {
     phase: "db-store",
     trackId,
-    storedArtworkMime: artPoster?.type || null,
-    storedArtworkBytes: artPoster?.size || 0,
+    storedArtworkMime: artPoster?.type || (artKey ? "image/png" : null),
+    storedArtworkBytes: posterBytes,
     storedArtworkSource: artworkSource
   });
-
-  const playlistId = params.targetPlaylistId && library.playlistsById[params.targetPlaylistId]
-    ? params.targetPlaylistId
-    : library.activePlaylistId;
-  const playlist = playlistId ? library.playlistsById[playlistId] : undefined;
-  if (!playlist && !params.isDemo) {
-    throw new Error(IMPORT_REQUIRES_PLAYLIST_MESSAGE);
-  }
   if (playlist) {
     playlist.trackIds = [trackId, ...(playlist.trackIds || []).filter((id) => id !== trackId)];
     playlist.updatedAt = ts;
@@ -470,6 +540,14 @@ export async function addTrackToDb(params: {
         : []
     });
   } catch (error) {
+    await Promise.allSettled(
+      [audioKey, artKey, artVideoKey]
+        .filter((key): key is string => Boolean(key))
+        .map(async (key) => {
+          await deleteBlob(key).catch(() => undefined);
+          revokeMediaUrl(key);
+        })
+    );
     console.error("[demo-seed]", {
       event: "db-write:failure",
       trackId,
