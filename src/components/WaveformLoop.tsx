@@ -210,7 +210,6 @@ export function WaveformLoop({
   const [editViewportMode, setEditViewportMode] = useState<EditViewportMode>("fit");
   const [shouldPreserveViewRange, setShouldPreserveViewRange] = useState(false);
   const [layoutVersion, setLayoutVersion] = useState(0);
-  const [isTrackSwitching, setIsTrackSwitching] = useState(false);
   const lockedViewRangeRef = useRef<{ start: number; end: number } | null>(null);
   const editingViewRangeRef = useRef<{ start: number; end: number } | null>(null);
   const lastMeasuredSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
@@ -246,7 +245,6 @@ export function WaveformLoop({
   if (loopRegion.active && hasLoopRange) waveClasses.push("is-loop-active");
   if (loopRegion.editing) waveClasses.push("is-loop-editing");
   if (viewSpan < (duration || 0) - MIN_LOOP_SECONDS) waveClasses.push("is-loop-zoomed");
-  if (isTrackSwitching) waveClasses.push("is-track-switching");
 
   const secondsFromClientX = (clientX: number): number => {
     if (!hasDuration || !waveRef.current) return 0;
@@ -631,14 +629,12 @@ export function WaveformLoop({
           storeWaveformPeaks(trackId, nextPeaks);
           setPeaks(nextPeaks);
           setHasResolvedPeaks(true);
-          setIsTrackSwitching(false);
         }
       })
       .catch(() => {
         if (!canceled) {
           setPeaks(fallbackPeaks());
           setHasResolvedPeaks(true);
-          setIsTrackSwitching(false);
         }
       });
 
@@ -888,14 +884,17 @@ export function WaveformLoop({
       return;
     }
     prevTrackIdRef.current = nextTrackId;
-    setIsTrackSwitching(true);
-    if (trackSwitchMaskTimerRef.current !== null) window.clearTimeout(trackSwitchMaskTimerRef.current);
-    trackSwitchMaskTimerRef.current = window.setTimeout(() => {
-      setIsTrackSwitching(false);
-      trackSwitchMaskTimerRef.current = null;
-    }, TRACK_SWITCH_MASK_MS);
     const wave = waveRef.current;
     if (!wave) return;
+    wave.classList.remove("is-track-switching");
+    void wave.offsetWidth;
+    wave.classList.add("is-track-switching");
+    if (trackSwitchMaskTimerRef.current !== null) window.clearTimeout(trackSwitchMaskTimerRef.current);
+    trackSwitchMaskTimerRef.current = window.setTimeout(() => {
+      const activeWave = waveRef.current;
+      if (activeWave) activeWave.classList.remove("is-track-switching");
+      trackSwitchMaskTimerRef.current = null;
+    }, TRACK_SWITCH_MASK_MS);
     wave.classList.remove("is-aura-pulse");
     void wave.offsetWidth;
     wave.classList.add("is-aura-pulse");
@@ -951,12 +950,12 @@ export function WaveformLoop({
         <div className="pc-wave__viewport">
           <canvas
             ref={canvasRef}
-            className={`pc-wave__canvas ${hasResolvedPeaks || isTrackSwitching || peaks.length ? "is-ready" : "is-loading"}`}
+            className={`pc-wave__canvas ${hasResolvedPeaks || peaks.length ? "is-ready" : "is-loading"}`}
           />
           <div className="pc-wave__decor" aria-hidden="true">
             <canvas
               ref={decorCanvasRef}
-              className={`pc-wave__canvas ${hasResolvedPeaks || isTrackSwitching || peaks.length ? "is-ready" : "is-loading"}`}
+              className={`pc-wave__canvas ${hasResolvedPeaks || peaks.length ? "is-ready" : "is-loading"}`}
             />
           </div>
         </div>

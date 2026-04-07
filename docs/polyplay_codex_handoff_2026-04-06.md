@@ -625,6 +625,17 @@ What changed in the second follow-up:
 
 Typecheck:
 - `npm run typecheck` passed
+
+### Follow-up visibility correction
+The next issue was that the mask was still too shell-level and could fail to visibly retrigger on rapid or wraparound switches.
+
+What changed in the third follow-up:
+- track-switch mask retrigger is now imperative on every track-id change
+- the visible flash now renders inside `.pc-wave__viewport`
+- viewport lift was strengthened so the effect shows on iOS and desktop Safari
+
+Typecheck:
+- `npm run typecheck` passed
 - The rest of the cluster remains on the original shared rotation logic.
 
 Why this stayed narrow:

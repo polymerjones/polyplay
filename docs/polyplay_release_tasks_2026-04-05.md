@@ -69,6 +69,40 @@ Use alongside any existing planning board already in the repo, but treat this fi
 
 **Diagnosis note — 2026-04-07 Codex:**
 - Status:
+  - diagnosis confirmed for waveform switch-mask follow-up
+- Focus:
+  - make the flash visible inside the waveform viewport
+  - make sure the mask retriggers on every track change, including wraparound next/prev
+- Files inspected so far:
+  - `src/components/WaveformLoop.tsx`
+  - `src/components/player.css`
+- Findings:
+  - The current mask mainly affects the outer waveform shell, which is too subtle on device because the viewport contents are what the user is watching.
+  - The current `is-track-switching` flag is state-driven, so a fast or overlapping track change can fail to retrigger the CSS animation cleanly if the class never fully leaves/re-enters between switches.
+- Narrow implementation plan:
+  - move the visual emphasis into `.pc-wave__viewport`
+  - trigger the switch-mask class imperatively on each track-id change, with remove/reflow/add semantics
+  - keep the previous-waveform hold and real peak-resolution path unchanged
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Updated `src/components/WaveformLoop.tsx` so the track-switch mask class is retriggered imperatively on every track-id change instead of relying on state transitions alone.
+    - Updated `src/components/player.css` so the visible flash now happens inside `.pc-wave__viewport`, not just on the outer waveform shell.
+    - Strengthened the viewport-level brightness/saturation lift during track switching so the effect reads on iOS and desktop Safari.
+    - Kept the earlier previous-waveform hold behavior unchanged.
+  - Exact files changed:
+    - `src/components/WaveformLoop.tsx`
+    - `src/components/player.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low.
+    - This remains a narrow transition-layer polish and does not change playback or peak generation logic.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm the flash is now visible inside the waveform viewport on iOS.
+    - Confirm the flash is now visible on desktop Safari.
+    - Confirm wraparound `Next` from last track to first track now retriggers the effect.
+- Status:
   - diagnosis confirmed for waveform switch dead-time follow-up
 - Focus:
   - prevent the waveform from going flat during track handoff
