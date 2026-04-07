@@ -209,6 +209,48 @@ If tomorrow’s QA still finds iPhone instability, check for any codepath that s
 
 ## Investigation update — 2026-04-07
 
+### New narrow theme FX color diagnosis
+Another visual-correctness seam was isolated:
+- light mode FX still read purple instead of pink
+- amber theme FX still read purple/orange instead of warm amber/gold
+- crimson theme FX still read purple instead of crimson
+
+Current narrow diagnosis:
+- `src/fx/ambientFxEngine.ts` is not inventing those colors; it reads `--fx-color-1-rgb`, `--fx-color-2-rgb`, `--fx-color-3-rgb`, `--aura-rgb`, and `--color-accent` from CSS.
+- `styles.css` already gives explicit FX palette variables to `merica`, `mx`, and `rasta`.
+- `light`, `custom/amber`, and `custom/crimson` only define accent/aura tokens, so the engine falls back to the root default purple FX palette for those modes.
+
+Safest next step:
+- keep the fix in CSS token definitions only
+- add explicit `--fx-color-*` variables for `light`, `amber`, and `crimson`
+- do not widen into FX engine behavior or particle-system changes
+
+### Theme FX color correction — 2026-04-07
+That palette correction is now implemented.
+
+Files changed:
+- `styles.css`
+- `docs/polyplay_release_tasks_2026-04-05.md`
+
+What changed:
+- `light` now defines explicit pink/rose `--fx-color-*` variables.
+- `custom/amber` now defines explicit warm amber/gold `--fx-color-*` variables.
+- `custom/crimson` now defines explicit crimson/red `--fx-color-*` variables.
+
+Why this was narrow:
+- `src/fx/ambientFxEngine.ts` was already using CSS tokens correctly.
+- The bug was just that these three themes were inheriting the root default purple FX palette because they never overrode `--fx-color-*`.
+- No FX engine behavior, particle density, timing, or theme layout was changed.
+
+Typecheck:
+- `npm run typecheck` passed
+
+Device QA still needed:
+- confirm light mode FX now reads pink rather than purple
+- confirm amber FX now reads warm candle/amber/gold rather than purple-orange
+- confirm crimson FX now reads crimson/red rather than purple
+- confirm merica, mx, and rasta remain unchanged
+
 ### New trust-critical playback diagnosis
 A separate playback regression was inspected after the lazy media-hydration containment:
 - imported tracks show `Missing audio`
@@ -598,6 +640,36 @@ What did not change:
 
 Typecheck:
 - `npm run typecheck` passed
+
+## Import overlay loading containment — 2026-04-07
+
+### Mask the settings/import iframe while it mounts
+A narrow app-side loading containment was implemented for the import/settings overlay.
+
+Files changed:
+- `src/App.tsx`
+- `src/index.css`
+- `docs/polyplay_release_tasks_2026-04-05.md`
+
+What changed:
+- Opening the settings/upload overlay now arms a frame-loading state before the iframe paints.
+- The iframe clears that state on `load`.
+- While loading, the app shows a theme-matched veil over the frame area with a centered shimmer message:
+  - `Loading import panel…`
+  - or `Loading settings panel…`
+
+What did not change:
+- admin/import logic
+- iframe source/page structure
+- broader overlay architecture
+
+Typecheck:
+- `npm run typecheck` passed
+
+QA still needed:
+- verify Import no longer reveals weird background layers while opening
+- verify the loading veil clears once the frame is ready
+- verify Manage mode still opens cleanly
 
 QA still needed:
 - verify track-switch waveform dead time feels masked rather than flat

@@ -69,6 +69,87 @@ Use alongside any existing planning board already in the repo, but treat this fi
 
 **Diagnosis note — 2026-04-07 Codex:**
 - Status:
+  - diagnosis confirmed for narrow theme FX color correction
+- Focus:
+  - make ambient FX colors match the selected theme in light, amber, and crimson modes
+- Files inspected so far:
+  - `styles.css`
+  - `src/fx/ambientFxEngine.ts`
+- Findings:
+  - The ambient FX engine reads `--fx-color-1-rgb`, `--fx-color-2-rgb`, `--fx-color-3-rgb`, `--aura-rgb`, and `--color-accent` from CSS.
+  - `merica`, `mx`, and `rasta` already define explicit FX palette variables.
+  - `light`, `amber`, and `crimson` define accent/aura tokens, but do not define `--fx-color-*`, so the FX engine falls back to the root purple palette.
+- Narrow implementation plan:
+  - add explicit `--fx-color-1-rgb`, `--fx-color-2-rgb`, and `--fx-color-3-rgb` only for `light`, `custom/amber`, and `custom/crimson`
+  - keep the change in `styles.css`
+  - do not alter FX engine behavior or broader theme styling
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Added explicit `--fx-color-1-rgb`, `--fx-color-2-rgb`, and `--fx-color-3-rgb` values for `light`, `custom/amber`, and `custom/crimson` in `styles.css`.
+    - Light mode now resolves to a pink/rose FX palette instead of inheriting the root purple palette.
+    - Amber now resolves to warm candle/amber/gold FX colors.
+    - Crimson now resolves to a crimson/red FX palette instead of purple.
+  - Exact files changed:
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a narrow theme-token correction only.
+  - Regression risk:
+    - Low.
+    - The ambient FX engine behavior is unchanged; only the three affected theme palettes now provide explicit values instead of falling back to root purple tokens.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm light mode FX now reads pink rather than purple.
+    - Confirm amber FX now reads warm amber/gold rather than purple-orange.
+    - Confirm crimson FX now reads crimson/red rather than purple.
+    - Confirm merica, mx, and rasta FX colors are unchanged.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
+  - diagnosis confirmed for narrow import-panel loading containment
+- Focus:
+  - prevent the Import/settings iframe mount from revealing odd transitional background layers
+- Files inspected so far:
+  - `src/App.tsx`
+  - `src/index.css`
+  - `src/admin/AdminApp.tsx`
+- Findings:
+  - The upload/import surface is mounted as an `iframe` inside the settings overlay.
+  - The app currently shows the iframe container immediately, but has no app-side loading veil while `/admin.html?mode=upload` is painting.
+  - That leaves a brief window where the user can see awkward transitional background content before the frame is visually ready.
+- Narrow implementation plan:
+  - add a settings-frame loading state in `src/App.tsx`
+  - set that state when opening the settings/upload panel and clear it on iframe `load`
+  - add a theme-matched loading veil over the iframe area with a centered shimmer message
+  - keep the change scoped to the settings/import overlay only
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Added a settings-frame loading state in `src/App.tsx`.
+    - Opening the settings/upload panel now arms that loading state before the iframe is shown.
+    - The iframe clears the loading state on `load`.
+    - Wrapped the iframe in a local shell and added a centered loading veil over the frame area.
+    - The veil uses the active theme styling and shows a shimmer message:
+      - `Loading import panel…` for upload mode
+      - `Loading settings panel…` for manage mode
+  - Exact files changed:
+    - `src/App.tsx`
+    - `src/index.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a narrow app-side overlay containment for the iframe mount path.
+  - Regression risk:
+    - Low.
+    - It only changes the presentation while the settings iframe is loading.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm Import no longer reveals odd background layers while loading.
+    - Confirm the loading veil matches the active theme and clears once the panel is ready.
+    - Confirm Manage/Settings mode still opens normally.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
   - diagnosis confirmed for waveform switch-mask follow-up
 - Focus:
   - make the flash visible inside the waveform viewport

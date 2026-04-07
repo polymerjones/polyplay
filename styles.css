@@ -75,6 +75,9 @@ html[data-theme="light"] {
   --color-text-primary: #191424;
   --color-accent: #ff63c6;
   --aura-rgb: 255, 99, 198;
+  --fx-color-1-rgb: 255, 124, 202;
+  --fx-color-2-rgb: 255, 240, 247;
+  --fx-color-3-rgb: 224, 92, 170;
   --glow-intensity: 0.95;
 }
 
@@ -133,6 +136,9 @@ html[data-theme="custom"][data-theme-slot="crimson"] {
   --color-text-primary: #fdeef2;
   --color-accent: #cf6f82;
   --aura-rgb: 207, 111, 130;
+  --fx-color-1-rgb: 224, 64, 98;
+  --fx-color-2-rgb: 255, 229, 237;
+  --fx-color-3-rgb: 150, 18, 48;
   --glow-intensity: 1.2;
   --bg-line-rgb: 207, 111, 130;
 }
@@ -153,6 +159,9 @@ html[data-theme="custom"][data-theme-slot="amber"] {
   --color-text-primary: #fff1d8;
   --color-accent: #f0b35b;
   --aura-rgb: 240, 179, 91;
+  --fx-color-1-rgb: 255, 191, 92;
+  --fx-color-2-rgb: 255, 242, 204;
+  --fx-color-3-rgb: 196, 114, 28;
   --glow-intensity: 1.24;
   --bg-line-rgb: 240, 179, 91;
 }

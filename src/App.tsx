@@ -411,6 +411,7 @@ export default function App() {
   const [isCropAudioPromptOpen, setIsCropAudioPromptOpen] = useState(false);
   const [isCropAudioBusy, setIsCropAudioBusy] = useState(false);
   const [settingsPanelMode, setSettingsPanelMode] = useState<"upload" | "manage">("upload");
+  const [isSettingsFrameLoading, setIsSettingsFrameLoading] = useState(false);
   const [isTipsOpen, setIsTipsOpen] = useState(false);
   const [layoutMode, setLayoutMode] = useState<"grid" | "list">("grid");
   const [gratitudeSettings, setGratitudeSettings] = useState<GratitudeSettings>(() => loadGratitudeSettings());
@@ -4110,9 +4111,16 @@ export default function App() {
       pendingSettingsPanelModeRef.current = mode;
       return;
     }
+    setIsSettingsFrameLoading(true);
     setSettingsPanelMode(mode);
     setOverlayPage("settings");
   };
+
+  useEffect(() => {
+    if (overlayPage !== "settings") {
+      setIsSettingsFrameLoading(false);
+    }
+  }, [overlayPage]);
 
   useEffect(() => {
     if (!isAppSettledForSettingsOpen) return;
@@ -4950,11 +4958,23 @@ export default function App() {
                 ✕
               </button>
             </div>
-            <iframe
-              title="Settings"
-              src={`/admin.html?mode=${settingsPanelMode}`}
-              className="app-overlay-frame"
-            />
+            <div className="app-overlay-frame-shell">
+              <iframe
+                title="Settings"
+                src={`/admin.html?mode=${settingsPanelMode}`}
+                className="app-overlay-frame"
+                onLoad={() => setIsSettingsFrameLoading(false)}
+              />
+              {isSettingsFrameLoading && (
+                <div className="app-overlay-frame-loading" aria-live="polite">
+                  <div className="app-overlay-frame-loading__card">
+                    <TextShimmer duration={1.35}>
+                      {settingsPanelMode === "upload" ? "Loading import panel…" : "Loading settings panel…"}
+                    </TextShimmer>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </section>
       )}
