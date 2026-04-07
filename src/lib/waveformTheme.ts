@@ -2,6 +2,7 @@ import type { CustomThemeSlot, ThemeSelection } from "./themeConfig";
 
 export type WaveformThemePalette = {
   idleFill: string;
+  idleUnderlay: string;
   decorStops: [string, string, string];
   progressStops: [string, string, string];
   loopStops: [string, string, string];
@@ -79,6 +80,7 @@ function paletteFromThemeColors(
 
   return {
     idleFill: rgba(idle, idleAlpha),
+    idleUnderlay: rgba(mixRgb(idle, [255, 255, 255], 0.18), Math.min(0.36, idleAlpha * 0.62)),
     decorStops: [rgba(a, 0.46), rgba(b, 0.42), rgba(c, 0.4)],
     progressStops: [rgba(a, progressAlpha), rgba(b, progressAlpha), rgba(c, progressAlpha)],
     loopStops: [rgba(loopA, loopAlpha), rgba(loopB, loopAlpha), rgba(loopC, loopAlpha)],

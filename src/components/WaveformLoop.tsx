@@ -7,6 +7,7 @@ import {
   setRuntimeWaveformPeaks,
   storeWaveformPeaks
 } from "../lib/artwork/waveformArtwork";
+import { getTrackAudioBlobFromDb } from "../lib/db";
 import { getWaveformThemePalette } from "../lib/waveformTheme";
 import type { LoopRegion, Track } from "../types";
 
@@ -56,6 +57,8 @@ const MANUAL_ZOOM_OUT_FULL_THRESHOLD = 0.9;
 const LOOP_REGION_YELLOW = "rgba(255, 214, 92, 0.96)";
 const LOOP_REGION_YELLOW_SOFT = "rgba(255, 232, 150, 0.98)";
 const LOOP_REGION_YELLOW_DEEP = "rgba(255, 196, 76, 0.94)";
+const SHORT_TRACK_WAVEFORM_FETCH_MAX_SECONDS = 12 * 60;
+const TRACK_SWITCH_MASK_MS = 320;
 export function WaveformLoop({
   track,
   currentTime,
@@ -179,6 +182,9 @@ export function WaveformLoop({
   const pendingDragRef = useRef<{ handle: Handle; clientX: number; clientY: number } | null>(null);
   const dragPointerRangeRef = useRef<{ start: number; end: number } | null>(null);
   const prevEditingRef = useRef(loopRegion.editing);
+  const prevTrackIdRef = useRef<string | null>(track?.id ?? null);
+  const hasMountedRef = useRef(false);
+  const trackSwitchMaskTimerRef = useRef<number | null>(null);
 
   const [peaks, setPeaks] = useState<number[]>(() => {
     if (track?.waveformPeaks?.length) return track.waveformPeaks;
@@ -204,6 +210,7 @@ export function WaveformLoop({
   const [editViewportMode, setEditViewportMode] = useState<EditViewportMode>("fit");
   const [shouldPreserveViewRange, setShouldPreserveViewRange] = useState(false);
   const [layoutVersion, setLayoutVersion] = useState(0);
+  const [isTrackSwitching, setIsTrackSwitching] = useState(false);
   const lockedViewRangeRef = useRef<{ start: number; end: number } | null>(null);
   const editingViewRangeRef = useRef<{ start: number; end: number } | null>(null);
   const lastMeasuredSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
@@ -239,6 +246,7 @@ export function WaveformLoop({
   if (loopRegion.active && hasLoopRange) waveClasses.push("is-loop-active");
   if (loopRegion.editing) waveClasses.push("is-loop-editing");
   if (viewSpan < (duration || 0) - MIN_LOOP_SECONDS) waveClasses.push("is-loop-zoomed");
+  if (isTrackSwitching) waveClasses.push("is-track-switching");
 
   const secondsFromClientX = (clientX: number): number => {
     if (!hasDuration || !waveRef.current) return 0;
@@ -573,8 +581,9 @@ export function WaveformLoop({
 
   useEffect(() => {
     let canceled = false;
+    const trackId = track?.id;
 
-    const stored = loadStoredWaveformPeaks(track?.id);
+    const stored = loadStoredWaveformPeaks(trackId);
     if (track?.waveformPeaks?.length) {
       setRuntimeWaveformPeaks(track.id, track.waveformPeaks);
       setPeaks(track.waveformPeaks);
@@ -588,12 +597,6 @@ export function WaveformLoop({
       return;
     }
 
-    if (!track?.audioBlob) {
-      setPeaks(fallbackPeaks());
-      setHasResolvedPeaks(true);
-      return;
-    }
-
     const cached = getRuntimeWaveformPeaks(track?.id);
     if (cached?.length) {
       setPeaks(cached);
@@ -601,29 +604,48 @@ export function WaveformLoop({
       return;
     }
 
-    setPeaks(fallbackPeaks());
+    if (!peaks.length) {
+      setPeaks(fallbackPeaks());
+    }
     setHasResolvedPeaks(false);
 
-    buildPeaksFromAudioBlob(track.audioBlob)
+    const canFetchShortTrackBlob =
+      Boolean(track?.id) &&
+      Boolean(track?.hasAudioSource) &&
+      duration > 0 &&
+      duration <= SHORT_TRACK_WAVEFORM_FETCH_MAX_SECONDS;
+
+    const resolvePeaks = async () => {
+      if (track?.audioBlob) return buildPeaksFromAudioBlob(track.audioBlob);
+      if (canFetchShortTrackBlob && track?.id) {
+        const audioBlob = await getTrackAudioBlobFromDb(track.id);
+        if (audioBlob) return buildPeaksFromAudioBlob(audioBlob);
+      }
+      throw new Error("Waveform peaks unavailable");
+    };
+
+    resolvePeaks()
       .then((nextPeaks) => {
-        if (!canceled) {
-          setRuntimeWaveformPeaks(track.id, nextPeaks);
-          storeWaveformPeaks(track.id, nextPeaks);
+        if (!canceled && trackId) {
+          setRuntimeWaveformPeaks(trackId, nextPeaks);
+          storeWaveformPeaks(trackId, nextPeaks);
           setPeaks(nextPeaks);
           setHasResolvedPeaks(true);
+          setIsTrackSwitching(false);
         }
       })
       .catch(() => {
         if (!canceled) {
           setPeaks(fallbackPeaks());
           setHasResolvedPeaks(true);
+          setIsTrackSwitching(false);
         }
       });
 
     return () => {
       canceled = true;
     };
-  }, [track?.id, track?.audioBlob, track?.waveformPeaks]);
+  }, [duration, track?.audioBlob, track?.hasAudioSource, track?.id, track?.waveformPeaks]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -660,6 +682,11 @@ export function WaveformLoop({
       const x = i * (barWidth + gap);
       const y = (height - h) / 2;
       const inLoop = loopRegion.active && hasDisplayLoopRange && sampleTime >= displayStart && sampleTime <= displayEnd;
+
+      if (!inLoop) {
+        ctx.fillStyle = hasResolvedPeaks ? waveformPalette.idleUnderlay : "rgba(196, 202, 214, 0.14)";
+        ctx.fillRect(x - 0.35, Math.max(0, y - 0.6), barWidth + 0.7, Math.min(height, h + 1.2));
+      }
 
       ctx.fillStyle = inLoop
         ? LOOP_REGION_YELLOW
@@ -834,16 +861,54 @@ export function WaveformLoop({
 
   useEffect(() => {
     if (!enableAuraPulse) return;
-    const onAuraTrigger = () => {
+    const triggerAuraPulse = () => {
       const wave = waveRef.current;
       if (!wave) return;
       wave.classList.remove("is-aura-pulse");
       void wave.offsetWidth;
       wave.classList.add("is-aura-pulse");
     };
+    const onAuraTrigger = () => {
+      triggerAuraPulse();
+    };
     window.addEventListener("polyplay:aura-trigger", onAuraTrigger);
     return () => window.removeEventListener("polyplay:aura-trigger", onAuraTrigger);
   }, [enableAuraPulse]);
+
+  useEffect(() => {
+    const nextTrackId = track?.id ?? null;
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      prevTrackIdRef.current = nextTrackId;
+      return;
+    }
+    const prevTrackId = prevTrackIdRef.current;
+    if (!nextTrackId || prevTrackId === nextTrackId) {
+      if (nextTrackId) prevTrackIdRef.current = nextTrackId;
+      return;
+    }
+    prevTrackIdRef.current = nextTrackId;
+    setIsTrackSwitching(true);
+    if (trackSwitchMaskTimerRef.current !== null) window.clearTimeout(trackSwitchMaskTimerRef.current);
+    trackSwitchMaskTimerRef.current = window.setTimeout(() => {
+      setIsTrackSwitching(false);
+      trackSwitchMaskTimerRef.current = null;
+    }, TRACK_SWITCH_MASK_MS);
+    const wave = waveRef.current;
+    if (!wave) return;
+    wave.classList.remove("is-aura-pulse");
+    void wave.offsetWidth;
+    wave.classList.add("is-aura-pulse");
+  }, [track?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (trackSwitchMaskTimerRef.current !== null) {
+        window.clearTimeout(trackSwitchMaskTimerRef.current);
+        trackSwitchMaskTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!pendingHandle && !draggingHandle) return;
@@ -884,9 +949,15 @@ export function WaveformLoop({
         onContextMenu={(event) => event.preventDefault()}
       >
         <div className="pc-wave__viewport">
-          <canvas ref={canvasRef} className={`pc-wave__canvas ${track ? "is-ready" : "is-loading"}`} />
+          <canvas
+            ref={canvasRef}
+            className={`pc-wave__canvas ${hasResolvedPeaks || isTrackSwitching || peaks.length ? "is-ready" : "is-loading"}`}
+          />
           <div className="pc-wave__decor" aria-hidden="true">
-            <canvas ref={decorCanvasRef} className={`pc-wave__canvas ${track ? "is-ready" : "is-loading"}`} />
+            <canvas
+              ref={decorCanvasRef}
+              className={`pc-wave__canvas ${hasResolvedPeaks || isTrackSwitching || peaks.length ? "is-ready" : "is-loading"}`}
+            />
           </div>
         </div>
         <div className="pc-wave__loop-overlay" aria-hidden="true">

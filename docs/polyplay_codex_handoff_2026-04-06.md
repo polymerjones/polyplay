@@ -419,6 +419,35 @@ What changed:
   - an extra random 10–20px offset from the tap point
   - an independent random rotation
 
+## Merica sequencing update — 2026-04-07
+
+### Stagger accent fireworks instead of firing them all at once
+A narrow FX-engine correction was implemented for the Merica accent burst cadence.
+
+Files changed:
+- `src/fx/ambientFxEngine.ts`
+- `docs/polyplay_release_tasks_2026-04-05.md`
+
+What changed:
+- The every-6th-tap Merica accent still starts with one immediate burst at the tap point.
+- The second and third bursts now fire in sequence after short delays instead of detonating in the same frame.
+- Those follow-up bursts now spawn at independent random positions within the canvas rather than fixed offsets from the tap point.
+- Pending delayed Merica bursts are now cleared on engine stop, destroy, and theme change.
+
+What did not change:
+- ordinary non-accent Merica taps
+- broader FX architecture
+- other themes
+
+Typecheck:
+- `npm run typecheck` passed
+
+QA still needed:
+- verify the first burst is immediate at the tap point
+- verify the second and third bursts fire in a visible sequence
+- verify the follow-up bursts appear in random positions
+- verify no delayed Merica bursts fire after leaving the theme
+
 ## Long audio crop diagnosis — 2026-04-07
 
 ### Crash/refresh when cropping a loop from hour-plus audio
@@ -490,6 +519,112 @@ Device QA still needed:
 - confirm the guardrail message is clear and the prompt stays closed
 - confirm short-track crop still works for replace and duplicate flows
 - confirm long tracks now open with a wider initial loop region
+
+## Tile/Rasta cleanup — 2026-04-07
+
+### Remove visible tile backplate seam and restore blurred Rasta leaf on iOS
+A narrow CSS-only visual cleanup was implemented.
+
+Files changed:
+- `styles.css`
+- `docs/polyplay_release_tasks_2026-04-05.md`
+
+What changed:
+- `.ytm-tile-hit` no longer paints its own solid dark background.
+- `.ytm-cover` remains the visual tile backing, so the tile no longer reads as having a separate black rounded plate behind it.
+- The iOS-only Rasta override was rebalanced from a very strong blur to a softer blur plus slightly higher opacity so the leaf stays visible while still reading abstractly.
+
+What did not change:
+- tile layout
+- tile badges
+- non-iOS Rasta visuals
+- broader theme architecture
+
+Typecheck:
+- `npm run typecheck` passed
+
+QA still needed:
+- verify the dark rounded backing seam is no longer visible behind tiles
+- verify tile depth still looks intentional
+- verify the Rasta leaf is visible again on iOS while still blurred
+
+## Waveform visibility correction — 2026-04-07
+
+### Keep inactive waveform visible and resolve real short-track peaks
+A narrow waveform pass was implemented.
+
+Files changed:
+- `src/components/WaveformLoop.tsx`
+- `src/lib/waveformTheme.ts`
+- `docs/polyplay_release_tasks_2026-04-05.md`
+
+What changed:
+- `WaveformLoop` no longer treats missing eager `audioBlob` hydration as a fully resolved waveform state.
+- When a selected track has no cached/stored peaks, short tracks can now fetch their audio blob on demand from DB and generate real peaks locally.
+- That on-demand path is capped to short tracks only, so the long-track lazy-hydration containment remains in place.
+- Inactive waveform bars now draw with a subtle contrast underlay so they stay visible against the viewport background instead of visually collapsing into it.
+
+What did not change:
+- long-track containment strategy
+- broader import/player architecture
+- loop editing behavior
+
+Typecheck:
+- `npm run typecheck` passed
+
+QA still needed:
+- verify unplayed waveform remains visible across themes
+- verify short imported tracks resolve to real peaks instead of the synthetic fallback shape
+- verify long tracks still avoid eager heavy waveform decoding
+
+## Waveform transition polish — 2026-04-07
+
+### Pulse the waveform briefly on track switch
+A narrow perception-layer polish pass was implemented.
+
+Files changed:
+- `src/components/WaveformLoop.tsx`
+- `docs/polyplay_release_tasks_2026-04-05.md`
+
+What changed:
+- `WaveformLoop` now reuses its existing `is-aura-pulse` animation on track-id changes.
+- The initial mount is skipped, so the pulse only reads as a transition between tracks.
+- This was intentionally kept as a masking/polish layer only; it does not replace the real waveform-resolution fixes.
+
+What did not change:
+- playback logic
+- loop state
+- peak generation logic in this pass
+
+Typecheck:
+- `npm run typecheck` passed
+
+QA still needed:
+- verify track-switch waveform dead time feels masked rather than flat
+- verify the pulse is not noisy during rapid track changes
+- verify fullscreen loop editing remains calm
+
+### Follow-up correction
+The first version of the track-switch pulse was too narrowly gated.
+
+What changed in the follow-up:
+- `WaveformLoop` track-switch pulse no longer depends on `enableAuraPulse`.
+- Aura-trigger event pulses are still gated the old way.
+- Track-switch pulse now uses a mount guard plus previous-track tracking so a transient `null` handoff does not suppress the next real switch pulse.
+
+Typecheck:
+- `npm run typecheck` passed
+
+### Follow-up dead-time correction
+The pulse alone was not enough because the unresolved waveform path still let the viewport go flat.
+
+What changed in the second follow-up:
+- `WaveformLoop` now keeps the previous waveform visible briefly during track handoff instead of immediately dropping to a transparent/loading state.
+- A dedicated `is-track-switching` class in `src/components/player.css` adds a short mask/overlay treatment during the switch.
+- This was kept narrow and does not change the real peak-resolution strategy.
+
+Typecheck:
+- `npm run typecheck` passed
 - The rest of the cluster remains on the original shared rotation logic.
 
 Why this stayed narrow:

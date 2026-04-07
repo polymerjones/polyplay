@@ -1687,7 +1687,8 @@ body.theme-custom.theme-custom-rasta::after {
 }
 
 body.is-ios.theme-custom.theme-custom-rasta::after {
-  filter: saturate(0.92) brightness(0.78) blur(18px);
+  opacity: 0.22;
+  filter: saturate(0.94) brightness(0.8) blur(12px);
 }
 
 @keyframes rasta-smoke-rise {
@@ -7196,7 +7197,7 @@ html[data-theme="light"] .playlist-selector select {
   display: block;
   border-radius: 16px;
   overflow: hidden;
-  background: #0e121c;
+  background: transparent;
   color: inherit;
   cursor: pointer;
   pointer-events: auto;

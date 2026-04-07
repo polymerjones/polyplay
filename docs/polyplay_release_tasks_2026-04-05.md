@@ -69,6 +69,249 @@ Use alongside any existing planning board already in the repo, but treat this fi
 
 **Diagnosis note — 2026-04-07 Codex:**
 - Status:
+  - diagnosis confirmed for waveform switch dead-time follow-up
+- Focus:
+  - prevent the waveform from going flat during track handoff
+  - make the track-switch mask actually visible in the iOS build
+- Files inspected so far:
+  - `src/components/WaveformLoop.tsx`
+  - `src/components/player.css`
+- Findings:
+  - The earlier track-switch pulse could fire, but the unresolved waveform path still dropped the canvas into a loading/transparent state.
+  - That means users can still see a flat viewport before the next track’s real peaks arrive.
+  - On iOS, the existing aura-pulse treatment on the container is too subtle to convincingly mask that dead time.
+- Narrow implementation plan:
+  - keep the previous waveform visible during track handoff until new peaks resolve
+  - add a short dedicated track-switch mask class to the waveform container
+  - keep the existing long-track containment and real peak-resolution logic intact
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Updated `src/components/WaveformLoop.tsx` so track switching no longer immediately drops the waveform into a flat transparent loading state.
+    - The previous rendered waveform now stays visible during the handoff until the next track’s peaks resolve or the short mask window expires.
+    - Added an `is-track-switching` class to the waveform container and a short dedicated mask animation in `src/components/player.css`.
+    - Kept the existing long-track containment and on-demand short-track real-peak logic unchanged.
+  - Exact files changed:
+    - `src/components/WaveformLoop.tsx`
+    - `src/components/player.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low to moderate.
+    - Low for the visual mask itself.
+    - Low to moderate because the previous waveform now persists briefly during handoff before the next waveform resolves, but that is intentional and tightly time-bounded.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm iOS no longer shows a flat waveform viewport during track changes.
+    - Confirm the switch now reads as a brief masked handoff into the next waveform.
+    - Confirm rapid next/prev does not feel smeary or overly flashy.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
+  - diagnosis confirmed for narrow waveform transition pulse follow-up
+- Focus:
+  - make sure waveform track-switch pulse actually fires across player surfaces
+- Files inspected so far:
+  - `src/components/WaveformLoop.tsx`
+  - `src/components/MiniPlayerBar.tsx`
+  - `src/components/FullscreenPlayer.tsx`
+- Findings:
+  - The earlier track-switch pulse effect in `WaveformLoop` is currently gated by `enableAuraPulse`.
+  - Fullscreen intentionally passes `enableAuraPulse={false}`, so the track-switch pulse is also suppressed there.
+  - The earlier effect also depended on carrying a non-null previous track id, which can be skipped if the selected track briefly transitions through `null`.
+- Narrow implementation plan:
+  - keep the aura-event pulse toggle behavior unchanged
+  - make track-switch pulse independent of `enableAuraPulse`
+  - use an explicit mounted/previous-id guard so the pulse survives transient `null` handoffs without flashing on first mount
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Updated `src/components/WaveformLoop.tsx` so track-switch pulse no longer depends on `enableAuraPulse`.
+    - Kept the aura-event listener gated by `enableAuraPulse`, but made the local track-id transition pulse always available for waveform surfaces.
+    - Replaced the earlier fragile previous-id logic with an explicit mount guard plus previous-track tracking, so transient `null` handoffs no longer suppress the next switch pulse.
+  - Exact files changed:
+    - `src/components/WaveformLoop.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low.
+    - This only changes when the existing waveform pulse class is triggered on track changes.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm waveform track-switch pulse now appears in mini player.
+    - Confirm waveform track-switch pulse now appears in fullscreen where appropriate.
+    - Confirm first mount still stays calm and does not flash unnecessarily.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
+  - diagnosis confirmed for narrow waveform transition masking
+- Focus:
+  - soften the visible waveform dead time on track switch without changing waveform architecture
+- Files inspected so far:
+  - `src/components/WaveformLoop.tsx`
+  - `src/components/player.css`
+- Findings:
+  - `WaveformLoop` already supports a local `is-aura-pulse` visual treatment through the existing waveform container class.
+  - That pulse is currently only triggered by the aura event path, not by track changes.
+  - The cleanest seam is to reuse the existing waveform pulse locally on track-id change, rather than adding a new loader or broader animation system.
+- Narrow implementation plan:
+  - keep the real waveform-resolution path unchanged
+  - reuse the existing waveform aura-pulse class on track switch
+  - skip the initial mount so it only reads as a transition between tracks
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Updated `src/components/WaveformLoop.tsx` so the existing waveform `is-aura-pulse` effect now also triggers on track-id changes.
+    - The pulse is local to the waveform component and reuses the existing class-based animation path.
+    - The initial mount is skipped so the effect reads as a track-switch transition only, not a first-load flash.
+    - The underlying waveform-resolution logic was left unchanged in this pass.
+  - Exact files changed:
+    - `src/components/WaveformLoop.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a narrow perception-layer polish on top of the existing waveform component.
+  - Regression risk:
+    - Low.
+    - The change only adds a brief waveform pulse on track change and does not alter playback, loop state, or peak generation logic.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm waveform dead time during track switching now reads more intentional instead of flat/blank.
+    - Confirm the pulse does not feel noisy during rapid next/prev changes.
+    - Confirm the initial app load does not flash unnecessarily.
+    - Confirm mini player behavior improves without affecting fullscreen loop editing.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
+  - diagnosis confirmed for narrow waveform visibility correction
+- Focus:
+  - prevent inactive waveform bars from blending into the loop viewport background
+  - stop short tracks from presenting the fallback/lazy waveform as if it were resolved waveform data
+- Files inspected so far:
+  - `src/components/WaveformLoop.tsx`
+  - `src/components/FullscreenPlayer.tsx`
+  - `src/lib/waveformTheme.ts`
+  - `src/lib/db.ts`
+  - `src/components/player.css`
+- Findings:
+  - `WaveformLoop` currently treats `!track.audioBlob` as effectively resolved and falls back to `fallbackPeaks()`, which means normal imported tracks without eager blob hydration can show the synthetic placeholder waveform indefinitely.
+  - Runtime `Track` rows currently only carry real `waveformPeaks` for demos; normal imported tracks do not persist decoded peak arrays in DB state.
+  - Because lazy hydration removed eager `audioBlob` loading, short imported tracks can enter the loop viewport with no real peaks and settle on the placeholder shape.
+  - The inactive waveform bars are rendered with a single idle fill color, and on some theme/background combinations that color can collapse visually into the viewport background.
+- Narrow implementation plan:
+  - keep long-track lazy-hydration containment intact
+  - add a short-track-only on-demand peak fetch in `WaveformLoop` when no cached/stored peaks exist
+  - cache/store those generated peaks once resolved so the synthetic fallback does not persist for short tracks
+  - add a contrast-floor underlay for inactive waveform bars so they stay visible against the viewport background
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Updated `src/components/WaveformLoop.tsx` so the loop viewport no longer treats `!track.audioBlob` as an immediately resolved waveform state.
+    - If no real peaks are cached/stored and the selected track is short enough, `WaveformLoop` now loads the audio blob on demand from DB and generates real peaks locally.
+    - That short-track on-demand path is capped at 12 minutes, preserving the existing long-track lazy-hydration containment.
+    - Once generated, peaks are cached and stored so the synthetic fallback waveform does not keep presenting as the resolved waveform for short tracks.
+    - Updated inactive waveform rendering to draw a subtle contrast underlay behind non-loop bars, so the unplayed portion no longer disappears into the viewport background.
+    - Added the corresponding palette field in `src/lib/waveformTheme.ts` to provide that contrast floor.
+  - Exact files changed:
+    - `src/components/WaveformLoop.tsx`
+    - `src/lib/waveformTheme.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This stays inside the current-track waveform path and preserves the long-track containment strategy.
+  - Regression risk:
+    - Low to moderate.
+    - Low for the inactive-bar contrast floor.
+    - Low to moderate for the short-track peak fetch because it adds an on-demand DB/audio decode path for waveform resolution, but only for short tracks without existing peaks.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm the inactive/unplayed waveform remains visible against the viewport in Merica and other themes.
+    - Confirm short imported tracks no longer settle on the synthetic fallback waveform once selected.
+    - Confirm longer tracks still respect the lazy-hydration containment and do not trigger eager heavy waveform work.
+    - Confirm loop editing, playhead progress, and loop markers still render correctly in mini and fullscreen players.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
+  - diagnosis confirmed for narrow Merica firework sequencing correction
+- Focus:
+  - make the Merica multi-burst accent fire in sequence instead of simultaneously
+  - keep the first burst at the tap point
+  - make the second and third bursts spawn independently at random positions
+- Files inspected so far:
+  - `src/fx/ambientFxEngine.ts`
+- Findings:
+  - The Merica accent path currently fires by calling `spawnMericaFireworks(...)` three times in the same tap handler branch.
+  - That means all three fireworks detonate immediately in the same frame.
+  - The current follow-up positions are fixed offsets from the tap point, not independently randomized spawn points.
+  - The FX engine does not yet have a tiny scheduler for delayed Merica follow-up bursts, so the cleanest seam is a small timeout queue inside the engine itself.
+- Narrow implementation plan:
+  - keep ordinary non-accent Merica taps unchanged
+  - keep the first accent burst at the user tap point immediately
+  - schedule bursts two and three with short staggered delays
+  - randomize the second and third burst positions within the canvas bounds
+  - clear any pending Merica follow-up timers on engine stop/destroy
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Updated the Merica accent branch in `src/fx/ambientFxEngine.ts` so the first firework still spawns immediately at the tap point.
+    - Added a tiny engine-owned timeout queue for accent follow-up bursts.
+    - The second and third accent fireworks now fire in sequence at `0.3s` and `0.6s` after the first burst.
+    - The second and third bursts now choose independent random positions within the canvas instead of using fixed offsets from the tap point.
+    - Pending Merica follow-up timers now clear on engine stop, destroy, and theme change.
+  - Exact files changed:
+    - `src/fx/ambientFxEngine.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a narrow FX-engine behavior correction isolated to the Merica accent path.
+  - Regression risk:
+    - Low.
+    - Ordinary non-accent Merica taps are unchanged.
+    - The change is scoped to the every-6th-tap accent branch and timer cleanup.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm the first Merica firework still goes off immediately at the tap point.
+    - Confirm the second and third fireworks fire at roughly `0.3s` intervals instead of all at once.
+    - Confirm the second and third bursts appear in independent random spots rather than stacked near the tap.
+    - Confirm reduced-motion behavior still feels controlled.
+    - Confirm switching away from Merica mid-sequence does not leave delayed follow-up bursts firing afterward.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
+  - diagnosis confirmed for narrow tile/Rasta visual cleanup
+- Focus:
+  - remove the visible dark rounded backing seam behind track tiles
+  - restore the Rasta leaf on iOS so it remains visible but abstractly blurred
+- Files inspected so far:
+  - `styles.css`
+  - `src/components/TrackTile.tsx`
+- Findings:
+  - The tile image is rendered inside `.ytm-cover`, but the clickable wrapper `.ytm-tile-hit` still has its own solid dark background in `styles.css`.
+  - With the current rounded corners/shadow stack, that dark base can read as a separate black rounded plate behind the tile art.
+  - The Rasta leaf is still present in `body.theme-custom.theme-custom-rasta::after`, but the iOS-only override currently applies a strong `blur(18px)` to a low-opacity layer, which can blur it into near-invisibility on iOS.
+- Narrow implementation plan:
+  - keep the tile layout, art badges, and general tile shadow system intact
+  - remove the visible dark backing seam by making the tile hit surface transparent and letting `.ytm-cover` remain the visual backing
+  - keep the iOS-only Rasta override but rebalance blur/opacity so the leaf remains visible and abstract instead of disappearing
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Updated `.ytm-tile-hit` in `styles.css` so the tile hit surface no longer paints its own solid dark backing.
+    - Left `.ytm-cover` as the actual visual tile backing, which removes the separate black rounded plate look behind the art.
+    - Updated the iOS-only Rasta override in `styles.css` so the leaf now uses a softer blur and higher opacity, staying abstract without disappearing.
+  - Exact files changed:
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a narrow CSS-only visual cleanup.
+  - Regression risk:
+    - Low.
+    - The tile fix only changes the hit-surface background fill.
+    - The Rasta change only affects the iOS-only leaf override for that theme.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm the dark rounded backplate is no longer visible behind tiles.
+    - Confirm tile depth/shadow still looks intentional after the backing seam is removed.
+    - Confirm the Rasta leaf is visible again on iOS while remaining blurred and abstract.
+    - Confirm non-iOS Rasta appearance is unchanged.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
   - diagnosis only
 - Focus:
   - identify why long-form loop crop crashes or refreshes the app

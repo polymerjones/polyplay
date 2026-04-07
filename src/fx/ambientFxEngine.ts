@@ -70,6 +70,7 @@ type Spark = {
 
 const TAP_WINDOW_MS = 1200;
 const ATTRACTOR_MS = 900;
+const MERICA_ACCENT_BURST_DELAY_MS = 300;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -221,6 +222,7 @@ class AmbientFxEngine {
   private popAudio: HTMLAudioElement | null = null;
   private popStamps: number[] = [];
   private mericaTapCount = 0;
+  private mericaAccentTimeouts: number[] = [];
 
   private themeTokens: ThemeTokens = {
     accentRgb: [125, 86, 226],
@@ -265,6 +267,7 @@ class AmbientFxEngine {
     this.running = false;
     if (this.rafId !== null) window.cancelAnimationFrame(this.rafId);
     this.rafId = null;
+    this.clearMericaAccentTimeouts();
   }
 
   destroy(): void {
@@ -307,6 +310,7 @@ class AmbientFxEngine {
     };
     if (prevThemeSlot !== nextThemeSlot) {
       this.mericaTapCount = 0;
+      this.clearMericaAccentTimeouts();
     }
   }
 
@@ -344,8 +348,8 @@ class AmbientFxEngine {
       const isAccentTap = this.mericaTapCount % 6 === 0;
       if (isAccentTap && !this.reducedMotion) {
         this.spawnMericaFireworks(x, y, Math.min(1, intensity + 0.24));
-        this.spawnMericaFireworks(x - 46, y - 18, Math.min(1, intensity + 0.12));
-        this.spawnMericaFireworks(x + 52, y - 12, Math.min(1, intensity + 0.16));
+        this.scheduleMericaAccentBurst(1, Math.min(1, intensity + 0.12));
+        this.scheduleMericaAccentBurst(2, Math.min(1, intensity + 0.16));
       } else if (isAccentTap) {
         this.spawnMericaFireworks(x, y, Math.min(1, intensity + 0.18));
         this.spawnMericaFireworks(x + 28, y - 10, Math.min(1, intensity + 0.08));
@@ -367,6 +371,37 @@ class AmbientFxEngine {
       this.spawnSplat(x, y, intensity);
     }
     this.trimCaps();
+  }
+
+  private clearMericaAccentTimeouts(): void {
+    this.mericaAccentTimeouts.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    this.mericaAccentTimeouts.length = 0;
+  }
+
+  private scheduleMericaAccentBurst(sequenceIndex: number, intensity: number): void {
+    const delayMs = sequenceIndex * MERICA_ACCENT_BURST_DELAY_MS;
+    const timeoutId = window.setTimeout(() => {
+      this.mericaAccentTimeouts = this.mericaAccentTimeouts.filter((id) => id !== timeoutId);
+      if (!this.running || this.themeTokens.themeSlot !== "merica") return;
+      const { x, y } = this.pickMericaAccentBurstPosition();
+      this.spawnMericaFireworks(x, y, intensity);
+      this.trimCaps();
+    }, delayMs);
+    this.mericaAccentTimeouts.push(timeoutId);
+  }
+
+  private pickMericaAccentBurstPosition(): { x: number; y: number } {
+    const horizontalPadding = Math.min(140, Math.max(48, this.width * 0.14));
+    const topPadding = Math.min(120, Math.max(44, this.height * 0.12));
+    const bottomPadding = Math.min(180, Math.max(68, this.height * 0.2));
+    const minX = horizontalPadding;
+    const maxX = Math.max(minX, this.width - horizontalPadding);
+    const minY = topPadding;
+    const maxY = Math.max(minY, this.height - bottomPadding);
+    return {
+      x: rand(minX, maxX),
+      y: rand(minY, maxY)
+    };
   }
 
   onPointerMove(x: number, y: number, now = performance.now()): void {

@@ -1971,6 +1971,18 @@ html[data-theme="light"] .pc-wave-toolbar__label {
   animation: pc-playback-sparkles 1200ms ease-out;
 }
 
+.pc-wave.is-track-switching {
+  animation: pc-track-switch-mask 320ms ease-out;
+}
+
+.pc-wave.is-track-switching::after {
+  animation: pc-track-switch-overlay 320ms ease-out;
+}
+
+.pc-wave.is-track-switching .pc-wave__viewport {
+  filter: saturate(1.08) brightness(1.06);
+}
+
 @keyframes pc-playback-flash {
   0% {
     filter: brightness(1) saturate(1);
@@ -1998,6 +2010,36 @@ html[data-theme="light"] .pc-wave-toolbar__label {
   100% {
     opacity: 0;
     transform: scale(1.12);
+  }
+}
+
+@keyframes pc-track-switch-mask {
+  0% {
+    filter: brightness(1.02) saturate(1.04);
+  }
+  32% {
+    filter: brightness(1.18) saturate(1.2);
+    box-shadow:
+      0 0 18px rgba(var(--aura-rgb, 188, 132, 255), 0.26),
+      0 0 34px rgba(var(--aura-rgb, 188, 132, 255), 0.18);
+  }
+  100% {
+    filter: brightness(1) saturate(1);
+  }
+}
+
+@keyframes pc-track-switch-overlay {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  24% {
+    opacity: 0.72;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.06);
   }
 }
 
