@@ -16,6 +16,7 @@ export type Track = {
   audioBlob?: Blob;
   artBlob?: Blob;
   persistedId?: string;
+  hasAudioSource?: boolean;
   missingAudio?: boolean;
   missingArt?: boolean;
   artworkSource?: "auto" | "user";

@@ -65,7 +65,474 @@ Use alongside any existing planning board already in the repo, but treat this fi
 ---
 
 ## Active task
-**Current active task:** `Import page ergonomics`
+**Current active task:** `Long audio crop crash + default loop marker spacing`
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
+  - diagnosis only
+- Focus:
+  - identify why long-form loop crop crashes or refreshes the app
+  - identify why the default loop markers feel too close together on hour-plus tracks
+- Files inspected so far:
+  - `src/App.tsx`
+  - `src/lib/audio/cropAudio.ts`
+  - `src/components/WaveformLoop.tsx`
+  - `src/lib/artwork/waveformArtwork.ts`
+- Findings:
+  - `setLoopFromCurrent()` in `src/App.tsx` initializes the default region span from a ratio, but then clamps it to `DEFAULT_SET_LOOP_SPAN_MAX_SECONDS = 12`.
+  - On a 60+ minute track, that cap dominates, so the default start/end markers land only about 12 seconds apart. This is why they feel visually cramped on long-form audio.
+  - The crop/export path is the heavier seam. `cropCurrentLoopToWav()` loads the track blob from storage and calls `cropAudioBlobToWav(...)`.
+  - `cropAudioBlobToWav(...)` currently reads the entire source blob into an `ArrayBuffer`, decodes the entire file with `decodeAudioData(...)`, allocates a new `AudioBuffer` for the crop, then encodes a new WAV in memory.
+  - For a 60+ minute source, this creates multiple large in-memory representations of the same asset at once: compressed blob bytes, decoded PCM, cropped PCM, and encoded WAV output.
+  - Region loop playback itself does not appear to be the crash seam. The playback path loops by seeking `audio.currentTime` within the existing media element, not by decoding or slicing the full source for preview.
+  - `WaveformLoop` and `buildPeaksFromAudioBlob(...)` can also fully decode a blob, but that path only runs when `track.audioBlob` is present. After the recent lazy-hydration containment, the selected/current track no longer eagerly hydrates `audioBlob`, so waveform rendering is not the leading cause in the normal long-track crop flow.
+- Exact likely root cause:
+  - Long-track crop is most likely failing from memory pressure in the in-browser crop/export pipeline, not from loop playback state or a render loop.
+  - Default loop marker spacing is too tight because the initialization logic is effectively fixed to a maximum 12-second loop on long tracks.
+- Narrow next step:
+  - Keep this as a containment fix, not a crop-system redesign.
+  - Split the follow-up into two surgical fixes:
+    - add a long-source guard or safer strategy in `cropAudioBlobToWav(...)` / crop entry so hour-plus media does not try to fully decode in-memory on constrained devices
+    - widen only the default loop-span initialization for long durations without changing manual loop editing behavior
+  - Do not widen into waveform architecture, import changes, or full media-processing redesign in the same pass.
+- Safe before release:
+  - Likely yes, if kept narrow.
+  - The loop-span fix is low risk.
+  - The crop containment is moderate risk because it touches decoding/export behavior, but it is still safer than broader player or import changes if approached as a guardrail/containment patch.
+- Regression risk if fixed:
+  - Low for default loop-marker spacing if isolated to `setLoopFromCurrent()`.
+  - Moderate for crop containment because audio export and replace/duplicate flows depend on the crop output format and timing.
+- Fix not yet implemented:
+  - Superseded by the containment implementation below.
+- QA still needed after implementation:
+  - Reproduce crop on a 60+ minute track on iPhone and confirm the app no longer refreshes or crashes.
+  - Confirm shorter-track crop still works for both replace-existing and duplicate-to-new-track flows.
+  - Confirm the default loop markers open with a visibly wider, more usable region on long tracks.
+  - Confirm manual loop adjustment, loop playback, and stored loop persistence remain unchanged.
+- Implementation pass opening note — 2026-04-07 Codex:
+  - Confirmed containment to implement now:
+    - keep short-track crop/export behavior unchanged
+    - widen only the default long-track loop initialization
+    - add an iOS long-track crop guardrail before the current full in-memory decode/export path can run
+  - Files planned for edit:
+    - `src/App.tsx`
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Added a narrow default-loop helper in `src/App.tsx` so long tracks now initialize a larger loop region instead of being effectively capped at 12 seconds.
+    - Long tracks at or above 20 minutes now open with a loop span in the 45–120 second range, using a small duration ratio while preserving the previous short-track behavior.
+    - Added an iOS-only long-track crop guardrail in `src/App.tsx` so the app blocks unsafe crop attempts before opening the crop prompt or starting the export path.
+    - The guardrail message is: `This track is too long to crop safely on this device. Try desktop.`
+    - Kept the existing replace-existing and duplicate-to-new-track crop flows unchanged for tracks below the guard threshold.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - How default loop behavior changed:
+    - Before:
+      - all tracks used the same 6–12 second default loop span logic
+      - hour-plus tracks therefore opened with an initial region only about 12 seconds wide
+    - After:
+      - tracks below 20 minutes keep the previous default span behavior
+      - tracks at or above 20 minutes now open with a larger initial region derived from a 45–120 second long-track range
+  - Long-track crop guardrail:
+    - Scope:
+      - iOS only
+      - current track duration at or above 20 minutes
+    - Behavior:
+      - the crop prompt does not open
+      - if the crop path is somehow reached anyway, the same message is thrown as a safety backstop before blob fetch/decode begins
+  - Why this is the safest release fix:
+    - It prevents the known crash-prone decode/export path on the device family where the failure is most likely, without redesigning crop architecture.
+    - It preserves normal short-track crop behavior and keeps the loop-spacing fix isolated to default initialization only.
+  - What remains intentionally deferred:
+    - any general long-audio crop/export solution in browser/webview
+    - streaming or chunked media processing
+    - waveform-generation redesign
+    - any broader import/player architecture changes
+  - Regression risk:
+    - Low for default loop-marker sizing because it only affects initial loop creation on long tracks.
+    - Low to moderate for the crop containment because it adds a new iOS block condition, but it is narrow and fail-safe.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm 60+ minute tracks no longer crash/refresh the app when crop is attempted on iPhone.
+    - Confirm the guardrail message appears immediately and the crop prompt stays closed.
+    - Confirm shorter-track crop still works for both replace-existing and duplicate-to-new-track flows.
+    - Confirm long tracks now open with a much more usable default loop region.
+    - Confirm manual loop adjustment, loop playback, and saved loop persistence are unchanged.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
+  - diagnosis confirmed for narrow Rasta smoke spawn polish
+- Focus:
+  - make the second Rasta smoke plume feel offset and organic
+- Files inspected so far:
+  - `src/fx/ambientFxEngine.ts`
+  - `src/components/AmbientFxCanvas.tsx`
+- Findings:
+  - Rasta tap FX are spawned entirely inside `spawnRastaSmoke(...)` in `src/fx/ambientFxEngine.ts`.
+  - The duplicate feel is not coming from CSS or a second render system; it is one cluster of three splats emitted from that function.
+  - All three plumes currently inherit the same cluster rotation with only small jitter, which makes the second plume feel too closely stacked with the first on some taps.
+  - Per-plume position and rotation are already defined in the FX engine, so the cleanest seam is there.
+- Narrow implementation plan:
+  - Keep the existing three-plume Rasta cluster.
+  - Give only the second plume an extra random 10–20px offset from the tap point.
+  - Give that second plume an independent random rotation rather than keeping it near the shared cluster rotation.
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Updated `spawnRastaSmoke(...)` in `src/fx/ambientFxEngine.ts` so only the second plume now gets an additional random 10–20px radial offset from the tap point.
+    - Updated that same second plume to use an independent random rotation instead of staying clustered near the shared plume rotation.
+    - Kept the existing three-plume Rasta cluster, colors, motion, and overall smoke behavior intact.
+  - Exact files changed:
+    - `src/fx/ambientFxEngine.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a narrow FX-engine adjustment inside the Rasta tap spawn path only.
+  - Regression risk:
+    - Low.
+    - The change affects only the second Rasta smoke plume on tap.
+    - Other themes, other FX modes, and the rest of the Rasta plume cluster are unchanged.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm the second Rasta smoke plume no longer feels stacked directly on the first.
+    - Confirm the offset still feels subtle and tied to the tap point.
+    - Confirm fullscreen and theme transitions do not produce obvious Rasta FX discontinuities.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
+  - diagnosis confirmed for narrow Rasta iOS-only blur tweak
+- Focus:
+  - make the Rasta leaf background more abstract on iOS only
+- Files inspected so far:
+  - `styles.css`
+  - `src/App.tsx`
+- Findings:
+  - The recognizable leaf is rendered as the theme pseudo-element `body.theme-custom.theme-custom-rasta::after` in `styles.css`.
+  - It is not a React node or runtime image overlay.
+  - The current leaf uses `url("/rastaweed.png")` plus light color washes and only `filter: saturate(0.92) brightness(0.78)`, so there is no existing blur on that element.
+  - The app already manages global body classes in `src/App.tsx`, which provides a clean seam for an iOS-only class.
+- Likely root cause / visual seam:
+  - On iOS, the leaf pseudo-element stays too crisp and recognizable because it is rendered without enough blur.
+- Narrow implementation plan:
+  - Add a single `is-ios` body class in `src/App.tsx`.
+  - Add one iOS-only CSS override for `body.is-ios.theme-custom.theme-custom-rasta::after`.
+  - Use a practical CSS blur value to achieve the requested “roughly 70% Gaussian blur” look without affecting the rest of the theme.
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Added a body-level `is-ios` class toggle in `src/App.tsx`.
+    - Added an iOS-only override in `styles.css` for `body.is-ios.theme-custom.theme-custom-rasta::after` so the Rasta leaf pseudo-element now uses `blur(18px)` on top of its existing saturation/brightness treatment.
+    - Left the rest of the Rasta theme and all non-iOS platforms unchanged.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a narrow CSS-only visual change scoped to one pseudo-element on iOS.
+  - Regression risk:
+    - Low.
+    - The change affects only the Rasta leaf background element on iOS.
+    - Smoke, other theme layers, and non-iOS platforms are unchanged.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm the Rasta leaf reads more abstractly on iPhone/iPad.
+    - Confirm the rest of the Rasta atmosphere is unchanged.
+    - Confirm non-iOS Rasta appearance is unchanged.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
+  - tiny UX follow-up confirmed
+- Focus:
+  - add matching transient feedback when entering `dim`
+- Files inspected so far:
+  - `src/App.tsx`
+- Findings:
+  - `cycleDimMode()` already handles the `normal -> dim -> mute -> normal` desktop path and now already emits `Audio Muted` when entering `mute`.
+  - The existing transient `showFxToast(...)` path is already the chosen pattern for this control family.
+- Narrow implementation plan:
+  - Keep the change inside `cycleDimMode()`.
+  - Emit `Audio Dimmed` only when entering `dim`.
+  - Keep `normal` silent and leave the existing mute toast intact.
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Updated `cycleDimMode()` in `src/App.tsx` so entering `dim` now emits `Audio Dimmed` through the existing `showFxToast(...)` path.
+    - Left `normal` silent and preserved the existing `Audio Muted` toast for the `mute` transition.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low.
+    - The change is limited to one additional transient toast on the existing dim-mode transition.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm desktop `normal -> dim` shows `Audio Dimmed`.
+    - Confirm the following `dim -> mute` transition still shows `Audio Muted`.
+    - Confirm returning to `normal` stays silent.
+    - Confirm no extra duplicate toasts appear during normal cycling.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
+  - diagnosis in progress for narrow mute-awareness feedback
+- Focus:
+  - add clear mute feedback without widening toast architecture
+- Files inspected so far:
+  - `src/App.tsx`
+  - `src/lib/toastUtils.ts`
+  - `src/components/PlayerControls.tsx`
+- Findings:
+  - Mute is toggled through `cycleDimMode()` in `src/App.tsx`.
+  - The app already has a lightweight transient toast path via `fxToast` / `showFxToast(...)` used for repeat/theme/FX/vibe feedback.
+  - The shimmer/persistent toast path is `vaultToast`, which is tied to workflow/process messages and `isBusyToastMessage(...)`, not general playback state.
+  - There is no existing persistent, state-linked toast architecture for mute-like toggles.
+- Likely root cause / UX seam:
+  - Mute changes playback state visually, but the toggle path does not currently emit a toast or status confirmation.
+- Narrow implementation plan:
+  - Keep this in `cycleDimMode()`.
+  - Use the existing transient `fxToast` pattern for a simple `Audio Muted` message when entering mute.
+  - Avoid adding a persistent state-linked toast system for this one control.
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Updated `cycleDimMode()` in `src/App.tsx` so entering `mute` now emits `Audio Muted` through the existing `showFxToast(...)` path.
+    - Left unmute behavior silent to avoid duplicate/noisy toggle toasts.
+    - Did not change the broader toast architecture or add a persistent mute-state toast.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a narrow UX confirmation on an existing toggle path using an existing transient toast mechanism.
+  - Toast behavior:
+    - Transient.
+    - It uses the existing `fxToast` path, which auto-clears quickly.
+  - Regression risk:
+    - Low.
+    - The change is limited to showing one toast when mute is activated.
+    - No playback logic, toast timing system, or persistent state handling was changed.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm pressing Mute shows `Audio Muted` immediately on both mini and fullscreen player controls.
+    - Confirm repeated presses do not create noisy duplicate toasts beyond normal mute activations.
+    - Confirm leaving mute does not leave stale toast UI behind.
+    - Confirm repeat/theme/FX/vibe toasts still behave normally.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
+  - diagnosis in progress for narrow long-track auto-art cleanup
+- Focus:
+  - remove visible theme badge/text from long-track fallback auto art
+- Files inspected so far:
+  - `src/lib/db.ts`
+  - `src/components/TrackRow.tsx`
+  - `src/components/TrackTile.tsx`
+- Findings:
+  - The visible theme badge/text is baked directly into the long-track fallback poster SVG generated by `buildThemeNotePoster(...)` in `src/lib/db.ts`.
+  - The badge is not a runtime UI overlay.
+  - This fallback poster is used specifically in the long iOS auto-art skip path when waveform auto art is intentionally avoided for long imports.
+  - Separate UI `AUTO` badges on tiles/rows are different components and are out of scope for this task.
+- Likely root cause / UI seam:
+  - The fallback SVG template itself includes a badge rectangle plus theme-name/`PolyPlay` text.
+- Narrow implementation plan:
+  - Keep the existing gradient, glow, and music-note composition.
+  - Remove only the baked badge/text elements from the SVG template.
+  - Do not change auto-art triggering logic or broader artwork generation behavior.
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Updated the long-track fallback poster generator in `src/lib/db.ts` so `buildThemeNotePoster(...)` no longer includes the baked theme badge rectangle or theme-name/`PolyPlay` text.
+    - Kept the existing gradient background, glow shapes, and music-note composition unchanged.
+    - Did not change the fallback-art trigger path or any broader auto-art generation logic.
+  - Exact files changed:
+    - `src/lib/db.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a narrow generation-template cleanup for the long-track fallback poster only.
+  - Regression risk:
+    - Low.
+    - The poster generator still returns the same kind of stored SVG artwork and is used in the same long-track fallback path.
+    - The only intended visual change is removal of the visible badge/text.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Re-import or regenerate a long guarded track and confirm the fallback poster no longer shows theme text/badge.
+    - Confirm the remaining poster composition still looks balanced in playbar, fullscreen, and now playing.
+    - Confirm broader waveform auto art and UI `AUTO` badges are unchanged.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
+  - diagnosis in progress for narrow presentation cleanup
+- Focus:
+  - remove visible `Imported` source label/text from track UI
+- Files inspected so far:
+  - `src/components/TrackRow.tsx`
+  - `src/components/TrackTile.tsx`
+  - `src/components/MiniPlayerBar.tsx`
+  - `src/components/FullscreenPlayer.tsx`
+  - `src/admin/AdminApp.tsx`
+  - `src/lib/db.ts`
+- Findings:
+  - The visible `Imported` text in the main app is rendered directly in `src/components/TrackRow.tsx` via `track.sub || "Imported"`.
+  - Grid tiles do not render that label.
+  - Mini player and fullscreen player do not render `track.sub`; they only show title/artist/time/aura and missing-media messages.
+  - Admin import code and DB/storage normalization still write `sub: "Imported"` for imported tracks, but that is state/storage metadata, not the user-facing label seam for this task.
+- Likely root cause / UI seam:
+  - This is presentation-only noise from the list-row metadata renderer, not an import logic issue.
+- Narrow implementation plan:
+  - Keep import/storage/source state unchanged.
+  - Remove only the visible `Imported` fallback from `TrackRow`.
+  - Preserve any non-default custom `sub` value if one exists.
+  - Avoid widening into badge or metadata redesign.
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Updated `src/components/TrackRow.tsx` so the list-row metadata no longer renders the default `Imported` fallback.
+    - The row now hides that source line when `track.sub` is empty or equal to `Imported`, while still showing any non-default custom `sub` label if one exists.
+    - No import/storage/state logic was changed.
+  - Exact files changed:
+    - `src/components/TrackRow.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is presentation-only and scoped to the visible list-row renderer.
+  - Regression risk:
+    - Low.
+    - The only intended change is removal of the visible default `Imported` label in list rows.
+    - Grid, mini player, fullscreen, import logic, and stored metadata are unchanged.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm list rows no longer show `Imported`.
+    - Confirm rows still look balanced with artist-only, sub-only, and no-artist cases.
+    - Confirm any non-default custom `sub` value still appears if such a track exists.
+    - Confirm grid tiles, mini player, fullscreen player, and admin surfaces are visually unchanged.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
+  - diagnosis in progress for release-trust playback regression
+- Focus:
+  - imported tracks falsely showing `Missing audio`
+  - tap/row selection not starting playback
+  - next-track selection advancing without autoplay
+  - possible now-playing / lock-screen metadata linkage
+- Files inspected so far:
+  - `src/lib/db.ts`
+  - `src/App.tsx`
+  - `src/lib/mediaSession.ts`
+  - `src/components/MiniPlayerBar.tsx`
+  - `src/components/FullscreenPlayer.tsx`
+  - `src/components/TrackGrid.tsx`
+  - `src/components/TrackRow.tsx`
+  - `src/components/TrackTile.tsx`
+- Likely root cause:
+  - The recent lazy playback hydration change stopped broad `audioUrl` hydration on refresh, which was intentional.
+  - But `toTrack(...)` in `src/lib/db.ts` still derives `missingAudio` from the absence of hydrated `audioUrl` / `audioBlob`, even when hydration was intentionally skipped. That makes imported tracks with a valid persisted `audioKey` appear missing in normal library state.
+  - At the same time, `playTrack(...)` in `src/App.tsx` still requires `selectedTrack.audioUrl` to already exist before it arms `pendingAutoPlayRef`. Since `allTracksRef` is intentionally loaded with `includeMediaUrls: false`, tap-to-play and autoplay-to-next-track are blocked before current-track hydration can finish.
+  - Manual Play still works because `togglePlayPause()` only requires `currentTrack.audioUrl`, and the selected/current-track effect hydrates that later via `getTrackPlaybackMediaFromDb(...)`.
+  - The same false `missingAudio` flag also suppresses iOS now-playing and Media Session metadata sync, because those effects bail out when `currentTrack.missingAudio` is true even if the track later has a valid hydrated `audioUrl`.
+- Narrow implementation plan:
+  - Keep lazy playback hydration.
+  - Decouple `missingAudio` from “audio URL not hydrated yet” so normal library rows are not misclassified.
+  - Adjust tap/autoplay gating so a track with persisted audio backing can arm pending autoplay before `audioUrl` hydration completes.
+  - Re-check current-track merged state so now-playing metadata follows the real hydrated playback state instead of the pre-hydration placeholder state.
+- Implementation pass opening note — 2026-04-07 Codex:
+  - Confirmed containment to implement now:
+    - separate persisted audio backing from hydrated playback URL state
+    - make `missingAudio` mean truly absent/broken media, not deferred hydration
+    - let tap/autoplay arm from persisted audio availability without reintroducing eager library-wide media hydration
+  - Files planned for edit:
+    - `src/types.ts`
+    - `src/lib/db.ts`
+    - `src/App.tsx`
+- Fix not yet implemented:
+  - This pass is diagnosis only. No code changes made yet.
+- QA still needed after implementation:
+  - Confirm imported tracks no longer show `Missing audio` in mini player, fullscreen, or admin rows during normal playback state.
+  - Confirm tapping a tile or row starts playback without needing a second manual Play press.
+  - Confirm track end and Next both autoplay the next imported track.
+  - Confirm lock-screen / now-playing title, artwork, and transport controls return for imported tracks.
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Added `hasAudioSource` to the runtime `Track` model so persisted audio backing is tracked separately from whether `audioUrl` has already been hydrated into UI state.
+    - Updated `toTrack(...)` in `src/lib/db.ts` so `missingAudio` now reflects only true absence of any persisted/bundled audio source during normal lazy-hydrated catalog reads, instead of treating deferred hydration as missing media.
+    - Updated `getTrackPlaybackMediaFromDb(...)` to return `missingAudio` for the selected/current-track hydration path based on whether a persisted audio source actually resolves to a playback URL. This preserves the ability for a genuinely broken selected track to surface as missing after on-demand fetch.
+    - Updated the current-track merged state in `src/App.tsx` so the selected track can replace the placeholder `missingAudio` value with the hydrated truth from `getTrackPlaybackMediaFromDb(...)`.
+    - Updated `playTrack(...)` in `src/App.tsx` so tap-to-play and autoplay arm from `hasAudioSource` rather than requiring a pre-hydrated `audioUrl`.
+    - Kept lazy playback hydration intact. No eager full-library audio URL/blob hydration was reintroduced.
+  - Exact files changed:
+    - `src/types.ts`
+    - `src/lib/db.ts`
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - How readiness modeling changed:
+    - Before:
+      - `missingAudio` could become true simply because `audioUrl`/`audioBlob` had not been hydrated yet.
+    - After:
+      - `hasAudioSource` answers whether the track has persisted audio backing.
+      - `missingAudio` in the broad lazy-hydrated catalog now means no persisted/bundled audio source is known.
+      - The selected/current-track hydration path can still mark `missingAudio` true if a supposedly backed track fails to resolve to a playback URL on demand.
+  - How playback gating changed:
+    - Before:
+      - `playTrack(...)` required `selectedTrack.audioUrl` to already exist before arming autoplay.
+    - After:
+      - `playTrack(...)` arms autoplay when the selected track has persisted audio backing and is not known-missing, allowing current-track hydration to provide the actual `audioUrl` after selection.
+  - Why this is the safest release fix:
+    - It corrects only the meaning of readiness state and the autoplay gate that depended on the wrong meaning.
+    - It preserves the existing lazy hydration containment and does not widen into a player redesign or earlier media loading.
+  - What remains intentionally deferred:
+    - any broader player architecture changes
+    - any eager library-wide hydration rollback
+    - long-audio crop follow-up
+    - mute toast, artwork badge, or theme/UI polish work
+    - broader AirPods / competing-audio audit outside this same readiness seam
+  - Regression risk:
+    - Low to moderate.
+    - Low because the change is narrow and keeps the lazy hydration architecture intact.
+    - Moderate because tracks with stale `audioKey` pointers but no actual blob will now surface as missing only once selected/current-track hydration runs, not necessarily in every broad list state.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm imported tracks no longer show `Missing audio` in mini player/fullscreen during normal playback state.
+    - Confirm tapping a tile and row from a cold state starts playback without a second manual Play press.
+    - Confirm natural track-end advance autoplays the next track.
+    - Confirm manual Next/Prev still autoplay correctly.
+    - Confirm manual Play behavior remains unchanged.
+    - Confirm lock-screen / now-playing metadata and artwork return for valid imported tracks.
+    - Spot-check a genuinely broken/missing-media record if available to ensure selected-track missing-audio messaging still appears.
+
+**Diagnosis note — 2026-04-06 Codex:**
+- Files inspected so far:
+  - `src/App.tsx`
+  - `src/lib/db.ts`
+  - `src/lib/player/media.ts`
+  - `src/types.ts`
+- Likely root cause:
+  - The earlier hydration containment stopped full-library blob hydration, but visible playlist tracks still get hydrated with media URLs during `refreshTracks()`.
+  - `toTrack(...)` still builds `audioUrl` by materializing the stored media blob into an object URL. For long imported video-as-audio tracks on iPhone, that is still enough to trigger memory pressure and refresh/reopen instability.
+  - The existing long-iOS no-auto-art guard also leaves those tracks without fallback poster art, which is why they can appear blank in playbar/fullscreen/now playing when waveform art is skipped.
+- Narrow implementation plan:
+  - Keep general refresh metadata-light and artwork-safe by stopping audio URL hydration for non-current tracks.
+  - Move playback audio URL hydration to the current-track path only.
+  - Replace the long-iOS skipped-auto-art fallback with a cheap stored note poster in the current theme gradient so it appears across playbar, fullscreen, and now playing without expensive media analysis.
+- Fix implemented — 2026-04-06 Codex:
+  - Exact fix made:
+    - Updated track hydration in `src/lib/db.ts` so general refresh can now include artwork URLs without also materializing audio URLs.
+    - Updated `refreshTracks()` in `src/App.tsx` to hydrate visible tracks with artwork URLs only, not playback audio URLs.
+    - Moved playback audio URL hydration to the current-track path only.
+    - Removed eager current-track audio-blob hydration after refresh; crop now loads the current track’s audio blob on demand only when the user actually crops audio.
+    - Added a cheap stored fallback poster for long iOS guarded imports in `src/lib/db.ts`: a small SVG music-note poster in the current theme gradient. This is written as real artwork so it shows in playbar, fullscreen, and now playing.
+  - Exact files changed:
+    - `src/lib/db.ts`
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low to moderate.
+    - Playback source loading now happens later, at current-track hydration time rather than visible-list refresh time.
+    - Crop now depends on on-demand audio-blob loading instead of prehydrated audio blobs.
+    - The long-iOS auto-art fallback is intentionally simpler than waveform art, but it is much safer for memory.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Re-import a long video track on iPhone and confirm the app no longer enters a refresh/reopen loop.
+    - Confirm the fallback note poster appears in the playbar, fullscreen player, and now playing.
+    - Confirm regular imported tracks still play normally after refresh/reopen.
+    - Confirm audio crop still works when invoked on an imported track.
 
 **Diagnosis note — 2026-04-06 Codex:**
 - Files inspected so far:

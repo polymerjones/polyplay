@@ -1686,6 +1686,10 @@ body.theme-custom.theme-custom-rasta::after {
   animation: rasta-leaf-float 110s ease-in-out infinite;
 }
 
+body.is-ios.theme-custom.theme-custom-rasta::after {
+  filter: saturate(0.92) brightness(0.78) blur(18px);
+}
+
 @keyframes rasta-smoke-rise {
   0% {
     transform: translate3d(0, 0, 0) scale(1) rotate(0deg);

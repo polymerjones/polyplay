@@ -113,6 +113,56 @@ function getStoredArtworkThemeSelection(): ThemeSelection {
   }
 }
 
+function getThemeNotePosterPalette(themeSelection: ThemeSelection): {
+  start: string;
+  end: string;
+  glow: string;
+  note: string;
+} {
+  switch (themeSelection) {
+    case "light":
+      return { start: "#f6f1ff", end: "#d8dff5", glow: "#ffffff", note: "#5b48b8" };
+    case "amber":
+      return { start: "#5c3308", end: "#f0b35b", glow: "#ffd38a", note: "#fff3dc" };
+    case "teal":
+      return { start: "#07383d", end: "#42c7c4", glow: "#8ffff7", note: "#e7fffe" };
+    case "crimson":
+      return { start: "#451321", end: "#cf6f82", glow: "#ffc0cc", note: "#fff3f6" };
+    case "merica":
+      return { start: "#10244b", end: "#b31942", glow: "#fff0d2", note: "#fff8ee" };
+    case "mx":
+      return { start: "#0f4a33", end: "#d54d41", glow: "#fff0c8", note: "#fffaf0" };
+    case "rasta":
+      return { start: "#5d130f", end: "#1f6c2c", glow: "#ffe36f", note: "#fff8d7" };
+    case "dark":
+    default:
+      return { start: "#1a2133", end: "#4b2d9a", glow: "#cbb8ff", note: "#f4efff" };
+  }
+}
+
+function buildThemeNotePoster(themeSelection: ThemeSelection): Blob {
+  const palette = getThemeNotePosterPalette(themeSelection);
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" role="img" aria-label="PolyPlay auto artwork">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${palette.start}"/>
+      <stop offset="100%" stop-color="${palette.end}"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="32%" cy="24%" r="62%">
+      <stop offset="0%" stop-color="${palette.glow}" stop-opacity="0.42"/>
+      <stop offset="100%" stop-color="${palette.glow}" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="1200" rx="190" fill="url(#bg)"/>
+  <rect width="1200" height="1200" rx="190" fill="url(#glow)"/>
+  <circle cx="282" cy="212" r="190" fill="${palette.glow}" opacity="0.12"/>
+  <circle cx="996" cy="1008" r="240" fill="${palette.glow}" opacity="0.08"/>
+  <path d="M482 316v418.7c-23.3-13.6-53.7-21.3-86.7-21.3-80 0-145.3 45.3-145.3 101.3s65.3 101.3 145.3 101.3 145.3-45.3 145.3-101.3V442.7l309.3-61.4v277.4c-23.3-13.6-53.7-21.3-86.7-21.3-80 0-145.3 45.3-145.3 101.3s65.3 101.3 145.3 101.3S909.3 794.7 909.3 738.7V252L482 316z" fill="${palette.note}"/>
+</svg>`;
+  return new Blob([svg], { type: "image/svg+xml" });
+}
+
 function makeId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -253,6 +303,8 @@ async function maybeMigrateLegacyTracks(): Promise<void> {
 
 type TrackHydrationOptions = {
   includeMediaUrls?: boolean;
+  includeAudioUrl?: boolean;
+  includeArtworkUrls?: boolean;
   includeBlobs?: boolean;
 };
 
@@ -288,9 +340,12 @@ function readLegacyTracks(): Promise<LegacyDbTrackRecord[]> {
 
 async function toTrack(record: TrackRecord, options?: TrackHydrationOptions): Promise<Track> {
   const includeMediaUrls = options?.includeMediaUrls !== false;
+  const includeAudioUrl = includeMediaUrls && options?.includeAudioUrl !== false;
+  const includeArtworkUrls = includeMediaUrls && options?.includeArtworkUrls !== false;
   const includeBlobs = options?.includeBlobs === true;
   // Self-heal older demo rows that may have lost audioKey but still have a playable demo video blob.
   const effectiveAudioKey = record.audioKey || (record.isDemo ? record.artVideoKey || null : null);
+  const hasAudioSource = Boolean(record.bundledAudioUrl || effectiveAudioKey);
   const [audioBlob, artBlob] = includeBlobs
     ? await Promise.all([
         effectiveAudioKey ? getBlob(effectiveAudioKey) : Promise.resolve(null),
@@ -298,12 +353,12 @@ async function toTrack(record: TrackRecord, options?: TrackHydrationOptions): Pr
       ])
     : [null, null];
 
-  const audioUrl = includeMediaUrls ? record.bundledAudioUrl || (await getMediaUrl(effectiveAudioKey)) : record.bundledAudioUrl || undefined;
-  const artUrl = includeMediaUrls ? record.bundledArtUrl || (await getMediaUrl(record.artKey)) : record.bundledArtUrl || undefined;
-  const artVideoUrl = includeMediaUrls
+  const audioUrl = includeAudioUrl ? record.bundledAudioUrl || (await getMediaUrl(effectiveAudioKey)) : record.bundledAudioUrl || undefined;
+  const artUrl = includeArtworkUrls ? record.bundledArtUrl || (await getMediaUrl(record.artKey)) : record.bundledArtUrl || undefined;
+  const artVideoUrl = includeArtworkUrls
     ? record.bundledArtVideoUrl || (await getMediaUrl(record.artVideoKey))
     : record.bundledArtVideoUrl || undefined;
-  const missingAudio = !record.bundledAudioUrl && Boolean(effectiveAudioKey) && !audioUrl && !audioBlob;
+  const missingAudio = !hasAudioSource;
   const missingArt =
     !record.bundledArtUrl &&
     !record.bundledArtVideoUrl &&
@@ -325,6 +380,7 @@ async function toTrack(record: TrackRecord, options?: TrackHydrationOptions): Pr
     audioBlob: audioBlob ?? undefined,
     artBlob: artBlob ?? undefined,
     persistedId: record.id,
+    hasAudioSource,
     missingAudio,
     missingArt,
     artworkSource: record.artworkSource === "auto" ? "auto" : "user"
@@ -361,20 +417,30 @@ export async function getTracksByIdsFromDb(trackIds: string[], options?: TrackHy
   return hydrated.filter(Boolean) as Track[];
 }
 
-export async function getTrackMediaBlobsFromDb(trackId: string): Promise<{ audioBlob?: Blob; artBlob?: Blob }> {
+export async function getTrackPlaybackMediaFromDb(trackId: string): Promise<{ audioUrl?: string; artBlob?: Blob; missingAudio?: boolean }> {
   await maybeMigrateLegacyTracks();
   const library = loadLibrary();
   const record = library.tracksById[trackId];
   if (!record) return {};
   const effectiveAudioKey = record.audioKey || (record.isDemo ? record.artVideoKey || null : null);
-  const [audioBlob, artBlob] = await Promise.all([
-    effectiveAudioKey ? getBlob(effectiveAudioKey) : Promise.resolve(null),
-    record.artKey ? getBlob(record.artKey) : Promise.resolve(null)
-  ]);
+  const hasAudioSource = Boolean(record.bundledAudioUrl || effectiveAudioKey);
+  const artBlob = record.artKey ? await getBlob(record.artKey) : null;
+  const audioUrl = record.bundledAudioUrl || (await getMediaUrl(effectiveAudioKey));
   return {
-    audioBlob: audioBlob ?? undefined,
-    artBlob: artBlob ?? undefined
+    audioUrl: audioUrl ?? undefined,
+    artBlob: artBlob ?? undefined,
+    missingAudio: hasAudioSource ? !audioUrl : true
   };
+}
+
+export async function getTrackAudioBlobFromDb(trackId: string): Promise<Blob | undefined> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const record = library.tracksById[trackId];
+  if (!record) return undefined;
+  const effectiveAudioKey = record.audioKey || (record.isDemo ? record.artVideoKey || null : null);
+  const audioBlob = effectiveAudioKey ? await getBlob(effectiveAudioKey) : null;
+  return audioBlob ?? undefined;
 }
 
 export async function loadLibraryFromAppSourceOfTruth(): Promise<LibraryState> {
@@ -518,6 +584,12 @@ export async function addTrackToDb(params: {
       }
     }
     if (skipWaveformArtworkForLongIosAudio) {
+      const fallbackPoster = buildThemeNotePoster(getStoredArtworkThemeSelection());
+      artKey = makeId();
+      posterBytes = fallbackPoster.size || 0;
+      await putBlob(artKey, fallbackPoster, { type: "image", createdAt: ts });
+      createdBlobKeys.add(artKey);
+      artworkSource = "auto";
       console.debug("[artwork:metadata-import]", {
         phase: "ios-long-audio-auto-art-skipped",
         trackId,

@@ -18,7 +18,8 @@ import { TextShimmer } from "./components/TextShimmer";
 import {
   duplicateTrackWithAudioInDb,
   getAllTracksFromDb,
-  getTrackMediaBlobsFromDb,
+  getTrackAudioBlobFromDb,
+  getTrackPlaybackMediaFromDb,
   getTracksByIdsFromDb,
   hardResetLibraryInDb,
   regenerateAutoArtworkForThemeChangeInDb,
@@ -164,6 +165,11 @@ const UI_CURRENT_TIME_MIN_DELTA_SEC = 0.08;
 const DEFAULT_SET_LOOP_SPAN_MIN_SECONDS = 6;
 const DEFAULT_SET_LOOP_SPAN_MAX_SECONDS = 12;
 const DEFAULT_SET_LOOP_SPAN_RATIO = 0.18;
+const LONG_TRACK_LOOP_SPAN_THRESHOLD_SECONDS = 20 * 60;
+const LONG_TRACK_LOOP_SPAN_MIN_SECONDS = 45;
+const LONG_TRACK_LOOP_SPAN_MAX_SECONDS = 120;
+const LONG_TRACK_LOOP_SPAN_RATIO = 0.03;
+const IOS_CROP_GUARD_DURATION_SECONDS = 20 * 60;
 const FX_ENABLED_KEY = "polyplay_fxEnabled_v1";
 const FX_MODE_KEY = "polyplay_fxMode_v1";
 const FX_QUALITY_KEY = "polyplay_fxQuality_v1";
@@ -245,6 +251,32 @@ function easeOutQuad(value: number): number {
 function normalizeDimModeForPlatform(mode: DimMode, isIOS: boolean): DimMode {
   if (isIOS && mode === "dim") return "normal";
   return mode;
+}
+
+function getDefaultLoopSpanForDuration(durationSec: number): number {
+  if (durationSec >= LONG_TRACK_LOOP_SPAN_THRESHOLD_SECONDS) {
+    return Math.max(
+      MIN_LOOP_REGION_SECONDS,
+      Math.min(
+        durationSec,
+        Math.max(
+          LONG_TRACK_LOOP_SPAN_MIN_SECONDS,
+          Math.min(LONG_TRACK_LOOP_SPAN_MAX_SECONDS, durationSec * LONG_TRACK_LOOP_SPAN_RATIO)
+        )
+      )
+    );
+  }
+
+  return Math.max(
+    MIN_LOOP_REGION_SECONDS,
+    Math.min(
+      durationSec,
+      Math.max(
+        DEFAULT_SET_LOOP_SPAN_MIN_SECONDS,
+        Math.min(DEFAULT_SET_LOOP_SPAN_MAX_SECONDS, durationSec * DEFAULT_SET_LOOP_SPAN_RATIO)
+      )
+    )
+  );
 }
 
 function isCoarsePointer(): boolean {
@@ -500,8 +532,9 @@ export default function App() {
   const [vaultImportCloseCountdownMs, setVaultImportCloseCountdownMs] = useState<number | null>(null);
   const [hydratedCurrentTrackMedia, setHydratedCurrentTrackMedia] = useState<{
     trackId: string | null;
-    audioBlob?: Blob;
+    audioUrl?: string;
     artBlob?: Blob;
+    missingAudio?: boolean;
   }>({ trackId: null });
   const [importSummary, setImportSummary] = useState<{
     playlistName: string;
@@ -892,7 +925,7 @@ export default function App() {
       const hydratedLoaded = loaded.length
         ? await getTracksByIdsFromDb(
             loaded.map((track) => track.id),
-            { includeMediaUrls: true, includeBlobs: false }
+            { includeMediaUrls: true, includeAudioUrl: false, includeArtworkUrls: true, includeBlobs: false }
           )
         : [];
       if (requestSeq !== refreshTracksRequestSeqRef.current) return false;
@@ -1797,6 +1830,13 @@ export default function App() {
   }, [noveltyMode]);
 
   useEffect(() => {
+    document.body.classList.toggle("is-ios", isIOS);
+    return () => {
+      document.body.classList.remove("is-ios");
+    };
+  }, [isIOS]);
+
+  useEffect(() => {
     try {
       if (localStorage.getItem(HAS_ONBOARDED_KEY) === "true") {
         setShowOpenState(false);
@@ -2053,8 +2093,9 @@ export default function App() {
     if (hydratedCurrentTrackMedia.trackId !== baseTrack.id) return baseTrack;
     return {
       ...baseTrack,
-      audioBlob: hydratedCurrentTrackMedia.audioBlob,
-      artBlob: hydratedCurrentTrackMedia.artBlob
+      audioUrl: hydratedCurrentTrackMedia.audioUrl ?? baseTrack.audioUrl,
+      artBlob: hydratedCurrentTrackMedia.artBlob,
+      missingAudio: hydratedCurrentTrackMedia.missingAudio ?? baseTrack.missingAudio
     } satisfies Track;
   }, [allTracksCatalog, currentTrackId, hydratedCurrentTrackMedia, tracks]);
   const hasTracks = tracks.length > 0;
@@ -2110,14 +2151,15 @@ export default function App() {
     }
     setHydratedCurrentTrackMedia((current) => (current.trackId === currentTrackId ? current : { trackId: currentTrackId }));
     void (async () => {
-      const media = await getTrackMediaBlobsFromDb(currentTrackId).catch(
-        (): { audioBlob?: Blob; artBlob?: Blob } => ({})
+      const media = await getTrackPlaybackMediaFromDb(currentTrackId).catch(
+        (): { audioUrl?: string; artBlob?: Blob; missingAudio?: boolean } => ({})
       );
       if (cancelled) return;
       setHydratedCurrentTrackMedia({
         trackId: currentTrackId,
-        audioBlob: media.audioBlob,
-        artBlob: media.artBlob
+        audioUrl: media.audioUrl,
+        artBlob: media.artBlob,
+        missingAudio: media.missingAudio
       });
     })();
     return () => {
@@ -2967,7 +3009,7 @@ export default function App() {
     logAudioDebug("playTrack() called", { trackId, autoPlay });
     dismissOpenState();
     const selectedTrack = allTracksRef.current.find((track) => track.id === trackId) ?? null;
-    const canPlay = Boolean(selectedTrack?.audioUrl) && !selectedTrack?.missingAudio;
+    const canPlay = Boolean(selectedTrack?.hasAudioSource) && !selectedTrack?.missingAudio;
     if (autoPlay && canPlay) {
       void ensurePlaybackGainRouting(true);
     }
@@ -3274,16 +3316,7 @@ export default function App() {
       return;
     }
     const livePlaybackTime = getSafeDuration(currentTime) || getSafeDuration(audio?.currentTime || 0);
-    const targetSpan = Math.max(
-      MIN_LOOP_REGION_SECONDS,
-      Math.min(
-        effectiveDuration,
-        Math.max(
-          DEFAULT_SET_LOOP_SPAN_MIN_SECONDS,
-          Math.min(DEFAULT_SET_LOOP_SPAN_MAX_SECONDS, effectiveDuration * DEFAULT_SET_LOOP_SPAN_RATIO)
-        )
-      )
-    );
+    const targetSpan = getDefaultLoopSpanForDuration(effectiveDuration);
     const safeStart = Math.max(0, Math.min(effectiveDuration - targetSpan, livePlaybackTime));
     const safeEnd = Math.min(effectiveDuration, Math.max(safeStart + MIN_LOOP_REGION_SECONDS, safeStart + targetSpan));
     setLoopByTrack((prev) => ({
@@ -3362,8 +3395,22 @@ export default function App() {
     }
   };
 
+  const getCropGuardMessage = () => {
+    const audio = audioRef.current;
+    const effectiveDuration = getSafeDuration(duration) || getSafeDuration(audio?.duration || 0);
+    if (isIOS && effectiveDuration >= IOS_CROP_GUARD_DURATION_SECONDS) {
+      return "This track is too long to crop safely on this device. Try desktop.";
+    }
+    return null;
+  };
+
   const openCropAudioPrompt = () => {
     if (!hasCroppableLoop) return;
+    const cropGuardMessage = getCropGuardMessage();
+    if (cropGuardMessage) {
+      setVaultStatus(cropGuardMessage, "error");
+      return;
+    }
     fireLightHaptic();
     setIsFullscreenPlayerOpen(false);
     setIsCropAudioPromptOpen(true);
@@ -3375,9 +3422,12 @@ export default function App() {
   };
 
   const cropCurrentLoopToWav = async () => {
-    if (!currentTrack?.audioBlob) throw new Error("Current track audio is not available for cropping.");
     if (!hasCroppableLoop) throw new Error("Create a valid loop before cropping audio.");
-    return cropAudioBlobToWav(currentTrack.audioBlob, currentLoop.start, currentLoop.end);
+    const cropGuardMessage = getCropGuardMessage();
+    if (cropGuardMessage) throw new Error(cropGuardMessage);
+    const audioBlob = await getTrackAudioBlobFromDb(currentTrackId || "").catch(() => undefined);
+    if (!audioBlob) throw new Error("Current track audio is not available for cropping.");
+    return cropAudioBlobToWav(audioBlob, currentLoop.start, currentLoop.end);
   };
 
   const handleCropExistingTrack = async () => {
@@ -3532,6 +3582,12 @@ export default function App() {
         localStorage.setItem(DIM_MODE_KEY, next);
       } catch {
         // Ignore localStorage failures.
+      }
+      if (next === "dim" && prev !== "dim") {
+        showFxToast("Audio Dimmed");
+      }
+      if (next === "mute" && prev !== "mute") {
+        showFxToast("Audio Muted");
       }
       return next;
     });

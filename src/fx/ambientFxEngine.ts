@@ -1064,8 +1064,13 @@ class AmbientFxEngine {
       const color = plumeColors[i]!;
       const localOffsetX = (i - 1) * (12 + intensity * 7) + rand(-4, 4);
       const localOffsetY = rand(-6, 8) + i * rand(2, 6);
-      const offsetX = localOffsetX * clusterCos - localOffsetY * clusterSin;
-      const offsetY = localOffsetX * clusterSin + localOffsetY * clusterCos;
+      const clusterOffsetX = localOffsetX * clusterCos - localOffsetY * clusterSin;
+      const clusterOffsetY = localOffsetX * clusterSin + localOffsetY * clusterCos;
+      const isSecondPlume = i === 1;
+      const secondPlumeAngle = isSecondPlume ? rand(0, Math.PI * 2) : 0;
+      const secondPlumeDistance = isSecondPlume ? rand(10, 20) : 0;
+      const offsetX = clusterOffsetX + Math.cos(secondPlumeAngle) * secondPlumeDistance;
+      const offsetY = clusterOffsetY + Math.sin(secondPlumeAngle) * secondPlumeDistance;
       const baseRadius = (this.reducedMotion ? 24 : 30) + intensity * rand(10, 18);
       splat.x = x + offsetX;
       splat.y = y + offsetY;
@@ -1074,7 +1079,7 @@ class AmbientFxEngine {
       splat.r = baseRadius;
       splat.rx = baseRadius * rand(1.35, 1.9);
       splat.ry = baseRadius * rand(0.96, 1.28);
-      splat.rot = clusterRotation + rand(-0.28, 0.28);
+      splat.rot = isSecondPlume ? rand(-Math.PI, Math.PI) : clusterRotation + rand(-0.28, 0.28);
       splat.alpha = rand(0.14, 0.22) * Math.min(1.16, this.themeTokens.glowIntensity);
       splat.ttl = this.resolvedQuality === "lite" ? rand(1500, 2100) : rand(1800, 2600);
       splat.age = 0;

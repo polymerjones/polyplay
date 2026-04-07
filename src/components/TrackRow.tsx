@@ -21,6 +21,8 @@ export function TrackRow({ track, active, isPlaying, dimMode, onSelectTrack, onA
   const auraLevel = Math.max(0, Math.min(1, track.aura / 10));
   const hasAura = track.aura > 0;
   const artist = track.artist?.trim();
+  const sourceLabel = (track.sub || "").trim();
+  const displaySub = sourceLabel && sourceLabel !== "Imported" ? sourceLabel : "";
 
   useEffect(() => {
     const onAuraArtHit = (event: Event) => {
@@ -67,7 +69,7 @@ export function TrackRow({ track, active, isPlaying, dimMode, onSelectTrack, onA
         <div className="trackRow__meta">
           <div className="trackRow__title">{track.title}</div>
           {artist && <div className="trackRow__sub">{artist}</div>}
-          <div className="trackRow__sub">{track.sub || "Imported"}</div>
+          {displaySub && <div className="trackRow__sub">{displaySub}</div>}
           <div className="trackRow__aura">Aura {track.aura}/10</div>
         </div>
       </button>
