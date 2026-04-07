@@ -15,7 +15,11 @@ export function SplashOverlay({ isDismissing, onClose, onSkip, skipLabel = "Skip
   const lastTapAtRef = useRef(0);
   const [needsUserStart, setNeedsUserStart] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
-  const [isVideoReady, setIsVideoReady] = useState(false);
+  const [hasVisibleVideo, setHasVisibleVideo] = useState(false);
+
+  const markVideoVisible = () => {
+    setHasVisibleVideo(true);
+  };
 
   const completeOnce = () => {
     if (completedRef.current) return;
@@ -34,12 +38,12 @@ export function SplashOverlay({ isDismissing, onClose, onSkip, skipLabel = "Skip
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) setIsVideoReady(true);
 
     const startPlayback = async () => {
       try {
         await video.play();
         setNeedsUserStart(false);
+        if (video.currentTime > 0.02) markVideoVisible();
       } catch {
         setNeedsUserStart(true);
       }
@@ -56,7 +60,11 @@ export function SplashOverlay({ isDismissing, onClose, onSkip, skipLabel = "Skip
         video.pause();
         return;
       }
-      void video.play().catch(() => undefined);
+      void video.play()
+        .then(() => {
+          if (video.currentTime > 0.02) markVideoVisible();
+        })
+        .catch(() => undefined);
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
@@ -68,6 +76,7 @@ export function SplashOverlay({ isDismissing, onClose, onSkip, skipLabel = "Skip
     try {
       await video.play();
       setNeedsUserStart(false);
+      if (video.currentTime > 0.02) markVideoVisible();
     } catch {
       setNeedsUserStart(true);
     }
@@ -83,6 +92,7 @@ export function SplashOverlay({ isDismissing, onClose, onSkip, skipLabel = "Skip
       await video.play();
       setSoundEnabled(nextEnabled);
       setNeedsUserStart(false);
+      if (video.currentTime > 0.02) markVideoVisible();
     } catch {
       video.muted = true;
       setSoundEnabled(false);
@@ -110,24 +120,26 @@ export function SplashOverlay({ isDismissing, onClose, onSkip, skipLabel = "Skip
     >
       <video
         ref={videoRef}
-        className={`splash-overlay__video ${isVideoReady ? "is-ready" : ""}`.trim()}
+        className={`splash-overlay__video ${hasVisibleVideo ? "is-ready" : ""}`.trim()}
         src={logoVideo}
         poster={logoImage}
         autoPlay
         muted
         playsInline
         preload="auto"
-        onLoadedData={() => setIsVideoReady(true)}
-        onCanPlay={() => setIsVideoReady(true)}
+        onPlaying={(event) => {
+          if (event.currentTarget.currentTime > 0.02) markVideoVisible();
+        }}
         onTimeUpdate={(event) => {
           const video = event.currentTarget;
+          if (video.currentTime > 0.02) markVideoVisible();
           const safeDuration = Number.isFinite(video.duration) ? video.duration : 0;
           if (safeDuration <= 1) return;
           if (video.currentTime >= safeDuration - 1) completeOnce();
         }}
         onEnded={completeOnce}
       />
-      {!isVideoReady && (
+      {!hasVisibleVideo && (
         <div className="splash-overlay__fallback" aria-hidden="true">
           <img src={logoImage} alt="" className="splash-overlay__fallback-logo" />
           <div className="splash-overlay__fallback-wordmark">PolyPlay</div>

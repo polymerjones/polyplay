@@ -7115,7 +7115,7 @@ html[data-theme="light"] .playlist-selector select {
   overflow: visible;
   aspect-ratio: 1 / 1;
   min-height: 150px;
-  background: linear-gradient(145deg, #1c2232, #0e121c);
+  background: transparent;
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.26);
   isolation: isolate;
   contain: paint;
@@ -7205,6 +7205,7 @@ html[data-theme="light"] .playlist-selector select {
   width: 100%;
   height: 100%;
   border-radius: inherit;
+  overflow: hidden;
   background:
     radial-gradient(circle at 20% 20%, rgba(145, 102, 245, 0.44), rgba(145, 102, 245, 0) 58%),
     radial-gradient(circle at 80% 80%, rgba(72, 170, 255, 0.24), rgba(72, 170, 255, 0) 60%),

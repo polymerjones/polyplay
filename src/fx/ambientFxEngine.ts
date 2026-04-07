@@ -220,6 +220,7 @@ class AmbientFxEngine {
   private attractor = { x: 0, y: 0, strength: 0, until: 0 };
   private popAudio: HTMLAudioElement | null = null;
   private popStamps: number[] = [];
+  private mericaTapCount = 0;
 
   private themeTokens: ThemeTokens = {
     accentRgb: [125, 86, 226],
@@ -292,6 +293,7 @@ class AmbientFxEngine {
     const nextThemeSlot = Object.prototype.hasOwnProperty.call(tokens, "themeSlot")
       ? (tokens.themeSlot ?? null)
       : this.themeTokens.themeSlot;
+    const prevThemeSlot = this.themeTokens.themeSlot;
     this.themeTokens = {
       ...this.themeTokens,
       ...tokens,
@@ -303,6 +305,9 @@ class AmbientFxEngine {
         ? clamp(tokens.glowIntensity as number, 0.5, 2)
         : this.themeTokens.glowIntensity
     };
+    if (prevThemeSlot !== nextThemeSlot) {
+      this.mericaTapCount = 0;
+    }
   }
 
   onTap(x: number, y: number, now = performance.now()): void {
@@ -335,7 +340,18 @@ class AmbientFxEngine {
     }
 
     if (this.themeTokens.themeSlot === "merica") {
-      this.spawnMericaFireworks(x, y, intensity);
+      this.mericaTapCount += 1;
+      const isAccentTap = this.mericaTapCount % 6 === 0;
+      if (isAccentTap && !this.reducedMotion) {
+        this.spawnMericaFireworks(x, y, Math.min(1, intensity + 0.24));
+        this.spawnMericaFireworks(x - 46, y - 18, Math.min(1, intensity + 0.12));
+        this.spawnMericaFireworks(x + 52, y - 12, Math.min(1, intensity + 0.16));
+      } else if (isAccentTap) {
+        this.spawnMericaFireworks(x, y, Math.min(1, intensity + 0.18));
+        this.spawnMericaFireworks(x + 28, y - 10, Math.min(1, intensity + 0.08));
+      } else {
+        this.spawnMericaFireworks(x, y, intensity);
+      }
       this.trimCaps();
       return;
     }
@@ -362,6 +378,7 @@ class AmbientFxEngine {
   }
 
   clear(): void {
+    this.mericaTapCount = 0;
     this.gravityBubbles.length = 0;
     this.popBubbles.length = 0;
     this.splatters.length = 0;

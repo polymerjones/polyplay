@@ -123,7 +123,7 @@ function isBuiltInDemoTrack(track: Pick<TrackRecord, "isDemo" | "demoId"> | null
 }
 
 function sanitizeLibraryForFullBackup(library: LibraryState): LibraryState {
-  const tracksById = Object.fromEntries(
+  const nonDemoTracksById = Object.fromEntries(
     Object.entries(library.tracksById || {}).filter(([, track]) => !isBuiltInDemoTrack(track))
   );
 
@@ -137,9 +137,16 @@ function sanitizeLibraryForFullBackup(library: LibraryState): LibraryState {
         playlistId,
         {
           ...playlist,
-          trackIds: (playlist.trackIds || []).filter((trackId) => Boolean(tracksById[trackId]))
+          trackIds: (playlist.trackIds || []).filter((trackId) => Boolean(nonDemoTracksById[trackId]))
         }
       ])
+  );
+
+  const reachableTrackIds = new Set(
+    Object.values(playlistsById).flatMap((playlist) => (playlist.trackIds || []).filter((trackId) => Boolean(nonDemoTracksById[trackId])))
+  );
+  const tracksById = Object.fromEntries(
+    Object.entries(nonDemoTracksById).filter(([trackId]) => reachableTrackIds.has(trackId))
   );
 
   const activePlaylistId =
@@ -156,9 +163,7 @@ function sanitizeLibraryForFullBackup(library: LibraryState): LibraryState {
 }
 
 export function countNonDemoTracksForFullBackup(library: LibraryState): number {
-  return Object.values(library.tracksById || {}).filter(
-    (track) => !(track.isDemo || (track.demoId ? CANONICAL_DEMO_TRACK_IDS.has(track.demoId) : false))
-  ).length;
+  return Object.keys(sanitizeLibraryForFullBackup(library).tracksById).length;
 }
 
 export type ExportPolyplaylistResult = {
@@ -1315,7 +1320,7 @@ export async function exportFullBackup(
   const { entries: mediaEntries, mediaBytes } = await buildTrackMediaEntries(
     allTracks,
     BACKUP_ROOT,
-    "Preparing backup…",
+    "Collecting vault media…",
     onProgress
   );
   const jsonEntries: ZipEntryInput[] = [
@@ -1353,9 +1358,9 @@ export async function exportFullBackup(
     throw new BackupSizeError(estimatedBytes, capBytes);
   }
 
-  onProgress?.({ done: 0, total: 1, label: "Building zip archive…" });
+  onProgress?.({ done: 0, total: 1, label: "Building vault zip…" });
   const blob = await buildZip([...jsonEntries, ...mediaEntries]);
-  onProgress?.({ done: 1, total: 1, label: "Backup ready." });
+  onProgress?.({ done: 1, total: 1, label: "Vault backup ready." });
 
   return {
     blob,
@@ -1609,7 +1614,11 @@ function sanitizeTrackForRestore(base: TrackRecord): TrackRecord {
   };
 }
 
-export async function importFullBackup(file: File): Promise<ImportFullBackupResult> {
+export async function importFullBackup(
+  file: File,
+  onProgress?: (progress: BackupProgress) => void
+): Promise<ImportFullBackupResult> {
+  onProgress?.({ done: 0, total: 1, label: "Opening vault backup…" });
   const raw = await file.arrayBuffer();
   const zipEntries = parseZipEntries(raw);
 
@@ -1630,10 +1639,21 @@ export async function importFullBackup(file: File): Promise<ImportFullBackupResu
   const restoredTracks: Record<string, TrackRecord> = {};
   const existingBlobKeys = (await listBlobStats()).map((stat) => stat.key);
   const stagedBlobKeys: string[] = [];
+  const trackEntries = Object.entries(importedLibrary.tracksById);
+  const totalTracks = Math.max(1, trackEntries.length);
 
   try {
-    for (const [trackId, track] of Object.entries(importedLibrary.tracksById)) {
+    for (const [index, [trackId, track]] of trackEntries.entries()) {
       const nextTrack = sanitizeTrackForRestore(track);
+      const progressIndex = index + 1;
+
+      if (progressIndex === 1 || progressIndex === totalTracks || progressIndex % 5 === 0) {
+        onProgress?.({
+          done: progressIndex,
+          total: totalTracks,
+          label: `Restoring vault media… (${progressIndex}/${totalTracks} tracks)`
+        });
+      }
 
       const audioEntry = findEntryByPrefix(zipEntries, `${BACKUP_ROOT}/media/${trackId}/audio.`);
       if (audioEntry) {
@@ -1690,6 +1710,7 @@ export async function importFullBackup(file: File): Promise<ImportFullBackupResu
     restoredLibrary.activePlaylistId = firstPlaylistId;
   }
 
+  onProgress?.({ done: 0, total: 1, label: "Finalizing vault restore…" });
   saveLibrary(restoredLibrary);
   const summary = applyImportedConfig(importedConfig);
 
@@ -1698,6 +1719,7 @@ export async function importFullBackup(file: File): Promise<ImportFullBackupResu
   );
   const obsoleteBlobKeys = existingBlobKeys.filter((key) => !restoredBlobKeys.has(key));
   await clearStoredBlobs(obsoleteBlobKeys);
+  onProgress?.({ done: 1, total: 1, label: "Vault restore complete." });
 
   return {
     restoredTracks: Object.keys(restoredTracks).length,

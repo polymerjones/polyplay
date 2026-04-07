@@ -20,7 +20,7 @@ export function EmptyLibraryWelcome({
   onPrimaryButtonClick,
   primaryButtonLabel = "Import your first track",
   primaryButtonClassName,
-  bodyText = "Start by importing your first track. Once you add music, aura controls and loop tools unlock.",
+  bodyText = "Tap Import, choose your first audio file, then review the details and bring it into PolyPlay.",
   onClose
 }: Props) {
   const showPrimaryButton = phase === "pre-tour" || phase === "upload-track";

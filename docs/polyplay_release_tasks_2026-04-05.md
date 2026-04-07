@@ -65,7 +65,127 @@ Use alongside any existing planning board already in the repo, but treat this fi
 ---
 
 ## Active task
-**Current active task:** `Long MP3 import failure containment`
+**Current active task:** `Import page ergonomics`
+
+**Diagnosis note — 2026-04-06 Codex:**
+- Files inspected so far:
+  - `src/admin/AdminApp.tsx`
+  - `src/App.tsx`
+  - `src/components/EmptyLibraryWelcome.tsx`
+  - `src/admin/TransferLaneDropZone.tsx`
+  - `styles.css`
+- Likely UX seam:
+  - The main player already exposes an `Import` action near the top, but once the upload page opens the real first step is visually buried.
+  - In the admin upload form, title/artist fields appear before the audio picker, so the user sees metadata fields before the actual track-selection action.
+  - The only submit button sits low in the form, below artwork controls and optional frame-selection UI, which makes import feel farther away than it is.
+  - First-run guidance says “import your first track,” but it does not explicitly tell the user to tap Import, choose audio first, then review metadata if needed.
+- Narrow implementation plan:
+  - Keep the import engine unchanged.
+  - Reorder the upload form so audio selection is the first visible action.
+  - Surface a primary Import button near the top once audio is armed, while keeping the existing lower submit button.
+  - Tighten the welcome/import hint copy so it describes the actual sequence in plain language.
+- Fix implemented — 2026-04-06 Codex:
+  - Exact fix made:
+    - Reordered the admin upload form so the audio drop zone is now the first visible action.
+    - Added clearer helper copy at the top of the import form explaining that audio comes first and metadata/artwork can be reviewed after.
+    - Added a second primary Import button near the top of the upload form, next to a compact readiness summary, while keeping the existing lower submit button in place.
+    - Added clearer hints to the audio and artwork drop zones so the first step and optional artwork step are less ambiguous.
+    - Added a calm onboarding tooltip to the main app’s header Import button when the upload hint is active.
+    - Tightened empty-state/onboarding copy so it explicitly says to tap Import, choose audio first, then review details and import.
+  - Exact files changed:
+    - `src/admin/AdminApp.tsx`
+    - `src/App.tsx`
+    - `src/components/EmptyLibraryWelcome.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low.
+    - This pass changes only layout order, helper copy, and duplicate access to the existing submit flow.
+    - Import logic, metadata parsing, and storage behavior are unchanged.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm the import page now shows the audio step high enough on mobile without feeling buried.
+    - Confirm the new top Import button submits exactly like the existing lower Import button.
+    - Confirm the main app header Import tooltip appears only during the upload-guidance phase and does not collide badly on small screens.
+    - Confirm onboarding copy feels clear but not overly noisy during first-run flow.
+
+**Diagnosis note — 2026-04-06 Codex:**
+- Files inspected so far:
+  - `src/App.tsx`
+  - `src/admin/AdminApp.tsx`
+  - `src/lib/backup.ts`
+  - `src/lib/toastUtils.ts`
+- Likely UX seam:
+  - Export already has progress labels, but some wording is vague or abrupt, especially `Zipping backup now.` and `Preparing download…`.
+  - Import is less trustworthy because the main app starts restore work without any explicit “opening/reading backup” phase message, and admin import only shows a broad `Importing backup…` label for the whole operation.
+  - Backup-size and storage-related helper text can be made plainer so users understand the difference between device export limits and general app storage pressure.
+- Narrow implementation plan:
+  - Keep this pass to copy plus tiny phase-label sequencing only.
+  - Add an optional progress callback to full-backup import so both app surfaces can show `opening`, `restoring`, and `finalizing` states without changing restore behavior.
+  - Tighten the most visible vault import/export and storage-cap messages to calmer, more literal wording.
+- Fix implemented — 2026-04-06 Codex:
+  - Exact fix made:
+    - Added an optional progress callback to `importFullBackup(...)` so vault import can now surface explicit restore phases: `Opening vault backup…`, `Restoring vault media…`, and `Finalizing vault restore…`.
+    - Updated export-phase labels to clearer wording around collecting media and building the vault zip.
+    - Updated the main app vault toast copy to use clearer import/export wording and calmer success/error text.
+    - Updated the admin backup/import progress and status copy to match the same vault wording.
+    - Expanded the busy-toast shimmer matcher so all active vault-process labels shimmer consistently, including the new opening/restoring/finalizing labels.
+    - Tightened backup-size helper text so it reads as a device export-limit problem rather than a vague storage failure.
+  - Exact files changed:
+    - `src/lib/backup.ts`
+    - `src/lib/toastUtils.ts`
+    - `src/App.tsx`
+    - `src/admin/AdminApp.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low.
+    - This pass only changes user-facing status wording and adds optional import progress callbacks.
+    - The underlying backup/export/import behavior is unchanged.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm vault export in the main app shows clearer active shimmer text through the full save flow.
+    - Confirm admin full-backup export shows the updated active shimmer labels and final status wording.
+    - Confirm app and admin import both show opening/restoring/finalizing progress without conflicting duplicate messages.
+    - Confirm backup-size errors read clearly on mobile and do not imply the wrong kind of storage limit.
+
+**Diagnosis note — 2026-04-06 Codex:**
+- Files inspected so far:
+  - `src/App.tsx`
+  - `src/components/AmbientFxCanvas.tsx`
+  - `src/fx/ambientFxEngine.ts`
+- Likely cadence seam:
+  - America/Merica tap fireworks already route through the ambient FX engine, not the DOM safe-tap burst layer.
+  - `App.tsx` forwards taps to `AmbientFxCanvas`, which calls `ambientFxEngine.onTap(...)`.
+  - In `ambientFxEngine.ts`, Merica currently uses only a rolling tap-window intensity value and always spawns a single `spawnMericaFireworks(...)` burst per tap.
+  - There is no existing per-theme cadence counter, which is why there is no distinct “every 6th tap” accent today.
+- Narrow implementation plan:
+  - Keep the fix inside `src/fx/ambientFxEngine.ts`.
+  - Add a small Merica-only tap counter and trigger a stronger multi-burst accent on every 6th tap.
+  - Reuse the existing `spawnMericaFireworks(...)` renderer with small positional offsets instead of redesigning the effect system.
+  - Preserve normal single-burst behavior for all non-6th taps.
+- Fix implemented — 2026-04-06 Codex:
+  - Exact fix made:
+    - Added a Merica-only tap cadence counter inside `src/fx/ambientFxEngine.ts`.
+    - Every 6th Merica tap now triggers a stronger multi-burst accent by reusing the existing `spawnMericaFireworks(...)` renderer at the tapped point plus two nearby offset burst points.
+    - Reduced-motion Merica taps keep a smaller two-burst accent instead of the full three-burst variant.
+    - The cadence counter resets when the theme slot changes or when the FX canvas is cleared so the accent pattern does not leak across theme switches or resets.
+  - Exact files changed:
+    - `src/fx/ambientFxEngine.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Regression risk:
+    - Low.
+    - The change is scoped to Merica-theme tap fireworks only.
+    - Normal non-6th taps still use the existing single-burst behavior.
+    - The only intentional behavior change is the stronger accent cadence on every 6th Merica tap.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm Merica theme produces the usual single burst on taps 1-5.
+    - Confirm tap 6 produces a visibly stronger multi-burst accent.
+    - Confirm the cadence repeats reliably on taps 12, 18, and so on.
+    - Confirm theme switching or fullscreen transitions do not leave the cadence out of phase in an obvious way.
+    - Confirm reduced-motion behavior still feels controlled rather than noisy.
 
 **Diagnosis note — 2026-04-06 Codex:**
 - Files inspected so far:
@@ -124,6 +244,481 @@ Use alongside any existing planning board already in the repo, but treat this fi
     - Confirm the imported track remains playable and visible after closing/reopening the app.
     - Confirm smaller iOS imports without artwork still get generated poster art.
     - Confirm imports with embedded artwork still preserve that artwork.
+- Diagnosis start — 2026-04-06 Codex:
+  - Scope:
+    - playlist deletion from admin
+    - track/media cleanup after playlist deletion
+    - shared-media protection across playlists
+    - vault export size behavior and orphaned blob inclusion
+  - Files to inspect:
+    - `src/admin/AdminApp.tsx`
+    - `src/lib/db.ts`
+    - `src/lib/storage/db.ts`
+    - `src/lib/storage/library.ts`
+    - `src/lib/backup.ts`
+  - Working questions:
+    - Does deleting a playlist remove only the playlist row, or also unreferenced tracks and blobs?
+    - Does vault export walk library references only, or can orphaned blobs still bloat the archive/export-size calculation?
+    - Could a reported `734 MB` vault size plausibly come from retained imported MP3 blobs after playlist deletion?
+- Diagnosis update — 2026-04-06 Codex:
+  - Files inspected:
+    - `src/admin/AdminApp.tsx`
+    - `src/lib/db.ts`
+    - `src/lib/backup.ts`
+    - `src/lib/storage/db.ts`
+  - Likely root cause:
+    - Playlist deletion itself appears to remove the playlist row and delete blobs for tracks that become unreferenced by all remaining playlists.
+    - Shared tracks are intentionally protected by reference counting across playlists.
+    - Full backup export does not iterate raw blob-store keys, so truly orphaned blobs by themselves should not inflate the vault export estimate.
+    - The sharper issue is that full backup export includes every non-demo track still present in `library.tracksById`, even if that track is no longer referenced by any playlist. If orphaned/unreferenced track records exist in the library, their audio blobs will still be exported and still count against the `512 MB` mobile cap.
+    - This means a reported `734 MB` vault estimate is much more likely to come from retained track records and their referenced MP3 blobs than from blob-store garbage alone.
+  - Narrow implementation direction:
+    - Keep diagnosis-only for now.
+    - Safest next fix is probably to make full backup export prune to tracks actually referenced by surviving non-demo playlists, and optionally add a targeted orphan-track/blob cleanup pass rather than raising the backup cap.
+  - Concrete codepath findings:
+    - Admin playlist deletion flows through `src/admin/AdminApp.tsx` `onDeletePlaylist(...)`, which calls `deletePlaylistInDb(...)`, then refreshes playlists, tracks, and storage.
+    - `src/lib/db.ts` `deletePlaylistInDb(...)` deletes the playlist record first, recomputes references with `countTrackReferences(...)`, and deletes track blobs plus `tracksById` entries only for tracks that are no longer referenced anywhere.
+    - `src/lib/db.ts` `clearPlaylistInDb(...)` uses the same reference-counting pattern for nuking/emptying a playlist while preserving shared tracks.
+    - `src/lib/db.ts` `getStorageUsageSummary()` reads raw blob-store stats from `listBlobStats()`, so admin storage totals can stay high if blob-store garbage already exists from earlier failures even when backup export would not include those blobs.
+    - `src/lib/backup.ts` `exportFullBackup(...)` calls `sanitizeLibraryForFullBackup(loadLibrary())`, but that sanitizer removes demo content only; it does not prune tracks that have zero remaining playlist references.
+    - `src/lib/backup.ts` `buildTrackMediaEntries(...)` exports media by walking the track records passed in, so any stale non-demo `tracksById` entry with live blob keys will still be packaged into the vault backup.
+  - Release judgment:
+    - This looks safe to fix before release if kept surgical.
+    - The most surgical change is in full-backup export scoping, not playlist deletion semantics and not backup-cap widening.
+  - Implementation decision — 2026-04-06 Codex:
+    - Confirmed root cause for the release-trust issue:
+      - full vault backup currently includes all non-demo `tracksById` rows, not only tracks still reachable from surviving playlists
+      - this can keep deleted/unreachable media in the backup even when playlist deletion itself handled shared-reference protection correctly
+    - Narrowest release-safe fix:
+      - apply export-time filtering only, by pruning full-backup library content to tracks referenced by surviving non-demo playlists before media collection runs
+    - Deferred on purpose:
+      - broad delete-time storage/orphan cleanup redesign
+      - admin storage-meter reconciliation for pre-existing orphan blobs
+  - Fix implemented — 2026-04-06 Codex:
+    - Exact fix made:
+      - Updated full-backup sanitization so vault export now prunes non-demo tracks to only those still reachable from surviving non-demo playlists before media collection runs.
+      - Updated full-backup track counting to use that same sanitized/reachable set so backup eligibility matches actual export contents.
+    - Fix type:
+      - export-time filtering only
+    - Exact files changed:
+      - `src/lib/backup.ts`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Why this was the safest release fix:
+      - It addresses the trust-critical user-visible problem directly: deleted/unreachable media should no longer keep inflating vault export size.
+      - It leaves playlist deletion semantics, shared-track protection, storage accounting, and restore/import behavior untouched.
+      - It avoids a riskier delete-time cleanup change late in stabilization.
+    - Intentionally deferred:
+      - deleting pre-existing orphan blobs from the blob store
+      - reconciling admin storage totals with exportable live media
+      - broader storage/backup redesign
+    - Regression risk:
+      - Low.
+      - The main intentional behavior change is that tracks not reachable from any surviving non-demo playlist are no longer included in full vault backups.
+      - If the product later wants “library-resident but unassigned” tracks to be preserved in full backups, that would need an explicit design, but no such ownership model was evident in the current code.
+    - QA completed:
+      - `npm run typecheck`
+  - QA still needed:
+      - Delete a playlist containing unique long tracks, then confirm full backup estimate/export size drops.
+      - Delete one playlist while another still references shared tracks and confirm shared media remains exportable.
+      - Confirm remaining playlists/tracks still load normally after deletion.
+      - Confirm full backup no longer includes unreachable tracks/media.
+      - Smoke-test full backup import/export flow on an existing non-demo library.
+- Diagnosis start — 2026-04-06 Codex:
+  - Scope:
+    - full vault import path only
+    - post-import restore/rehydration/refresh behavior
+    - iPhone flashing / repeated redraw / bricked reopen loop
+  - Files to inspect:
+    - `src/admin/AdminApp.tsx`
+    - `src/lib/backup.ts`
+    - `src/App.tsx`
+    - `src/lib/storage/library.ts`
+    - any iOS-specific lifecycle/reopen hooks touched after import
+  - Working questions:
+    - where does full vault import write restored library/media/config
+    - what post-import messages or refreshes fire after restore completes
+    - can restored heavy media cause repeated refresh/reconcile/playback reinit on iOS
+    - is there a loop between import completion, overlay reopen/close, and app rehydration
+  - Diagnosis update — 2026-04-06 Codex:
+    - Files inspected:
+      - `src/App.tsx`
+      - `src/admin/AdminApp.tsx`
+      - `src/lib/backup.ts`
+      - `src/lib/db.ts`
+      - `src/lib/player/media.ts`
+      - `src/lib/storage/library.ts`
+    - Findings:
+      - Full vault import reads the whole zip into memory in `src/lib/backup.ts` `importFullBackup(...)`, restores every media blob into IndexedDB, saves the restored library, applies imported config, then deletes obsolete old blobs.
+      - After import, both the in-app vault flow (`src/App.tsx` `onLoadUniverseFile(...)`) and the admin iframe flow (`src/admin/AdminApp.tsx` `onImportFullBackupFile(...)`) trigger post-restore refresh activity.
+      - The critical refresh path is `src/App.tsx` `refreshTracks()`, which calls `getAllTracksFromDb()`.
+      - `src/lib/db.ts` `getAllTracksFromDb()` maps every track through `toTrack(...)`, and `toTrack(...)` eagerly calls `getBlob(...)` for audio/art/video blobs and returns `audioBlob`/`artBlob` for every track, not just the current track.
+      - On a heavy restored vault, this means the app immediately rehydrates the entire restored media set into JS memory right after import.
+      - The import path also triggers redundant refresh pressure:
+        - in-app flow dispatches `polyplay:library-updated` and also directly awaits `refreshTracks()`
+        - admin iframe flow posts both `config-imported` and `library-updated`, and the parent app refresh handlers react to both
+      - That redundancy alone does not explain an infinite loop, but under heavy payload on iPhone it likely increases the chance of a webview crash during post-import hydration.
+      - Once the large restored library has already been persisted, app reopen/startup will hit the same eager hydration path again, which can create the observed "flashing / repeated redraw / effectively bricked" behavior on iOS.
+    - Likely root cause:
+      - not generic ZIP parsing
+      - not a simple message-loop by itself
+      - most likely iOS memory collapse caused by eager full-library blob rehydration immediately after restore, with repeated refresh triggers increasing the odds of crash and persisted restored state causing the same crashy hydration path again on reopen
+    - Narrow implementation direction:
+      - safest next fix is likely a containment change in post-import/startup hydration, not in the ZIP parser
+      - likely target: stop `refreshTracks()` from eagerly materializing every restored blob into JS memory during restore/reopen, or at minimum avoid the redundant post-import refresh fan-out on heavy restore paths
+  - Implementation decision — 2026-04-06 Codex:
+    - Confirmed release-safe fix target:
+      - remove eager blob hydration from the general track catalog refresh path
+    - Narrow implementation plan:
+      - make `getAllTracksFromDb()` / `toTrack(...)` stop fetching `audioBlob` and `artBlob` for every track during normal refresh
+      - preserve URLs/metadata/catalog behavior
+      - patch any direct blob-dependent operation only if it needs an explicit on-demand fetch fallback
+    - Deferred on purpose:
+      - ZIP/import flow redesign
+      - broader event-fanout cleanup unless a tiny direct change proves necessary
+  - Fix implemented — 2026-04-06 Codex:
+    - Exact fix made:
+      - General library refresh no longer hydrates media blobs for the full library.
+ - Diagnosis start — 2026-04-06 Codex:
+   - Scope:
+     - Rasta auto-art instability only
+     - whether art is truly regenerating or just being visually re-animated
+   - Files inspected:
+     - `src/components/FullscreenPlayer.tsx`
+     - `src/App.tsx`
+     - `src/admin/AdminApp.tsx`
+     - `src/lib/db.ts`
+     - `styles.css`
+   - Findings:
+     - I do not see an interval/effect loop repeatedly regenerating auto artwork in storage during normal playback.
+     - Auto-art regeneration in `src/lib/db.ts` is currently tied to explicit theme changes through `regenerateAutoArtworkForThemeChangeInDb(...)`, not to a repeating timer.
+     - The strongest match for the reported "changes every 5 seconds" behavior is in `src/components/FullscreenPlayer.tsx`, where generated artwork (`track.artworkSource === "auto"`) is intentionally animated with a canvas overlay on a `4000ms` loop via `requestAnimationFrame`.
+     - Rasta also layers animated smoke/leaf background motion in `styles.css`, which likely amplifies the impression that the poster itself keeps changing.
+   - Likely root cause:
+     - This looks much more like unstable presentation of generated art than repeated DB-side art regeneration.
+     - Specifically, fullscreen auto-art animation is enabled for all auto-generated art, and the Rasta theme makes that motion especially noticeable.
+ - Narrow implementation direction:
+   - Safest next fix is likely to keep generated art visually stable in this path by disabling or gating the fullscreen generated-art animation, rather than touching theme watchers, storage, or auto-art generation itself.
+ - Implementation decision — 2026-04-06 Codex:
+   - Confirmed release-safe fix target:
+     - `src/components/FullscreenPlayer.tsx` generated-art presentation only
+   - Narrow implementation plan:
+     - disable the repeating generated-art canvas animation loop so auto-generated poster art remains visually stable in fullscreen
+     - leave artwork-video handling unchanged
+     - leave DB/theme-triggered auto-art regeneration unchanged
+ - Fix implemented — 2026-04-06 Codex:
+   - Exact fix made:
+     - Disabled the fullscreen generated-art animation loop in `src/components/FullscreenPlayer.tsx` by turning off the auto-art canvas overlay path.
+     - Auto-generated poster art now remains visually static in fullscreen/current-art presentation instead of cycling on the previous ~4 second loop.
+     - Artwork-video behavior remains unchanged.
+     - Theme-change-triggered DB regeneration remains unchanged.
+   - Exact files changed:
+     - `src/components/FullscreenPlayer.tsx`
+     - `docs/polyplay_release_tasks_2026-04-05.md`
+   - Why this was the safest release fix:
+     - It fixes the confirmed presentation-layer cause directly without touching storage, theme watchers, or regeneration logic.
+     - It avoids broader fullscreen art redesign and preserves existing artwork/video handling.
+   - Intentionally deferred:
+     - any future redesign of generated-art animation as an explicit opt-in effect
+     - Rasta smoke/background polish unrelated to the repeated poster-change symptom
+   - Regression risk:
+     - Low.
+     - The main behavior change is intentional: auto-generated poster art is now visually stable instead of animated in fullscreen.
+   - QA completed:
+     - `npm run typecheck`
+   - QA still needed:
+     - Confirm Rasta auto art stays visually stable for the same track over time.
+     - Confirm explicit theme change still regenerates auto art when intended.
+     - Confirm non-video auto-art tracks still render correctly.
+     - Confirm artwork-video tracks are unchanged.
+     - Confirm fullscreen transitions still work normally.
+ - Diagnosis start — 2026-04-06 Codex:
+   - Scope:
+     - waveform visibility before playback only
+     - whether pre-play waveform blanking is data-readiness, rendering, or styling
+   - Files inspected:
+     - `src/components/WaveformLoop.tsx`
+     - `src/components/player.css`
+     - `src/App.tsx`
+     - `src/lib/db.ts`
+     - `src/lib/artwork/waveformArtwork.ts`
+     - `src/lib/waveformTheme.ts`
+     - `src/components/MiniPlayerBar.tsx`
+     - `src/components/FullscreenPlayer.tsx`
+   - Findings:
+     - The waveform component already has multiple fallback paths that should allow pre-play rendering even before decoded peaks exist:
+       - cached `track.waveformPeaks`
+       - stored/runtime peak cache
+       - synthetic `fallbackPeaks()`
+     - General track hydration no longer ships `audioBlob` with the full catalog after the recent iOS vault-import containment change. Active-track blobs are now loaded asynchronously on demand in `src/App.tsx`.
+     - `WaveformLoop` can still render without `audioBlob`, so the new lazy hydration is a secondary amplifier, not the primary cause.
+     - The stronger issue is render invalidation: `WaveformLoop` draws its canvases from `getBoundingClientRect()` inside effects that depend on peaks/time/duration state, but it does not observe container size/layout changes and has no local `ResizeObserver`.
+     - If the waveform first draws while the player area is still settling or measuring at zero width/height, the canvases can remain blank until some later state change causes another draw.
+     - Playback start reliably changes `currentTime`, which re-runs the decor canvas draw path and can make the waveform suddenly appear, matching the observed symptom.
+     - Theme contrast is unlikely to be the primary cause: idle waveform colors are opaque enough in `src/lib/waveformTheme.ts`, and the pre-play canvas is not intentionally hidden once a track exists.
+   - Likely root cause:
+     - The blank pre-play waveform is most likely a canvas redraw/measurement bug, not missing waveform data generation.
+     - Specifically, `WaveformLoop` does not redraw when its viewport size becomes valid after initial layout, so a first blank/zero-size draw can persist until playback-driven state changes arrive.
+ - Narrow implementation direction:
+   - Safest next fix is likely to add a tiny waveform-local redraw trigger for viewport size/layout changes, or otherwise force one redraw after the player area settles, without changing audio import, playback, or waveform generation logic.
+ - Implementation decision — 2026-04-06 Codex:
+   - Confirmed release-safe fix target:
+     - `src/components/WaveformLoop.tsx` presentation/layout only
+   - Narrow implementation plan:
+     - add a waveform-local layout redraw trigger
+     - use a tightly scoped `ResizeObserver` on the waveform container and a small post-layout redraw after track change
+     - keep waveform generation and playback behavior unchanged
+ - Fix implemented — 2026-04-06 Codex:
+   - Exact fix made:
+     - Added a waveform-local layout redraw trigger in `src/components/WaveformLoop.tsx`.
+     - `WaveformLoop` now observes the waveform container with `ResizeObserver` and bumps a local layout version only when the measured waveform viewport size changes to a valid non-zero size.
+     - Added a narrow two-`requestAnimationFrame` post-layout redraw after track change so a too-early first canvas draw does not persist.
+     - Wired both waveform canvas draw effects to that local layout version so the waveform redraws when the viewport becomes valid, without changing playback or waveform generation logic.
+   - Exact files changed:
+     - `src/components/WaveformLoop.tsx`
+     - `docs/polyplay_release_tasks_2026-04-05.md`
+   - Redraw trigger type:
+     - both
+     - `ResizeObserver` for valid size/layout changes
+     - a one-shot post-layout settle redraw after track change
+   - Why this was the safest release fix:
+     - It stays entirely inside waveform presentation/layout behavior.
+     - It does not change track loading, waveform generation, audio playback, or broader app layout.
+     - It directly addresses the confirmed zero-size/too-early draw failure mode.
+   - Intentionally deferred:
+     - any broader waveform rendering refactor
+     - any app-wide layout invalidation system
+     - any unrelated visual polish to waveform styling
+   - Regression risk:
+     - Low.
+     - Main tradeoff is a small amount of additional redraw work when the waveform container resizes or a track changes, but the observer is scoped locally and only reacts to actual size changes.
+   - QA completed:
+     - `npm run typecheck`
+   - QA still needed:
+     - Load a track and confirm waveform is visible before pressing play.
+     - Confirm waveform still updates correctly during playback.
+     - Confirm switching tracks redraws correctly before playback.
+     - Confirm mini player and fullscreen loop editor still render waveform correctly.
+     - Confirm no obvious regressions on iPhone/Safari where layout timing is more sensitive.
+ - Diagnosis start — 2026-04-06 Codex:
+   - Scope:
+     - factory reset path only
+     - Safari splash overlay behavior after reset/startup
+     - splash asset visibility, not broader onboarding redesign
+   - Files inspected:
+     - `src/App.tsx`
+     - `src/admin/AdminApp.tsx`
+     - `src/components/SplashOverlay.tsx`
+     - `src/index.css`
+   - Findings:
+     - Factory reset from admin clears splash/onboarding keys in `src/admin/AdminApp.tsx`, then posts `polyplay:factory-reset` to the parent.
+     - The parent reset handler in `src/App.tsx` sets `showSplash(true)` and `isSplashDismissing(false)`, so the splash overlay is explicitly re-shown after reset.
+     - The splash assets themselves are present locally (`logo.png` and `polyplay_splashvideo_logo480.mp4`), so this does not look like a missing-file problem.
+     - In `src/components/SplashOverlay.tsx`, the fallback logo is shown only while `!isVideoReady`.
+     - `isVideoReady` is set eagerly from:
+       - `video.readyState >= HAVE_CURRENT_DATA`
+       - `onLoadedData`
+       - `onCanPlay`
+     - On Safari, those conditions can become true before the video has actually painted a usable frame and even when autoplay is blocked or deferred.
+     - Once `isVideoReady` flips true, the fallback logo is removed and the video fades in. If Safari has not painted the first frame yet, the splash can appear black/blank, which matches the “missing splash image” report.
+   - Likely root cause:
+     - The splash overlay’s readiness logic is too optimistic for Safari.
+     - It treats media readiness as visual readiness and hides the fallback image too early, especially on reset when the splash is forced back into view and autoplay/user-gesture conditions are sensitive.
+ - Narrow implementation direction:
+   - Safest next fix is likely inside `src/components/SplashOverlay.tsx`:
+     - keep the fallback logo visible until actual playback/frame-progress is confirmed, or
+     - otherwise make the fallback independent of early `canplay`/`loadeddata` signals on Safari.
+ - Implementation decision — 2026-04-06 Codex:
+   - Confirmed release-safe fix target:
+     - `src/components/SplashOverlay.tsx` readiness/display logic only
+   - Narrow implementation plan:
+     - stop treating `readyState` / `loadeddata` / `canplay` as sufficient to hide the fallback
+     - require stronger evidence of visible playback, with actual video time/frame progress, before removing the fallback logo
+     - leave reset sequencing and splash assets unchanged
+ - Fix implemented — 2026-04-06 Codex:
+   - Exact fix made:
+     - Updated `src/components/SplashOverlay.tsx` so the fallback splash logo is no longer removed on early media-readiness signals alone.
+     - Replaced the old `isVideoReady` behavior with a stronger visible-playback gate: the splash video now has to show actual playback progress (`currentTime > 0.02`) before the fallback logo is hidden.
+     - The splash video still attempts autoplay as before, but if Safari reports readiness before a visible frame is on screen, the fallback remains visible instead of going blank.
+   - Exact files changed:
+     - `src/components/SplashOverlay.tsx`
+     - `docs/polyplay_release_tasks_2026-04-05.md`
+   - Stronger signal now controlling fallback removal:
+     - actual playback/frame progress via `currentTime > 0.02`
+     - observed from play/resume attempts and `timeupdate`, instead of `readyState` / `loadeddata` / `canplay` alone
+   - Why this was the safest release fix:
+     - It stays entirely inside splash readiness/display logic.
+     - It leaves factory reset sequencing, onboarding flow, and splash assets untouched.
+     - It directly addresses the Safari-specific early-readiness mismatch that was hiding the fallback too soon.
+   - Intentionally deferred:
+     - any broader splash/onboarding redesign
+     - any Safari/PWA-specific branching beyond the stronger readiness gate
+   - Regression risk:
+     - Low.
+     - The main behavior change is intentional: the fallback image can remain visible slightly longer before the video takes over.
+   - QA completed:
+     - `npm run typecheck`
+  - QA still needed:
+    - Run factory reset in Safari browser mode and confirm the splash shows a visible image immediately.
+    - Test Safari PWA mode separately if possible.
+    - Confirm splash still transitions into video normally.
+    - Confirm skip/close/tap-to-start behavior still works.
+    - Confirm non-Safari browsers are unchanged.
+ - Diagnosis start — 2026-04-06 Codex:
+   - Scope:
+     - theme-to-aura mapping only
+     - custom theme selection for Amber / Teal / Crimson
+     - global aura override vs theme CSS variable behavior
+   - Files inspected:
+     - `src/lib/themeConfig.ts`
+     - `src/App.tsx`
+     - `src/admin/AdminApp.tsx`
+     - `styles.css`
+   - Findings:
+     - The actual theme aura constants are already correct:
+       - Amber `#f0b35b`
+       - Teal `#42c7c4`
+       - Crimson `#cf6f82`
+     - CSS theme-slot aura variables are also correct in `styles.css`.
+     - The likely bug is in theme-switch runtime logic, not the constants.
+     - In both `src/App.tsx` and `src/admin/AdminApp.tsx`, custom-theme switching only updates `auraColor` when `preserveTrackThemeAuraOrigins` is false.
+     - When preserve-origins is true, the code skips updating or clearing the global aura override, which can leave a stale prior aura color in state/localStorage and override the correct theme aura.
+   - Likely root cause:
+     - The preserve-origins flag is incorrectly affecting the global UI aura mapping seam.
+     - It should control track/theme-origin conversion behavior, not prevent the selected theme pack from applying its intended aura color to the UI.
+  - Narrow implementation direction:
+    - Safest next fix is to make explicit theme selection always apply the matching global aura color for custom theme packs, regardless of preserve-origins.
+    - Keep preserve-origins only on the track regeneration path.
+ - Fix implemented — 2026-04-06 Codex:
+   - Exact fix made:
+     - Updated explicit theme-switch handling in `src/App.tsx` so custom theme selection now always applies that pack’s matching global aura color (`THEME_PACK_AURA_COLORS[...]`) and persists it to `AURA_COLOR_KEY`, regardless of the preserve-origins setting.
+     - Updated the admin theme-switch path in `src/admin/AdminApp.tsx` to mirror the same behavior and to always post the matching `polyplay:aura-color-updated` message for custom theme selection.
+     - Preserve-origins now remains only on the track regeneration branch, not on the global UI aura mapping branch.
+   - Exact files changed:
+     - `src/App.tsx`
+     - `src/admin/AdminApp.tsx`
+     - `docs/polyplay_release_tasks_2026-04-05.md`
+   - Why this was the safest release fix:
+     - The theme aura constants and CSS were already correct.
+     - The bug was a narrow runtime override issue where stale `auraColor` could survive theme changes.
+     - This fix corrects the explicit theme-selection seam without redesigning theme state or track-origin behavior.
+   - Regression risk:
+     - Low.
+     - The intentional behavior change is that selecting Amber / Teal / Crimson now always updates the global aura to the pack’s intended color, even when preserve-origins is on.
+   - QA completed:
+     - `npm run typecheck`
+  - QA still needed:
+    - Confirm Amber theme shows an amber aura.
+    - Confirm Teal theme shows a teal/turquoise aura.
+    - Confirm Crimson theme shows a crimson aura.
+    - Confirm theme switching still works from both main app and admin.
+    - Confirm preserve-origins still only affects track-regeneration behavior, not UI aura color.
+ - Diagnosis start — 2026-04-06 Codex:
+   - Scope:
+     - YTM-style tile shell/background/masking only
+     - false square / black backing behind rounded corners
+   - Files inspected:
+     - `src/components/TrackTile.tsx`
+     - `src/components/BorderTrail.tsx`
+     - `styles.css`
+     - `src/index.css`
+   - Findings:
+     - The tile content is rendered inside `.ytm-tile-hit`, which already has the intended rounded mask (`border-radius: 16px; overflow: hidden; background: #0e121c`).
+     - The outer `.ytm-tile` shell also paints its own dark background gradient while keeping `overflow: visible`.
+     - That creates a second backing layer behind the real rounded hit area and can read as a square/black rectangle behind the corners when the inner masked cover and outer shell disagree visually.
+     - `ytm-cover` inherits radius but does not clip its own media explicitly, so tightening the cover clipping is also low-risk.
+   - Likely root cause:
+     - The tile has two competing background layers:
+       - outer shell `.ytm-tile`
+       - inner masked tile body `.ytm-tile-hit`
+     - The outer shell background is the likely false square backing seam.
+  - Narrow implementation direction:
+    - Safest next fix is to make the outer `.ytm-tile` shell background transparent and let the rounded `.ytm-tile-hit` own the visible tile body.
+    - Also add local clipping on `.ytm-cover` so media/pseudo content cannot escape the intended rounded tile mask.
+ - Fix implemented — 2026-04-06 Codex:
+   - Exact fix made:
+     - Removed the outer `.ytm-tile` shell backing fill by changing its background to transparent.
+     - Added `overflow: hidden` to `.ytm-cover` so cover media and cover pseudo-layers clip to the inherited rounded radius.
+   - Exact files changed:
+     - `styles.css`
+     - `docs/polyplay_release_tasks_2026-04-05.md`
+   - Why this was safe to fix before release:
+     - The issue was a narrow layer/mask seam in the tile stack, not a broader tile architecture problem.
+     - The rounded tile body already lived on `.ytm-tile-hit`, so removing the duplicate outer backing layer is low risk.
+   - Regression risk:
+     - Low.
+     - Main behavioral change is only that the visible tile body is now owned by one rounded masked layer instead of two competing layers.
+   - QA completed:
+     - `npm run typecheck`
+ - QA still needed:
+   - Confirm rounded tile corners render cleanly with no black/square backing.
+   - Check both default and custom themes.
+   - Check tiles with real artwork and fallback artwork.
+   - Confirm active/aura-hit states still render correctly.
+ - Diagnosis start — 2026-04-06 Codex:
+   - Scope:
+     - Rasta smoke composition only
+     - whether the doubled cloud look comes from duplicate layers or a single overbuilt composition
+   - Files inspected:
+     - `styles.css`
+     - `src/index.css`
+     - `src/App.tsx`
+   - Findings:
+     - I do not see two separate smoke components mounting from JS.
+     - Rasta uses:
+       - `body.theme-custom.theme-custom-rasta::before` for the main blurred smoke/haze field
+       - `body.theme-custom.theme-custom-rasta::after` for the leaf layer, but that layer also includes two extra radial haze gradients
+       - the global `.track-backdrop.is-visible`, which is also blurred and slightly more opaque for Rasta (`0.23`)
+     - So the “double cloud” look is most likely compositional overlap:
+       - one real smoke field in `::before`
+       - plus secondary haze in `::after`
+       - plus the blurred track backdrop behind everything
+     - The generic `body.theme-custom::before` is not a separate extra smoke layer here; the Rasta-specific `::before` overrides that same pseudo-element.
+   - Likely root cause:
+     - Not duplicate mounting.
+     - The Rasta smoke effect is being visually doubled by overlapping haze sources across multiple layers.
+     - The sharpest suspect is the extra radial haze gradients in `body.theme-custom.theme-custom-rasta::after`, because that layer already carries the weed silhouette and should not also read like a second smoke cloud.
+   - Narrow implementation direction:
+     - Safest next fix is likely to simplify the Rasta `::after` layer so it carries only the leaf silhouette support art, not extra haze clouds.
+     - If that alone is insufficient in QA, the next narrow trim would be reducing Rasta track-backdrop opacity slightly.
+      - `src/lib/db.ts` now supports lighter track hydration modes:
+        - general catalog load: no media URLs, no blobs
+        - visible playlist load: media URLs only, no blobs
+        - active-track demand load: audio/art blobs only for the selected track
+      - `src/App.tsx` `refreshTracks()` now loads lightweight catalog metadata for all tracks, then hydrates only the visible track set with media URLs.
+      - `src/App.tsx` now hydrates `audioBlob` / `artBlob` only for the active track via an on-demand effect.
+    - Exact files changed:
+      - `src/lib/db.ts`
+      - `src/App.tsx`
+      - `docs/polyplay_release_tasks_2026-04-05.md`
+    - Where eager hydration was removed or deferred:
+      - Removed from the general `refreshTracks() -> getAllTracksFromDb()` path for the whole library.
+      - Deferred to:
+        - visible-track URL hydration
+        - active-track blob hydration only
+    - Event/refresh fan-out changes:
+      - None in this pass.
+      - Redundant post-import refresh fan-out remains deferred because the primary release risk was full-library media hydration.
+    - Why this was the safest release fix:
+      - It directly targets the confirmed memory-risk seam without redesigning vault import, backup format, or playback architecture.
+      - It preserves visible playlist behavior and current-track functionality while removing the worst all-library memory spike.
+    - Intentionally deferred:
+      - deduplicating post-import message/refresh fan-out
+      - broader startup/import lifecycle cleanup
+      - blob-store cleanup or backup redesign
+    - Regression risk:
+      - Low to moderate.
+      - Main risk is any code that implicitly expected every track in the catalog to already carry `audioBlob`/`artBlob`.
+      - This was contained by preserving on-demand hydration for the active track and keeping visible-track media URLs intact.
+    - QA completed:
+      - `npm run typecheck`
+    - QA still needed:
+      - Import a small vault and confirm no regression.
+      - Import a heavier vault and confirm no flashing/reopen instability.
+      - Force-close and reopen after heavy vault import and confirm app reopens normally.
+      - Confirm playlists/tracks still appear after restore.
+      - Confirm active-track playback still works.
+      - Confirm waveform/crop/now-playing artwork still work when accessing the active track on demand.
+      - Confirm admin iframe import and in-app vault import both still work.
 
 ---
 

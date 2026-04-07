@@ -2288,8 +2288,8 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
   const onExportFullBackup = async () => {
     if (isBackupBusy) return;
     setIsBackupBusy(true);
-    setBackupProgress("Preparing backup…");
-    setStatus("Preparing download…");
+    setBackupProgress("Preparing vault backup…");
+    setStatus("Preparing vault export…");
     try {
       const result = await exportFullBackup((progress) => {
         setBackupProgress(progress.label);
@@ -2309,11 +2309,11 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
       });
       setStatus(
         saveMode === "shared"
-          ? "Vault backup ready."
+          ? "Vault backup is ready to share or save."
           : saveMode === "save-dialog"
             ? `Saved to selected location: ${filename}.`
             : saveMode === "opened-preview"
-              ? `Backup ready for ${filename}. Use iPhone save options to keep the file.`
+              ? `Vault backup opened for ${filename}. Use iPhone save options to keep the file.`
               : `Download started for ${filename}.`
       );
       setBackupProgress("");
@@ -2321,10 +2321,10 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
       if (error instanceof BackupSizeError) {
         setInfoModal({
           title: "Backup Too Large",
-          message: `Backup estimate ${formatByteCount(error.estimatedBytes)} exceeds this device's export limit of ${formatByteCount(error.capBytes)}. Remove large media or use Export Config.`
+          message: `This vault backup is estimated at ${formatByteCount(error.estimatedBytes)}, which is over this device's export limit of ${formatByteCount(error.capBytes)}. Remove large media or use Export Config.`
         });
       } else {
-        setStatus(`Full backup export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+        setStatus(`Vault backup export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
       }
       setBackupProgress("");
     } finally {
@@ -2335,20 +2335,22 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
   const onImportFullBackupFile = async (file: File | null) => {
     if (!file || isBackupBusy) return;
     setIsBackupBusy(true);
-    setBackupProgress("Importing backup…");
+    setBackupProgress("Opening vault backup…");
     try {
-      const summary = await importFullBackup(file);
+      const summary = await importFullBackup(file, (progress) => {
+        setBackupProgress(progress.label);
+      });
       await refreshTracks();
       await refreshStorage();
       setStatus(
-        `Backup imported. Restored ${summary.restoredTracks} tracks and ${summary.restoredMediaFiles} media files.`
+        `Vault imported. Restored ${summary.restoredTracks} tracks and ${summary.restoredMediaFiles} media files.`
       );
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type: "polyplay:config-imported" }, window.location.origin);
         window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
       }
     } catch (error) {
-      setStatus(`Full backup import failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      setStatus(`Vault import failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setBackupProgress("");
       setIsBackupBusy(false);
@@ -2714,7 +2716,43 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
           className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3"
         >
           <h2 className="mb-2 text-base font-semibold text-slate-100">Import Track</h2>
+          <p className="mb-3 text-sm text-slate-400">
+            Start with your audio file. You can review the title, artist, and optional artwork after that.
+          </p>
           <div className="admin-v1-fields admin-upload-stack grid gap-2">
+            <TransferLaneDropZone
+              label="Audio (.wav/.mp3/.mov)"
+              tooltip="Choose the track file first. This is the main import step."
+              iconType="audio"
+              hint="Start here: choose the audio track you want to import."
+              accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,.wav,.mp3,.m4a,.aac,.mp4,.mov"
+              selectedFileName={uploadAudio?.name}
+              armed={Boolean(uploadAudio)}
+              onPickRequest={CAN_USE_IOS_NATIVE_AUDIO_IMPORT ? (fallbackPick) => void onPickUploadAudioNative(fallbackPick) : undefined}
+              onFileSelected={(file) => void onPickUploadAudio(file)}
+            />
+
+            <div className="rounded-xl border border-slate-300/15 bg-slate-950/40 px-3 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-slate-100">Ready to import</div>
+                  <div className="text-xs text-slate-400">
+                    {isImportArmed
+                      ? "Your audio file is selected. Import now, or review metadata and artwork below first."
+                      : "Choose an audio file above, then tap Import."}
+                  </div>
+                </div>
+                <Button
+                  variant="primary"
+                  type="submit"
+                  disabled={!isImportArmed}
+                  className={`admin-upload-submit min-h-[48px] px-5 text-base font-semibold ${isImportArmed ? "admin-action-armed" : ""}`.trim()}
+                >
+                  Import
+                </Button>
+              </div>
+            </div>
+
             <label className="grid gap-1 text-sm text-slate-300">
               Title
               <input
@@ -2750,20 +2788,10 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
             </datalist>
 
             <TransferLaneDropZone
-              label="Audio (.wav/.mp3/.mov)"
-              tooltip="Fallback importer for direct track creation."
-              iconType="audio"
-              accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,.wav,.mp3,.m4a,.aac,.mp4,.mov"
-              selectedFileName={uploadAudio?.name}
-              armed={Boolean(uploadAudio)}
-              onPickRequest={CAN_USE_IOS_NATIVE_AUDIO_IMPORT ? (fallbackPick) => void onPickUploadAudioNative(fallbackPick) : undefined}
-              onFileSelected={(file) => void onPickUploadAudio(file)}
-            />
-
-            <TransferLaneDropZone
               label="Artwork (image, mp4, or mov, optional)"
-              tooltip="Fallback artwork picker for manual import flow."
+              tooltip="Optional artwork for this import."
               iconType="artwork"
+              hint="Optional: add image or video artwork, or let PolyPlay keep the existing auto-art flow."
               accept="image/*,video/mp4,video/quicktime,.mov"
               selectedFileName={uploadArt?.name}
               armed={Boolean(uploadArt)}
@@ -3258,7 +3286,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
               } catch {
                 // Ignore localStorage failures.
               }
-              if (!shouldPreserveTrackVisualOrigins && nextMode === "custom") {
+              if (nextMode === "custom") {
                 const auraForSlot = THEME_PACK_AURA_COLORS[nextSlot];
                 setAuraColor(auraForSlot);
                 setSavedAuraColor(auraForSlot);
@@ -3267,7 +3295,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
                 } catch {
                   // Ignore localStorage failures.
                 }
-              } else if (!shouldPreserveTrackVisualOrigins) {
+              } else {
                 setAuraColor("#bc84ff");
                 setSavedAuraColor("#bc84ff");
                 try {
@@ -3280,9 +3308,9 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
                 if (window.parent && window.parent !== window) {
                   window.parent.postMessage({ type: "polyplay:theme-mode-updated", themeMode: nextMode }, window.location.origin);
                   window.parent.postMessage({ type: "polyplay:custom-theme-slot-updated", slot: nextSlot }, window.location.origin);
-                  if (!shouldPreserveTrackVisualOrigins && nextMode === "custom") {
+                  if (nextMode === "custom") {
                     window.parent.postMessage({ type: "polyplay:aura-color-updated", color: THEME_PACK_AURA_COLORS[nextSlot] }, window.location.origin);
-                  } else if (!shouldPreserveTrackVisualOrigins) {
+                  } else {
                     window.parent.postMessage({ type: "polyplay:aura-color-updated", color: null }, window.location.origin);
                   }
                 }

@@ -251,6 +251,11 @@ async function maybeMigrateLegacyTracks(): Promise<void> {
   localStorage.setItem(LEGACY_MIGRATION_FLAG, "1");
 }
 
+type TrackHydrationOptions = {
+  includeMediaUrls?: boolean;
+  includeBlobs?: boolean;
+};
+
 function readLegacyTracks(): Promise<LegacyDbTrackRecord[]> {
   return new Promise((resolve, reject) => {
     const openReq = indexedDB.open(LEGACY_DB_NAME, LEGACY_DB_VERSION);
@@ -281,18 +286,28 @@ function readLegacyTracks(): Promise<LegacyDbTrackRecord[]> {
   });
 }
 
-async function toTrack(record: TrackRecord): Promise<Track> {
+async function toTrack(record: TrackRecord, options?: TrackHydrationOptions): Promise<Track> {
+  const includeMediaUrls = options?.includeMediaUrls !== false;
+  const includeBlobs = options?.includeBlobs === true;
   // Self-heal older demo rows that may have lost audioKey but still have a playable demo video blob.
   const effectiveAudioKey = record.audioKey || (record.isDemo ? record.artVideoKey || null : null);
-  const [audioBlob, artBlob, artVideoBlob] = await Promise.all([
-    effectiveAudioKey ? getBlob(effectiveAudioKey) : Promise.resolve(null),
-    record.artKey ? getBlob(record.artKey) : Promise.resolve(null),
-    record.artVideoKey ? getBlob(record.artVideoKey) : Promise.resolve(null)
-  ]);
+  const [audioBlob, artBlob] = includeBlobs
+    ? await Promise.all([
+        effectiveAudioKey ? getBlob(effectiveAudioKey) : Promise.resolve(null),
+        record.artKey ? getBlob(record.artKey) : Promise.resolve(null)
+      ])
+    : [null, null];
 
-  const audioUrl = record.bundledAudioUrl || (await getMediaUrl(effectiveAudioKey));
-  const artUrl = record.bundledArtUrl || (await getMediaUrl(record.artKey));
-  const artVideoUrl = record.bundledArtVideoUrl || (await getMediaUrl(record.artVideoKey));
+  const audioUrl = includeMediaUrls ? record.bundledAudioUrl || (await getMediaUrl(effectiveAudioKey)) : record.bundledAudioUrl || undefined;
+  const artUrl = includeMediaUrls ? record.bundledArtUrl || (await getMediaUrl(record.artKey)) : record.bundledArtUrl || undefined;
+  const artVideoUrl = includeMediaUrls
+    ? record.bundledArtVideoUrl || (await getMediaUrl(record.artVideoKey))
+    : record.bundledArtVideoUrl || undefined;
+  const missingAudio = !record.bundledAudioUrl && Boolean(effectiveAudioKey) && !audioUrl && !audioBlob;
+  const missingArt =
+    !record.bundledArtUrl &&
+    !record.bundledArtVideoUrl &&
+    ((Boolean(record.artKey) && !artUrl && !artBlob) || (Boolean(record.artVideoKey) && !artVideoUrl));
 
   return {
     id: record.id,
@@ -310,29 +325,56 @@ async function toTrack(record: TrackRecord): Promise<Track> {
     audioBlob: audioBlob ?? undefined,
     artBlob: artBlob ?? undefined,
     persistedId: record.id,
-    missingAudio: !record.bundledAudioUrl && Boolean(effectiveAudioKey) && !audioBlob,
-    missingArt:
-      !record.bundledArtUrl &&
-      !record.bundledArtVideoUrl &&
-      ((Boolean(record.artKey) && !artBlob) || (Boolean(record.artVideoKey) && !artVideoBlob)),
+    missingAudio,
+    missingArt,
     artworkSource: record.artworkSource === "auto" ? "auto" : "user"
   } satisfies Track;
 }
 
-export async function getTracksFromDb(): Promise<Track[]> {
+export async function getTracksFromDb(options?: TrackHydrationOptions): Promise<Track[]> {
   await maybeMigrateLegacyTracks();
   const library = loadLibrary();
-  const allTracks = await getAllTracksFromDb();
+  const allTracks = await getAllTracksFromDb(options);
   const byId = new Map(allTracks.map((track) => [track.id, track] as const));
   const trackIds = getTrackOrder(library);
   return trackIds.map((id) => byId.get(id)).filter(Boolean) as Track[];
 }
 
-export async function getAllTracksFromDb(): Promise<Track[]> {
+export async function getAllTracksFromDb(options?: TrackHydrationOptions): Promise<Track[]> {
   await maybeMigrateLegacyTracks();
   const library = loadLibrary();
   const records = Object.values(library.tracksById).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-  return Promise.all(records.map((record) => toTrack(record)));
+  return Promise.all(records.map((record) => toTrack(record, options)));
+}
+
+export async function getTracksByIdsFromDb(trackIds: string[], options?: TrackHydrationOptions): Promise<Track[]> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const recordsById = new Map(Object.values(library.tracksById).map((record) => [record.id, record] as const));
+  const hydrated = await Promise.all(
+    trackIds.map(async (trackId) => {
+      const record = recordsById.get(trackId);
+      if (!record) return null;
+      return toTrack(record, options);
+    })
+  );
+  return hydrated.filter(Boolean) as Track[];
+}
+
+export async function getTrackMediaBlobsFromDb(trackId: string): Promise<{ audioBlob?: Blob; artBlob?: Blob }> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const record = library.tracksById[trackId];
+  if (!record) return {};
+  const effectiveAudioKey = record.audioKey || (record.isDemo ? record.artVideoKey || null : null);
+  const [audioBlob, artBlob] = await Promise.all([
+    effectiveAudioKey ? getBlob(effectiveAudioKey) : Promise.resolve(null),
+    record.artKey ? getBlob(record.artKey) : Promise.resolve(null)
+  ]);
+  return {
+    audioBlob: audioBlob ?? undefined,
+    artBlob: artBlob ?? undefined
+  };
 }
 
 export async function loadLibraryFromAppSourceOfTruth(): Promise<LibraryState> {

@@ -203,8 +203,10 @@ export function WaveformLoop({
   const [draftLoopRange, setDraftLoopRange] = useState<{ start: number; end: number } | null>(null);
   const [editViewportMode, setEditViewportMode] = useState<EditViewportMode>("fit");
   const [shouldPreserveViewRange, setShouldPreserveViewRange] = useState(false);
+  const [layoutVersion, setLayoutVersion] = useState(0);
   const lockedViewRangeRef = useRef<{ start: number; end: number } | null>(null);
   const editingViewRangeRef = useRef<{ start: number; end: number } | null>(null);
+  const lastMeasuredSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
   const themeKey =
     typeof document === "undefined"
       ? "dark"
@@ -529,6 +531,47 @@ export function WaveformLoop({
   }, [loopRegion.editing]);
 
   useEffect(() => {
+    const wave = waveRef.current;
+    if (!wave || typeof ResizeObserver === "undefined") return;
+
+    const syncLayoutVersion = () => {
+      const rect = wave.getBoundingClientRect();
+      const width = Math.round(rect.width);
+      const height = Math.round(rect.height);
+      const last = lastMeasuredSizeRef.current;
+      if (width <= 0 || height <= 0) return;
+      if (last.width === width && last.height === height) return;
+      lastMeasuredSizeRef.current = { width, height };
+      setLayoutVersion((current) => current + 1);
+    };
+
+    syncLayoutVersion();
+    const observer = new ResizeObserver(() => {
+      syncLayoutVersion();
+    });
+    observer.observe(wave);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!track?.id) return;
+    let canceled = false;
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = window.requestAnimationFrame(() => {
+      raf2 = window.requestAnimationFrame(() => {
+        if (canceled) return;
+        setLayoutVersion((current) => current + 1);
+      });
+    });
+    return () => {
+      canceled = true;
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+    };
+  }, [track?.id]);
+
+  useEffect(() => {
     let canceled = false;
 
     const stored = loadStoredWaveformPeaks(track?.id);
@@ -626,7 +669,19 @@ export function WaveformLoop({
 
       ctx.fillRect(x, y, barWidth, h);
     }
-  }, [displayEnd, displayStart, duration, hasDisplayLoopRange, hasResolvedPeaks, loopRegion.active, peaks, safeViewRange.start, viewSpan, waveformPalette]);
+  }, [
+    displayEnd,
+    displayStart,
+    duration,
+    hasDisplayLoopRange,
+    hasResolvedPeaks,
+    layoutVersion,
+    loopRegion.active,
+    peaks,
+    safeViewRange.start,
+    viewSpan,
+    waveformPalette
+  ]);
 
   useEffect(() => {
     const canvas = decorCanvasRef.current;
@@ -687,14 +742,15 @@ export function WaveformLoop({
     ctx.fillRect(playheadX - 1, 0, 2, height);
   }, [
     currentTime,
+    displayEnd,
+    displayStart,
     duration,
     hasDisplayLoopRange,
     hasResolvedPeaks,
     isPlaying,
+    layoutVersion,
     loopRegion.active,
     peaks,
-    displayEnd,
-    displayStart,
     safeViewRange.start,
     viewSpan,
     waveformPalette

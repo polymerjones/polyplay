@@ -18,6 +18,8 @@ import { TextShimmer } from "./components/TextShimmer";
 import {
   duplicateTrackWithAudioInDb,
   getAllTracksFromDb,
+  getTrackMediaBlobsFromDb,
+  getTracksByIdsFromDb,
   hardResetLibraryInDb,
   regenerateAutoArtworkForThemeChangeInDb,
   replaceAudioInDb,
@@ -496,6 +498,11 @@ export default function App() {
   const [pendingVaultBackupBlob, setPendingVaultBackupBlob] = useState<Blob | null>(null);
   const [pendingVaultBackupName, setPendingVaultBackupName] = useState("");
   const [vaultImportCloseCountdownMs, setVaultImportCloseCountdownMs] = useState<number | null>(null);
+  const [hydratedCurrentTrackMedia, setHydratedCurrentTrackMedia] = useState<{
+    trackId: string | null;
+    audioBlob?: Blob;
+    artBlob?: Blob;
+  }>({ trackId: null });
   const [importSummary, setImportSummary] = useState<{
     playlistName: string;
     updatedTrackCount: number;
@@ -839,7 +846,7 @@ export default function App() {
       librarySnapshot = ensured.library;
       if (ensured.changed) setLibrary(librarySnapshot);
       const playlistIds = Object.keys(librarySnapshot.playlistsById || {});
-      const allTracks = await getAllTracksFromDb();
+      const allTracks = await getAllTracksFromDb({ includeMediaUrls: false, includeBlobs: false });
       if (requestSeq !== refreshTracksRequestSeqRef.current) return false;
       const allTracksById = allTracks.reduce<Record<string, Track>>((acc, track) => {
         acc[track.id] = track;
@@ -882,10 +889,17 @@ export default function App() {
         }
       }
       if (requestSeq !== refreshTracksRequestSeqRef.current) return false;
+      const hydratedLoaded = loaded.length
+        ? await getTracksByIdsFromDb(
+            loaded.map((track) => track.id),
+            { includeMediaUrls: true, includeBlobs: false }
+          )
+        : [];
+      if (requestSeq !== refreshTracksRequestSeqRef.current) return false;
       allTracksRef.current = allTracks;
       setAllTracksCatalog(allTracks);
       setRuntimeLibrary(librarySnapshot);
-      setTracks(loaded);
+      setTracks(hydratedLoaded);
       setIsPlaylistRequired(playlistIds.length === 0);
       if (playlistIds.length === 0) {
         setIsCreatePlaylistModalOpen(true);
@@ -899,7 +913,7 @@ export default function App() {
         if (prev) {
           teardownCurrentAudio();
         }
-        return loaded[0]?.id ?? null;
+        return hydratedLoaded[0]?.id ?? null;
       });
       return true;
     } finally {
@@ -2033,10 +2047,16 @@ export default function App() {
     gratitudeEvaluatedRef.current = true;
   }, [gratitudeSettings, isNuking, isSplashDismissing, showSplash]);
 
-  const currentTrack = useMemo(
-    () => allTracksCatalog.find((track) => track.id === currentTrackId) ?? null,
-    [allTracksCatalog, currentTrackId]
-  );
+  const currentTrack = useMemo(() => {
+    const baseTrack = tracks.find((track) => track.id === currentTrackId) ?? allTracksCatalog.find((track) => track.id === currentTrackId) ?? null;
+    if (!baseTrack) return null;
+    if (hydratedCurrentTrackMedia.trackId !== baseTrack.id) return baseTrack;
+    return {
+      ...baseTrack,
+      audioBlob: hydratedCurrentTrackMedia.audioBlob,
+      artBlob: hydratedCurrentTrackMedia.artBlob
+    } satisfies Track;
+  }, [allTracksCatalog, currentTrackId, hydratedCurrentTrackMedia, tracks]);
   const hasTracks = tracks.length > 0;
   const isInitialDemoFirstRunState = useMemo(() => {
     if (hasOnboarded) return false;
@@ -2081,6 +2101,29 @@ export default function App() {
   }, [quickTourPhase]);
   const canCreatePolyplaylist = newPlaylistName.trim().length > 0;
   const currentAudioUrl = currentTrack?.audioUrl ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentTrackId) {
+      setHydratedCurrentTrackMedia({ trackId: null });
+      return;
+    }
+    setHydratedCurrentTrackMedia((current) => (current.trackId === currentTrackId ? current : { trackId: currentTrackId }));
+    void (async () => {
+      const media = await getTrackMediaBlobsFromDb(currentTrackId).catch(
+        (): { audioBlob?: Blob; artBlob?: Blob } => ({})
+      );
+      if (cancelled) return;
+      setHydratedCurrentTrackMedia({
+        trackId: currentTrackId,
+        audioBlob: media.audioBlob,
+        artBlob: media.artBlob
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentTrackId]);
 
   useEffect(() => {
     const rootStyle = document.documentElement.style;
@@ -3516,17 +3559,17 @@ export default function App() {
     setThemeMode(nextMode);
     setCustomThemeSlot(nextSlot);
     showFxToast(`Theme changed to ${nextThemeLabel}`, "theme");
-    if (!shouldPreserveTrackVisualOrigins && nextMode === "custom") {
+    if (nextMode === "custom") {
       setAuraColor(nextAuraColor);
-    } else if (!shouldPreserveTrackVisualOrigins) {
+    } else {
       setAuraColor(null);
     }
     try {
       localStorage.setItem(THEME_MODE_KEY, nextMode);
       localStorage.setItem(CUSTOM_THEME_SLOT_KEY, nextSlot);
-      if (!shouldPreserveTrackVisualOrigins && nextMode === "custom" && nextAuraColor) {
+      if (nextMode === "custom" && nextAuraColor) {
         localStorage.setItem(AURA_COLOR_KEY, nextAuraColor);
-      } else if (!shouldPreserveTrackVisualOrigins) {
+      } else {
         localStorage.removeItem(AURA_COLOR_KEY);
       }
     } catch {
@@ -3902,11 +3945,11 @@ export default function App() {
     clearActivePlaylistDirty();
     setVaultStatus(
       saveMode === "shared"
-        ? "Vault backup ready."
+        ? "Vault backup is ready to share or save."
         : saveMode === "save-dialog"
           ? `Saved to selected location: ${filename}.`
           : saveMode === "opened-preview"
-            ? `Backup ready for ${filename}. Use iPhone save options to keep the file.`
+            ? `Vault backup opened for ${filename}. Use iPhone save options to keep the file.`
             : `Download started for ${filename}.`,
       "success"
     );
@@ -3920,18 +3963,20 @@ export default function App() {
       const nonDemoTrackCount = countNonDemoTracksForFullBackup(library);
       if (nonDemoTrackCount < MIN_FULL_BACKUP_USER_TRACKS) {
         setVaultStatus(
-          `Add at least ${MIN_FULL_BACKUP_USER_TRACKS} imported track before saving a Universe backup.`,
+          `Add at least ${MIN_FULL_BACKUP_USER_TRACKS} imported track before saving a vault backup.`,
           "error"
         );
         return false;
       }
-      setVaultStatus("Zipping backup now.");
-      const payload = await exportFullBackup();
+      setVaultStatus("Preparing vault backup…");
+      const payload = await exportFullBackup((progress) => {
+        setVaultStatus(progress.label);
+      });
       const defaultFilename = getFullBackupFilename();
       if (allowDeferredNaming && shouldUseInlineSaveNameStep()) {
         setPendingVaultBackupBlob(payload.blob);
         setPendingVaultBackupName(defaultFilename);
-        setVaultStatus("Backup ready. Name it, then tap Save backup.", "info");
+        setVaultStatus("Vault backup is ready. Name it, then tap Save Backup.", "info");
         return false;
       }
       const filename = promptForSaveFilename(getFullBackupFilename(), {
@@ -3939,7 +3984,7 @@ export default function App() {
         requiredExtension: ".zip"
       });
       if (!filename) {
-        setVaultStatus("Save Universe canceled.", "info");
+        setVaultStatus("Vault backup export canceled.", "info");
         schedulePlaybackResync("vault-save-return");
         return false;
       }
@@ -3947,11 +3992,11 @@ export default function App() {
     } catch (error) {
       if (error instanceof BackupSizeError) {
         setVaultStatus(
-          `Save Universe failed: backup estimate ${formatByteCount(error.estimatedBytes)} exceeds this device's export limit of ${formatByteCount(error.capBytes)}.`,
+          `Vault backup is estimated at ${formatByteCount(error.estimatedBytes)}, which is over this device's export limit of ${formatByteCount(error.capBytes)}.`,
           "error"
         );
       } else {
-        setVaultStatus(`Save Universe failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+        setVaultStatus(`Vault backup export failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
       }
       schedulePlaybackResync("vault-save-return");
       return false;
@@ -4096,7 +4141,10 @@ export default function App() {
     try {
       setImportSummary(null);
       setShowMissingIds(false);
-      const summary = await importFullBackup(file);
+      setVaultStatus("Opening vault backup…");
+      const summary = await importFullBackup(file, (progress) => {
+        setVaultStatus(progress.label);
+      });
       teardownCurrentAudio();
       pendingAutoPlayRef.current = false;
       revokeAllMediaUrls();
@@ -4111,14 +4159,14 @@ export default function App() {
       await refreshVaultInspector();
       clearActivePlaylistDirty();
       setVaultStatus(
-        `Universe loaded. Restored ${summary.restoredTracks} tracks and ${summary.restoredMediaFiles} media files.`,
+        `Vault imported. Restored ${summary.restoredTracks} tracks and ${summary.restoredMediaFiles} media files.`,
         "success"
       );
       startVaultImportSuccessCountdown();
     } catch (error) {
       clearVaultImportSuccessCountdown();
       setImportSummary(null);
-      setVaultStatus(`Load Universe failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+      setVaultStatus(`Vault import failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
     } finally {
       schedulePlaybackResync("vault-import-return");
     }
@@ -4412,17 +4460,24 @@ export default function App() {
                 </span>
               </button>
               {showHeaderUploadButton && (
-                <button
-                  type="button"
-                  className={`upload-link nav-action-btn onboarding-action ${
-                    shouldShowUploadHint ? "guided-cta is-onboarding-target" : ""
-                  }`.trim()}
-                  aria-label="Import tracks"
-                  title="Import"
-                  onClick={() => openUploadPanel()}
-                >
-                  Import
-                </button>
+                <div className="playlist-selector__tutorial-anchor">
+                  <button
+                    type="button"
+                    className={`upload-link nav-action-btn onboarding-action ${
+                      shouldShowUploadHint ? "guided-cta is-onboarding-target" : ""
+                    }`.trim()}
+                    aria-label="Import tracks"
+                    title="Import"
+                    onClick={() => openUploadPanel()}
+                  >
+                    Import
+                  </button>
+                  {shouldShowUploadHint && (
+                    <div className="playlist-selector__tutorial-tip onboarding-tooltip" role="note">
+                      Tap Import, choose your audio file first, then review title or artwork if needed.
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -4640,8 +4695,8 @@ export default function App() {
               welcomePhase === "create-playlist"
                 ? "Create your first PolyPlaylist to get started."
                 : welcomePhase === "upload-track"
-                  ? "Now import your first track."
-                  : "Take a quick tour to create your first PolyPlaylist and add your own music."
+                  ? "Tap Import, choose your audio file, then review the details and tap Import again."
+                  : "Take a quick tour to create your first PolyPlaylist, then use Import to add your own music."
             }
             primaryButtonClassName={
               shouldHighlightQuickTourStart || shouldHighlightWelcomeUpload ? "is-onboarding-target" : undefined

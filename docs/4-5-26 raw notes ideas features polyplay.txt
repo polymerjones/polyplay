@@ -1,0 +1,19 @@
+PolyPlay feature idea on desktop user can drag and MP3 or audio into the canvas and it will allow for a drop zone and if user drags it over a rower tile that will light up as the option to swap everything on the track Meta data and all
+
+PolyPlay feature another feature if user presses the vibe change button there's a vibe change mode with auto FX basically going off the volume of the way form the effects will go off however in that manner
+
+PolyPlay feature idea rearrange mode basically on the canvas user presses a button and it goes into edit order of tracks mode where the tracks are just bubbles or the tracks are gliding around freely you can drag them and they don't collide with each other and then when user press is done the system looks at the intended re-ordering tracks and snaps it into place
+
+PolyPlay feature idea there is a button somewhere kind of hidden in a corner or something where it's a pencil page thing and user presses it and then the same prompt that the gratitude prompt kind of thing is it's basically a pop-up quick note and the prompt would also be in the theme colors as well but the instead of what are you grateful for you just quick note it pops up type it in save
+
+PolyPlay feature idea on that quick note thing maybe figure out somehow way to attach notes to tracks so these particular notes would be categorized with that track like let's say a producers making music and they want to take a note they just press the button take a note it'll tie it to that time code of that track track notes
+
+PolyPlay feature at quick note another idea basically after a user does the note it would skip the track back 15 seconds or it would take playback to where it was when the user press a quick note button so basically user press note quick note button music continues to play after note is accepted the note is categorized with that time code did the user press the note as well as the playback is brought about five seconds before that 15 seconds before that quick note placement
+
+PolyPlay feature idea the quick note there would be options to have it skip back five 1510 seconds or not skip back at all this would all be customizable in the settings as well as some options for customization on the actual quick note checkbox prompt
+
+PolyPlay feature the custom theme design menu that would also be like a check box or a button what type of mood they would want and based on that mood the images would be blended ingredients would be either softer or hard or different kinds of effects would occur depending on the kind of a custom mood of the theme that goes with the three hex colors and the aura color and even a custom image background image
+
+PolyPlay feature on the custom design of theme menu basically this would create a new slot of theme called user so it would be all the prebuilt themes that you cycle through and then there's maybe one or two or three slots for user and that's where the custom theme would be placed in and that's where it would export if user did a vault export the theme would be included in those custom slots
+
+PolyPlay feature idea a custom theme menu where user selects three hex codes color picker and then order a color and then gives it a name and that could be a format a format for our users to make themes basically I gotta come up with a system that's customizable I think we're almost there but yeah

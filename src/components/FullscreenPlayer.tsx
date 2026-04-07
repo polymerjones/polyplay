@@ -118,7 +118,9 @@ export function FullscreenPlayer({
   const artist = track.artist?.trim();
   const cinemaStillSrc = track.artUrl || DEFAULT_ARTWORK_URL;
   const hasArtworkVideo = Boolean(track.artVideoUrl);
-  const shouldAnimateGenerated = track.artworkSource === "auto" && !hasArtworkVideo;
+  // Stabilization: keep auto-generated poster art visually stable in fullscreen.
+  // Explicit regeneration still happens through theme-change flows in db.ts.
+  const shouldAnimateGenerated = false;
   const showLoopEditor = loopMode === "region" && loopRegion.active;
   const [peaks, setPeaks] = useState<number[]>(() => {
     if (track.waveformPeaks?.length) return track.waveformPeaks;
