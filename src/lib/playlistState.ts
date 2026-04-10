@@ -208,7 +208,8 @@ export function setActivePlaylistInLibrary(library: LibraryState, id: string): {
 
 export function createPlaylistInLibrary(
   library: LibraryState,
-  name: string
+  name: string,
+  themeSelection: LibraryState["playlistsById"][string]["themeSelection"] = null
 ): { library: LibraryState; createdPlaylistId: string } {
   const now = Date.now();
   const id = makeId("playlist");
@@ -219,6 +220,7 @@ export function createPlaylistInLibrary(
       [id]: {
         id,
         name: name.trim() || "New Playlist",
+        themeSelection: themeSelection ?? null,
         trackIds: [],
         createdAt: now,
         updatedAt: now

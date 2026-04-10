@@ -24,16 +24,20 @@ import {
   hardResetLibraryInDb,
   regenerateAutoArtworkForThemeChangeInDb,
   replaceAudioInDb,
-  saveAuraToDb
+  saveAuraToDb,
+  setPlaylistThemeSelectionInDb
 } from "./lib/db";
 import {
   BackupSizeError,
   countNonDemoTracksForFullBackup,
   exportFullBackup,
+  exportPolyplaylist,
   formatByteCount,
   getFullBackupFilename,
+  getPolyplaylistFilename,
   MIN_FULL_BACKUP_USER_TRACKS,
-  importFullBackup
+  importFullBackup,
+  importPolyplaylist
 } from "./lib/backup";
 import { normalizeDemoLibrary, restoreDemoTracks, seedDemoTracksIfNeeded } from "./lib/demoSeed";
 import {
@@ -531,7 +535,10 @@ export default function App() {
   const [vaultToast, setVaultToastState] = useState<{ message: string; tone: VaultToastTone } | null>(null);
   const [pendingVaultBackupBlob, setPendingVaultBackupBlob] = useState<Blob | null>(null);
   const [pendingVaultBackupName, setPendingVaultBackupName] = useState("");
+  const [pendingPlaylistBackupBlob, setPendingPlaylistBackupBlob] = useState<Blob | null>(null);
+  const [pendingPlaylistBackupName, setPendingPlaylistBackupName] = useState("");
   const [vaultImportCloseCountdownMs, setVaultImportCloseCountdownMs] = useState<number | null>(null);
+  const [vaultImportSuccessTitle, setVaultImportSuccessTitle] = useState("Vault imported successfully");
   const [hydratedCurrentTrackMedia, setHydratedCurrentTrackMedia] = useState<{
     trackId: string | null;
     audioUrl?: string;
@@ -637,6 +644,7 @@ export default function App() {
   const scratchPlayersRef = useRef<HTMLAudioElement[]>([]);
   const activeScratchRef = useRef<HTMLAudioElement | null>(null);
   const importUniverseInputRef = useRef<HTMLInputElement | null>(null);
+  const importPlaylistBackupInputRef = useRef<HTMLInputElement | null>(null);
   const pendingAutoPlayRef = useRef(false);
   const pendingAutoPlayTrackIdRef = useRef<string | null>(null);
   const audioSrcRef = useRef<string | null>(null);
@@ -703,6 +711,8 @@ export default function App() {
   const activePlaylistId = runtimeLibrary?.activePlaylistId ?? null;
   const activePlaylistName =
     (activePlaylistId && runtimeLibrary?.playlistsById?.[activePlaylistId]?.name) || "None";
+  const activePlaylistThemeSelection =
+    (activePlaylistId && runtimeLibrary?.playlistsById?.[activePlaylistId]?.themeSelection) || null;
   const orderedPlaylists = useMemo(
     () => (runtimeLibrary ? Object.values(runtimeLibrary.playlistsById || {}) : []),
     [runtimeLibrary]
@@ -728,6 +738,43 @@ export default function App() {
   useEffect(() => {
     activePlaylistIdRef.current = activePlaylistId;
   }, [activePlaylistId]);
+
+  useEffect(() => {
+    if (!activePlaylistThemeSelection) return;
+    const currentSelection = getThemeSelection(themeMode, customThemeSlot);
+    if (activePlaylistThemeSelection === currentSelection) return;
+
+    const nextMode: ThemeMode =
+      activePlaylistThemeSelection === "dark" ? "dark" : activePlaylistThemeSelection === "light" ? "light" : "custom";
+    const nextSlot: CustomThemeSlot = isCustomThemeSlot(activePlaylistThemeSelection)
+      ? activePlaylistThemeSelection
+      : customThemeSlot;
+    const nextAuraColor = nextMode === "custom" ? THEME_PACK_AURA_COLORS[nextSlot] : null;
+
+    setThemeMode(nextMode);
+    setCustomThemeSlot(nextSlot);
+    setAuraColor(nextAuraColor);
+    try {
+      localStorage.setItem(THEME_MODE_KEY, nextMode);
+      localStorage.setItem(CUSTOM_THEME_SLOT_KEY, nextSlot);
+      if (nextAuraColor) {
+        localStorage.setItem(AURA_COLOR_KEY, nextAuraColor);
+      } else {
+        localStorage.removeItem(AURA_COLOR_KEY);
+      }
+    } catch {
+      // Ignore localStorage failures.
+    }
+    try {
+      const overlayFrame = document.querySelector<HTMLIFrameElement>(".app-overlay-frame");
+      overlayFrame?.contentWindow?.postMessage(
+        { type: "polyplay:theme-changed", themeMode: nextMode, customThemeSlot: nextSlot },
+        window.location.origin
+      );
+    } catch {
+      // Ignore cross-document messaging failures.
+    }
+  }, [activePlaylistThemeSelection, customThemeSlot, themeMode]);
 
   useEffect(() => {
     currentTrackIdRef.current = currentTrackId;
@@ -793,6 +840,7 @@ export default function App() {
       const playlists = Object.values(library.playlistsById).map((playlist) => ({
         id: playlist.id,
         name: playlist.name,
+        themeSelection: playlist.themeSelection ?? null,
         createdAt: playlist.createdAt,
         updatedAt: playlist.updatedAt,
         trackIds: playlist.trackIds
@@ -860,6 +908,24 @@ export default function App() {
     } catch {
       // Ignore localStorage failures.
     }
+  };
+
+  const syncRuntimePlaylistThemeSelection = (playlistId: string, themeSelection: ThemeSelection | null) => {
+    setRuntimeLibrary((current) => {
+      if (!current) return current;
+      const playlist = current.playlistsById?.[playlistId];
+      if (!playlist || playlist.themeSelection === (themeSelection ?? null)) return current;
+      return {
+        ...current,
+        playlistsById: {
+          ...current.playlistsById,
+          [playlistId]: {
+            ...playlist,
+            themeSelection: themeSelection ?? null
+          }
+        }
+      };
+    });
   };
 
   const logAudioDebug = (event: string, details?: Record<string, unknown>) => {
@@ -1003,7 +1069,7 @@ export default function App() {
         !isEmptyWelcomeDismissed &&
         tracks.length === 0 &&
         existingUserPlaylistCount === 0;
-      const created = createPlaylistInLibrary(source, nextName);
+      const created = createPlaylistInLibrary(source, nextName, getThemeSelection(themeMode, customThemeSlot));
       const createdPlaylist = created.library.playlistsById[created.createdPlaylistId];
       setLibrary(created.library);
       setRuntimeLibrary(created.library);
@@ -1348,6 +1414,7 @@ export default function App() {
       vaultImportCloseIntervalRef.current = null;
     }
     setVaultImportCloseCountdownMs(null);
+    setVaultImportSuccessTitle("Vault imported successfully");
   };
 
   const dismissOverlayKeyboard = () => {
@@ -1417,6 +1484,11 @@ export default function App() {
       setOverlayPage((current) => (current === "vault" ? null : current));
       pulseAuraAfterVaultClose();
     }, totalMs);
+  };
+
+  const startImportSuccessCountdown = (title: string) => {
+    setVaultImportSuccessTitle(title);
+    startVaultImportSuccessCountdown();
   };
 
   useEffect(() => {
@@ -1955,6 +2027,9 @@ export default function App() {
         const slot = event.data?.slot;
         if (isCustomThemeSlot(slot)) {
           setCustomThemeSlot(slot);
+          if (activePlaylistId) {
+            syncRuntimePlaylistThemeSelection(activePlaylistId, getThemeSelection(themeMode, slot));
+          }
           try {
             localStorage.setItem(CUSTOM_THEME_SLOT_KEY, slot);
           } catch {
@@ -1967,6 +2042,9 @@ export default function App() {
         const nextMode = event.data?.themeMode;
         if (nextMode === "light" || nextMode === "dark" || nextMode === "custom") {
           setThemeMode(nextMode);
+          if (activePlaylistId) {
+            syncRuntimePlaylistThemeSelection(activePlaylistId, getThemeSelection(nextMode, customThemeSlot));
+          }
           try {
             localStorage.setItem(THEME_MODE_KEY, nextMode);
           } catch {
@@ -3673,6 +3751,10 @@ export default function App() {
     } catch {
       // Ignore localStorage failures.
     }
+    if (activePlaylistId) {
+      syncRuntimePlaylistThemeSelection(activePlaylistId, nextSelection);
+      void setPlaylistThemeSelectionInDb(activePlaylistId, nextSelection).catch(() => undefined);
+    }
     if (!shouldPreserveTrackVisualOrigins) {
       void regenerateAutoArtworkForThemeChangeInDb(nextSelection)
         .then((updated) => {
@@ -4055,6 +4137,30 @@ export default function App() {
     return true;
   };
 
+  const finishPlaylistBackupSave = async (blob: Blob, filename: string, playlistName?: string): Promise<boolean> => {
+    const saveMode = await saveBlobWithBestEffort(blob, filename, {
+      description: "Playlist Backup Export",
+      accept: {
+        "application/zip": [".polyplaylist", ".zip"],
+        "application/octet-stream": [".polyplaylist"]
+      }
+    });
+    setVaultStatus(
+      saveMode === "shared"
+        ? "Playlist backup is ready to share or save."
+        : saveMode === "save-dialog"
+          ? `Saved to selected location: ${filename}.`
+          : saveMode === "opened-preview"
+            ? `Playlist backup opened for ${filename}. Use iPhone save options to keep the file.`
+            : playlistName
+              ? `Playlist backup exported from "${playlistName}".`
+              : `Playlist backup exported: ${filename}.`,
+      "success"
+    );
+    schedulePlaybackResync("vault-save-return");
+    return true;
+  };
+
   const saveUniverseBackup = async ({ allowDeferredNaming = true }: { allowDeferredNaming?: boolean } = {}): Promise<boolean> => {
     try {
       const library = await getLibrary();
@@ -4090,7 +4196,7 @@ export default function App() {
     } catch (error) {
       if (error instanceof BackupSizeError) {
         setVaultStatus(
-          `Vault backup is estimated at ${formatByteCount(error.estimatedBytes)}, which is over this device's export limit of ${formatByteCount(error.capBytes)}.`,
+          `Vault backup is estimated at ${formatByteCount(error.estimatedBytes)}, which is over this device's safe export limit of ${formatByteCount(error.capBytes)}.`,
           "error"
         );
       } else {
@@ -4267,13 +4373,83 @@ export default function App() {
         `Vault imported. Restored ${summary.restoredTracks} tracks and ${summary.restoredMediaFiles} media files.`,
         "success"
       );
-      startVaultImportSuccessCountdown();
+      startImportSuccessCountdown("Vault imported successfully");
     } catch (error) {
       clearVaultImportSuccessCountdown();
       setImportSummary(null);
       setVaultStatus(`Vault import failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
     } finally {
       schedulePlaybackResync("vault-import-return");
+    }
+  };
+
+  const exportPlaylistBackup = async (): Promise<void> => {
+    try {
+      setVaultStatus("Preparing playlist backup…");
+      const result = await exportPolyplaylist();
+      const defaultFilename = getPolyplaylistFilename(result.playlistName);
+      if (shouldUseInlineSaveNameStep()) {
+        setPendingPlaylistBackupBlob(result.blob);
+        setPendingPlaylistBackupName(defaultFilename);
+        setVaultStatus("Playlist backup is ready. Name it, then tap Save Backup.", "info");
+        return;
+      }
+      const filename = promptForSaveFilename(defaultFilename, {
+        message: "Name this playlist backup before saving.",
+        requiredExtension: ".polyplaylist"
+      });
+      if (!filename) {
+        setVaultStatus("Playlist backup export canceled.", "info");
+        schedulePlaybackResync("vault-save-return");
+        return;
+      }
+      await finishPlaylistBackupSave(result.blob, filename, result.playlistName);
+    } catch (error) {
+      setVaultStatus(`Playlist backup export failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+      schedulePlaybackResync("vault-save-return");
+    }
+  };
+
+  const onConfirmPendingPlaylistBackup = async () => {
+    if (!pendingPlaylistBackupBlob) return;
+    const filename = normalizeSaveFilename(
+      pendingPlaylistBackupName,
+      getPolyplaylistFilename(activePlaylistName || "playlist"),
+      ".polyplaylist"
+    );
+    if (!filename) {
+      setVaultStatus("Enter a playlist backup filename first.", "error");
+      return;
+    }
+    try {
+      await finishPlaylistBackupSave(pendingPlaylistBackupBlob, filename, activePlaylistName || undefined);
+      setPendingPlaylistBackupBlob(null);
+      setPendingPlaylistBackupName("");
+    } catch (error) {
+      setVaultStatus(`Playlist backup save failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
+    }
+  };
+
+  const onStartImportPlaylistBackup = () => {
+    importPlaylistBackupInputRef.current?.click();
+  };
+
+  const onLoadPlaylistBackupFile = async (file: File | null) => {
+    if (!file) return;
+    try {
+      setVaultStatus("Opening playlist backup…");
+      const summary = await importPolyplaylist(file);
+      markActivePlaylistDirty();
+      await refreshTracks();
+      setVaultStatus(
+        `Playlist backup imported to "${summary.playlistName}" (${summary.importedTracks} track${
+          summary.importedTracks === 1 ? "" : "s"
+        }, ${summary.importedMediaFiles} media files).`,
+        "success"
+      );
+      startImportSuccessCountdown("Playlist imported successfully");
+    } catch (error) {
+      setVaultStatus(`Playlist backup import failed: ${error instanceof Error ? error.message : "Unknown error"}`, "error");
     }
   };
 
@@ -5057,7 +5233,7 @@ export default function App() {
             <div className="vault-body">
               {vaultImportCloseCountdownMs !== null && (
                 <div className="vault-success-countdown" role="status" aria-live="polite">
-                  <h3 className="vault-success-countdown__title">Vault imported successfully</h3>
+                  <h3 className="vault-success-countdown__title">{vaultImportSuccessTitle}</h3>
                   <p className="vault-success-countdown__sub">Closing in</p>
                   <div className="vault-success-countdown__count">
                     {Math.max(1, Math.ceil(vaultImportCloseCountdownMs / 1000))}...
@@ -5086,6 +5262,29 @@ export default function App() {
               </div>
 
               <div className="vault-actions">
+                <button
+                  type="button"
+                  className="vault-btn vault-btn--primary"
+                  onClick={() => {
+                    void exportPlaylistBackup();
+                  }}
+                >
+                  Export Playlist Backup
+                </button>
+                <button type="button" className="vault-btn vault-btn--secondary" onClick={onStartImportPlaylistBackup}>
+                  Import Playlist Backup
+                </button>
+                <input
+                  ref={importPlaylistBackupInputRef}
+                  type="file"
+                  accept=".polyplaylist,application/zip,application/octet-stream,.zip"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0] ?? null;
+                    void onLoadPlaylistBackupFile(file);
+                    event.currentTarget.value = "";
+                  }}
+                />
                 <button
                   type="button"
                   className="vault-btn vault-btn--primary"
@@ -5134,6 +5333,38 @@ export default function App() {
                         setPendingVaultBackupBlob(null);
                         setPendingVaultBackupName("");
                         setVaultStatus("Save Universe canceled.", "info");
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+              {pendingPlaylistBackupBlob && (
+                <div className="vault-warning vault-save-name-card" role="group" aria-label="Name playlist backup file">
+                  <p>Name this playlist backup before saving.</p>
+                  <input
+                    type="text"
+                    value={pendingPlaylistBackupName}
+                    onChange={(event) => setPendingPlaylistBackupName(event.currentTarget.value)}
+                    className="vault-save-name-input"
+                    placeholder="Playlist backup"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                  <div className="vault-warning__actions">
+                    <button type="button" className="vault-btn vault-btn--primary" onClick={() => void onConfirmPendingPlaylistBackup()}>
+                      Save backup
+                    </button>
+                    <button
+                      type="button"
+                      className="vault-btn vault-btn--ghost"
+                      onClick={() => {
+                        setPendingPlaylistBackupBlob(null);
+                        setPendingPlaylistBackupName("");
+                        setVaultStatus("Playlist backup export canceled.", "info");
+                        schedulePlaybackResync("vault-save-return");
                       }}
                     >
                       Cancel

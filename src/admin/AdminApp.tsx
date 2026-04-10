@@ -23,6 +23,7 @@ import {
   replaceAudioInDb,
   resetAuraInDb,
   setActivePlaylistInDb,
+  setPlaylistThemeSelectionInDb,
   type PlaylistRow,
   type StorageUsageSummary,
   type TrackStorageRow,
@@ -54,13 +55,10 @@ import {
   applyImportedConfig,
   buildConfigSnapshot,
   exportFullBackup,
-  exportPolyplaylist,
   formatByteCount,
   getConfigExportFilename,
   getFullBackupFilename,
-  getPolyplaylistFilename,
   importFullBackup,
-  importPolyplaylist,
   parseConfigImportText,
   serializeConfig
 } from "../lib/backup";
@@ -668,13 +666,58 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
   const manageStorageRef = useRef<HTMLElement | null>(null);
   const importConfigInputRef = useRef<HTMLInputElement | null>(null);
   const importBackupInputRef = useRef<HTMLInputElement | null>(null);
-  const importPolyplaylistInputRef = useRef<HTMLInputElement | null>(null);
   const [backupProgress, setBackupProgress] = useState("");
   const [isBackupBusy, setIsBackupBusy] = useState(false);
   const SHOW_TRANSFER_LANES = false;
   const SHOW_DEMO_TRACKS_SECTION = false;
 
   const hasTracks = tracks.length > 0;
+  const activePlaylist = useMemo(() => playlists.find((playlist) => playlist.isActive) ?? null, [playlists]);
+
+  const applyThemeSelectionLocally = (selected: ThemeSelection) => {
+    if (!isThemeSelection(selected)) return;
+    const nextMode = selected === "dark" ? "dark" : selected === "light" ? "light" : "custom";
+    const nextSlot: CustomThemeSlot = isCustomThemeSlot(selected) ? selected : customThemeSlot;
+    setThemeSelection(selected);
+    setCustomThemeSlot(nextSlot);
+    if (nextMode === "custom") {
+      const auraForSlot = THEME_PACK_AURA_COLORS[nextSlot];
+      setAuraColor(auraForSlot);
+      setSavedAuraColor(auraForSlot);
+      try {
+        localStorage.setItem(AURA_COLOR_KEY, auraForSlot);
+      } catch {
+        // Ignore localStorage failures.
+      }
+    } else {
+      setAuraColor("#bc84ff");
+      setSavedAuraColor("#bc84ff");
+      try {
+        localStorage.removeItem(AURA_COLOR_KEY);
+      } catch {
+        // Ignore localStorage failures.
+      }
+    }
+    try {
+      localStorage.setItem(CUSTOM_THEME_SLOT_KEY, nextSlot);
+      localStorage.setItem(THEME_MODE_KEY, nextMode);
+    } catch {
+      // Ignore localStorage failures.
+    }
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:theme-mode-updated", themeMode: nextMode }, window.location.origin);
+        window.parent.postMessage({ type: "polyplay:custom-theme-slot-updated", slot: nextSlot }, window.location.origin);
+        if (nextMode === "custom") {
+          window.parent.postMessage({ type: "polyplay:aura-color-updated", color: THEME_PACK_AURA_COLORS[nextSlot] }, window.location.origin);
+        } else {
+          window.parent.postMessage({ type: "polyplay:aura-color-updated", color: null }, window.location.origin);
+        }
+      }
+    } catch {
+      // Ignore postMessage failures.
+    }
+  };
 
   const emitLibraryUpdated = () => {
     window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
@@ -938,6 +981,13 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
       document.documentElement.removeAttribute("data-theme-slot");
     };
   }, []);
+
+  useEffect(() => {
+    const nextSelection = activePlaylist?.themeSelection ?? null;
+    if (!nextSelection || !isThemeSelection(nextSelection)) return;
+    if (nextSelection === themeSelection) return;
+    applyThemeSelectionLocally(nextSelection);
+  }, [activePlaylist?.themeSelection, themeSelection]);
 
   useEffect(() => {
     const refreshEntries = () => setGratitudeEntries(getGratitudeEntries());
@@ -2334,7 +2384,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
       if (error instanceof BackupSizeError) {
         setInfoModal({
           title: "Backup Too Large",
-          message: `This vault backup is estimated at ${formatByteCount(error.estimatedBytes)}, which is over this device's export limit of ${formatByteCount(error.capBytes)}. Remove large media or use Export Config.`
+          message: `This vault backup is estimated at ${formatByteCount(error.estimatedBytes)}, which is over this device's safe export limit of ${formatByteCount(error.capBytes)}. Remove large media or use Export Config.`
         });
       } else {
         setStatus(`Vault backup export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -2366,63 +2416,6 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
       setStatus(`Vault import failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setBackupProgress("");
-      setIsBackupBusy(false);
-    }
-  };
-
-  const onExportPolyplaylist = async () => {
-    try {
-      setIsBackupBusy(true);
-      setStatus("Preparing download…");
-      const result = await exportPolyplaylist();
-      const filename = promptForSaveFilename(getPolyplaylistFilename(result.playlistName), {
-        message: "Name this PolyPlaylist before saving.",
-        requiredExtension: ".polyplaylist"
-      });
-      if (!filename) {
-        setStatus("PolyPlaylist export canceled.");
-        return;
-      }
-      const saveMode = await saveBlobWithBestEffort(result.blob, filename, {
-        description: "PolyPlaylist Export",
-        accept: { "application/zip": [".polyplaylist", ".zip"] }
-      });
-      setStatus(
-        saveMode === "shared"
-          ? "PolyPlaylist ready."
-          : saveMode === "save-dialog"
-            ? `Saved to selected location: ${filename}.`
-            : saveMode === "opened-preview"
-              ? `PolyPlaylist ready for ${filename}. Use iPhone save options to keep the file.`
-              : `PolyPlaylist exported: ${result.trackCount} track${result.trackCount === 1 ? "" : "s"} from "${result.playlistName}".`
-      );
-    } catch (error) {
-      setStatus(`PolyPlaylist export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
-    } finally {
-      setIsBackupBusy(false);
-    }
-  };
-
-  const onImportPolyplaylistFile = async (file: File | null) => {
-    if (!file) return;
-    try {
-      setIsBackupBusy(true);
-      const summary = await importPolyplaylist(file);
-      await refreshTracks();
-      await refreshPlaylists();
-      await refreshStorage();
-      setStatus(
-        `PolyPlaylist imported to "${summary.playlistName}" (${summary.importedTracks} track${
-          summary.importedTracks === 1 ? "" : "s"
-        }, ${summary.importedMediaFiles} media files).`
-      );
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: "polyplay:config-imported" }, window.location.origin);
-        window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
-      }
-    } catch (error) {
-      setStatus(`PolyPlaylist import failed: ${error instanceof Error ? error.message : "Unknown error"}`);
-    } finally {
       setIsBackupBusy(false);
     }
   };
@@ -3306,47 +3299,14 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
             onChange={(event) => {
               const selected = event.currentTarget.value as ThemeSelection;
               if (!isThemeSelection(selected)) return;
+              const shouldPreserveTrackVisualOrigins = preserveTrackThemeAuraOrigins;
               const nextMode = selected === "dark" ? "dark" : selected === "light" ? "light" : "custom";
               const nextSlot: CustomThemeSlot = isCustomThemeSlot(selected) ? selected : customThemeSlot;
-              const shouldPreserveTrackVisualOrigins = preserveTrackThemeAuraOrigins;
-              setThemeSelection(selected);
-              setCustomThemeSlot(nextSlot);
-              try {
-                localStorage.setItem(CUSTOM_THEME_SLOT_KEY, nextSlot);
-                localStorage.setItem(THEME_MODE_KEY, nextMode);
-              } catch {
-                // Ignore localStorage failures.
-              }
-              if (nextMode === "custom") {
-                const auraForSlot = THEME_PACK_AURA_COLORS[nextSlot];
-                setAuraColor(auraForSlot);
-                setSavedAuraColor(auraForSlot);
-                try {
-                  localStorage.setItem(AURA_COLOR_KEY, auraForSlot);
-                } catch {
-                  // Ignore localStorage failures.
-                }
-              } else {
-                setAuraColor("#bc84ff");
-                setSavedAuraColor("#bc84ff");
-                try {
-                  localStorage.removeItem(AURA_COLOR_KEY);
-                } catch {
-                  // Ignore localStorage failures.
-                }
-              }
-              try {
-                if (window.parent && window.parent !== window) {
-                  window.parent.postMessage({ type: "polyplay:theme-mode-updated", themeMode: nextMode }, window.location.origin);
-                  window.parent.postMessage({ type: "polyplay:custom-theme-slot-updated", slot: nextSlot }, window.location.origin);
-                  if (nextMode === "custom") {
-                    window.parent.postMessage({ type: "polyplay:aura-color-updated", color: THEME_PACK_AURA_COLORS[nextSlot] }, window.location.origin);
-                  } else {
-                    window.parent.postMessage({ type: "polyplay:aura-color-updated", color: null }, window.location.origin);
-                  }
-                }
-              } catch {
-                // Ignore postMessage failures.
+              applyThemeSelectionLocally(selected);
+              if (activePlaylist?.id) {
+                void setPlaylistThemeSelectionInDb(activePlaylist.id, selected)
+                  .then(() => refreshPlaylists())
+                  .catch(() => undefined);
               }
               if (!shouldPreserveTrackVisualOrigins) {
                 void regenerateAutoArtworkForThemeChangeInDb(selected)
@@ -3495,18 +3455,6 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
       <section className="admin-v1-card mt-3 rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3">
         <h2 className="mb-2 text-base font-semibold text-slate-100">Backups</h2>
         <div className="flex flex-wrap gap-2">
-          <Button variant="primary" onClick={() => void onExportPolyplaylist()} disabled={isBackupBusy}>
-            Export PolyPlaylist
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              importPolyplaylistInputRef.current?.click();
-            }}
-            disabled={isBackupBusy}
-          >
-            Import PolyPlaylist
-          </Button>
           <Button variant="primary" onClick={onExportConfig}>
             Export Config
           </Button>
@@ -3531,17 +3479,6 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
             Import Full Backup (.zip)
           </Button>
         </div>
-        <input
-          ref={importPolyplaylistInputRef}
-          type="file"
-          accept=".polyplaylist,application/zip,.zip"
-          className="hidden"
-          onChange={(event) => {
-            const file = event.currentTarget.files?.[0] ?? null;
-            void onImportPolyplaylistFile(file);
-            event.currentTarget.value = "";
-          }}
-        />
         <input
           ref={importConfigInputRef}
           type="file"

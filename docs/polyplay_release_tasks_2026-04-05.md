@@ -65,7 +65,397 @@ Use alongside any existing planning board already in the repo, but treat this fi
 ---
 
 ## Active task
-**Current active task:** `Import page storage indicator`
+**Current active task:** `Vault page playlist backup naming/import polish`
+
+**Diagnosis note — 2026-04-10 Codex:**
+- Status:
+  - fix implemented for imported-playlist missing-artwork copy leakage
+- Focus:
+  - stop surfacing unnecessary `Missing artwork` text in normal player surfaces after playlist import
+- Files inspected so far:
+  - `src/lib/backup.ts`
+  - `src/lib/db.ts`
+  - `src/components/MiniPlayerBar.tsx`
+  - `src/components/FullscreenPlayer.tsx`
+- Findings:
+  - Imported playlist tracks can legitimately have no stored artwork while still rendering clean fallback/default artwork.
+  - Mini player and fullscreen were surfacing `track.missingArt` as visible copy.
+  - That warning text is noisy in normal playback because the app already has a visual fallback path.
+- Narrow implementation plan:
+  - keep `missingArt` state unchanged for diagnostics/admin
+  - remove the visible `Missing artwork` copy from mini player and fullscreen only
+- Fix implemented — 2026-04-10 Codex:
+  - Exact fix made:
+    - Removed `Missing artwork` copy from the mini player metadata area.
+    - Removed `Missing artwork` copy from the fullscreen player metadata area.
+    - Left `missingArt` state intact for non-player diagnostics/admin use.
+  - Exact files changed:
+    - `src/components/MiniPlayerBar.tsx`
+    - `src/components/FullscreenPlayer.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is presentation-only and does not change artwork/media logic.
+  - Regression risk:
+    - Low.
+    - The only intended change is removing noisy warning copy where fallback art already exists.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Import a playlist and confirm mini player no longer shows `Missing artwork`.
+    - Open fullscreen on a track without stored art and confirm the warning copy is gone.
+    - Confirm `Missing audio` messaging still appears when truly needed.
+
+**Diagnosis note — 2026-04-10 Codex:**
+- Status:
+  - fix implemented for imported-playlist theme switch lock seam
+- Focus:
+  - keep playlist theme recall without making active imported playlists feel theme-locked
+- Files inspected so far:
+  - `src/App.tsx`
+  - `src/lib/db.ts`
+- Findings:
+  - Active-playlist theme recall was reading `themeSelection` from `runtimeLibrary`.
+  - Manual theme change persisted the playlist theme to DB, but `runtimeLibrary` still held the old imported playlist theme briefly.
+  - That stale in-memory value caused the active-playlist recall effect to immediately snap the UI back, making imported playlists feel theme-locked.
+- Narrow implementation plan:
+  - update the active playlist’s `themeSelection` in `runtimeLibrary` immediately when the user changes theme
+  - keep the existing DB persistence and playlist recall model intact
+- Fix implemented — 2026-04-10 Codex:
+  - Exact fix made:
+    - Added a narrow `runtimeLibrary` sync helper for active-playlist theme selection in `src/App.tsx`.
+    - Main-app manual theme changes now update the active playlist’s in-memory `themeSelection` immediately before the DB write.
+    - Admin iframe theme-change messages now also sync the active playlist’s in-memory `themeSelection` so the same snap-back does not happen there.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This keeps playlist theme recall but fixes the stale-state lock seam only.
+  - Regression risk:
+    - Low to moderate.
+    - Main risk is making sure playlist recall still works on navigation while manual theme changes remain respected immediately.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Open an imported playlist and manually switch themes; confirm the new theme sticks immediately.
+    - Switch away and back; confirm that playlist now recalls the new theme.
+    - Confirm non-imported playlists still behave the same.
+    - Confirm admin/settings theme changes do not snap back on the active playlist.
+
+**Diagnosis note — 2026-04-10 Codex:**
+- Status:
+  - fix implemented for playlist-import success countdown parity
+- Focus:
+  - make playlist-backup import reuse the same 2-second vault-import close countdown
+- Files inspected so far:
+  - `src/App.tsx`
+- Findings:
+  - Full vault import already starts the shared success-close countdown.
+  - Playlist-backup import was setting success status only and leaving the Vault overlay open.
+  - The existing countdown UI text was hardcoded to `Vault imported successfully`, so playlist import needed a tiny label seam correction to reuse it cleanly.
+- Narrow implementation plan:
+  - reuse the existing countdown mechanism for playlist import success
+  - add a tiny success-title state so the countdown card can say the right thing for vault vs playlist import
+- Fix implemented — 2026-04-10 Codex:
+  - Exact fix made:
+    - Playlist-backup import now starts the same 2-second close countdown as full vault import.
+    - Added a tiny import-success title state so the shared countdown card now says either:
+      - `Vault imported successfully`
+      - `Playlist imported successfully`
+  - Exact files changed:
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This reuses the existing countdown behavior and only adjusts the label seam.
+  - Regression risk:
+    - Low.
+    - Main risk is only making sure vault import still shows the original title and that the countdown clears correctly.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm playlist import now shows the 2-second close countdown.
+    - Confirm the countdown title reads `Playlist imported successfully`.
+    - Confirm full vault import still shows the same countdown with `Vault imported successfully`.
+    - Confirm `Close now` still works in both cases.
+
+**Diagnosis note — 2026-04-10 Codex:**
+- Status:
+  - diagnosis confirmed for playlist-backup export naming on the main Vault page
+- Focus:
+  - make playlist backup export use the same inline filename step as full vault backup
+  - make playlist backup import accept the saved file type more reliably
+- Files inspected so far:
+  - `src/App.tsx`
+  - `src/lib/saveBlob.ts`
+  - `src/lib/backup.ts`
+- Findings:
+  - Playlist backup export on the Vault page was using the direct `promptForSaveFilename(...)` path.
+  - On iPhone-like devices, `promptForSaveFilename(...)` returns the initial filename immediately, so the user does not get an inline naming step there.
+  - Full vault backup already uses a deferred naming flow on iPhone via pending blob/name state.
+  - Playlist backup import already accepts `.polyplaylist`, but broadening the accept list is a safe compatibility improvement for iOS file picking.
+- Narrow implementation plan:
+  - mirror the full-vault deferred naming flow for playlist backup on the Vault page
+  - preserve the default filename as `playlistname-date-polyplaylist`
+  - broaden playlist-backup file input/save accept compatibility without changing archive behavior
+- Fix implemented — 2026-04-10 Codex:
+  - Exact fix made:
+    - Playlist backup export on the main Vault page now uses the same deferred inline save-name flow as full vault backup on iPhone-like devices.
+    - Added a dedicated pending playlist-backup save card so the user can edit the default filename before saving.
+    - Reused the existing normalized filename logic so the default remains `playlistname-date-polyplaylist.polyplaylist`.
+    - Broadened playlist-backup save/import accept compatibility to include `application/octet-stream` alongside `.polyplaylist` / zip types for iOS file picking.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a narrow Vault-page save/import UX correction only.
+  - Regression risk:
+    - Low.
+    - Main risk is making sure deferred naming only changes the playlist-backup path and that desktop save behavior remains unchanged.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - On iPhone, confirm `Export Playlist Backup` now presents the inline filename box before save.
+    - Confirm the default filename is `playlistname-date-polyplaylist.polyplaylist`.
+    - Confirm the saved `.polyplaylist` file is selectable again through `Import Playlist Backup`.
+    - Confirm desktop export/import behavior remains unchanged.
+
+**Diagnosis note — 2026-04-10 Codex:**
+- Status:
+  - diagnosis confirmed for playlist-backup controls surface move
+- Focus:
+  - move playlist backup import/export controls from admin/settings to the main Vault overlay
+- Files inspected so far:
+  - `src/App.tsx`
+  - `src/admin/AdminApp.tsx`
+  - `src/lib/backup.ts`
+- Findings:
+  - Full backup controls already live on the main Vault overlay in `src/App.tsx`.
+  - Playlist backup import/export handlers currently exist only in `src/admin/AdminApp.tsx`.
+  - The playlist backup behavior is already implemented; this is a surface move, not a behavior change.
+- Narrow implementation plan:
+  - add playlist backup export/import handlers and input to the main Vault overlay
+  - reuse existing `exportPolyplaylist()` / `importPolyplaylist()` behavior
+  - remove playlist-backup buttons from the admin backup section to avoid duplicate homes
+- Fix implemented — 2026-04-10 Codex:
+  - Exact fix made:
+    - Added playlist-backup export/import controls directly to the main Vault overlay in `src/App.tsx`.
+    - Added main-app handlers for:
+      - playlist backup export
+      - playlist backup import
+    - Reused the existing `exportPolyplaylist()` / `importPolyplaylist()` behavior and vault toast messaging style.
+    - Removed the playlist-backup buttons and file input from `src/admin/AdminApp.tsx` so Vault is now the single home for that action.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `src/admin/AdminApp.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a surface move only; the playlist-backup behavior itself was reused unchanged.
+  - Regression risk:
+    - Low.
+    - Main risk is just making sure the vault-page import/export buttons and file inputs behave cleanly.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Open Vault and confirm `Export Playlist Backup` and `Import Playlist Backup` are visible there.
+    - Confirm those controls are no longer shown in admin/settings backups.
+    - Confirm playlist backup export/import still works from the new location.
+    - Confirm vault full-backup controls remain unchanged.
+
+**Diagnosis note — 2026-04-10 Codex:**
+- Status:
+  - diagnosis confirmed for playlist-owned theme recall and loop-carrying polyplaylist zip backup
+- Focus:
+  - make playlist navigation apply playlist-owned themes
+  - make `.polyplaylist` zip import/export preserve playlist theme and loop state
+  - keep import additive
+- Files inspected so far:
+  - `src/lib/storage/library.ts`
+  - `src/lib/db.ts`
+  - `src/lib/backup.ts`
+  - `src/App.tsx`
+  - `src/admin/AdminApp.tsx`
+- Findings:
+  - The existing `.polyplaylist` zip export/import path is already additive and playlist-scoped.
+  - `buildPolyplaylistConfig(...)` already captures per-track loop state, but the actual zip archive path does not currently carry or apply that loop config.
+  - Playlist records do not currently store theme ownership metadata.
+  - Theme changes are currently global/localStorage-driven rather than playlist-owned.
+  - Polyplaylist export filenames already sanitize names, but the current format is `polyplaylist-name-date` rather than the requested `playlistname-date-polyplaylist`.
+- Narrow implementation plan:
+  - add optional `themeSelection` metadata to playlist records
+  - persist active playlist theme when the user changes theme
+  - apply playlist theme when the active playlist changes
+  - extend the `.polyplaylist` archive manifest to carry playlist config/loop metadata
+  - apply imported loops/theme to the newly created local playlist/tracks during zip import
+  - switch the default polyplaylist filename format to `playlistname-date-polyplaylist` with filename-safe sanitization
+- Fix implemented — 2026-04-10 Codex:
+  - Exact fix made:
+    - Added optional `themeSelection` metadata to playlist records in the library model.
+    - New playlists now default to the current theme selection.
+    - Main-app theme changes now persist the chosen theme onto the active playlist.
+    - Active playlist changes now apply the playlist-owned theme in the main app.
+    - The `.polyplaylist` archive manifest now carries embedded playlist config, including loop state and playlist theme selection.
+    - Polyplaylist zip import now restores imported playlist theme metadata and writes imported loop state onto the newly created local track ids.
+    - Backup UI labels were clarified to `Playlist Backup`.
+    - Default polyplaylist filenames now use the requested order: `playlistname-date-polyplaylist.polyplaylist`, with filename-safe sanitization.
+  - Exact files changed:
+    - `src/lib/storage/library.ts`
+    - `src/lib/db.ts`
+    - `src/lib/backup.ts`
+    - `src/lib/playlistState.ts`
+    - `src/App.tsx`
+    - `src/admin/AdminApp.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Moderate.
+    - This reuses the existing playlist/archive system rather than introducing a parallel one, but it does touch playlist state, import/export, and theme switching together.
+  - Regression risk:
+    - Moderate.
+    - Highest-risk areas are active-playlist theme switching, archive import fidelity, and playlist creation/activation consistency.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Create two playlists with different themes and confirm switching playlists changes theme automatically.
+    - Change theme while a playlist is active and confirm that playlist recalls the new theme later.
+    - Export a playlist backup and confirm filename format is `playlistname-date-polyplaylist.polyplaylist`.
+    - Import a playlist backup into an existing library and confirm:
+      - it adds a new playlist
+      - it does not overwrite existing playlists
+      - imported loops are present on the restored tracks
+      - imported playlist theme is recalled when that playlist becomes active
+
+**Diagnosis note — 2026-04-10 Codex:**
+- Status:
+  - diagnosis confirmed for oversized full vault backup crash on iPhone
+- Focus:
+  - add a release-safe pre-zip guardrail so large full backups fail safely instead of crashing WebView during zip assembly
+- Files inspected so far:
+  - `src/lib/backup.ts`
+  - `src/admin/AdminApp.tsx`
+  - `src/App.tsx`
+  - `src/lib/platform.ts`
+- Findings:
+  - Full vault export can reach `[VAULT EXPORT READY] 21/21`, proving per-track media collection completes.
+  - The WebView then crashes immediately afterward, before save/share completion.
+  - That points to post-collection in-memory zip assembly in `buildZip(...)`, not a specific track fetch.
+  - The current mobile full-backup cap is `512 MB`, which is appropriate for logical backup size but too high for safe in-memory zip assembly on constrained iPhone WebView.
+- Narrow implementation plan:
+  - keep export architecture unchanged
+  - add a stricter full-vault pre-zip build cap on constrained mobile only
+  - throw the existing `BackupSizeError` before `buildZip(...)`
+  - update the user-facing copy to describe this as a safe export limit on the device
+- Fix implemented — 2026-04-10 Codex:
+  - Exact fix made:
+    - Added a constrained-mobile full-vault backup build cap in `src/lib/backup.ts`.
+    - Full vault backup now uses a stricter pre-zip safe cap of `192 MB` on constrained mobile devices before attempting `buildZip(...)`.
+    - Reused the existing `BackupSizeError` path so oversized full backups fail safely before zip assembly instead of crashing WebView.
+    - Updated the user-facing copy in both app/admin callers to say `safe export limit` instead of the more general `export limit`.
+    - Removed the temporary per-track vault-export console instrumentation added during diagnosis.
+  - Exact files changed:
+    - `src/lib/backup.ts`
+    - `src/admin/AdminApp.tsx`
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a narrow containment guardrail around the confirmed unsafe stage.
+  - Regression risk:
+    - Low to moderate.
+    - Low because smaller full backups still follow the same path.
+    - Moderate because some backups that previously attempted export on iPhone will now be blocked earlier.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm smaller full backups still export on iPhone.
+    - Confirm oversized full backups now fail safely without WebView crash.
+    - Confirm the safe-limit message is clear in both admin and main-app flows.
+    - Confirm Export Config / smaller backup paths remain usable.
+
+**Diagnosis note — 2026-04-10 Codex:**
+- Status:
+  - diagnosis confirmed for full vault export crash instrumentation
+- Focus:
+  - add temporary per-track export logging in the exact vault-media collection loop without changing export behavior
+- Files inspected so far:
+  - `src/lib/backup.ts`
+  - `src/admin/AdminApp.tsx`
+  - `src/App.tsx`
+- Findings:
+  - Full backup progress text such as `Collecting vault media… (46/48 tracks)` is emitted from `buildTrackMediaEntries(...)` in `src/lib/backup.ts`.
+  - The same function also performs the actual per-track media iteration for export.
+  - That makes `buildTrackMediaEntries(...)` the narrowest safe seam for temporary instrumentation.
+- Narrow implementation plan:
+  - add compact console logging at the top of each track iteration
+  - include cheap fields already present on the track:
+    - export index
+    - title
+    - id
+    - audioKey
+    - duration
+  - add a second completion log after the existing media fetches so `blob.size` can be included when already available
+  - do not change export flow, ordering, or error handling
+- Follow-up diagnosis note — 2026-04-10 Codex:
+  - Status:
+    - first instrumentation narrowed the export failure to a specific per-track collection step on larger failing runs
+  - New finding:
+    - failing repros can stop after `[VAULT EXPORT] 20/21` without reaching `[VAULT EXPORT READY] 20/21`
+    - that means the crash can still occur inside per-track media collection for the current track, before zip build
+  - Narrow follow-up implementation plan:
+    - extend the existing temporary logs to include `artKey` and `artVideoKey`
+    - add one compact log before each collect call:
+      - audio
+      - artwork
+      - artwork video
+    - keep this diagnosis-only and do not alter export behavior
+- Fix implemented — 2026-04-10 Codex:
+  - Exact fix made:
+    - Added temporary per-track vault-export console logging inside `buildTrackMediaEntries(...)` in `src/lib/backup.ts`.
+    - Each track now logs a start line before media collection begins:
+      - `[VAULT EXPORT] 46/48`
+      - with `{ title, id, audioKey, duration, size: null }`
+    - Each track also logs a completion line after the existing media fetches:
+      - `[VAULT EXPORT READY] 46/48`
+      - with `{ title, id, audioKey, duration, size }`
+      - where `size` is the fetched audio blob size when available
+  - Exact files changed:
+    - `src/lib/backup.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is temporary instrumentation only and does not change export behavior.
+  - Regression risk:
+    - Low.
+    - The only change is added console logging inside the existing loop.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Re-run full vault export on iPhone.
+    - Capture the last `[VAULT EXPORT]` or `[VAULT EXPORT READY]` line before the crash.
+    - Use that track id/title to inspect the failing media item in the next pass.
+- Follow-up instrumentation implemented — 2026-04-10 Codex:
+  - Exact fix made:
+    - Extended the existing temporary export logs to include `artKey` and `artVideoKey` on both `[VAULT EXPORT]` and `[VAULT EXPORT READY]`.
+    - Added compact per-media collection logs before each existing fetch:
+      - `[VAULT EXPORT AUDIO]`
+      - `[VAULT EXPORT ARTWORK]`
+      - `[VAULT EXPORT VIDEO]`
+    - These logs include `{ title, id, key, duration }` so the next failing run can identify which media field on the current track dies before the ready log.
+  - Exact files changed:
+    - `src/lib/backup.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This remains diagnosis-only logging with no export behavior changes.
+  - Regression risk:
+    - Low.
+    - The only added behavior is extra console output.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Run `npm run ios:update`.
+    - Rebuild/run from Xcode.
+    - Reproduce the failing full vault export.
+    - Capture the last one of:
+      - `[VAULT EXPORT AUDIO]`
+      - `[VAULT EXPORT ARTWORK]`
+      - `[VAULT EXPORT VIDEO]`
+      - `[VAULT EXPORT READY]`
+    - That last line should identify the exact failing media step.
 
 **Diagnosis note — 2026-04-09 Codex:**
 - Status:

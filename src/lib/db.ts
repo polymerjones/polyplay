@@ -113,6 +113,17 @@ function getStoredArtworkThemeSelection(): ThemeSelection {
   }
 }
 
+function getStoredPlaylistThemeSelection(): ThemeSelection {
+  if (typeof localStorage === "undefined") return "dark";
+  try {
+    const mode = localStorage.getItem(THEME_MODE_KEY);
+    const slot = parseCustomThemeSlot(localStorage.getItem(CUSTOM_THEME_SLOT_KEY));
+    return getThemeSelectionFromState(mode, slot);
+  } catch {
+    return "dark";
+  }
+}
+
 function getThemeNotePosterPalette(themeSelection: ThemeSelection): {
   start: string;
   end: string;
@@ -992,6 +1003,7 @@ export type TrackStorageRow = {
 export type PlaylistRow = {
   id: string;
   name: string;
+  themeSelection?: ThemeSelection | null;
   trackCount: number;
   isActive: boolean;
   createdAt: number;
@@ -1032,6 +1044,7 @@ export async function getPlaylistsFromDb(): Promise<PlaylistRow[]> {
     .map((playlist) => ({
       id: playlist.id,
       name: playlist.name,
+      themeSelection: playlist.themeSelection ?? null,
       trackCount: playlist.trackIds.filter((trackId) => Boolean(library.tracksById[trackId])).length,
       isActive: library.activePlaylistId === playlist.id,
       createdAt: playlist.createdAt,
@@ -1049,6 +1062,7 @@ export async function createPlaylistInDb(name: string): Promise<string> {
   library.playlistsById[playlistId] = {
     id: playlistId,
     name: nextName,
+    themeSelection: getStoredPlaylistThemeSelection(),
     trackIds: [],
     createdAt: ts,
     updatedAt: ts
@@ -1075,6 +1089,19 @@ export async function renamePlaylistInDb(playlistId: string, name: string): Prom
   const trimmed = name.trim();
   if (!trimmed) throw new Error("Playlist name can't be empty.");
   playlist.name = trimmed;
+  playlist.updatedAt = now();
+  saveLibrary(library);
+}
+
+export async function setPlaylistThemeSelectionInDb(
+  playlistId: string,
+  themeSelection: ThemeSelection | null
+): Promise<void> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const playlist = library.playlistsById[playlistId];
+  if (!playlist) throw new Error("Playlist not found");
+  playlist.themeSelection = themeSelection ?? null;
   playlist.updatedAt = now();
   saveLibrary(library);
 }

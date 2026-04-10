@@ -17,7 +17,7 @@ import {
   type LibraryState,
   type TrackRecord
 } from "./storage/library";
-import { parseCustomThemeSlot, type CustomThemeSlot } from "./themeConfig";
+import { getThemeSelectionFromState, isThemeSelection, parseCustomThemeSlot, type CustomThemeSlot, type ThemeSelection } from "./themeConfig";
 import { isConstrainedMobileDevice } from "./platform";
 
 const LAYOUT_MODE_KEY = "polyplay_layoutMode";
@@ -38,6 +38,7 @@ const LOOP_MODE_KEY = "polyplay_loopModeByTrack";
 const BACKUP_ROOT = "polyplay-backup";
 const BACKUP_CAP_BYTES_MOBILE = 512 * 1024 * 1024;
 const BACKUP_CAP_BYTES_DESKTOP = 1024 * 1024 * 1024;
+const FULL_BACKUP_SAFE_BUILD_CAP_BYTES_MOBILE = 192 * 1024 * 1024;
 export const MIN_FULL_BACKUP_USER_TRACKS = 1;
 const FULL_BACKUP_VERSION = 1;
 const POLYPLAYLIST_ROOT = "polyplaylist";
@@ -195,7 +196,7 @@ export type PolyplaylistConfigV1 = {
   tracks: Record<string, PolyplaylistTrackConfig>;
   global: {
     layoutMode: "grid" | "list";
-    theme: "light" | "dark";
+    theme: ThemeSelection;
   };
 };
 
@@ -242,8 +243,10 @@ export type PolyplaylistManifest = {
   playlist: {
     id: string;
     name: string;
+    themeSelection?: ThemeSelection | null;
     trackIds: string[];
   };
+  config?: PolyplaylistConfigV1;
   tracksById: Record<string, TrackRecord>;
 };
 
@@ -284,6 +287,12 @@ export function getBackupCapBytes(): number {
     // Ignore capability detection failures and keep the platform fallback.
   }
   return capBytes;
+}
+
+function getFullBackupBuildCapBytes(): number {
+  const capBytes = getBackupCapBytes();
+  if (!isConstrainedMobileDevice()) return capBytes;
+  return Math.min(capBytes, FULL_BACKUP_SAFE_BUILD_CAP_BYTES_MOBILE);
 }
 
 function clampAura(value: number): number {
@@ -333,13 +342,13 @@ function writeLoopState(loopByTrack: Record<string, LoopRegion>, loopModeByTrack
   localStorage.setItem(LOOP_MODE_KEY, JSON.stringify(loopModeByTrack));
 }
 
-function asTheme(value: unknown): "light" | "dark" {
-  return value === "dark" ? "dark" : "light";
+function asThemeSelection(value: unknown): ThemeSelection {
+  return isThemeSelection(value) ? value : "light";
 }
 
 function asThemeMode(value: unknown): "light" | "dark" | "custom" {
   if (value === "custom") return "custom";
-  return asTheme(value);
+  return value === "dark" ? "dark" : "light";
 }
 
 function asCustomThemeSlot(value: unknown): CustomThemeSlot {
@@ -593,7 +602,7 @@ function slugifyName(input: string): string {
 
 export function getPolyplaylistFilename(playlistName = "playlist"): string {
   const slug = slugifyName(playlistName) || "playlist";
-  return `polyplaylist-${slug}-${formatStamp()}.polyplaylist`;
+  return `${slug}-${formatStamp()}-polyplaylist.polyplaylist`;
 }
 
 export function serializeConfig(config = buildConfigSnapshot()): string {
@@ -819,7 +828,7 @@ function normalizePolyplaylistConfig(input: unknown): PolyplaylistConfigV1 {
     tracks,
     global: {
       layoutMode: asLayout(value.global?.layoutMode),
-      theme: asTheme(value.global?.theme)
+      theme: asThemeSelection(value.global?.theme)
     }
   };
 }
@@ -841,6 +850,20 @@ function resolveTrackKey(library: LibraryState, requestedId: string): string | n
     if (track.id === requestedId) return key;
   }
   return null;
+}
+
+function getCurrentThemeSelection(): ThemeSelection {
+  return getThemeSelectionFromState(localStorage.getItem(THEME_MODE_KEY), parseCustomThemeSlot(localStorage.getItem(CUSTOM_THEME_SLOT_KEY)));
+}
+
+function applyThemeSelectionToStorage(themeSelection: ThemeSelection): void {
+  const nextMode = themeSelection === "dark" ? "dark" : themeSelection === "light" ? "light" : "custom";
+  const nextSlot =
+    themeSelection === "dark" || themeSelection === "light"
+      ? parseCustomThemeSlot(localStorage.getItem(CUSTOM_THEME_SLOT_KEY))
+      : themeSelection;
+  localStorage.setItem(THEME_MODE_KEY, nextMode);
+  localStorage.setItem(CUSTOM_THEME_SLOT_KEY, nextSlot);
 }
 
 export async function buildPolyplaylistConfig(
@@ -887,7 +910,7 @@ export async function buildPolyplaylistConfig(
     tracks,
     global: {
       layoutMode: asLayout(localStorage.getItem(LAYOUT_MODE_KEY)),
-      theme: asTheme(localStorage.getItem(THEME_MODE_KEY))
+      theme: targetPlaylist.themeSelection ?? getCurrentThemeSelection()
     }
   };
 }
@@ -916,7 +939,8 @@ export async function applyImportedPolyplaylistConfig(
   const resolvedPlaylistName = resolveImportPlaylistName(library, payload.playlistName, targetPlaylistId);
   targetPlaylist.name = resolvedPlaylistName;
   localStorage.setItem(LAYOUT_MODE_KEY, payload.global.layoutMode);
-  localStorage.setItem(THEME_MODE_KEY, payload.global.theme);
+  applyThemeSelectionToStorage(payload.global.theme);
+  targetPlaylist.themeSelection = payload.global.theme;
 
   const { loopByTrack, loopModeByTrack } = readLoopState();
   const missingTrackIds: string[] = [];
@@ -1353,7 +1377,7 @@ export async function exportFullBackup(
 
   const estimatedBytes =
     mediaBytes + jsonEntries.reduce((sum, entry) => sum + entry.bytes.length, 0) + 1024 * Math.max(1, mediaEntries.length);
-  const capBytes = getBackupCapBytes();
+  const capBytes = getFullBackupBuildCapBytes();
   if (estimatedBytes > capBytes) {
     throw new BackupSizeError(estimatedBytes, capBytes);
   }
@@ -1397,6 +1421,8 @@ function normalizeImportedPolyplaylist(input: unknown): PolyplaylistManifest {
   const playlistTrackIds = Array.isArray(value.playlist?.trackIds)
     ? value.playlist.trackIds.filter((trackId): trackId is string => typeof trackId === "string")
     : [];
+  const playlistThemeSelection = isThemeSelection(value.playlist?.themeSelection) ? value.playlist?.themeSelection ?? null : null;
+  const normalizedConfig = value.config ? normalizePolyplaylistConfig(value.config) : null;
 
   const normalizedLibrary = migrateLibraryIfNeeded({
     version: 1,
@@ -1405,6 +1431,7 @@ function normalizeImportedPolyplaylist(input: unknown): PolyplaylistManifest {
       imported: {
         id: "imported",
         name: playlistName,
+        themeSelection: playlistThemeSelection,
         trackIds: playlistTrackIds,
         createdAt: Date.now(),
         updatedAt: Date.now()
@@ -1425,8 +1452,10 @@ function normalizeImportedPolyplaylist(input: unknown): PolyplaylistManifest {
     playlist: {
       id: typeof value.playlist?.id === "string" ? value.playlist.id : "imported",
       name: playlistName,
+      themeSelection: playlistThemeSelection,
       trackIds: normalizedTrackIds
     },
+    config: normalizedConfig ?? undefined,
     tracksById: normalizedLibrary.tracksById
   };
 }
@@ -1443,6 +1472,10 @@ export async function exportPolyplaylist(
 
   const tracks = trackIds.map((trackId) => library.tracksById[trackId]).filter(Boolean);
   const tracksById = Object.fromEntries(tracks.map((track) => [track.id, track]));
+  const playlistConfig = await buildPolyplaylistConfig(activePlaylist.name || "My Playlist", {
+    playlistId: activePlaylist.id,
+    sourceLibrary: library
+  });
 
   const { entries: mediaEntries, mediaBytes } = await buildTrackMediaEntries(
     tracks,
@@ -1459,8 +1492,10 @@ export async function exportPolyplaylist(
     playlist: {
       id: activePlaylist.id,
       name: activePlaylist.name || "My Playlist",
+      themeSelection: activePlaylist.themeSelection ?? playlistConfig.global.theme,
       trackIds
     },
+    config: playlistConfig,
     tracksById
   };
 
@@ -1497,6 +1532,7 @@ export async function importPolyplaylist(file: File): Promise<ImportPolyplaylist
   if (!manifest.playlist.trackIds.length) throw new Error("PolyPlaylist has no tracks.");
 
   const library = loadLibrary();
+  const { loopByTrack, loopModeByTrack } = readLoopState();
   const nowMs = Date.now();
   const playlistId = makeRecordId();
   const playlistName = toUniquePlaylistName(library, manifest.playlist.name);
@@ -1516,6 +1552,28 @@ export async function importPolyplaylist(file: File): Promise<ImportPolyplaylist
       createdAt: nowMs + index,
       updatedAt: nowMs + index
     });
+    const importedTrackConfig = manifest.config?.tracks[sourceTrackId] ?? manifest.config?.tracks[legacyTrackId];
+    if (importedTrackConfig) {
+      nextTrack.title = importedTrackConfig.title.trim() || nextTrack.title;
+      nextTrack.aura = clampAura(importedTrackConfig.aura);
+      nextTrack.artworkSource = importedTrackConfig.artworkMode === "auto" ? "auto" : "user";
+      loopModeByTrack[nextTrackId] = importedTrackConfig.loop.mode;
+      if (
+        importedTrackConfig.loop.mode === "region" &&
+        Number.isFinite(importedTrackConfig.loop.in) &&
+        Number.isFinite(importedTrackConfig.loop.out) &&
+        Number(importedTrackConfig.loop.out) > Number(importedTrackConfig.loop.in)
+      ) {
+        loopByTrack[nextTrackId] = {
+          start: Math.max(0, Number(importedTrackConfig.loop.in)),
+          end: Number(importedTrackConfig.loop.out),
+          active: true,
+          editing: false
+        };
+      } else {
+        delete loopByTrack[nextTrackId];
+      }
+    }
 
     const audioEntry = findEntryByPrefixes(zipEntries, [
       `${POLYPLAYLIST_ROOT}/media/${sourceTrackId}/audio.`,
@@ -1574,12 +1632,14 @@ export async function importPolyplaylist(file: File): Promise<ImportPolyplaylist
   library.playlistsById[playlistId] = {
     id: playlistId,
     name: playlistName,
+    themeSelection: manifest.playlist.themeSelection ?? manifest.config?.global.theme ?? null,
     trackIds: importedTrackIds,
     createdAt: nowMs,
     updatedAt: nowMs
   };
   library.activePlaylistId = playlistId;
   saveLibrary(library);
+  writeLoopState(loopByTrack, loopModeByTrack);
 
   return {
     playlistId,

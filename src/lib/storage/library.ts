@@ -1,3 +1,5 @@
+import { isThemeSelection, type ThemeSelection } from "../themeConfig";
+
 export type TrackRecord = {
   id: string;
   demoId?: string | null;
@@ -25,6 +27,7 @@ export type TrackRecord = {
 export type PlaylistRecord = {
   id: string;
   name: string;
+  themeSelection?: ThemeSelection | null;
   trackIds: string[];
   createdAt: number;
   updatedAt: number;
@@ -109,6 +112,9 @@ export function migrateLibraryIfNeeded(input: unknown): LibraryState {
     playlistsById[id] = {
       id,
       name: (p.name || "").trim() || "Playlist",
+      themeSelection: isThemeSelection((p as { themeSelection?: unknown }).themeSelection)
+        ? ((p as { themeSelection?: ThemeSelection }).themeSelection ?? null)
+        : null,
       trackIds: normalizedTrackIds,
       createdAt,
       updatedAt
