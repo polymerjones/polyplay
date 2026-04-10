@@ -23,6 +23,7 @@ import {
   replaceAudioInDb,
   resetAuraInDb,
   setActivePlaylistInDb,
+  setPlaylistReverseOrderInDb,
   setPlaylistThemeSelectionInDb,
   type PlaylistRow,
   type StorageUsageSummary,
@@ -1550,6 +1551,19 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
     }
   };
 
+  const requestUploadSubmitFromKeyboard = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Enter") return;
+    if (!uploadAudio) return;
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+    const target = event.target as HTMLElement | null;
+    const tagName = target?.tagName ?? "";
+    if (tagName === "TEXTAREA" || tagName === "SELECT") return;
+    if (target instanceof HTMLInputElement && (target.type === "range" || target.type === "file")) return;
+    if (target?.closest(".transfer-lane__tip-btn, .frame-video-toggle, .admin-upload-submit")) return;
+    event.preventDefault();
+    uploadFormRef.current?.requestSubmit();
+  };
+
   const seekPreviewVideo = (video: HTMLVideoElement | null, timeSec: number) => {
     if (!video) return;
     const duration = Number.isFinite(video.duration) ? video.duration : 0;
@@ -2517,6 +2531,23 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
     }
   };
 
+  const onTogglePlaylistReverse = async (playlist: PlaylistRow, isReversed: boolean) => {
+    setPlaylistBusyId(playlist.id);
+    try {
+      await setPlaylistReverseOrderInDb(playlist.id, isReversed);
+      setStatus(isReversed ? "Playlist order reversed." : "Playlist order restored.");
+      await refreshPlaylists();
+      await refreshTracks();
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "polyplay:library-updated" }, window.location.origin);
+      }
+    } catch (error) {
+      setStatus(`Reverse order failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      setPlaylistBusyId(null);
+    }
+  };
+
   const onDeletePlaylist = async (playlist: PlaylistRow) => {
     setPlaylistBusyId(playlist.id);
     const previousPlaylists = playlists.slice();
@@ -2707,18 +2738,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
         <form
           ref={uploadFormRef}
           onSubmit={onUpload}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter") return;
-            if (!uploadAudio) return;
-            if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
-            const target = event.target as HTMLElement | null;
-            const tagName = target?.tagName ?? "";
-            if (tagName === "TEXTAREA" || tagName === "SELECT") return;
-            if (target instanceof HTMLInputElement && (target.type === "range" || target.type === "file")) return;
-            if (target?.closest(".transfer-lane__tip-btn, .frame-video-toggle, .admin-upload-submit")) return;
-            event.preventDefault();
-            uploadFormRef.current?.requestSubmit();
-          }}
+          onKeyDown={requestUploadSubmitFromKeyboard}
           className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3"
         >
           <h2 className="mb-2 text-base font-semibold text-slate-100">Import Track</h2>
@@ -2787,6 +2807,8 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
                   uploadTitleAutofilledRef.current = false;
                   setUploadTitleValue(event.currentTarget.value);
                 }}
+                onKeyDown={requestUploadSubmitFromKeyboard}
+                enterKeyHint="done"
                 className="admin-upload-input rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
               />
             </label>
@@ -2801,6 +2823,8 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
                   uploadArtistAutofilledRef.current = false;
                   setUploadArtistValue(event.currentTarget.value);
                 }}
+                onKeyDown={requestUploadSubmitFromKeyboard}
+                enterKeyHint="done"
                 placeholder="Start typing to see artist suggestions"
                 className="admin-upload-input rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
               />
@@ -3235,7 +3259,17 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
                   <p>
                     {playlist.trackCount} track{playlist.trackCount === 1 ? "" : "s"}
                     {playlist.isActive ? " • Active" : ""}
+                    {playlist.isReversed ? " • Reversed" : ""}
                   </p>
+                  <label className="playlist-row__toggle">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(playlist.isReversed)}
+                      onChange={(event) => void onTogglePlaylistReverse(playlist, event.currentTarget.checked)}
+                      disabled={Boolean(playlistBusyId)}
+                    />
+                    <span>Reverse Order</span>
+                  </label>
                 </div>
                 <div className="playlist-row__actions">
                   {!playlist.isActive && (

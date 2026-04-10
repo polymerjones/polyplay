@@ -128,6 +128,52 @@ Why this mattered:
 - imported playlist tracks can fall back cleanly to default artwork
 - the warning copy was noisy in normal playback even when the UI still had a valid visual fallback
 
+### 10. Playlist-level reverse-order toggle
+- `src/lib/storage/library.ts`
+- `src/lib/playlistState.ts`
+- `src/lib/db.ts`
+- `src/App.tsx`
+- `src/admin/AdminApp.tsx`
+- `styles.css`
+
+What changed:
+- playlists now support a persisted `isReversed` flag
+- visible playlist tracks and playback navigation both derive order from a shared copied-reverse helper
+- source `trackIds` are never mutated in place
+- a `Reverse Order` checkbox now lives in the existing playlist manager row in admin/settings
+
+Why this mattered:
+- users needed some clean way to flip playlist order without cluttering tiles or adding per-track controls
+- the admin playlist manager was the cleanest existing surface for a reversible playlist-view preference
+
+### 11. Playlist-backup filename suffix + Gratitude prompt lag polish
+- `src/lib/backup.ts`
+- `src/components/GratitudePrompt.tsx`
+- `src/App.tsx`
+
+What changed:
+- playlist-backup filenames now end with:
+  - `-polyplay.polyplaylist`
+- Gratitude prompt no longer applies the `is-typing` shimmer overlay
+- Gratitude typing no longer triggers the extra reactive body effect on each keystroke
+- Gratitude typing now uses a small local border pulse only
+
+Why this mattered:
+- the old filename suffix was awkward and redundant
+- the Gratitude prompt felt laggy and visually noisy because it was layering two separate typing effects
+
+### 12. Import-page Enter/Return submit reliability
+- `src/admin/AdminApp.tsx`
+
+What changed:
+- added a shared keyboard-submit helper for the import form
+- wired Title and Artist inputs to trigger Import on Enter/Return
+- added `enterKeyHint="done"` on those inputs for iOS keyboards
+
+Why this mattered:
+- Enter/Return was no longer reliably activating Import from the import form fields
+- this restores expected desktop and iOS keyboard behavior without changing import logic
+
 ## Important current behavior
 
 ### Full vault backup on iPhone

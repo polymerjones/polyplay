@@ -65,7 +65,140 @@ Use alongside any existing planning board already in the repo, but treat this fi
 ---
 
 ## Active task
-**Current active task:** `Vault page playlist backup naming/import polish`
+**Current active task:** `Import-page Enter/Return submit reliability`
+
+**Diagnosis note — 2026-04-10 Codex:**
+- Status:
+  - fix implemented for import-page Enter/Return submit reliability
+- Focus:
+  - restore Enter/Return activation of the Import action on the import page for desktop and iOS
+- Files inspected so far:
+  - `src/admin/AdminApp.tsx`
+- Findings:
+  - The import page already had a form `onSubmit` and a form-level Enter handler.
+  - The failure was a reliability seam in how Enter/Return reached that submit path from field focus states.
+  - Title and Artist were the main text-entry fields where users expect Return to activate Import.
+- Narrow implementation plan:
+  - add one shared keyboard-submit helper for the import form
+  - reuse it on the form and explicitly on the Title/Artist inputs
+  - keep the existing import behavior unchanged
+- Fix implemented — 2026-04-10 Codex:
+  - Exact fix made:
+    - Added a shared `requestUploadSubmitFromKeyboard(...)` helper in `src/admin/AdminApp.tsx`.
+    - Wired the import form to use that helper.
+    - Wired the Title and Artist inputs to use that helper directly.
+    - Added `enterKeyHint="done"` to the Title and Artist inputs for cleaner iOS keyboard behavior.
+  - Exact files changed:
+    - `src/admin/AdminApp.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a narrow keyboard-submit reliability fix only.
+  - Regression risk:
+    - Low.
+    - Main risk is just confirming Enter still stays suppressed for textarea/range/file inputs and that normal button click import remains unchanged.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - On desktop, focus Title or Artist and press Enter; confirm Import runs.
+    - On iOS, focus Title or Artist and press Return/Done; confirm Import runs.
+    - Confirm textarea/select/range/file controls do not trigger accidental submit.
+    - Confirm tapping the Import button still works normally.
+
+**Diagnosis note — 2026-04-10 Codex:**
+- Status:
+  - fix implemented for playlist-backup filename suffix and Gratitude prompt lag/shimmer polish
+- Focus:
+  - rename playlist-backup default suffix from `polyplaylist.polyplaylist` to `polyplay.polyplaylist`
+  - remove the laggy/shimmery Gratitude typing treatment
+- Files inspected so far:
+  - `src/lib/backup.ts`
+  - `src/components/GratitudePrompt.tsx`
+  - `src/App.tsx`
+  - `styles.css`
+- Findings:
+  - Playlist-backup filenames came from `getPolyplaylistFilename(...)`, so the suffix change was a single helper seam.
+  - The Gratitude prompt applied `is-typing` whenever it was open/focused, which painted a full animated shimmer overlay over the card/text area.
+  - Gratitude typing also triggered a separate reactive body effect on each throttled keystroke from `App.tsx`.
+- Narrow implementation plan:
+  - change only the playlist-backup filename helper
+  - remove the Gratitude prompt `is-typing` usage and stop firing the per-keystroke reactive callback
+  - keep the rest of the Gratitude prompt flow unchanged
+- Fix implemented — 2026-04-10 Codex:
+  - Exact fix made:
+    - Changed playlist-backup default filename format to end with `-polyplay.polyplaylist`.
+    - Removed the Gratitude prompt `is-typing` class usage so the shimmering overlay no longer appears over the prompt/text field.
+    - Removed the Gratitude per-keystroke reactive typing path from `App.tsx`.
+    - Added a lightweight local Gratitude keypress pulse that briefly lifts the card/textarea border only, without obstructing text.
+  - Exact files changed:
+    - `src/lib/backup.ts`
+    - `src/components/GratitudePrompt.tsx`
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. These are narrow presentation/naming seams only.
+  - Regression risk:
+    - Low.
+    - Main risk is only confirming the new filename appears everywhere playlist backup uses the helper and that the Gratitude prompt still opens/completes normally.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Export a playlist backup and confirm the filename now ends in `-polyplay.polyplaylist`.
+    - Confirm playlist backup import still accepts the new filename normally.
+    - Open Gratitude prompt and confirm typing feels responsive.
+    - Confirm there is no shimmering overlay over the text field/card while typing.
+    - Confirm keypress still produces a subtle visible FX without slowing typing.
+
+**Diagnosis note — 2026-04-10 Codex:**
+- Status:
+  - diagnosis confirmed for playlist-level reverse-order toggle
+- Focus:
+  - add a safe per-playlist reverse-view preference with clean placement in playlist management UI
+- Files inspected so far:
+  - `src/lib/storage/library.ts`
+  - `src/lib/playlistState.ts`
+  - `src/lib/db.ts`
+  - `src/App.tsx`
+  - `src/admin/AdminApp.tsx`
+  - `styles.css`
+- Findings:
+  - Playlist metadata can safely carry a small persisted flag without changing track records.
+  - Visible playlist tracks already derive from playlist `trackIds` through `getVisibleTracksFromLibrary(...)`.
+  - Playback next/prev already derive from a playlist-owned navigation list in `src/App.tsx`.
+  - The cleanest non-noisy UI placement is the existing playlist manager in admin/settings, where playlists already have actions like Activate / Rename / Delete.
+- Narrow implementation plan:
+  - add a persisted playlist-level `isReversed` flag
+  - derive visible and playback track order from a copied-reversed id list when that flag is true
+  - place a labeled `Reverse Order` checkbox row in the playlist manager only
+- Fix implemented — 2026-04-10 Codex:
+  - Exact fix made:
+    - Added persisted `isReversed` playlist metadata in library storage.
+    - Added a shared `getOrderedPlaylistTrackIds(...)` helper that returns a copied reversed array when needed.
+    - Updated visible-track derivation and playback-navigation derivation to consume that helper.
+    - Added `setPlaylistReverseOrderInDb(...)` for narrow persistence.
+    - Added a `Reverse Order` checkbox in the existing playlist manager row in admin/settings.
+  - Exact files changed:
+    - `src/lib/storage/library.ts`
+    - `src/lib/playlistState.ts`
+    - `src/lib/db.ts`
+    - `src/App.tsx`
+    - `src/admin/AdminApp.tsx`
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes, with normal QA.
+    - This is a non-destructive playlist view/order preference, not a track reorder system.
+  - Regression risk:
+    - Low to moderate.
+    - Main risk is making sure visible playlist order and playback navigation stay aligned when reverse is on.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Toggle `Reverse Order` on a playlist and confirm tracks display in reverse.
+    - Toggle it back off and confirm original order returns.
+    - Confirm shuffle still works.
+    - Confirm autoplay and next/prev still work.
+    - Confirm artwork/fullscreen/current-track behavior is unchanged.
+    - Confirm each playlist preserves its own reverse setting.
 
 **Diagnosis note — 2026-04-10 Codex:**
 - Status:

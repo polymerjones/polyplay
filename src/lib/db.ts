@@ -1004,6 +1004,7 @@ export type PlaylistRow = {
   id: string;
   name: string;
   themeSelection?: ThemeSelection | null;
+  isReversed?: boolean;
   trackCount: number;
   isActive: boolean;
   createdAt: number;
@@ -1045,6 +1046,7 @@ export async function getPlaylistsFromDb(): Promise<PlaylistRow[]> {
       id: playlist.id,
       name: playlist.name,
       themeSelection: playlist.themeSelection ?? null,
+      isReversed: Boolean(playlist.isReversed),
       trackCount: playlist.trackIds.filter((trackId) => Boolean(library.tracksById[trackId])).length,
       isActive: library.activePlaylistId === playlist.id,
       createdAt: playlist.createdAt,
@@ -1063,6 +1065,7 @@ export async function createPlaylistInDb(name: string): Promise<string> {
     id: playlistId,
     name: nextName,
     themeSelection: getStoredPlaylistThemeSelection(),
+    isReversed: false,
     trackIds: [],
     createdAt: ts,
     updatedAt: ts
@@ -1102,6 +1105,16 @@ export async function setPlaylistThemeSelectionInDb(
   const playlist = library.playlistsById[playlistId];
   if (!playlist) throw new Error("Playlist not found");
   playlist.themeSelection = themeSelection ?? null;
+  playlist.updatedAt = now();
+  saveLibrary(library);
+}
+
+export async function setPlaylistReverseOrderInDb(playlistId: string, isReversed: boolean): Promise<void> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const playlist = library.playlistsById[playlistId];
+  if (!playlist) throw new Error("Playlist not found");
+  playlist.isReversed = Boolean(isReversed);
   playlist.updatedAt = now();
   saveLibrary(library);
 }

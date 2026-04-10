@@ -602,7 +602,7 @@ function slugifyName(input: string): string {
 
 export function getPolyplaylistFilename(playlistName = "playlist"): string {
   const slug = slugifyName(playlistName) || "playlist";
-  return `${slug}-${formatStamp()}-polyplaylist.polyplaylist`;
+  return `${slug}-${formatStamp()}-polyplay.polyplaylist`;
 }
 
 export function serializeConfig(config = buildConfigSnapshot()): string {

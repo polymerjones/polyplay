@@ -7,7 +7,6 @@ type Props = {
   doNotPromptAgain: boolean;
   onDoNotSaveTextChange: (next: boolean) => void;
   onDoNotPromptAgainChange: (next: boolean) => void;
-  onTyping: () => void;
   onPersist: (payload: { text: string; doNotSaveText: boolean; doNotPromptAgain: boolean }) => void;
   onComplete: () => void;
 };
@@ -19,27 +18,24 @@ export function GratitudePrompt({
   doNotPromptAgain,
   onDoNotSaveTextChange,
   onDoNotPromptAgainChange,
-  onTyping,
   onPersist,
   onComplete
 }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pulseTimeoutRef = useRef<number | null>(null);
-  const lastTypingNotifyAtRef = useRef(0);
+  const keyPulseTimeoutRef = useRef<number | null>(null);
   const [text, setText] = useState("");
   const [pulseMode, setPulseMode] = useState<"save" | "skip" | null>(null);
-  const [isTextareaFocused, setIsTextareaFocused] = useState(false);
+  const [isKeyPulseActive, setIsKeyPulseActive] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setText("");
       setPulseMode(null);
-      setIsTextareaFocused(false);
       return;
     }
     setText("");
     setPulseMode(null);
-    setIsTextareaFocused(false);
   }, [open]);
 
   useEffect(() => {
@@ -63,6 +59,10 @@ export function GratitudePrompt({
       if (pulseTimeoutRef.current !== null) {
         window.clearTimeout(pulseTimeoutRef.current);
         pulseTimeoutRef.current = null;
+      }
+      if (keyPulseTimeoutRef.current !== null) {
+        window.clearTimeout(keyPulseTimeoutRef.current);
+        keyPulseTimeoutRef.current = null;
       }
     };
   }, []);
@@ -89,11 +89,26 @@ export function GratitudePrompt({
     }, 290);
   };
 
+  const triggerKeyPulse = () => {
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReducedMotion) return;
+    setIsKeyPulseActive(false);
+    window.requestAnimationFrame(() => setIsKeyPulseActive(true));
+    if (keyPulseTimeoutRef.current !== null) window.clearTimeout(keyPulseTimeoutRef.current);
+    keyPulseTimeoutRef.current = window.setTimeout(() => {
+      setIsKeyPulseActive(false);
+      keyPulseTimeoutRef.current = null;
+    }, 170);
+  };
+
   return (
     <section className="gratitude-modal" role="dialog" aria-modal="true" aria-label="Gratitude prompt">
       <div
         className={`gratitude-modal__card ${pulseMode ? `is-pulse-${pulseMode}` : ""} ${
-          open || isTextareaFocused ? "is-typing" : ""
+          isKeyPulseActive ? "is-keypress-pulse" : ""
         }`.trim()}
       >
         <div className="gratitude-modal__clouds" aria-hidden="true" />
@@ -105,14 +120,8 @@ export function GratitudePrompt({
           value={text}
           onChange={(event) => {
             setText(event.currentTarget.value);
-            const now = performance.now();
-            if (now - lastTypingNotifyAtRef.current > 180) {
-              lastTypingNotifyAtRef.current = now;
-              onTyping();
-            }
+            triggerKeyPulse();
           }}
-          onFocus={() => setIsTextareaFocused(true)}
-          onBlur={() => setIsTextareaFocused(false)}
           onKeyDown={(event) => {
             if (event.key !== "Enter") return;
             event.stopPropagation();

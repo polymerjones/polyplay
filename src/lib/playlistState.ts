@@ -221,6 +221,7 @@ export function createPlaylistInLibrary(
         id,
         name: name.trim() || "New Playlist",
         themeSelection: themeSelection ?? null,
+        isReversed: false,
         trackIds: [],
         createdAt: now,
         updatedAt: now
@@ -231,11 +232,18 @@ export function createPlaylistInLibrary(
   return { library: next, createdPlaylistId: id };
 }
 
+export function getOrderedPlaylistTrackIds(
+  playlist: Pick<LibraryState["playlistsById"][string], "trackIds" | "isReversed"> | null | undefined
+): string[] {
+  const trackIds = Array.isArray(playlist?.trackIds) ? [...playlist.trackIds] : [];
+  return playlist?.isReversed ? trackIds.reverse() : trackIds;
+}
+
 export function getVisibleTrackIdsFromLibrary(library: LibraryState): string[] {
   if (!library.activePlaylistId) return [];
   const playlist = library.playlistsById[library.activePlaylistId];
   if (!playlist) return [];
-  return (playlist.trackIds || []).filter((trackId) => Boolean(library.tracksById[trackId]));
+  return getOrderedPlaylistTrackIds(playlist).filter((trackId) => Boolean(library.tracksById[trackId]));
 }
 
 export function getVisibleTracksFromLibrary(library: LibraryState, tracksById: Record<string, UiTrack>): UiTrack[] {

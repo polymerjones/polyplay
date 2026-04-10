@@ -28,6 +28,7 @@ export type PlaylistRecord = {
   id: string;
   name: string;
   themeSelection?: ThemeSelection | null;
+  isReversed?: boolean;
   trackIds: string[];
   createdAt: number;
   updatedAt: number;
@@ -115,6 +116,7 @@ export function migrateLibraryIfNeeded(input: unknown): LibraryState {
       themeSelection: isThemeSelection((p as { themeSelection?: unknown }).themeSelection)
         ? ((p as { themeSelection?: ThemeSelection }).themeSelection ?? null)
         : null,
+      isReversed: Boolean((p as { isReversed?: unknown }).isReversed),
       trackIds: normalizedTrackIds,
       createdAt,
       updatedAt

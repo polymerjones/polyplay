@@ -72,6 +72,7 @@ import { revokeAllMediaUrls } from "./lib/player/media";
 import {
   createPlaylistInLibrary,
   ensureActivePlaylist,
+  getOrderedPlaylistTrackIds,
   getVisibleTracksFromLibrary,
   setActivePlaylistInLibrary
 } from "./lib/playlistState";
@@ -421,7 +422,6 @@ export default function App() {
   const [layoutMode, setLayoutMode] = useState<"grid" | "list">("grid");
   const [gratitudeSettings, setGratitudeSettings] = useState<GratitudeSettings>(() => loadGratitudeSettings());
   const [isGratitudeOpen, setIsGratitudeOpen] = useState(false);
-  const [isGratitudeReactive, setIsGratitudeReactive] = useState(false);
   const [isJournalOpen, setIsJournalOpen] = useState(false);
   const [showJournalTapToast, setShowJournalTapToast] = useState(false);
   const [edgeSwipeIndicator, setEdgeSwipeIndicator] = useState<"left" | "right" | null>(null);
@@ -660,7 +660,6 @@ export default function App() {
   const themeToggleCooldownRef = useRef(0);
   const themeAnimTimeoutRef = useRef<number | null>(null);
   const themeBloomTimeoutRef = useRef<number | null>(null);
-  const gratitudeTypingTimeoutRef = useRef<number | null>(null);
   const journalToastTimeoutRef = useRef<number | null>(null);
   const vaultToastTimeoutRef = useRef<number | null>(null);
   const vaultImportCloseTimeoutRef = useRef<number | null>(null);
@@ -841,6 +840,7 @@ export default function App() {
         id: playlist.id,
         name: playlist.name,
         themeSelection: playlist.themeSelection ?? null,
+        isReversed: Boolean(playlist.isReversed),
         createdAt: playlist.createdAt,
         updatedAt: playlist.updatedAt,
         trackIds: playlist.trackIds
@@ -1371,10 +1371,6 @@ export default function App() {
         nukeTimeoutRef.current = null;
         isNukingRef.current = false;
       }
-      if (gratitudeTypingTimeoutRef.current !== null) {
-        window.clearTimeout(gratitudeTypingTimeoutRef.current);
-        gratitudeTypingTimeoutRef.current = null;
-      }
       if (journalToastTimeoutRef.current !== null) {
         window.clearTimeout(journalToastTimeoutRef.current);
         journalToastTimeoutRef.current = null;
@@ -1840,21 +1836,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const reducedMotion =
-      typeof window !== "undefined" &&
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reducedMotion) {
-      document.body.classList.remove("gratitude-reactive");
-      return;
-    }
-    document.body.classList.toggle("gratitude-reactive", isGratitudeReactive);
-    return () => {
-      document.body.classList.remove("gratitude-reactive");
-    };
-  }, [isGratitudeReactive]);
-
-  useEffect(() => {
     try {
       setIsShuffleEnabled(localStorage.getItem(SHUFFLE_ENABLED_KEY) === "true");
       const storedRepeatTrackMode = getStoredRepeatTrackMode();
@@ -2211,7 +2192,7 @@ export default function App() {
     const playlist = runtimeLibrary.playlistsById?.[playbackPlaylistId];
     if (!playlist) return tracks;
     const catalogById = new Map(allTracksCatalog.map((track) => [track.id, track] as const));
-    return (playlist.trackIds || [])
+    return getOrderedPlaylistTrackIds(playlist)
       .map((trackId) => catalogById.get(trackId))
       .filter(Boolean) as Track[];
   }, [allTracksCatalog, currentTrackId, playbackPlaylistId, runtimeLibrary, tracks]);
@@ -4077,20 +4058,6 @@ export default function App() {
     });
   };
 
-  const onGratitudeTyping = () => {
-    const reducedMotion =
-      typeof window !== "undefined" &&
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reducedMotion) return;
-    setIsGratitudeReactive((prev) => (prev ? prev : true));
-    if (gratitudeTypingTimeoutRef.current !== null) window.clearTimeout(gratitudeTypingTimeoutRef.current);
-    gratitudeTypingTimeoutRef.current = window.setTimeout(() => {
-      setIsGratitudeReactive(false);
-      gratitudeTypingTimeoutRef.current = null;
-    }, 1000);
-  };
-
   const onGratitudePersist = ({
     text,
     doNotSaveText,
@@ -5548,11 +5515,9 @@ export default function App() {
         doNotPromptAgain={gratitudeSettings.doNotPromptAgain}
         onDoNotSaveTextChange={onGratitudeDoNotSaveChange}
         onDoNotPromptAgainChange={onGratitudeDoNotPromptAgainChange}
-        onTyping={onGratitudeTyping}
         onPersist={onGratitudePersist}
         onComplete={() => {
           setIsGratitudeOpen(false);
-          setIsGratitudeReactive(false);
         }}
       />
       {showJournalTapToast && <div className="journal-tap-toast">Journal</div>}
