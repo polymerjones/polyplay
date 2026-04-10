@@ -3,6 +3,15 @@ import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
 import type { DimMode, Track } from "../types";
 import { BorderTrail } from "./BorderTrail";
 
+function appendRetryParam(src: string, key: string, value: string): string {
+  if (!src || src.startsWith("data:")) return src;
+  const hashIndex = src.indexOf("#");
+  const hash = hashIndex >= 0 ? src.slice(hashIndex) : "";
+  const base = hashIndex >= 0 ? src.slice(0, hashIndex) : src;
+  const joiner = base.includes("?") ? "&" : "?";
+  return `${base}${joiner}${encodeURIComponent(key)}=${encodeURIComponent(value)}${hash}`;
+}
+
 type Props = {
   track: Track;
   trackId: string;
@@ -26,10 +35,47 @@ export function TrackTile({
 }: Props) {
   const showTrail = isCurrentTrack;
   const [artFailed, setArtFailed] = useState(false);
+  const [resolvedDemoArtSrc, setResolvedDemoArtSrc] = useState<string | null>(null);
   const coverRef = useRef<HTMLDivElement | null>(null);
-  const artSrc = !artFailed && track.artUrl ? track.artUrl : DEFAULT_ARTWORK_URL;
+  const artSrc = track.isDemo
+    ? resolvedDemoArtSrc || DEFAULT_ARTWORK_URL
+    : (!artFailed && track.artUrl ? track.artUrl : DEFAULT_ARTWORK_URL);
   const isFallback = artSrc === DEFAULT_ARTWORK_URL;
   const auraLevel = Math.max(0, Math.min(1, (track.aura || 0) / 10));
+
+  useEffect(() => {
+    setArtFailed(false);
+    if (!track.isDemo) {
+      setResolvedDemoArtSrc(null);
+      return;
+    }
+    if (!track.artUrl) {
+      setResolvedDemoArtSrc(null);
+      return;
+    }
+    let cancelled = false;
+    const preload = (src: string, allowRetry: boolean) => {
+      const image = new Image();
+      image.onload = () => {
+        if (cancelled) return;
+        setResolvedDemoArtSrc(src);
+      };
+      image.onerror = () => {
+        if (cancelled) return;
+        if (allowRetry) {
+          preload(appendRetryParam(track.artUrl || src, "polyplayDemoRetry", String(Date.now())), false);
+          return;
+        }
+        setResolvedDemoArtSrc(null);
+      };
+      image.src = src;
+    };
+    setResolvedDemoArtSrc(null);
+    preload(track.artUrl, true);
+    return () => {
+      cancelled = true;
+    };
+  }, [track.artUrl, track.id, track.isDemo]);
 
   useEffect(() => {
     const onAuraArtHit = (event: Event) => {
@@ -65,7 +111,13 @@ export function TrackTile({
             className="ytm-cover-media"
             src={artSrc}
             alt={track.title}
-            onError={() => setArtFailed(true)}
+            onError={() => {
+              if (track.isDemo) {
+                setResolvedDemoArtSrc(null);
+                return;
+              }
+              setArtFailed(true);
+            }}
             draggable={false}
           />
         </div>

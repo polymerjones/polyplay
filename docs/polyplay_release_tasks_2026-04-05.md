@@ -65,7 +65,381 @@ Use alongside any existing planning board already in the repo, but treat this fi
 ---
 
 ## Active task
-**Current active task:** `Long audio crop crash + default loop marker spacing`
+**Current active task:** `Import page storage indicator`
+
+**Diagnosis note — 2026-04-09 Codex:**
+- Status:
+  - diagnosis confirmed for import page storage indicator
+- Focus:
+  - add a minimal storage-status bar to the top of the import form using existing storage summary logic
+- Files inspected so far:
+  - `src/admin/AdminApp.tsx`
+  - `src/lib/db.ts`
+  - `src/index.css`
+- Findings:
+  - `AdminApp` already maintains `storageUsage` via `getStorageUsageSummary()` in `refreshStorage()`.
+  - `refreshStorage()` already runs on initial admin load and again after import/storage-changing actions, so the import page can reuse those values directly and stay current without new architecture work.
+  - The import form already has a clean placement seam just below the intro copy and above the primary import controls.
+  - The existing manage-storage section already renders:
+    - used bytes
+    - cap bytes
+    - percent used
+  - Remaining bytes can be derived locally from the same summary.
+- Narrow implementation plan:
+  - keep this UI-only inside `AdminApp`
+  - add a compact top-of-import storage status bar that shows:
+    - used / limit
+    - remaining
+    - a subtle progress bar
+  - do not change import flow or storage logic
+- Fix implemented — 2026-04-09 Codex:
+  - Exact fix made:
+    - Added a compact storage status bar near the top of the import form in `src/admin/AdminApp.tsx`.
+    - The new UI reuses the existing `storageUsage` summary and shows:
+      - used / limit
+      - remaining
+      - a subtle progress bar
+    - The bar updates through the existing `refreshStorage()` path, so no new import or storage architecture was added.
+  - Exact files changed:
+    - `src/admin/AdminApp.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a localized import-page presentation change only.
+  - Regression risk:
+    - Low.
+    - It reuses existing storage values and does not alter import behavior or storage calculations.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm the storage bar appears cleanly at the top of Import.
+    - Confirm used / limit and remaining values look correct.
+    - Confirm the values update after a successful import.
+    - Confirm the import flow and layout remain clean on small screens.
+
+**Diagnosis note — 2026-04-09 Codex:**
+- Status:
+  - diagnosis confirmed for repeat-button flash/sparkle parity
+- Focus:
+  - make repeat-toggle visual confirmation match shuffle-toggle visual confirmation on every repeat state change
+- Files inspected so far:
+  - `src/components/PlayerControls.tsx`
+- Findings:
+  - Shuffle already uses the shared `emitPinkSparkle(...)` path inside `onShuffleClick(...)`.
+  - Repeat is toggled in `onRepeatClick(...)`.
+  - The repeat handler currently only emits sparkle/flash when the next landed mode is `repeat-3`.
+  - That means repeat does not provide the same visual confirmation on:
+    - `off -> repeat`
+    - `repeat -> repeat-1`
+    - `repeat-1 -> repeat-2`
+    - `repeat-3 -> off`
+- Narrow implementation plan:
+  - keep playback logic unchanged
+  - reuse the existing `emitPinkSparkle(...)` path in `onRepeatClick(...)`
+  - trigger the same sparkle/flash confirmation for every repeat state change while preserving reduced-motion behavior and the existing special `repeat-3` activation styling
+- Fix implemented — 2026-04-09 Codex:
+  - Exact fix made:
+    - Updated `onRepeatClick(...)` in `src/components/PlayerControls.tsx` so every repeat state change now triggers the same sparkle/flash confirmation path.
+    - Preserved reduced-motion behavior.
+    - Preserved the existing special `repeat-3` activation styling without widening into playback logic changes.
+  - Exact files changed:
+    - `src/components/PlayerControls.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a presentation-only change inside the existing repeat-toggle handler.
+  - Regression risk:
+    - Low.
+    - The change reuses the existing sparkle/flash path and does not alter repeat mode behavior.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm repeat on, repeat one, repeat two/three, and back to default all trigger the same visual confirmation.
+    - Confirm shuffle visual feedback is unchanged.
+    - Confirm rapid repeat cycling does not feel noisy.
+
+**Diagnosis note — 2026-04-09 Codex:**
+- Status:
+  - diagnosis confirmed for Safari desktop factory reset placeholder / broken splash + demo art
+- Focus:
+  - prevent broken bundled-asset placeholders from surfacing during cold-start reset recovery in Safari desktop
+- Files inspected so far:
+  - `src/components/SplashOverlay.tsx`
+  - `src/components/TrackTile.tsx`
+  - `src/lib/demoSeed.ts`
+  - `src/index.css`
+- Findings:
+  - The splash video is hidden until ready, so the visible broken/question-mark state is most likely the fallback image path rather than the video surface itself.
+  - `SplashOverlay` currently renders the fallback `<img src={logoImage}>` immediately, which lets Safari surface a broken image placeholder if the bundled image is not decoded/resolved yet.
+  - Demo tiles also render bundled art URLs directly into `<img src=...>` in `TrackTile`, which allows the same first-render broken/missing surface if Safari is late to resolve/reset those bundled assets.
+  - The underlying reset/demo seed model does not look corrupted; this is a visual readiness/fallback problem.
+- Narrow implementation plan:
+  - preload the splash fallback image before rendering it, and otherwise show a text-only/branded fallback shell
+  - add a narrow demo-art preload/retry containment in `TrackTile` so bundled demo art does not surface as a broken image during the first post-reset render
+  - keep reset flow and demo seed model unchanged
+- Fix implemented — 2026-04-09 Codex:
+  - Exact fix made:
+    - Updated `SplashOverlay` so the fallback logo image is preloaded before it is ever rendered. Until it is actually ready, the splash shows the branded fallback shell without exposing a broken image placeholder.
+    - Updated `TrackTile` so demo tracks no longer render bundled art URLs directly on first paint. Demo tile art now preloads first and retries once with a cache-busted URL before falling back.
+  - Exact files changed:
+    - `src/components/SplashOverlay.tsx`
+    - `src/components/TrackTile.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a localized visual readiness/fallback containment only.
+  - Regression risk:
+    - Low.
+    - Splash behavior is unchanged once video or logo is actually ready.
+    - Demo-art containment is limited to demo tiles and does not alter reset flow or demo seed data.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Factory reset in Safari desktop and confirm splash never shows a broken placeholder.
+    - Confirm splash fallback appears cleanly if video is delayed.
+    - Confirm demo tile art appears correctly after reset.
+    - Confirm demo art remains correct after first interaction/reopen.
+    - Confirm non-reset startup path is unchanged.
+    - Confirm iOS/PWA behavior is unchanged.
+
+**Diagnosis note — 2026-04-09 Codex:**
+- Status:
+  - diagnosis confirmed for artwork / fullscreen media not following active playback across playlist navigation
+- Focus:
+  - determine why off-playlist active playback keeps controls but loses artwork/video media
+- Files inspected so far:
+  - `src/App.tsx`
+  - `src/lib/db.ts`
+  - `src/components/FullscreenPlayer.tsx`
+  - `src/components/MiniPlayerBar.tsx`
+- Findings:
+  - `currentTrack` in `src/App.tsx` falls back to `allTracksCatalog` when the actively playing track is not in the currently viewed playlist.
+  - `allTracksCatalog` is built from `getAllTracksFromDb({ includeMediaUrls: false, includeBlobs: false })`, so off-playlist fallback tracks usually do not carry `artUrl` or `artVideoUrl`.
+  - The current-track hydration effect only calls `getTrackPlaybackMediaFromDb(currentTrackId)`, and that API currently returns:
+    - `audioUrl`
+    - `artBlob`
+    - `missingAudio`
+    - but not `artUrl` or `artVideoUrl`
+  - The `currentTrack` merge in `src/App.tsx` only overlays:
+    - `audioUrl`
+    - `artBlob`
+    - `missingAudio`
+    - but not `artUrl` or `artVideoUrl`
+  - `MiniPlayerBar`, `FullscreenPlayer`, the blurred backdrop, and now-playing artwork all read `track.artUrl` / `track.artVideoUrl` for visuals.
+  - Result:
+    - controls follow active playback context correctly
+    - but visual media remains blank/stale when the active track is off-playlist because the current-track media hydration path never supplies the missing art/video URLs
+- Narrow implementation plan:
+  - keep playback and playlist model unchanged
+  - expand the current-track hydration path to supply visual media fields needed by `currentTrack` when it is off-playlist
+  - merge hydrated `artUrl` / `artVideoUrl` into `currentTrack` the same way `audioUrl` is already merged
+- Fix implemented — 2026-04-09 Codex:
+  - Exact fix made:
+    - Extended `getTrackPlaybackMediaFromDb(...)` in `src/lib/db.ts` to return `artUrl` and `artVideoUrl` in addition to `audioUrl`, `artBlob`, and `missingAudio`.
+    - Extended `hydratedCurrentTrackMedia` in `src/App.tsx` to store `artUrl` and `artVideoUrl`.
+    - Extended the `currentTrack` merge in `src/App.tsx` so off-playlist active playback now overlays hydrated `artUrl` / `artVideoUrl` the same way it already overlays `audioUrl`.
+  - Exact files changed:
+    - `src/lib/db.ts`
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a narrow extension of current-track hydration only and does not broaden library-wide media loading.
+  - Regression risk:
+    - Low to moderate.
+    - Low because the fix is confined to the active current-track media path.
+    - Moderate because mini player, fullscreen, backdrop, and now-playing artwork all consume the corrected current-track media.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Start playback from playlist A, switch to playlist B, and confirm mini-player art follows the active track.
+    - Open fullscreen in that off-playlist state and confirm still-image/video media follows the active track.
+    - Use `Next` while staying on the other playlist and confirm artwork updates each time.
+    - Confirm backdrop updates correctly with off-playlist playback.
+    - Confirm on-playlist playback visuals remain unchanged.
+    - Confirm no regression in now-playing / lock-screen artwork.
+
+**Diagnosis note — 2026-04-09 Codex:**
+- Status:
+  - diagnosis confirmed for playlist navigation / playback context mismatch
+- Focus:
+  - determine why next/prev behavior and controls depend on the viewed playlist instead of active playback context
+- Files inspected so far:
+  - `src/App.tsx`
+  - `src/lib/playlistState.ts`
+  - `src/lib/iosNowPlaying.ts`
+  - `docs/polyplay_control_center.md`
+- Findings:
+  - The app keeps `tracks` as the currently visible playlist track list, derived strictly from `library.activePlaylistId` through `getVisibleTracksFromLibrary(...)` in `src/lib/playlistState.ts`.
+  - `playNext()` and `playPrev()` in `src/App.tsx` both operate on that `tracks` array.
+  - Hardware/media next/previous uses the exact same path:
+    - Media Session handlers call `playNext()` / `playPrev()`
+    - iOS remote command listener also calls `playNext()` / `playPrev()`
+  - `currentTrack` is more global than `tracks`:
+    - it resolves first from `tracks`
+    - then falls back to `allTracksCatalog`
+    - so a track can keep playing even when the user navigates to a different playlist
+  - This creates a context mismatch:
+    - playback context = `currentTrackId/currentTrack`
+    - navigation context = `activePlaylistId -> tracks`
+  - When the viewed playlist does not contain the current track, `playNext()` / `playPrev()` try to navigate within the wrong list.
+  - When the viewed playlist is blank, `hasTracks` becomes false, which suppresses the mini player even if `currentTrack` still exists elsewhere.
+- Narrow implementation plan:
+  - keep playlist architecture intact
+  - derive next/prev navigation from the playback-owning playlist context rather than the currently viewed playlist
+  - stop gating control visibility solely on `hasTracks` when there is an active `currentTrack`
+  - keep hardware/media next/prev on the same corrected path as in-app controls
+- Fix implemented — 2026-04-09 Codex:
+  - Exact fix made:
+    - Added a narrow `playbackPlaylistId` context in `src/App.tsx`.
+    - That playback-owned playlist id is set when a track is started from the current view, and is re-derived on restore/fallback if the current track belongs to another playlist.
+    - `playNext()` and `playPrev()` now navigate from `playbackNavigationTracks`, which are derived from the playback-owned playlist instead of the currently viewed `tracks`.
+    - Autoplay-to-next on `ended` now uses the same playback-owned navigation list.
+    - Mini-player visibility now follows `currentTrack` instead of `hasTracks`, so an empty viewed playlist does not hide controls while playback is active elsewhere.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `docs/polyplay_control_center.md`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This preserves the current playlist model and corrects only the playback/navigation context seam.
+  - Regression risk:
+    - Low to moderate.
+    - Low for the mini-player visibility change.
+    - Moderate because next/prev, autoplay, and hardware/media controls all depend on the corrected playback-owned navigation source.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Start playback from playlist A, switch to playlist B, and confirm hardware/media `nextTrack` advances correctly.
+    - Repeat with in-app `Next` and `Previous`.
+    - Confirm returning to playlist A is no longer required.
+    - Open a blank playlist while another track is active and confirm controls remain visible.
+    - Confirm autoplay-to-next still works when the viewed playlist differs from the playback-owning playlist.
+    - Confirm non-playing blank playlists still render normally.
+
+**Diagnosis note — 2026-04-09 Codex:**
+- Status:
+  - diagnosis confirmed for shuffle not functioning on iOS
+- Focus:
+  - determine why enabling Shuffle has no effect on next-track selection
+- Files inspected so far:
+  - `src/App.tsx`
+  - `src/lib/aura.ts`
+  - `src/lib/db.ts`
+  - `docs/polyplay_control_center.md`
+- Findings:
+  - Shuffle state is a boolean stored under `polyplay_shuffleEnabled` and loaded normally in `src/App.tsx`.
+  - Manual `Next` and autoplay-to-next both branch on `isShuffleEnabled` in `src/App.tsx`, so they are intended to use the same shuffle path.
+  - The shuffle path does not use a persisted shuffled queue. It calls `pickAuraWeightedTrack(...)` from `src/lib/aura.ts`.
+  - `pickAuraWeightedTrack(...)` filters candidates with `Boolean(track.audioUrl) && !track.missingAudio`.
+  - After the release-safety lazy hydration changes, normal playlist/runtime track state intentionally does not carry hydrated `audioUrl` for the full visible playlist:
+    - broad refresh uses `getAllTracksFromDb({ includeMediaUrls: false, includeBlobs: false })`
+    - visible tracks use `getTracksByIdsFromDb(..., { includeMediaUrls: true, includeAudioUrl: false, ... })`
+  - That means valid imported tracks usually have `hasAudioSource === true` but `audioUrl === undefined` until they become the current track.
+  - Result:
+    - the shuffle candidate pool is often empty or invalid for normal imported tracks
+    - autoplay `onEnded` falls back to linear `getAdjacentTrackId(...)` when the shuffle picker returns `null`
+    - manual `playNext()` can also fail to honor shuffle because it relies on the same picker
+- Narrow implementation plan:
+  - keep shuffle behavior narrow
+  - change the shuffle picker/readiness check to use persisted audio availability semantics (`hasAudioSource` / true missing-audio state), not hydrated `audioUrl`
+  - keep autoplay and manual `Next` on the same path
+  - do not change previous-track behavior or introduce a new queue system
+- Fix implemented — 2026-04-09 Codex:
+  - Exact fix made:
+    - Updated `pickAuraWeightedTrack(...)` in `src/lib/aura.ts` so shuffle candidate eligibility no longer depends on pre-hydrated `audioUrl`.
+    - The picker now treats a track as playable when it has persisted playback backing (`hasAudioSource`) and is not truly marked `missingAudio`.
+    - The existing aura-weighted selection model was preserved.
+  - Exact files changed:
+    - `src/lib/aura.ts`
+    - `docs/polyplay_control_center.md`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is the narrow readiness correction identified in diagnosis and does not redesign shuffle.
+  - Regression risk:
+    - Low to moderate.
+    - Low because non-shuffle paths and `Previous` are unchanged.
+    - Moderate because both manual `Next` and autoplay depend on this picker.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm Shuffle on iPhone changes `Next` order on a fresh playlist.
+    - Confirm autoplay-to-next also follows shuffle.
+    - Confirm `Previous` still behaves normally.
+    - Confirm imported tracks without pre-hydrated `audioUrl` now participate in shuffle.
+    - Confirm non-shuffle playback order remains unchanged.
+
+**Note — 2026-04-07 Codex:**
+- Added a final pre-submission checklist document for the current stabilization build:
+  - `docs/polyplay_ios_app_store_submission_checklist_2026-04-07.md`
+- This is a packaging/QA aid only.
+- No code changed in this pass.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
+  - diagnosis confirmed for narrow Rasta import-overlay blur follow-up
+- Focus:
+  - keep the Rasta leaf visible in normal iOS theme usage, but make it more abstract specifically behind the Import overlay on iOS
+- Files inspected so far:
+  - `styles.css`
+  - `src/App.tsx`
+- Findings:
+  - The Rasta leaf blur is still applied on iOS, but the Import/settings overlay makes the underlying leaf read more sharply again.
+  - The cleanest containment seam is a body class tied only to the upload/settings overlay open state.
+- Narrow implementation plan:
+  - add a body class in `src/App.tsx` when the upload overlay is open
+  - add an iOS-only Rasta CSS override for that state in `styles.css`
+  - keep desktop and normal non-overlay Rasta unchanged
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Added an `is-import-overlay-open` body class in `src/App.tsx` when the settings overlay is open in upload/import mode.
+    - Added an iOS-only Rasta override in `styles.css` that applies a stronger blur and slightly lower opacity to the leaf only while that import overlay is open.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a narrow iOS-only visual containment for the Rasta Import overlay state.
+  - Regression risk:
+    - Low.
+    - Desktop is unchanged, and normal non-overlay Rasta stays on the existing iOS blur path.
+  - QA completed:
+    - `npm run typecheck`
+- QA still needed:
+  - Confirm the Rasta leaf stays visible but more abstract behind Import on iPhone.
+  - Confirm normal Rasta screens on iPhone remain visually acceptable.
+  - Confirm desktop Rasta is unchanged.
+
+**Diagnosis note — 2026-04-07 Codex:**
+- Status:
+  - diagnosis refined after device rebuild
+- Focus:
+  - fix the Rasta leaf specifically inside the iOS import iframe
+- Files inspected so far:
+  - `src/index.css`
+  - `styles.css`
+  - `src/admin/AdminApp.tsx`
+- Findings:
+  - The recognizable leaf in the screenshot is inside the admin/import iframe, not just behind the parent overlay.
+  - The iframe body gets theme classes, but it was not getting its own iOS-specific Rasta leaf treatment.
+- Narrow implementation plan:
+  - add `is-ios` to the iframe body in `src/admin/AdminApp.tsx`
+  - add an iframe-body-specific Rasta leaf blur override in `styles.css`
+  - keep desktop and main-app Rasta behavior unchanged
+- Fix implemented — 2026-04-07 Codex:
+  - Exact fix made:
+    - Added `is-ios` to the admin/import iframe body in `src/admin/AdminApp.tsx`.
+    - Added `body.admin-frame-body.is-ios.theme-custom.theme-custom-rasta::after` in `styles.css` with a stronger blur and lower opacity for the iframe leaf layer.
+  - Exact files changed:
+    - `src/admin/AdminApp.tsx`
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Safe before release:
+    - Yes. This is a narrow iframe-only iOS visual correction.
+  - Regression risk:
+    - Low.
+    - Desktop is unchanged, and the main app’s non-iframe Rasta treatment is unchanged.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm the leaf is no longer clearly recognizable inside Import on iPhone.
+    - Confirm the iframe still feels like Rasta, not blank or washed out.
+    - Confirm desktop Import remains unchanged.
 
 **Diagnosis note — 2026-04-07 Codex:**
 - Status:

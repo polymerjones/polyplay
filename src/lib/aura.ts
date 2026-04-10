@@ -28,7 +28,10 @@ export function pickAuraWeightedTrack(
   lastPlayedAtByTrackId: Record<string, number>,
   now = Date.now()
 ): string | null {
-  const playable = tracks.filter((track) => Boolean(track.audioUrl) && !track.missingAudio);
+  const playable = tracks.filter((track) => {
+    const hasPlayableSource = Boolean(track.hasAudioSource ?? track.audioUrl);
+    return hasPlayableSource && !track.missingAudio;
+  });
   if (!playable.length) return null;
   if (playable.length === 1) return playable[0]?.id ?? null;
 

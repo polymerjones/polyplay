@@ -401,6 +401,7 @@ export default function App() {
   const VAULT_SWIPE_CLOSE_MIN_VELOCITY = 0.42;
   const [tracks, setTracks] = useState<Track[]>([]);
   const [currentTrackId, setCurrentTrackId] = useState<string | null>(null);
+  const [playbackPlaylistId, setPlaybackPlaylistId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -535,6 +536,8 @@ export default function App() {
     trackId: string | null;
     audioUrl?: string;
     artBlob?: Blob;
+    artUrl?: string;
+    artVideoUrl?: string;
     missingAudio?: boolean;
   }>({ trackId: null });
   const [importSummary, setImportSummary] = useState<{
@@ -729,6 +732,21 @@ export default function App() {
   useEffect(() => {
     currentTrackIdRef.current = currentTrackId;
   }, [currentTrackId]);
+
+  useEffect(() => {
+    if (!runtimeLibrary) return;
+    if (!currentTrackId) {
+      setPlaybackPlaylistId(null);
+      return;
+    }
+    setPlaybackPlaylistId((current) => {
+      const playlistsById = runtimeLibrary.playlistsById || {};
+      if (current && playlistsById[current]?.trackIds?.includes(currentTrackId)) return current;
+      if (activePlaylistId && playlistsById[activePlaylistId]?.trackIds?.includes(currentTrackId)) return activePlaylistId;
+      const owner = Object.values(playlistsById).find((playlist) => (playlist.trackIds || []).includes(currentTrackId));
+      return owner?.id ?? null;
+    });
+  }, [activePlaylistId, currentTrackId, runtimeLibrary]);
 
   useEffect(() => {
     try {
@@ -1838,6 +1856,14 @@ export default function App() {
   }, [isIOS]);
 
   useEffect(() => {
+    const isImportOverlayOpen = overlayPage === "settings" && settingsPanelMode === "upload";
+    document.body.classList.toggle("is-import-overlay-open", isImportOverlayOpen);
+    return () => {
+      document.body.classList.remove("is-import-overlay-open");
+    };
+  }, [overlayPage, settingsPanelMode]);
+
+  useEffect(() => {
     try {
       if (localStorage.getItem(HAS_ONBOARDED_KEY) === "true") {
         setShowOpenState(false);
@@ -2096,9 +2122,21 @@ export default function App() {
       ...baseTrack,
       audioUrl: hydratedCurrentTrackMedia.audioUrl ?? baseTrack.audioUrl,
       artBlob: hydratedCurrentTrackMedia.artBlob,
+      artUrl: hydratedCurrentTrackMedia.artUrl ?? baseTrack.artUrl,
+      artVideoUrl: hydratedCurrentTrackMedia.artVideoUrl ?? baseTrack.artVideoUrl,
       missingAudio: hydratedCurrentTrackMedia.missingAudio ?? baseTrack.missingAudio
     } satisfies Track;
   }, [allTracksCatalog, currentTrackId, hydratedCurrentTrackMedia, tracks]);
+  const playbackNavigationTracks = useMemo(() => {
+    if (!currentTrackId) return tracks;
+    if (!runtimeLibrary || !playbackPlaylistId) return tracks;
+    const playlist = runtimeLibrary.playlistsById?.[playbackPlaylistId];
+    if (!playlist) return tracks;
+    const catalogById = new Map(allTracksCatalog.map((track) => [track.id, track] as const));
+    return (playlist.trackIds || [])
+      .map((trackId) => catalogById.get(trackId))
+      .filter(Boolean) as Track[];
+  }, [allTracksCatalog, currentTrackId, playbackPlaylistId, runtimeLibrary, tracks]);
   const hasTracks = tracks.length > 0;
   const isInitialDemoFirstRunState = useMemo(() => {
     if (hasOnboarded) return false;
@@ -2153,13 +2191,15 @@ export default function App() {
     setHydratedCurrentTrackMedia((current) => (current.trackId === currentTrackId ? current : { trackId: currentTrackId }));
     void (async () => {
       const media = await getTrackPlaybackMediaFromDb(currentTrackId).catch(
-        (): { audioUrl?: string; artBlob?: Blob; missingAudio?: boolean } => ({})
+        (): { audioUrl?: string; artBlob?: Blob; artUrl?: string; artVideoUrl?: string; missingAudio?: boolean } => ({})
       );
       if (cancelled) return;
       setHydratedCurrentTrackMedia({
         trackId: currentTrackId,
         audioUrl: media.audioUrl,
         artBlob: media.artBlob,
+        artUrl: media.artUrl,
+        artVideoUrl: media.artVideoUrl,
         missingAudio: media.missingAudio
       });
     })();
@@ -2902,7 +2942,7 @@ export default function App() {
       }
       if (isShuffleEnabled) {
         const nextId = pickAuraWeightedTrack(
-          tracks,
+          playbackNavigationTracks,
           currentTrackId,
           lastPlayedAtByTrackRef.current,
           Date.now()
@@ -2912,7 +2952,7 @@ export default function App() {
           return;
         }
       }
-      const nextId = getAdjacentTrackId(tracks, currentTrackId, 1, true);
+      const nextId = getAdjacentTrackId(playbackNavigationTracks, currentTrackId, 1, true);
       if (nextId) {
         playTrack(nextId, true);
         return;
@@ -2953,7 +2993,7 @@ export default function App() {
       }
       detachListeners();
     };
-  }, [currentTrackId, loopByTrack, currentLoopMode, repeatTrackMode, isShuffleEnabled, tracks, dimMode]);
+  }, [currentTrackId, loopByTrack, currentLoopMode, repeatTrackMode, isShuffleEnabled, playbackNavigationTracks, dimMode]);
 
   const updateAura = async (trackId: string, delta: number, options?: { skipHaptic?: boolean }) => {
     let nextAuraForDb: number | null = null;
@@ -3039,23 +3079,24 @@ export default function App() {
 
     teardownCurrentAudio();
     pendingAutoPlayRef.current = autoPlay && canPlay;
+    setPlaybackPlaylistId(activePlaylistIdRef.current);
     setCurrentTrackId(trackId);
   };
 
   const playPrev = () => {
-    const prevId = getAdjacentTrackId(tracks, currentTrackId, -1, true);
+    const prevId = getAdjacentTrackId(playbackNavigationTracks, currentTrackId, -1, true);
     if (prevId) playTrack(prevId, true);
   };
 
   const playNext = () => {
     const nextId = isShuffleEnabled
       ? pickAuraWeightedTrack(
-          tracks,
+          playbackNavigationTracks,
           currentTrackId,
           lastPlayedAtByTrackRef.current,
           Date.now()
         )
-      : getAdjacentTrackId(tracks, currentTrackId, 1, true);
+      : getAdjacentTrackId(playbackNavigationTracks, currentTrackId, 1, true);
     if (nextId) playTrack(nextId, true);
   };
 
@@ -4782,7 +4823,7 @@ export default function App() {
         ) : null}
       </div>
 
-      {hasTracks && !overlayPage && (
+      {currentTrack && !overlayPage && (
         <MiniPlayerBar
           track={currentTrack}
           isPlaying={isPlaying}

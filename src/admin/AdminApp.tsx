@@ -703,6 +703,11 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
     () => tracks.map((track) => ({ value: String(track.id), label: formatTrackOptionLabel(track) })),
     [tracks]
   );
+  const storageUsedBytes = Math.max(0, storageUsage?.totalBytes ?? 0);
+  const storageCapBytes = Math.max(0, storageUsage?.capBytes ?? 0);
+  const storageRemainingBytes = Math.max(0, storageCapBytes - storageUsedBytes);
+  const storageUsagePercent =
+    storageCapBytes > 0 ? Math.min(100, (storageUsedBytes / storageCapBytes) * 100) : 0;
   const trackTitleById = useMemo(
     () =>
       tracks.reduce<Record<string, string>>((acc, track) => {
@@ -941,6 +946,14 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
     return () => {
       window.removeEventListener("focus", refreshEntries);
       window.removeEventListener("storage", refreshEntries);
+    };
+  }, []);
+
+  useEffect(() => {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    document.body.classList.toggle("is-ios", isIOS);
+    return () => {
+      document.body.classList.remove("is-ios");
     };
   }, []);
 
@@ -2719,6 +2732,24 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
           <p className="mb-3 text-sm text-slate-400">
             Start with your audio file. You can review the title, artist, and optional artwork after that.
           </p>
+          <div className="mb-3 rounded-xl border border-slate-300/15 bg-slate-950/42 px-3 py-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-500">
+              <span>Storage</span>
+              <span>{formatBytes(storageRemainingBytes)} remaining</span>
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-end justify-between gap-2">
+              <div className="text-sm font-semibold text-slate-100">
+                {formatBytes(storageUsedBytes)} / {formatBytes(storageCapBytes)}
+              </div>
+              <div className="text-xs text-slate-400">Available for new imports and artwork</div>
+            </div>
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-800/90">
+              <div
+                className="h-full rounded-full bg-violet-400/80 transition-[width] duration-300 ease-out"
+                style={{ width: `${storageUsagePercent}%` }}
+              />
+            </div>
+          </div>
           <div className="admin-v1-fields admin-upload-stack grid gap-2">
             <TransferLaneDropZone
               label="Audio (.wav/.mp3/.mov)"

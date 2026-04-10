@@ -417,7 +417,9 @@ export async function getTracksByIdsFromDb(trackIds: string[], options?: TrackHy
   return hydrated.filter(Boolean) as Track[];
 }
 
-export async function getTrackPlaybackMediaFromDb(trackId: string): Promise<{ audioUrl?: string; artBlob?: Blob; missingAudio?: boolean }> {
+export async function getTrackPlaybackMediaFromDb(
+  trackId: string
+): Promise<{ audioUrl?: string; artBlob?: Blob; artUrl?: string; artVideoUrl?: string; missingAudio?: boolean }> {
   await maybeMigrateLegacyTracks();
   const library = loadLibrary();
   const record = library.tracksById[trackId];
@@ -426,9 +428,13 @@ export async function getTrackPlaybackMediaFromDb(trackId: string): Promise<{ au
   const hasAudioSource = Boolean(record.bundledAudioUrl || effectiveAudioKey);
   const artBlob = record.artKey ? await getBlob(record.artKey) : null;
   const audioUrl = record.bundledAudioUrl || (await getMediaUrl(effectiveAudioKey));
+  const artUrl = record.bundledArtUrl || (await getMediaUrl(record.artKey));
+  const artVideoUrl = record.bundledArtVideoUrl || (await getMediaUrl(record.artVideoKey));
   return {
     audioUrl: audioUrl ?? undefined,
     artBlob: artBlob ?? undefined,
+    artUrl: artUrl ?? undefined,
+    artVideoUrl: artVideoUrl ?? undefined,
     missingAudio: hasAudioSource ? !audioUrl : true
   };
 }

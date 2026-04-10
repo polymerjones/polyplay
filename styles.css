@@ -1700,6 +1700,16 @@ body.is-ios.theme-custom.theme-custom-rasta::after {
   filter: saturate(0.94) brightness(0.8) blur(12px);
 }
 
+body.is-ios.is-import-overlay-open.theme-custom.theme-custom-rasta::after {
+  opacity: 0.18;
+  filter: saturate(0.9) brightness(0.76) blur(20px);
+}
+
+body.admin-frame-body.is-ios.theme-custom.theme-custom-rasta::after {
+  opacity: 0.14;
+  filter: saturate(0.88) brightness(0.74) blur(22px);
+}
+
 @keyframes rasta-smoke-rise {
   0% {
     transform: translate3d(0, 0, 0) scale(1) rotate(0deg);

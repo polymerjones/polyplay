@@ -16,6 +16,7 @@ export function SplashOverlay({ isDismissing, onClose, onSkip, skipLabel = "Skip
   const [needsUserStart, setNeedsUserStart] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [hasVisibleVideo, setHasVisibleVideo] = useState(false);
+  const [isFallbackLogoReady, setIsFallbackLogoReady] = useState(false);
 
   const markVideoVisible = () => {
     setHasVisibleVideo(true);
@@ -50,6 +51,23 @@ export function SplashOverlay({ isDismissing, onClose, onSkip, skipLabel = "Skip
     };
 
     void startPlayback();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const image = new Image();
+    image.onload = () => {
+      if (cancelled) return;
+      setIsFallbackLogoReady(true);
+    };
+    image.onerror = () => {
+      if (cancelled) return;
+      setIsFallbackLogoReady(false);
+    };
+    image.src = logoImage;
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -141,7 +159,14 @@ export function SplashOverlay({ isDismissing, onClose, onSkip, skipLabel = "Skip
       />
       {!hasVisibleVideo && (
         <div className="splash-overlay__fallback" aria-hidden="true">
-          <img src={logoImage} alt="" className="splash-overlay__fallback-logo" />
+          {isFallbackLogoReady ? (
+            <img
+              src={logoImage}
+              alt=""
+              className="splash-overlay__fallback-logo"
+              onError={() => setIsFallbackLogoReady(false)}
+            />
+          ) : null}
           <div className="splash-overlay__fallback-wordmark">PolyPlay</div>
         </div>
       )}

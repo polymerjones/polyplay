@@ -247,12 +247,15 @@ export function PlayerControls({
               ? "repeat-3"
               : "off";
     onToggleRepeatTrack();
-    if (prefersReducedMotion() || nextMode !== "repeat-3") return;
     const button = event.currentTarget;
+    if (prefersReducedMotion()) return;
+
+    emitPinkSparkle(button, { sparks: 5, distance: 18, includeFlash: true });
+    if (nextMode !== "repeat-3") return;
+
     setRepeatActivationActive(false);
     const rafId = window.requestAnimationFrame(() => {
       setRepeatActivationActive(true);
-      emitPinkSparkle(button, { sparks: 7, distance: 22, includeFlash: true });
       if (repeatActivationTimeoutRef.current !== null) {
         window.clearTimeout(repeatActivationTimeoutRef.current);
       }
