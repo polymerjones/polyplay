@@ -13,6 +13,7 @@ import { fireLightHaptic } from "../lib/haptics";
 import { formatTime } from "../lib/time";
 import { getWaveformThemePalette } from "../lib/waveformTheme";
 import type { LoopMode, LoopRegion, RepeatTrackMode, Track } from "../types";
+import { CinemaModeVisualizer } from "./CinemaModeVisualizer";
 import { PlayerControls } from "./PlayerControls";
 import { WaveformLoop } from "./WaveformLoop";
 
@@ -135,6 +136,7 @@ export function FullscreenPlayer({
   });
   const [isArtworkVideoReady, setIsArtworkVideoReady] = useState(false);
   const [isCinemaMode, setIsCinemaMode] = useState(false);
+  const cinemaVisualizerVibeLevel = isCinemaMode ? (noveltyMode === "dim" ? 2 : noveltyMode === "mute" ? 3 : null) : null;
   const themeKey =
     typeof document === "undefined"
       ? "dark"
@@ -143,7 +145,6 @@ export function FullscreenPlayer({
 
   useEffect(() => {
     setIsArtworkVideoReady(false);
-    setIsCinemaMode(false);
   }, [track.artVideoUrl, track.id]);
 
   useEffect(() => {
@@ -480,6 +481,16 @@ export function FullscreenPlayer({
       onPointerUp={handleCinemaOutsidePointerUp}
     >
       <div className="fullscreen-player-shell__bg" style={artStyle} aria-hidden="true" />
+      {cinemaVisualizerVibeLevel && (
+        <div className="fullscreen-player-shell__bg-visualizer" aria-hidden="true">
+          <div className="fullscreen-player-shell__bg-visualizer-field is-top">
+            <CinemaModeVisualizer vibeLevel={cinemaVisualizerVibeLevel} fast background />
+          </div>
+          <div className="fullscreen-player-shell__bg-visualizer-field is-bottom">
+            <CinemaModeVisualizer vibeLevel={cinemaVisualizerVibeLevel} mirrored fast background />
+          </div>
+        </div>
+      )}
 
       {!isCinemaMode && (
         <button
@@ -499,42 +510,54 @@ export function FullscreenPlayer({
 
       <div className={`fullscreen-player-shell__content ${isCinemaMode ? "is-cinema-mode" : ""}`.trim()}>
         {!isCinemaMode && <div className="fullscreen-player-shell__swipe-zone" aria-hidden="true" />}
-          <div
-            className={`fullscreen-player-shell__art ${hasArtworkVideo ? "has-video" : ""} ${
-              isCinemaMode ? "is-cinema-mode" : ""
-            }`.trim()}
-            ref={artRef}
-            style={hasArtworkVideo ? undefined : artStyle}
-            onClick={() => {
+        <div
+          className={`fullscreen-player-shell__art ${hasArtworkVideo ? "has-video" : ""} ${
+            isCinemaMode ? "is-cinema-mode" : ""
+          }`.trim()}
+          ref={artRef}
+          style={hasArtworkVideo ? undefined : artStyle}
+          onClick={() => {
             if (isCinemaMode) return;
             setIsCinemaMode(true);
-            }}
-          >
-          {!hasArtworkVideo && isCinemaMode && (
-            <img
-              className="fullscreen-player-shell__art-image"
-              src={cinemaStillSrc}
-              alt={`${track.title} artwork`}
-              draggable={false}
-            />
+          }}
+        >
+          {cinemaVisualizerVibeLevel && (
+            <>
+              <div className="fullscreen-player-shell__cinema-visualizer is-top" aria-hidden="true">
+                <CinemaModeVisualizer vibeLevel={cinemaVisualizerVibeLevel} />
+              </div>
+              <div className="fullscreen-player-shell__cinema-visualizer is-bottom" aria-hidden="true">
+                <CinemaModeVisualizer vibeLevel={cinemaVisualizerVibeLevel} mirrored />
+              </div>
+            </>
           )}
-          {hasArtworkVideo && !isArtworkVideoReady && (
-            <div className="fullscreen-player-shell__art-poster" style={artStyle} aria-hidden="true" />
-          )}
-          {shouldAnimateGenerated && <canvas ref={canvasRef} className="fullscreen-player-shell__art-canvas" />}
-          {hasArtworkVideo && (
-            <video
-              key={track.artVideoUrl}
-              ref={artworkVideoRef}
-              className={`fullscreen-player-shell__art-video ${isArtworkVideoReady ? "is-ready" : ""}`.trim()}
-              src={track.artVideoUrl}
-              muted
-              loop
-              autoPlay
-              playsInline
-              preload="auto"
-            />
-          )}
+          <div className="fullscreen-player-shell__art-media">
+            {!hasArtworkVideo && isCinemaMode && (
+              <img
+                className="fullscreen-player-shell__art-image"
+                src={cinemaStillSrc}
+                alt={`${track.title} artwork`}
+                draggable={false}
+              />
+            )}
+            {hasArtworkVideo && !isArtworkVideoReady && (
+              <div className="fullscreen-player-shell__art-poster" style={artStyle} aria-hidden="true" />
+            )}
+            {shouldAnimateGenerated && <canvas ref={canvasRef} className="fullscreen-player-shell__art-canvas" />}
+            {hasArtworkVideo && (
+              <video
+                key={track.artVideoUrl}
+                ref={artworkVideoRef}
+                className={`fullscreen-player-shell__art-video ${isArtworkVideoReady ? "is-ready" : ""}`.trim()}
+                src={track.artVideoUrl}
+                muted
+                loop
+                autoPlay
+                playsInline
+                preload="auto"
+              />
+            )}
+          </div>
         </div>
 
         {!isCinemaMode && (

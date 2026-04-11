@@ -2186,6 +2186,19 @@ export default function App() {
       missingAudio: hydratedCurrentTrackMedia.missingAudio ?? baseTrack.missingAudio
     } satisfies Track;
   }, [allTracksCatalog, currentTrackId, hydratedCurrentTrackMedia, tracks]);
+  const currentTrackMediaRefreshKey = useMemo(() => {
+    if (!currentTrackId) return "none";
+    const baseTrack =
+      tracks.find((track) => track.id === currentTrackId) ?? allTracksCatalog.find((track) => track.id === currentTrackId) ?? null;
+    if (!baseTrack) return `${currentTrackId}:missing`;
+    return [
+      baseTrack.id,
+      baseTrack.artUrl ?? "",
+      baseTrack.artVideoUrl ?? "",
+      baseTrack.artGrad ?? "",
+      baseTrack.missingAudio ? "missing-audio" : "has-audio"
+    ].join("|");
+  }, [allTracksCatalog, currentTrackId, tracks]);
   const playbackNavigationTracks = useMemo(() => {
     if (!currentTrackId) return tracks;
     if (!runtimeLibrary || !playbackPlaylistId) return tracks;
@@ -2265,7 +2278,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [currentTrackId]);
+  }, [currentTrackId, currentTrackMediaRefreshKey]);
 
   useEffect(() => {
     const rootStyle = document.documentElement.style;

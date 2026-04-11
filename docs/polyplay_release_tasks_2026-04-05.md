@@ -4477,6 +4477,168 @@ Audit all backup file systems for potential issues.
 9. Backup systems audit
 10. Planning-only tasks (Show Off mode, shake gesture, waveform recolor, app tightness)
 
+### 26. Cinema Mode behind-art visualizer for Vibe 2 / Vibe 3
+**Status:** fix implemented, awaiting QA
+
+**Observed request:**
+- when Cinema Mode is active and the visual-style vibe is set to 2 or 3, render a subtle vertical-bar visualizer behind the artwork
+- keep it presentation-only, isolated, and easy to remove
+
+**Clarification note — 2026-04-11 Codex:**
+- a naming seam caused confusion in the first pass: the app’s internal Vibe-switch state is currently stored in `noveltyMode` with values `normal` / `dim` / `mute`
+- that internal naming is separate from the audio `DIM/MUTE` control stored in `dimMode`
+- this task is keyed only to the Vibe switch, not the audio dim/mute control
+
+**Follow-up diagnosis — 2026-04-11 Codex:**
+- the first visual pass kept the bars too spatially contained behind square artwork, so on-device they read as effectively invisible
+- the narrowest safe correction is visual-only: make the behind-art layer much taller, narrower, and slightly stronger so it clearly peeks above/below the artwork without changing playback or fullscreen behavior
+
+**Follow-up diagnosis — 2026-04-11 Codex (Cinema persistence):**
+- `src/components/FullscreenPlayer.tsx` was explicitly clearing local `isCinemaMode` inside a `useEffect` that runs on every `track.id` change
+- that means autoplay, manual next/prev, and shuffle transitions all shared the same forced-exit behavior, because they all advance by replacing the current track
+- the narrowest safe fix is to stop resetting `isCinemaMode` on track change while still resetting per-track artwork-video readiness state
+
+**Follow-up diagnosis — 2026-04-11 Codex (visualizer hidden on iPhone):**
+- the visualizer was being explicitly hidden by `body.perf-lite .cinema-mode-visualizer { display: none; }` in `src/components/player.css`
+- `perf-lite` is enabled broadly on small screens in `src/App.tsx`, so iPhone Cinema Mode could never show the visualizer at all
+- the narrowest safe fix is to keep the visualizer visible under `perf-lite`, but tone it down slightly instead of disabling it
+
+**Follow-up diagnosis — 2026-04-11 Codex (wrong render plane):**
+- the current visualizer is still rendered inside the artwork container, which keeps it visually tied to the square art box even when made taller
+- the requested effect is a background layer behind the artwork, not an embellishment living inside the artwork frame
+- the narrowest safe correction is to move the visualizer to its own Cinema-only layer behind the art within the fullscreen scene, while leaving playback and control behavior unchanged
+
+**Follow-up diagnosis — 2026-04-11 Codex (not wide enough):**
+- after moving to the correct background plane, the visualizer still reads too narrow, so too much of the animated center stays hidden directly behind the artwork
+- the narrowest safe correction is to widen the Cinema visualizer field so more active bars remain visible at the left/right edges around the artwork
+
+**Follow-up diagnosis — 2026-04-11 Codex (wrong anchor):**
+- a single centered visualizer field still hides too much of its active motion behind the artwork body
+- the requested composition is better modeled as two mirrored bar fields whose bases align near the artwork’s top and bottom edges
+- the narrowest safe correction is to anchor one field above the art and one below it, using the artwork edges as the visual baseline
+
+**Follow-up diagnosis — 2026-04-11 Codex (clipping + motion):**
+- the new top/bottom fields still clip hard at their outer ends instead of fading into the screen
+- the current bar timing also reads too slow and too even, so the visualizer does not feel reactive enough
+- the narrowest safe correction is to let the fields occupy more of the screen, feather their edges with masks, and shorten/stagger the bar animation timing
+
+**Follow-up diagnosis — 2026-04-11 Codex (needs true back layer):**
+- even after widening/feathering, the visible visualizer still reads like a bounded mid-layer instead of a deep scene background
+- the cleanest narrow correction is to add a second mirrored Cinema visualizer on the far back layer, with heavier blur and faster motion, so the ambient background continues behind the existing bars/artwork
+
+**Follow-up diagnosis — 2026-04-11 Codex (background seam still visible):**
+- after adding the deep back layer, the user can still see where that background field ends at the top/bottom
+- the narrowest safe correction is to feather the top and bottom edges of the back visualizer fields themselves so they dissolve into the shell background instead of ending on a readable seam
+
+**Desired behavior:**
+- visualizer appears only in Cinema Mode
+- visualizer appears only for Vibe 2 / Vibe 3 (`noveltyMode === "dim"` or `"mute"`)
+- artwork remains dominant, with the bars reading as a soft ambient layer behind it
+- reduced-motion users do not get a busy animated layer
+
+**Codex notes:**
+- Diagnosis start — 2026-04-11 Codex:
+  - Files inspected:
+    - `src/components/FullscreenPlayer.tsx`
+    - `src/components/PlayerControls.tsx`
+    - `src/components/player.css`
+    - `src/App.tsx`
+  - Likely root cause / seam:
+    - Cinema Mode already exists as local fullscreen UI state in `FullscreenPlayer.tsx`, and the artwork surface is already the isolated render seam for Cinema presentation.
+    - The existing 3-state vibe switch is exposed there as `noveltyMode`, where Vibe 2 / Vibe 3 map cleanly to `dim` / `mute`.
+    - No current behind-art layer exists, so the safest implementation is a new optional visual-only component rendered inside the Cinema artwork container and gated entirely by current UI state.
+  - Narrow implementation plan:
+    - Add a small `CinemaModeVisualizer` component with lightweight DOM/CSS bars only.
+    - Render it only when `isCinemaMode` is true and `noveltyMode !== "normal"`.
+    - Keep it behind the art/video layer, derive color from the existing aura CSS variable, and disable it under reduced motion.
+  - Exact fix made:
+    - Added a new isolated `CinemaModeVisualizer` component in `src/components/CinemaModeVisualizer.tsx` that renders a fixed set of softly animated vertical bars using DOM + CSS only.
+    - Wired `src/components/FullscreenPlayer.tsx` to render that layer only when Cinema Mode is active and the Vibe-switch backing state (`noveltyMode`) corresponds to Vibe 2 or Vibe 3.
+    - Added a small `fullscreen-player-shell__art-media` wrapper in `src/components/player.css` so the media remains clipped/foregrounded while the visualizer can sit behind it and extend slightly above/below the art.
+    - Styled the bars to use `--aura-rgb` for color/glow, with a softer Vibe 3 variant.
+    - Follow-up cleanup: renamed the new visualizer seam to explicit Vibe 2 / Vibe 3 terminology so it no longer reads like the separate audio `DIM/MUTE` control.
+    - Follow-up visual tuning: made the bar stack much taller and narrower so it clearly extends above and below square artwork instead of disappearing behind it.
+    - Follow-up Cinema persistence fix: removed the track-change reset of local `isCinemaMode` in `src/components/FullscreenPlayer.tsx`, while keeping `isArtworkVideoReady` reset behavior intact per track.
+    - Follow-up iPhone visibility fix: removed the `perf-lite` hard-disable of the Cinema visualizer and replaced it with a softer low-cost variant so small-screen iPhones can still see it.
+    - Follow-up render-plane fix: moved the visualizer out of the artwork container and into its own Cinema-only background layer behind the art, so it stretches vertically through the scene instead of reading like a hidden overlay inside the square.
+    - Follow-up width tuning: widened the Cinema background field and increased bar spacing/width so more of the fast-moving bar activity remains visible at the left and right of the artwork.
+    - Follow-up edge-anchor tuning: replaced the single centered field with two mirrored visualizer fields anchored just beyond the artwork’s top and bottom edges, so the artwork edges now act as the visual base for the motion.
+    - Follow-up screen-fill/reactivity tuning: expanded the top/bottom fields to screen width, feathered their outer ends with a vertical mask, and shortened/staggered bar timing so the motion reads faster and more reactive.
+    - Follow-up deep-background tuning: added a second mirrored Cinema visualizer on the far back shell layer with heavier blur and faster timing so the ambient motion continues behind the visible edge-anchored bars.
+    - Follow-up background seam tuning: feathered the top and bottom edges of the far back visualizer fields so they dissolve into the shell background instead of ending on a visible layer seam.
+    - Disabled the layer entirely under `prefers-reduced-motion: reduce`; under `body.perf-lite` it now stays visible with lighter styling instead of being hidden.
+  - Exact files changed:
+    - `src/components/CinemaModeVisualizer.tsx`
+    - `src/components/FullscreenPlayer.tsx`
+    - `src/components/player.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Why this was the safest implementation:
+    - It stays inside the existing fullscreen/Cinema presentation seam.
+    - It does not touch playback, hydration, artwork generation, waveform decoding, or autoplay logic.
+    - The new layer is optional, state-gated, CSS-driven, and easy to remove if visual tuning is needed.
+  - Regression risk:
+    - Low.
+    - The main risk is visual balance on small iPhones or with video artwork, since the change is isolated to the Cinema art container and does not alter player behavior.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Confirm the visualizer appears only in Cinema Mode.
+    - Confirm it appears only for Vibe 2 / Vibe 3 from the Vibe switch.
+    - Confirm Cinema Mode now stays active across autoplay track advance.
+    - Confirm Cinema Mode now stays active across manual next/prev.
+    - Confirm Cinema Mode now stays active across shuffle transitions.
+    - Confirm Cinema Mode still exits only on explicit user exit gestures/actions.
+    - Confirm it stays behind the artwork/video and does not overpower title, art, or controls.
+    - Confirm reduced-motion environments do not show the animated layer.
+    - Confirm playback, autoplay, shuffle, and manual next/prev are unaffected while Cinema Mode is open.
+    - Confirm performance stays smooth on iPhone with both still artwork and artwork video.
+
+### 27. Current-track artwork refresh while playing
+**Status:** fix implemented, awaiting QA
+
+**Observed request:**
+- if the user changes artwork while the track is already playing, the playbar/fullscreen/current-track artwork stays stale until they leave the track and come back
+
+**Desired behavior:**
+- updating artwork for the currently playing track should refresh active playback surfaces immediately
+- the user should not need to switch away from the track to see the new art
+
+**Codex notes:**
+- Diagnosis start — 2026-04-11 Codex:
+  - Files inspected:
+    - `src/App.tsx`
+    - `src/lib/db.ts`
+    - `src/admin/AdminApp.tsx`
+  - Likely root cause:
+    - `currentTrack` in `src/App.tsx` merges refreshed track metadata with a separate `hydratedCurrentTrackMedia` cache.
+    - That cache prefers its own `artUrl` / `artVideoUrl` over the base track row.
+    - The hydration effect reruns only when `currentTrackId` changes, so artwork updates on the same active track leave stale hydrated media overriding the newly refreshed track metadata.
+  - Narrow implementation plan:
+    - Keep the current-track hydration model intact.
+    - Add a narrow refresh trigger so the current-track hydration effect reruns when the active track’s artwork/media metadata changes, not just when the track id changes.
+    - Do not widen into playback, import, or artwork-generation changes.
+  - Exact fix made:
+    - Added a narrow `currentTrackMediaRefreshKey` in `src/App.tsx` derived from the active track’s current media-facing fields (`artUrl`, `artVideoUrl`, `artGrad`, `missingAudio`).
+    - Updated the current-track hydration effect to rerun when that refresh key changes, not only when `currentTrackId` changes.
+    - This lets refreshed artwork/media for the currently playing track replace stale hydrated playback media immediately after an artwork update.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Why this was the safest implementation:
+    - It preserves the existing current-track hydration model.
+    - It only changes when that hydration is refreshed for the already-active track.
+    - It does not alter playback selection, DB artwork writes, or import flows.
+  - Regression risk:
+    - Low.
+    - The main risk is only an extra current-track media fetch when the active track’s artwork metadata changes, which is the intended refresh path.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - While a track is playing, update its artwork and confirm the mini player refreshes immediately.
+    - Confirm fullscreen/current-track artwork refreshes immediately without switching tracks.
+    - Confirm blurred backdrop / now-playing artwork also refresh if they depend on the current track art.
+    - Confirm updating artwork on a non-playing track does not disrupt current playback.
+
 ---
 
 ## End-of-day wrap
