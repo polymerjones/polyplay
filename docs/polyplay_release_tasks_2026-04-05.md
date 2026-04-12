@@ -4964,10 +4964,68 @@ Audit all backup file systems for potential issues.
   - Main QA is just confirming the two fullscreen states now diverge correctly at loop end.
 - QA completed:
   - `npm run typecheck`
-- QA still needed:
-  - In Cinema Mode on a loop-selected track, confirm playback advances to the next track normally.
-  - In non-cinema fullscreen with `Crop Audio` still available, confirm playback stays on the same track at loop end.
-  - In active loop editing, confirm playback stays on the same track at loop end.
+  - QA still needed:
+    - In Cinema Mode on a loop-selected track, confirm playback advances to the next track normally.
+    - In non-cinema fullscreen with `Crop Audio` still available, confirm playback stays on the same track at loop end.
+    - In active loop editing, confirm playback stays on the same track at loop end.
+
+### 33. Existing artwork reuse should override embedded metadata artwork
+**Status:** diagnosis in progress
+
+**Observed request:**
+- on import, if the user selects `Reuse artwork from existing track`, that choice should override embedded metadata artwork from the imported audio file
+- the `Update Artwork` / replace-artwork flow should also support reusing artwork from an existing track
+
+**Desired behavior:**
+- import artwork precedence should be:
+  - manual uploaded artwork
+  - reused artwork from an existing track
+  - embedded metadata artwork
+- replace-artwork should support either:
+  - a newly uploaded artwork file
+  - reused artwork from another existing track
+
+**Codex notes:**
+- Diagnosis start — 2026-04-12 Codex:
+  - Files inspected:
+    - `src/admin/AdminApp.tsx`
+    - `src/lib/db.ts`
+  - Findings:
+    - Import already has a reused-artwork dropdown, but the submit path only prefers it when there is no armed artwork file at all.
+    - Embedded metadata artwork is stored in the same `uploadArt` slot as manual artwork, so a metadata-autofilled image can currently override the user’s explicit reused-artwork dropdown choice.
+    - The replace-artwork lane currently only supports a newly uploaded file and has no seam for reusing stored artwork from another track.
+  - Narrow implementation plan:
+    - make import submit precedence explicit by distinguishing manual artwork from metadata-autofilled artwork at submit time
+    - add a small reused-artwork selector to the replace-artwork lane and feed it through the existing `updateArtworkInDb(...)` path
+    - keep manual uploaded artwork higher priority than reused artwork
+  - Exact fix made:
+    - Updated import submit logic in `src/admin/AdminApp.tsx` so artwork precedence is now:
+      - manual uploaded artwork
+      - reused artwork from existing track
+      - embedded metadata artwork
+    - The reused-artwork dropdown now overrides metadata-autofilled artwork specifically, while manual uploaded artwork still remains highest priority.
+    - Added `selectedArtworkSourceTrackId` plus `updateArtworkSourceOptions` to the replace-artwork lane in `src/admin/AdminApp.tsx`.
+    - Updated `onUpdateArtwork()` so `Update Artwork` can now use either:
+      - a newly selected artwork file
+      - or reused artwork from another existing track
+    - Updated helper copy so the import and update-artwork lanes describe the actual precedence rules.
+  - Exact files changed:
+    - `src/admin/AdminApp.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Why this was the safest implementation:
+    - It reuses the existing `getTrackArtworkPayloadFromDb(...)` and `updateArtworkInDb(...)` paths.
+    - It changes only artwork source selection precedence, not broader artwork storage or metadata parsing.
+    - It avoids redesigning the import form or replace-artwork system.
+  - Regression risk:
+    - Low.
+    - Main QA is confirming manual uploaded artwork still wins, reused artwork now beats metadata artwork, and replace-artwork works from both file and reused-source paths.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Import an audio file with embedded artwork, also choose `Reuse artwork from existing track`, and confirm the reused artwork is what imports.
+    - Confirm manual uploaded artwork still overrides both reused artwork and embedded metadata artwork.
+    - In `Update Artwork`, select a destination track and a source track, without uploading a file, and confirm artwork copies over.
+    - Confirm `Update Artwork` with a manually uploaded file still behaves unchanged.
 
 **Follow-up diagnosis — 2026-04-11 Codex (Cinema looped-to-looped autoplay still pausing):**
 - user reports a loop-selected track can advance correctly in Cinema Mode, but when the destination track also has an active loop it can still land paused

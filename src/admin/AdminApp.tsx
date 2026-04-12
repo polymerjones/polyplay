@@ -568,6 +568,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
 
   const [selectedArtworkTrackId, setSelectedArtworkTrackId] = useState<string>("");
   const [selectedArtworkFile, setSelectedArtworkFile] = useState<File | null>(null);
+  const [selectedArtworkSourceTrackId, setSelectedArtworkSourceTrackId] = useState<string>("");
   const [selectedArtPreviewUrl, setSelectedArtPreviewUrl] = useState("");
   const [selectedArtDuration, setSelectedArtDuration] = useState(0);
   const [selectedArtFrameTime, setSelectedArtFrameTime] = useState(0);
@@ -755,6 +756,13 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
         .filter((track) => Boolean(track.artUrl || track.artVideoUrl))
         .map((track) => ({ value: String(track.id), label: formatTrackOptionLabel(track) })),
     [tracks]
+  );
+  const updateArtworkSourceOptions = useMemo(
+    () =>
+      tracks
+        .filter((track) => track.id !== selectedArtworkTrackId && Boolean(track.artUrl || track.artVideoUrl))
+        .map((track) => ({ value: String(track.id), label: formatTrackOptionLabel(track) })),
+    [selectedArtworkTrackId, tracks]
   );
   const storageUsedBytes = Math.max(0, storageUsage?.totalBytes ?? 0);
   const storageCapBytes = Math.max(0, storageUsage?.capBytes ?? 0);
@@ -1774,14 +1782,17 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
     showImportNotice("IMPORTING TRACK...");
 
     try {
+      const shouldUseReusedArtwork = Boolean(
+        uploadArtworkSourceTrackId && (!uploadArt || uploadArtSource === "metadata")
+      );
       const artwork =
-        uploadArt || !uploadArtworkSourceTrackId
-          ? await buildArtworkPayload(uploadArt, uploadArtPosterBlob, uploadArtFrameTime, uploadArtSource)
-          : { ...(await getTrackArtworkPayloadFromDb(uploadArtworkSourceTrackId)), posterCaptureFailed: false };
-      if (uploadArt && !artwork.artPoster && !artwork.artVideo) {
+        shouldUseReusedArtwork
+          ? { ...(await getTrackArtworkPayloadFromDb(uploadArtworkSourceTrackId)), posterCaptureFailed: false }
+          : await buildArtworkPayload(uploadArt, uploadArtPosterBlob, uploadArtFrameTime, uploadArtSource)
+      if (!shouldUseReusedArtwork && uploadArt && !artwork.artPoster && !artwork.artVideo) {
         throw new Error("Armed artwork could not be prepared for import.");
       }
-      if (!uploadArt && uploadArtworkSourceTrackId && !artwork.artPoster && !artwork.artVideo) {
+      if (shouldUseReusedArtwork && !artwork.artPoster && !artwork.artVideo) {
         throw new Error("Selected artwork source track has no reusable artwork.");
       }
       await addTrackToDb({
@@ -1852,8 +1863,9 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
       setStatus("Select a track to update artwork.");
       return;
     }
-    if (!selectedArtworkFile) {
-      setStatus("Select an artwork file.");
+    const shouldUseReusedArtwork = Boolean(selectedArtworkSourceTrackId && !selectedArtworkFile);
+    if (!selectedArtworkFile && !shouldUseReusedArtwork) {
+      setStatus("Select an artwork file or reused artwork source.");
       return;
     }
     const selectedTrack = tracks.find((track) => track.id === selectedArtworkTrackId);
@@ -1866,10 +1878,16 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
     setStatus(updatingMessage);
     setLaneToast(updatingMessage);
     try {
-      const artwork = await buildArtworkPayload(selectedArtworkFile, selectedArtPosterBlob, selectedArtFrameTime);
+      const artwork = shouldUseReusedArtwork
+        ? { ...(await getTrackArtworkPayloadFromDb(selectedArtworkSourceTrackId)), posterCaptureFailed: false }
+        : await buildArtworkPayload(selectedArtworkFile, selectedArtPosterBlob, selectedArtFrameTime);
+      if (shouldUseReusedArtwork && !artwork.artPoster && !artwork.artVideo) {
+        throw new Error("Selected artwork source track has no reusable artwork.");
+      }
       await updateArtworkInDb(selectedArtworkTrackId, artwork);
       notifyUserImported();
       setSelectedArtworkAssetFile(null);
+      setSelectedArtworkSourceTrackId("");
       const successMessage = artwork.posterCaptureFailed
         ? "Artwork updated. Video artwork added (poster frame unavailable on this browser)."
         : "Artwork updated.";
@@ -2877,10 +2895,12 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
                   </option>
                 ))}
               </select>
-              <span className="text-xs text-slate-400">
-                {uploadArt
-                  ? "Manual artwork is currently selected and will override reused artwork."
-                  : "Optional: copy stored artwork from another track instead of uploading it again."}
+      <span className="text-xs text-slate-400">
+                {uploadArt && uploadArtSource !== "metadata"
+                  ? "Manual uploaded artwork is currently selected and will override reused artwork."
+                  : uploadArtworkSourceTrackId
+                    ? "Reused artwork will override embedded metadata artwork for this import."
+                    : "Optional: copy stored artwork from another track instead of uploading it again."}
               </span>
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-300">
@@ -3010,6 +3030,27 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
                 onFileSelected={(file) => void onPickSelectedArtwork(file)}
                 disabled={!hasTracks}
               />
+              <label className="grid gap-1 text-sm text-slate-300">
+                Reuse artwork from existing track
+                <select
+                  value={selectedArtworkSourceTrackId}
+                  onChange={(event) => setSelectedArtworkSourceTrackId(event.currentTarget.value)}
+                  disabled={updateArtworkSourceOptions.length === 0 || !hasTracks}
+                  className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
+                >
+                  <option value="">No reused artwork</option>
+                  {updateArtworkSourceOptions.map((option) => (
+                    <option key={`update-art-${option.value}`} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs text-slate-400">
+                  {selectedArtworkFile
+                    ? "Manual uploaded artwork is currently selected and will override reused artwork."
+                    : "Optional: copy stored artwork from another track onto the selected track."}
+                </span>
+              </label>
               {selectedArtPreviewUrl && (
                 <div className="video-frame-picker">
                   <label className="text-xs text-slate-300">Poster frame for static artwork</label>
@@ -3061,7 +3102,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
                 variant="primary"
                 onClick={onUpdateArtwork}
                 disabled={!hasTracks}
-                className={isUpdateArtworkArmed ? "admin-action-armed" : ""}
+                className={isUpdateArtworkArmed || Boolean(selectedArtworkSourceTrackId) ? "admin-action-armed" : ""}
               >
                 Update Artwork
               </Button>
