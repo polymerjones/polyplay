@@ -824,8 +824,9 @@ export async function duplicateTrackWithAudioInDb(
   const source = library.tracksById[sourceTrackId];
   if (!source) throw new Error("Source track not found");
 
-  const artPoster = source.artKey ? await getBlob(source.artKey) : null;
-  const artVideo = source.artVideoKey ? await getBlob(source.artVideoKey) : null;
+  const shouldPreserveExplicitArtwork = source.artworkSource !== "auto";
+  const artPoster = shouldPreserveExplicitArtwork && source.artKey ? await getBlob(source.artKey) : null;
+  const artVideo = shouldPreserveExplicitArtwork && source.artVideoKey ? await getBlob(source.artVideoKey) : null;
   const nextTrackId = makeId();
 
   await addTrackToDb({

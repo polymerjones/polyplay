@@ -5439,6 +5439,34 @@ Audit all backup file systems for potential issues.
     - Press Enter/Return from Artist and confirm Import runs.
     - Confirm excluded controls like artwork frame slider/file paths still do not trigger accidental submit.
 
+### 41. Track theme/aura origin toggle should apply immediately
+**Status:** diagnosis in progress
+
+**Observed request:**
+- disabling `Tracks maintain theme and aura origins` does not visibly apply until the user changes theme
+- auto art can visibly repopulate after theme changes instead of feeling masked/intentional
+
+**Desired behavior:**
+- turning the toggle off should immediately refresh theme-derived auto artwork to the current theme
+- theme-driven auto-art refresh should feel less like a visible repopulation step
+
+**Codex notes:**
+- Diagnosis start — 2026-04-12 Codex:
+  - Files inspected:
+    - `src/App.tsx`
+    - `src/admin/AdminApp.tsx`
+    - `src/lib/db.ts`
+    - `styles.css`
+  - Findings:
+    - `regenerateAutoArtworkForThemeChangeInDb(...)` already exists and is used on theme changes when preserve-origins is off.
+    - Toggling preserve-origins off currently only updates the boolean flag; it does not run regeneration for the current theme.
+    - That is why the user sees no immediate effect until the next theme switch triggers the regeneration path.
+    - A very short amber cover flash can be attached to the same regeneration seam as a presentation-only mask, without changing the artwork system itself.
+  - Narrow implementation plan:
+    - add one small helper in app/admin to regenerate auto art for the current theme when the toggle is turned off
+    - dispatch normal library refresh after regeneration
+    - add one short amber app-layer flash tied only to that regeneration path
+
 **Follow-up diagnosis — 2026-04-11 Codex (Cinema looped-to-looped autoplay still pausing):**
 - user reports a loop-selected track can advance correctly in Cinema Mode, but when the destination track also has an active loop it can still land paused
 - the remaining likely seam is in `retryPendingAutoPlayIfNeeded(...)` inside `src/App.tsx`
@@ -5497,6 +5525,78 @@ Audit all backup file systems for potential issues.
   - Confirm it begins at the loop start.
   - Confirm non-looped track taps still behave unchanged.
   - Confirm looped next-track autoplay still works in Cinema Mode and normal playback.
+
+**Task 41 — 2026-04-12 Codex (track theme/aura origin toggle should apply immediately):**
+- Scope:
+  - keep this narrow to the existing auto-art refresh seam when `Tracks maintain theme and aura origins` is turned off
+  - do not redesign artwork generation or theme architecture
+- Findings:
+  - `regenerateAutoArtworkForThemeChangeInDb(...)` already existed and was correctly used on theme switches while preserve-origins was disabled.
+  - The toggle-off path only updated `TRACK_THEME_AURA_ORIGINS_KEY`; it did not regenerate auto art for the current theme selection.
+  - That is why the user saw no visible change until the next later theme switch.
+- Exact fix made:
+  - Added `refreshAutoArtworkForThemeSelection(...)` in `src/App.tsx` to centralize the current-theme auto-art regeneration path.
+  - Reused that helper from both:
+    - the existing theme-switch path
+    - the `polyplay:track-theme-origins-updated` message path when preserve-origins becomes `false`
+  - Added a brief amber `auto-art-refresh-flash` overlay in the app effects layer so the artwork repopulation is masked instead of visually popping in.
+  - Adjusted the admin panel to refresh its track list when the parent emits `polyplay:library-updated`, rather than running a second duplicate regeneration pass locally.
+- Exact files changed:
+  - `src/App.tsx`
+  - `src/admin/AdminApp.tsx`
+  - `styles.css`
+  - `docs/polyplay_release_tasks_2026-04-05.md`
+- Why this was the safest implementation:
+  - It stays inside the already-existing auto-art regeneration seam.
+  - It does not change import logic, metadata parsing, or theme persistence rules.
+  - The amber flash is presentation-only and tied only to successful regeneration.
+- Regression risk:
+  - Low.
+  - Main risk is visual only: the flash timing may need one more tweak on-device if it feels too obvious or too subtle.
+- QA completed:
+  - `npm run typecheck`
+- QA still needed:
+  - Turn `Tracks maintain theme and aura origins` off and confirm auto art updates immediately for the current theme without requiring an extra theme change.
+  - Confirm the amber flash is brief and tasteful on iPhone.
+  - Confirm turning the toggle back on does not regenerate artwork.
+  - Confirm later theme changes still regenerate auto art only while preserve-origins is off.
+
+**Task 42 — 2026-04-12 Codex (cropped loop tracks should stay in theme-driven auto-art flow):**
+- Scope:
+  - keep this narrow to cropped loop tracks that are expected to keep responding to theme-driven auto-art changes
+  - do not redesign crop flow or artwork architecture
+- Diagnosis start:
+  - Files inspected:
+    - `src/lib/db.ts`
+    - `src/App.tsx`
+  - Findings:
+    - `duplicateTrackWithAudioInDb(...)` currently copies the source track poster/video blobs into the new cropped track.
+    - `addTrackToDb(...)` treats any passed-in poster/video as user artwork, so the new cropped track is stored as `artworkSource: "user"`.
+    - `regenerateAutoArtworkForThemeChangeInDb(...)` only updates tracks whose `artworkSource === "auto"`.
+    - Result: cropped-to-new tracks made from auto-art source tracks stop responding to theme cycling because they are accidentally converted into user-art tracks.
+  - Narrow implementation plan:
+    - preserve copied artwork only for genuinely user-supplied artwork
+    - for cropped-to-new tracks originating from auto art, let the new track regenerate/store auto art from its own cropped audio instead of copying the poster blob
+- Exact fix made:
+  - Updated `duplicateTrackWithAudioInDb(...)` in `src/lib/db.ts`.
+  - Cropped-to-new now only copies poster/video artwork when the source track artwork was explicitly user-supplied.
+  - If the source track was using PolyPlay auto art, the new cropped track is created without copied artwork so `addTrackToDb(...)` regenerates auto art from the cropped audio and keeps `artworkSource: "auto"`.
+- Exact files changed:
+  - `src/lib/db.ts`
+  - `docs/polyplay_release_tasks_2026-04-05.md`
+- Why this was the safest implementation:
+  - It changes only the cropped-to-new duplication seam.
+  - It does not alter theme switching logic, playback logic, or manual artwork replacement behavior.
+  - User-supplied artwork still remains preserved exactly as before.
+- Regression risk:
+  - Low.
+  - The only meaningful behavior change is that auto-art cropped duplicates will now generate their own auto poster instead of inheriting a copied poster blob.
+- QA completed:
+  - `npm run typecheck`
+- QA still needed:
+  - Crop a loop to a new track from a source using auto art, then cycle themes and confirm the new cropped track updates with the theme.
+  - Confirm cropped-to-new from a source with user-supplied artwork still preserves that artwork.
+  - Confirm crop-to-existing on an auto-art track still responds to later theme changes.
 
 ---
 

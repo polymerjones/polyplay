@@ -725,6 +725,21 @@ main,
   animation: theme-bloom 320ms ease-out;
 }
 
+.auto-art-refresh-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(255, 205, 120, 0.24), rgba(255, 205, 120, 0) 52%),
+    linear-gradient(180deg, rgba(255, 188, 92, 0.12), rgba(255, 188, 92, 0.03));
+}
+
+.auto-art-refresh-flash.is-active {
+  animation: auto-art-refresh-flash 220ms ease-out;
+}
+
 @keyframes theme-bloom {
   0% {
     opacity: 0;
@@ -737,6 +752,18 @@ main,
   100% {
     opacity: 0;
     transform: scale(1);
+  }
+}
+
+@keyframes auto-art-refresh-flash {
+  0% {
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }
 
@@ -5618,10 +5645,10 @@ body.mute-freeze .track-backdrop {
 
 .transfer-lane__clear-btn {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 18px;
-  height: 18px;
+  top: 9px;
+  right: 9px;
+  width: 16px;
+  height: 16px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 999px;
   display: inline-flex;
@@ -5630,8 +5657,6 @@ body.mute-freeze .track-backdrop {
   padding: 0;
   background: rgba(9, 14, 22, 0.28);
   color: rgba(255, 245, 226, 0.68);
-  font-size: 11px;
-  line-height: 1;
   box-shadow: none;
   cursor: pointer;
   z-index: 2;
@@ -5646,6 +5671,15 @@ body.mute-freeze .track-backdrop {
 
 .transfer-lane__clear-btn:active {
   transform: scale(0.96);
+}
+
+.transfer-lane__clear-icon {
+  width: 8px;
+  height: 8px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
 }
 
 .transfer-lane__zone::after {

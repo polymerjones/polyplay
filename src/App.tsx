@@ -463,6 +463,7 @@ export default function App() {
   });
   const [themeToggleAnim, setThemeToggleAnim] = useState<"on" | "off" | null>(null);
   const [themeBloomActive, setThemeBloomActive] = useState(false);
+  const [autoArtRefreshFlashActive, setAutoArtRefreshFlashActive] = useState(false);
   const [fxEnabled] = useState<boolean>(() => {
     try {
       const raw = localStorage.getItem(FX_ENABLED_KEY);
@@ -670,6 +671,7 @@ export default function App() {
   const themeToggleCooldownRef = useRef(0);
   const themeAnimTimeoutRef = useRef<number | null>(null);
   const themeBloomTimeoutRef = useRef<number | null>(null);
+  const autoArtRefreshFlashTimeoutRef = useRef<number | null>(null);
   const journalToastTimeoutRef = useRef<number | null>(null);
   const vaultToastTimeoutRef = useRef<number | null>(null);
   const vaultImportCloseTimeoutRef = useRef<number | null>(null);
@@ -683,6 +685,8 @@ export default function App() {
   const lastUiCurrentTimeCommitAtRef = useRef(0);
   const lastUiCurrentTimeValueRef = useRef(0);
   const currentTrackIdRef = useRef<string | null>(null);
+  const themeModeRef = useRef<ThemeMode>("dark");
+  const customThemeSlotRef = useRef<CustomThemeSlot>("crimson");
   const allTracksRef = useRef<Track[]>([]);
   const threepeatRemainingRef = useRef(0);
   const nowPlayingItemSyncSeqRef = useRef(0);
@@ -2072,6 +2076,9 @@ export default function App() {
         } catch {
           // Ignore localStorage failures.
         }
+        if (!preserve) {
+          void refreshAutoArtworkForThemeSelection(getThemeSelection(themeModeRef.current, customThemeSlotRef.current));
+        }
         return;
       }
       if (type === "polyplay:haptic") {
@@ -2170,6 +2177,23 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    themeModeRef.current = themeMode;
+  }, [themeMode]);
+
+  useEffect(() => {
+    customThemeSlotRef.current = customThemeSlot;
+  }, [customThemeSlot]);
+
+  useEffect(() => {
+    return () => {
+      if (autoArtRefreshFlashTimeoutRef.current !== null) {
+        window.clearTimeout(autoArtRefreshFlashTimeoutRef.current);
+        autoArtRefreshFlashTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const onLibraryUpdated = () => {
       syncPlayerStateFromStorage();
       void refreshTracks();
@@ -2177,6 +2201,35 @@ export default function App() {
     window.addEventListener("polyplay:library-updated", onLibraryUpdated as EventListener);
     return () => window.removeEventListener("polyplay:library-updated", onLibraryUpdated as EventListener);
   }, []);
+
+  const triggerAutoArtRefreshFlash = useCallback(() => {
+    setAutoArtRefreshFlashActive(false);
+    if (autoArtRefreshFlashTimeoutRef.current !== null) {
+      window.clearTimeout(autoArtRefreshFlashTimeoutRef.current);
+      autoArtRefreshFlashTimeoutRef.current = null;
+    }
+    window.requestAnimationFrame(() => {
+      setAutoArtRefreshFlashActive(true);
+      autoArtRefreshFlashTimeoutRef.current = window.setTimeout(() => {
+        setAutoArtRefreshFlashActive(false);
+        autoArtRefreshFlashTimeoutRef.current = null;
+      }, 220);
+    });
+  }, []);
+
+  const refreshAutoArtworkForThemeSelection = useCallback(
+    async (selection: ThemeSelection) => {
+      try {
+        const updated = await regenerateAutoArtworkForThemeChangeInDb(selection);
+        if (updated <= 0) return;
+        triggerAutoArtRefreshFlash();
+        window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
+      } catch {
+        // Ignore auto-art regeneration failures during theme-origin sync.
+      }
+    },
+    [triggerAutoArtRefreshFlash]
+  );
 
   useEffect(() => {
     if (gratitudeEvaluatedRef.current) return;
@@ -3842,14 +3895,7 @@ export default function App() {
       void setPlaylistThemeSelectionInDb(activePlaylistId, nextSelection).catch(() => undefined);
     }
     if (!shouldPreserveTrackVisualOrigins) {
-      void regenerateAutoArtworkForThemeChangeInDb(nextSelection)
-        .then((updated) => {
-          if (updated <= 0) return;
-          window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
-        })
-        .catch(() => {
-          // Ignore auto-art regeneration failures during theme switching.
-        });
+      void refreshAutoArtworkForThemeSelection(nextSelection);
     }
     markActivePlaylistDirty();
     try {
@@ -4547,6 +4593,9 @@ export default function App() {
       );
 
       if (event.key === "Escape") {
+        if (isJournalOpen || isGratitudeOpen) {
+          return;
+        }
         setIsFullscreenPlayerOpen(false);
         setOverlayPage(null);
         setIsTipsOpen(false);
@@ -4562,7 +4611,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [togglePlayPause]);
+  }, [isGratitudeOpen, isJournalOpen, togglePlayPause]);
 
   useEffect(() => {
     if (!overlayPage) return;
@@ -4695,6 +4744,7 @@ export default function App() {
             auraRgb={ambientAuraRgb}
             themeRefreshKey={fxThemeRefreshKey}
           />
+          <div className={`auto-art-refresh-flash ${autoArtRefreshFlashActive ? "is-active" : ""}`.trim()} />
           <div className={`playlist-nav-flash ${playlistNavFlash ? "is-active" : ""}`.trim()} />
           <div
             className={`track-backdrop ${currentTrack?.artUrl || currentTrack?.artGrad ? "is-visible" : ""}`.trim()}

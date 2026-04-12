@@ -978,6 +978,10 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
     };
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
+      if (event.data?.type === "polyplay:library-updated") {
+        void refreshTracks();
+        return;
+      }
       if (event.data?.type !== "polyplay:theme-changed") return;
       const mode = event.data?.themeMode;
       const slot = event.data?.customThemeSlot;
