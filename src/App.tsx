@@ -2618,10 +2618,36 @@ export default function App() {
       if (shouldDeferLoopedAutoplay && targetTrackId) {
         const safeLoopStart = getSafeActiveLoopStart();
         if (safeLoopStart !== null) {
+          try {
+            audio.currentTime = safeLoopStart;
+          } catch {
+            // Ignore transient seek failures; deferred retry remains available below.
+          }
           commitUiCurrentTime(safeLoopStart, { force: true });
         }
         pendingAutoPlayRef.current = false;
         pendingAutoPlayTrackIdRef.current = targetTrackId;
+        if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
+          pendingAutoPlayTrackIdRef.current = null;
+          void attemptPlay("pending-autoplay")
+            .then(() => {
+              logAudioDebug("play() resolved", { reason: "pending-autoplay", targetTrackId });
+              setIsPlaying(true);
+            })
+            .catch((error) => {
+              logAudioDebug("play() rejected", {
+                reason: "pending-autoplay",
+                targetTrackId,
+                readyState: audio.readyState,
+                error: String(error)
+              });
+              if (isIOS && currentTrackId === targetTrackId) {
+                pendingAutoPlayTrackIdRef.current = targetTrackId;
+                return;
+              }
+              setIsPlaying(false);
+            });
+        }
         return;
       }
 

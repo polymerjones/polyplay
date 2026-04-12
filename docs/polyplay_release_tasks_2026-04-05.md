@@ -4998,6 +4998,36 @@ Audit all backup file systems for potential issues.
   - Confirm non-looped next-track autoplay is unchanged.
   - Confirm non-cinema crop-workflow guard behavior remains intact.
 
+**Follow-up diagnosis — 2026-04-11 Codex (manual track selection with active loop still pausing):**
+- user reports tapping a track row/tile for a track with an active loop can still leave it paused instead of starting like a normal track
+- the direct selection path still goes through `playTrack(trackId, true)`, so the remaining seam is in the looped pending-autoplay branch in `src/App.tsx`
+- that branch currently always defers actual playback to the later retry path, even when the newly selected track already has enough metadata loaded to start immediately
+- narrowest safe fix:
+  - keep the deferred retry path for not-yet-ready media
+  - but opportunistically start playback immediately for loop-selected tracks when metadata is already available, while still preserving loop-start seek behavior
+
+**Follow-up fix implemented — 2026-04-11 Codex (immediate looped autoplay on ready direct selection):**
+- Exact fix made:
+  - Updated the looped pending-autoplay branch in `src/App.tsx` so it now seeks to the loop start immediately and, when the media element already has `HAVE_METADATA`, attempts `play()` right away instead of always waiting for the later retry path.
+  - If that immediate play attempt still rejects on iPhone for the still-current target track, the app re-arms `pendingAutoPlayTrackIdRef` so the existing deferred retry path can continue.
+- Exact files changed:
+  - `src/App.tsx`
+  - `docs/polyplay_release_tasks_2026-04-05.md`
+- Why this was the safest implementation:
+  - It stays inside the existing `playTrack(...)` / pending-autoplay flow.
+  - It does not alter list-row UI, track selection behavior, or loop storage.
+  - It only removes unnecessary waiting for loop-selected tracks that are already ready enough to start.
+- Regression risk:
+  - Low.
+  - Main QA is confirming direct looped track taps now start cleanly without breaking the existing deferred retry behavior for not-yet-ready media.
+- QA completed:
+  - `npm run typecheck`
+- QA still needed:
+  - Tap a track row/tile with an active loop and confirm it starts automatically.
+  - Confirm it begins at the loop start.
+  - Confirm non-looped track taps still behave unchanged.
+  - Confirm looped next-track autoplay still works in Cinema Mode and normal playback.
+
 ---
 
 ## End-of-day wrap
