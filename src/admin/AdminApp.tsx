@@ -3019,8 +3019,8 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
           <h2 className="mb-2 text-base font-semibold text-slate-100">Track Operations</h2>
 
           <div className="admin-v1-fields grid gap-2">
-            <label className="grid gap-1 text-sm text-slate-300">
-              Update artwork
+            <div className="grid gap-1 text-sm text-slate-300">
+              <div>Update artwork</div>
               <select
                 value={selectedArtworkTrackId}
                 onChange={(event) => setSelectedArtworkTrackId(event.currentTarget.value)}
@@ -3045,8 +3045,8 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
                 onFileSelected={(file) => void onPickSelectedArtwork(file)}
                 disabled={!hasTracks}
               />
-              <label className="grid gap-1 text-sm text-slate-300">
-                Reuse artwork from existing track
+              <div className="grid gap-1 text-sm text-slate-300">
+                <div>Reuse artwork from existing track</div>
                 <select
                   value={selectedArtworkSourceTrackId}
                   onChange={(event) => setSelectedArtworkSourceTrackId(event.currentTarget.value)}
@@ -3065,7 +3065,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
                     ? "Manual uploaded artwork is currently selected and will override reused artwork."
                     : "Optional: copy stored artwork from another track onto the selected track."}
                 </span>
-              </label>
+              </div>
               {selectedArtPreviewUrl && (
                 <div className="video-frame-picker">
                   <label className="text-xs text-slate-300">Poster frame for static artwork</label>
@@ -3121,7 +3121,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
               >
                 Update Artwork
               </Button>
-            </label>
+            </div>
 
             <label className="grid gap-1 text-sm text-slate-300">
               Replace audio

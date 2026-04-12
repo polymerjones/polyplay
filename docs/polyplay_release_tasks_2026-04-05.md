@@ -5183,6 +5183,32 @@ Audit all backup file systems for potential issues.
   - Confirm the lane title/copy no longer visually collides with it.
   - Confirm tapping it still clears the lane normally.
 
+**Follow-up diagnosis — 2026-04-12 Codex (corner clear mark still reads too tall):**
+- the behavior is correct, but the current text-glyph `✕` still reads visually taller/longer than intended on iPhone
+- the narrowest safe fix is to swap the glyph for a tiny SVG close icon and tighten the corner button dimensions/placement
+
+**Follow-up fix implemented — 2026-04-12 Codex (tiny SVG corner close mark):**
+- Exact fix made:
+  - Replaced the clear control’s text glyph in `src/admin/TransferLaneDropZone.tsx` with a tiny SVG close icon.
+  - Tightened the corner button size and icon size in `styles.css`.
+  - Kept the same clear behavior and corner positioning, but made the mark read shorter and cleaner on iPhone.
+- Exact files changed:
+  - `src/admin/TransferLaneDropZone.tsx`
+  - `styles.css`
+  - `docs/polyplay_release_tasks_2026-04-05.md`
+- Why this was the safest implementation:
+  - Presentation-only.
+  - SVG avoids font-specific glyph proportions that were making the `✕` read too tall.
+  - No import behavior changed.
+- Regression risk:
+  - Low.
+  - Main QA is just confirming the smaller icon is still tappable enough on device.
+- QA completed:
+  - `npm run typecheck`
+- QA still needed:
+  - Confirm the corner close mark now reads shorter/cleaner on iPhone.
+  - Confirm it is still easy enough to tap.
+
 ### 36. Demo Playlist with user tracks should survive full vault export/import
 **Status:** diagnosis in progress
 
@@ -5280,6 +5306,48 @@ Audit all backup file systems for potential issues.
     - Use `Crop Existing Track` with a changed title and confirm the current track is renamed after cropping.
     - Use `Crop to New Track` with a changed title and confirm the new track is created with that title.
     - Leave the field unchanged/blank and confirm the previous default naming behavior still works.
+
+### 38. Replace-artwork lane should not trigger reused-artwork dropdown
+**Status:** diagnosis in progress
+
+**Observed request:**
+- tapping the replace-artwork dropzone can trigger the reused-artwork dropdown instead of only opening the artwork picker
+
+**Desired behavior:**
+- the replace-artwork dropzone should only activate its own picker
+- the reused-artwork dropdown should only respond to intentional taps on that dropdown
+
+**Codex notes:**
+- Diagnosis start — 2026-04-12 Codex:
+  - Files inspected:
+    - `src/admin/AdminApp.tsx`
+  - Findings:
+    - The entire `Update artwork` section is wrapped in an outer `<label>`.
+    - Inside that same label, the reused-artwork control is also wrapped in its own `<label>`.
+    - That nested-label structure broadens tap activation and can route taps from the dropzone area into the dropdown on mobile Safari.
+  - Narrow implementation plan:
+    - replace the outer and inner label wrappers in the `Update artwork` section with neutral container elements
+    - preserve the exact layout and behavior otherwise
+  - Exact fix made:
+    - Updated the `Update artwork` section in `src/admin/AdminApp.tsx` to remove the outer `<label>` wrapper around the whole block.
+    - Updated the nested `Reuse artwork from existing track` wrapper in the same section from `<label>` to a neutral container as well.
+    - Preserved the exact controls and layout, but removed the label semantics that were broadening tap activation into the dropdown.
+  - Exact files changed:
+    - `src/admin/AdminApp.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Why this was the safest implementation:
+    - It fixes the hit-target bug at the DOM-structure layer instead of trying to patch around it with pointer-event hacks.
+    - It does not change artwork update behavior or introduce any new controls.
+    - It is scoped only to the affected `Update artwork` lane.
+  - Regression risk:
+    - Low.
+    - Main QA is confirming the dropdown still works when tapped directly and the dropzone now only opens its own picker.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Tap the replace-artwork dropzone on iPhone and confirm it opens the artwork picker only.
+    - Tap the reused-artwork dropdown directly and confirm it still opens normally.
+    - Confirm `Update Artwork` still works from both file upload and reused-artwork selection paths.
 
 **Follow-up diagnosis — 2026-04-11 Codex (Cinema looped-to-looped autoplay still pausing):**
 - user reports a loop-selected track can advance correctly in Cinema Mode, but when the destination track also has an active loop it can still land paused
