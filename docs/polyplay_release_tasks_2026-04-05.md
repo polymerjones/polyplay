@@ -4969,6 +4969,35 @@ Audit all backup file systems for potential issues.
   - In non-cinema fullscreen with `Crop Audio` still available, confirm playback stays on the same track at loop end.
   - In active loop editing, confirm playback stays on the same track at loop end.
 
+**Follow-up diagnosis — 2026-04-11 Codex (Cinema looped-to-looped autoplay still pausing):**
+- user reports a loop-selected track can advance correctly in Cinema Mode, but when the destination track also has an active loop it can still land paused
+- the remaining likely seam is in `retryPendingAutoPlayIfNeeded(...)` inside `src/App.tsx`
+- unlike the normal pending-autoplay path, the deferred looped-autoplay retry path currently treats any `audio.play()` rejection as terminal
+- on iPhone, a looped-to-looped transition can still hit a transient `play()` rejection immediately after the loop-start seek, so the safest contained fix is to re-arm one short retry for the same pending track instead of dropping autoplay entirely
+
+**Follow-up fix implemented — 2026-04-11 Codex (deferred looped-autoplay retry resilience):**
+- Exact fix made:
+  - Added a small local retry timer inside the audio listener effect in `src/App.tsx`.
+  - When `retryPendingAutoPlayIfNeeded(...)` hits a `play()` rejection on iPhone for the still-current pending track, it now re-arms `pendingAutoPlayTrackIdRef` and schedules one short retry instead of terminating looped autoplay immediately.
+  - Successful deferred autoplay now clears that retry timer.
+- Exact files changed:
+  - `src/App.tsx`
+  - `docs/polyplay_release_tasks_2026-04-05.md`
+- Why this was the safest implementation:
+  - It stays inside the existing deferred looped-autoplay path.
+  - It does not alter navigation rules, Cinema Mode rules, or crop-workflow rules.
+  - It only adds limited resilience for transient iPhone `play()` rejection timing during looped track transitions.
+- Regression risk:
+  - Low.
+  - Main QA is confirming the retry does not cause double-start behavior and that non-looped playback remains unchanged.
+- QA completed:
+  - `npm run typecheck`
+- QA still needed:
+  - In Cinema Mode, let a loop-selected track advance into another loop-selected track and confirm the destination autoplay starts.
+  - Confirm the destination still begins at its loop start.
+  - Confirm non-looped next-track autoplay is unchanged.
+  - Confirm non-cinema crop-workflow guard behavior remains intact.
+
 ---
 
 ## End-of-day wrap

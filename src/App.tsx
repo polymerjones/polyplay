@@ -2879,6 +2879,23 @@ export default function App() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    let pendingAutoPlayRetryTimeoutId: number | null = null;
+
+    const clearPendingAutoPlayRetryTimeout = () => {
+      if (pendingAutoPlayRetryTimeoutId !== null) {
+        window.clearTimeout(pendingAutoPlayRetryTimeoutId);
+        pendingAutoPlayRetryTimeoutId = null;
+      }
+    };
+
+    const schedulePendingAutoPlayRetry = (pendingTrackId: string) => {
+      if (!isIOS || pendingAutoPlayRetryTimeoutId !== null) return;
+      pendingAutoPlayRetryTimeoutId = window.setTimeout(() => {
+        pendingAutoPlayRetryTimeoutId = null;
+        if (pendingAutoPlayTrackIdRef.current !== pendingTrackId) return;
+        retryPendingAutoPlayIfNeeded("canplay");
+      }, 90);
+    };
 
     const handleThreepeatReplay = (
       restartAt: number,
@@ -3016,10 +3033,15 @@ export default function App() {
       logAudioDebug("play() called", { reason: `pending-autoplay-${reason}`, readyState: audio.readyState, pendingTrackId });
       void audio.play()
         .then(() => {
+          clearPendingAutoPlayRetryTimeout();
           logAudioDebug("play() resolved", { reason: `pending-autoplay-${reason}`, pendingTrackId });
           setIsPlaying(true);
         })
         .catch((error) => {
+          if (isIOS && pendingTrackId && currentTrackId === pendingTrackId) {
+            pendingAutoPlayTrackIdRef.current = pendingTrackId;
+            schedulePendingAutoPlayRetry(pendingTrackId);
+          }
           logAudioDebug("play() rejected", {
             reason: `pending-autoplay-${reason}`,
             pendingTrackId,
@@ -3094,6 +3116,7 @@ export default function App() {
     teardownAudioListenersRef.current = detachListeners;
 
     return () => {
+      clearPendingAutoPlayRetryTimeout();
       if (teardownAudioListenersRef.current === detachListeners) {
         teardownAudioListenersRef.current = null;
       }
