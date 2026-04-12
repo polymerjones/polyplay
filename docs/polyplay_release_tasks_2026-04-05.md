@@ -4716,6 +4716,36 @@ Audit all backup file systems for potential issues.
   - Confirm manual next/prev into a looped track also starts cleanly.
   - Confirm non-looped autoplay behavior is unchanged.
 
+**Follow-up diagnosis — 2026-04-11 Codex (looped track lands paused at loop start):**
+- user report and device screenshot indicate the destination looped track is reaching its loop start position, but playback is still paused
+- that points to the deferred pending-autoplay retry path reaching the seek step without ever crossing the `readyState >= HAVE_CURRENT_DATA` gate needed to call `play()`
+- on iOS, a newly assigned paused media element can remain at `HAVE_METADATA` after `load()` until `play()` is requested, so the current gate can deadlock looped autoplay
+- narrowest safe fix:
+  - lower the pending-autoplay retry readiness gate to `HAVE_METADATA` for the deferred retry path
+  - keep the rest of the loop-start seek behavior unchanged
+
+**Follow-up fix implemented — 2026-04-11 Codex (metadata gate for deferred loop autoplay):**
+- Exact fix made:
+  - Updated `retryPendingAutoPlayIfNeeded(...)` in `src/App.tsx` to allow the deferred pending-autoplay path to proceed once the media element reaches `HAVE_METADATA`, instead of waiting for `HAVE_CURRENT_DATA`.
+  - This keeps the existing loop-start seek, but removes the paused-state deadlock where iOS would never fetch enough current-frame data to trigger the old gate before `play()` was called.
+- Exact files changed:
+  - `src/App.tsx`
+  - `docs/polyplay_release_tasks_2026-04-05.md`
+- Why this was the safest implementation:
+  - It changes one readiness threshold inside the existing deferred autoplay path only.
+  - It does not alter playlist navigation, loop storage, shuffle behavior, or explicit user play/pause behavior.
+  - It matches the actual requirement for loop-start seeking, which only needs metadata.
+- Regression risk:
+  - Low.
+  - The main thing to confirm is that deferred autoplay now starts on looped next-track transitions without introducing double-start behavior.
+- QA completed:
+  - `npm run typecheck`
+- QA still needed:
+  - Let playback advance into a loop-selected next track and confirm it starts automatically.
+  - Confirm the destination track starts at the loop start, not at `0:00`.
+  - Confirm manual next/prev into a loop-selected track also starts.
+  - Confirm non-looped autoplay behavior is unchanged.
+
 ### 29. Repeat-button flash should only fire on return to off
 **Status:** fix implemented, awaiting QA
 
@@ -4856,6 +4886,59 @@ Audit all backup file systems for potential issues.
     - Confirm manual artwork upload still overrides reused artwork when both are set.
     - Confirm the source track’s own artwork remains unchanged.
     - Confirm reused video artwork still carries over a usable poster/frame.
+
+### 32. Crop workflow should not be ejected by playlist advance
+**Status:** diagnosis in progress
+
+**Observed request:**
+- while in fullscreen crop workflow, if playback hits the end of the selected loop, the app advances to the next playlist track
+- this ejects the user from loop editing or from the post-`Done` crop-ready fullscreen state where `Crop Audio` is still available
+
+**Desired behavior:**
+- while the user is in crop workflow on the current track, reaching the loop end should not advance to the next track
+- crop workflow should remain anchored to the current track until the user exits it intentionally
+
+**Codex notes:**
+- Diagnosis start — 2026-04-11 Codex:
+  - Files inspected:
+    - `src/App.tsx`
+    - `src/components/FullscreenPlayer.tsx`
+  - Findings:
+    - The recent playlist-loop fix advances on region-end whenever playlist navigation has more than one track.
+    - The app already tracks crop-related UI state separately:
+      - `loopRegion.editing` during active loop adjustment
+      - `hasCroppableLoop` after `Done`, when `Crop Audio` is still available
+      - `isFullscreenPlayerOpen` and `isCropAudioPromptOpen` for the current crop workflow surfaces
+    - That means the app can distinguish normal playback from active crop workflow without redesigning loop state.
+  - Narrow implementation plan:
+    - add a small crop-workflow guard in the region-end advance path
+    - while crop workflow is active, keep the existing same-track loop behavior instead of advancing
+    - leave normal playlist autoplay unchanged outside crop workflow
+  - Exact fix made:
+    - Added `isCropWorkflowActive` in `src/App.tsx`, derived from:
+      - `hasCroppableLoop`
+      - `currentLoop.editing`
+      - `isFullscreenPlayerOpen`
+      - `isCropAudioPromptOpen`
+    - Updated the region-loop `onTime` and `onEnded` handlers so playlist advance at loop end only happens when crop workflow is not active.
+    - While crop workflow is active, the existing same-track loop behavior now continues, so the user stays on the current track for loop adjustment or crop export.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Why this was the safest implementation:
+    - It does not redesign fullscreen, crop export, or playlist navigation.
+    - It reuses existing crop-related UI state already tracked by the app.
+    - It only narrows when the region-end playlist advance is allowed to fire.
+  - Regression risk:
+    - Low.
+    - The main risk is confirming playlist advance still happens during normal loop-selected playback outside crop workflow.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - In fullscreen loop editing, let playback hit loop end and confirm it stays on the same track.
+    - Tap `Done`, leave `Crop Audio` available, let playback hit loop end, and confirm it still stays on the same track.
+    - Open the crop prompt and confirm playback does not eject the user to the next track.
+    - Outside crop workflow, confirm a loop-selected playlist track still advances normally at loop end.
 
 ---
 

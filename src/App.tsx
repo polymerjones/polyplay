@@ -2516,6 +2516,11 @@ export default function App() {
     () => currentLoopMode === "region" && currentLoop.end > currentLoop.start,
     [currentLoop, currentLoopMode]
   );
+  const isCropWorkflowActive = useMemo(
+    () =>
+      hasCroppableLoop && (currentLoop.editing || isFullscreenPlayerOpen || isCropAudioPromptOpen),
+    [currentLoop.editing, hasCroppableLoop, isCropAudioPromptOpen, isFullscreenPlayerOpen]
+  );
 
   const getSafeActiveLoopStart = () => {
     if (currentLoopMode !== "region" || !currentLoop.active || currentLoop.end <= currentLoop.start) return null;
@@ -2963,7 +2968,7 @@ export default function App() {
       const nextTime = audio.currentTime || 0;
       const loopRegion = currentTrackId ? loopByTrack[currentTrackId] : undefined;
       if (currentLoopMode === "region" && loopRegion && loopRegion.end > loopRegion.start) {
-        if (playbackNavigationTracks.length > 1 && nextTime >= loopRegion.end) {
+        if (!isCropWorkflowActive && playbackNavigationTracks.length > 1 && nextTime >= loopRegion.end) {
           advancePlaybackAfterTrackCompletion();
           return;
         }
@@ -2987,7 +2992,7 @@ export default function App() {
       const pendingTrackId = pendingAutoPlayTrackIdRef.current;
       if (!pendingTrackId || pendingTrackId !== currentTrackId) return;
       if (audioSrcRef.current !== currentAudioUrl || !currentAudioUrl) return;
-      if (audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      if (audio.readyState < HTMLMediaElement.HAVE_METADATA) return;
       const loopRegion = currentTrackId ? loopByTrack[currentTrackId] : undefined;
       if (currentLoopMode === "region" && loopRegion && loopRegion.end > loopRegion.start) {
         const effectiveDuration = getSafeDuration(audio.duration) || getSafeDuration(duration);
@@ -3036,7 +3041,7 @@ export default function App() {
     const onEnded = () => {
       const loopRegion = currentTrackId ? loopByTrack[currentTrackId] : undefined;
       if (currentLoopMode === "region" && loopRegion && loopRegion.end > loopRegion.start) {
-        if (playbackNavigationTracks.length > 1) {
+        if (!isCropWorkflowActive && playbackNavigationTracks.length > 1) {
           advancePlaybackAfterTrackCompletion();
           return;
         }
@@ -3086,7 +3091,7 @@ export default function App() {
       }
       detachListeners();
     };
-  }, [currentTrackId, loopByTrack, currentLoopMode, repeatTrackMode, isShuffleEnabled, playbackNavigationTracks, dimMode]);
+  }, [currentTrackId, loopByTrack, currentLoopMode, repeatTrackMode, isShuffleEnabled, playbackNavigationTracks, dimMode, isCropWorkflowActive]);
 
   const updateAura = async (trackId: string, delta: number, options?: { skipHaptic?: boolean }) => {
     let nextAuraForDb: number | null = null;
