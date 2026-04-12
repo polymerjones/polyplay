@@ -69,7 +69,7 @@ export function TransferLaneDropZone({
     await onFileSelected(event.currentTarget.files?.[0] || null);
   };
 
-  const onDragOver = (event: DragEvent<HTMLButtonElement>) => {
+  const onDragOver = (event: DragEvent<HTMLDivElement>) => {
     if (disabled || busy) return;
     event.preventDefault();
     setIsDragOver(true);
@@ -77,7 +77,7 @@ export function TransferLaneDropZone({
 
   const onDragLeave = () => setIsDragOver(false);
 
-  const onDrop = async (event: DragEvent<HTMLButtonElement>) => {
+  const onDrop = async (event: DragEvent<HTMLDivElement>) => {
     if (disabled || busy) return;
     event.preventDefault();
     setIsDragOver(false);
@@ -108,14 +108,22 @@ export function TransferLaneDropZone({
         </button>
       </div>
       {hint && <div className="transfer-lane__hint">{hint}</div>}
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={disabled || busy ? -1 : 0}
         className={`transfer-lane__zone ${isDragOver ? "is-drag-over" : ""} ${isArmed ? "is-armed" : ""}`.trim()}
         onClick={pick}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={(event) => void onDrop(event)}
-        disabled={disabled || busy}
+        onKeyDown={(event) => {
+          if (disabled || busy) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            pick();
+          }
+        }}
+        aria-disabled={disabled || busy}
       >
         {isArmed && onClearRequest && !disabled && !busy && (
           <button
@@ -161,7 +169,7 @@ export function TransferLaneDropZone({
             </>
           )}
         </span>
-      </button>
+      </div>
       <input ref={inputRef} type="file" accept={accept} onChange={(event) => void onChange(event)} className="transfer-lane__input" />
     </div>
   );

@@ -107,6 +107,7 @@ const SUPPORT_URL = "/support.html";
 const CAN_USE_IOS_NATIVE_AUDIO_IMPORT = canUseIosNativeAudioImport();
 const CAN_USE_IOS_NATIVE_ARTWORK_IMPORT = canUseIosNativeAudioImport();
 const ARTIST_MEMORY_KEY = "polyplay_importArtist_v1";
+const AUTO_ART_ARTWORK_SOURCE_VALUE = "__auto_art__";
 type AdminHapticTone = "success" | "heavy";
 type UploadArtworkSource = "manual" | "metadata";
 type UploadMetadataPhase = "idle" | "loading" | "ready" | "skipped";
@@ -1782,14 +1783,21 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
     showImportNotice("IMPORTING TRACK...");
 
     try {
+      const shouldUseAutoArt = Boolean(
+        uploadArtworkSourceTrackId === AUTO_ART_ARTWORK_SOURCE_VALUE && (!uploadArt || uploadArtSource === "metadata")
+      );
       const shouldUseReusedArtwork = Boolean(
-        uploadArtworkSourceTrackId && (!uploadArt || uploadArtSource === "metadata")
+        uploadArtworkSourceTrackId &&
+        uploadArtworkSourceTrackId !== AUTO_ART_ARTWORK_SOURCE_VALUE &&
+        (!uploadArt || uploadArtSource === "metadata")
       );
       const artwork =
-        shouldUseReusedArtwork
+        shouldUseAutoArt
+          ? { artPoster: null, artVideo: null, posterCaptureFailed: false }
+          : shouldUseReusedArtwork
           ? { ...(await getTrackArtworkPayloadFromDb(uploadArtworkSourceTrackId)), posterCaptureFailed: false }
           : await buildArtworkPayload(uploadArt, uploadArtPosterBlob, uploadArtFrameTime, uploadArtSource)
-      if (!shouldUseReusedArtwork && uploadArt && !artwork.artPoster && !artwork.artVideo) {
+      if (!shouldUseAutoArt && !shouldUseReusedArtwork && uploadArt && !artwork.artPoster && !artwork.artVideo) {
         throw new Error("Armed artwork could not be prepared for import.");
       }
       if (shouldUseReusedArtwork && !artwork.artPoster && !artwork.artVideo) {
@@ -2893,15 +2901,18 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
                 className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
               >
                 <option value="">No reused artwork</option>
+                <option value={AUTO_ART_ARTWORK_SOURCE_VALUE}>Generate Auto Art</option>
                 {importArtworkSourceOptions.map((option) => (
                   <option key={`import-art-${option.value}`} value={option.value}>
                     {option.label}
                   </option>
                 ))}
               </select>
-      <span className="text-xs text-slate-400">
+              <span className="text-xs text-slate-400">
                 {uploadArt && uploadArtSource !== "metadata"
                   ? "Manual uploaded artwork is currently selected and will override reused artwork."
+                  : uploadArtworkSourceTrackId === AUTO_ART_ARTWORK_SOURCE_VALUE
+                    ? "Auto Art will override embedded metadata artwork for this import."
                   : uploadArtworkSourceTrackId
                     ? "Reused artwork will override embedded metadata artwork for this import."
                     : "Optional: copy stored artwork from another track instead of uploading it again."}

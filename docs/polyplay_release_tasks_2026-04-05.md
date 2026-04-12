@@ -5124,6 +5124,35 @@ Audit all backup file systems for potential issues.
     - Import an MP3 with embedded artwork, clear the artwork slot, and confirm the track can fall back to auto art.
     - Confirm normal dropzone click/browse behavior still works on both lanes.
 
+**Follow-up diagnosis — 2026-04-12 Codex (clear control not visible + explicit auto-art option needed):**
+- the initial `✕` control was rendered as a nested button inside the dropzone’s outer button, which is invalid HTML and can be suppressed or behave unreliably in Safari/WebKit
+- user also needs an explicit import-dropdown path for auto art, not just a clear action, so embedded metadata artwork can be intentionally bypassed without ambiguity
+
+**Follow-up fix implemented — 2026-04-12 Codex (clear-control structure + Generate Auto Art option):**
+- Exact fix made:
+  - Updated `src/admin/TransferLaneDropZone.tsx` so the dropzone host is now a keyboard-accessible `div` with `role="button"` instead of a button containing another button.
+  - This makes the top-right `✕` clear control valid and visible/clickable in Safari/WebKit.
+  - Added `Generate Auto Art` as an explicit option in the import `Reuse artwork from existing track` dropdown in `src/admin/AdminApp.tsx`.
+  - Updated import submit precedence so when `Generate Auto Art` is selected and there is no manual uploaded artwork, the import intentionally ignores embedded metadata artwork and allows the existing auto-art path to generate artwork.
+- Exact files changed:
+  - `src/admin/TransferLaneDropZone.tsx`
+  - `src/admin/AdminApp.tsx`
+  - `docs/polyplay_release_tasks_2026-04-05.md`
+- Why this was the safest implementation:
+  - It fixes the invalid nested-button structure instead of layering more CSS over it.
+  - It keeps manual uploaded artwork as the highest-priority source.
+  - It adds one explicit import-only auto-art selector without redesigning the broader artwork system.
+- Regression risk:
+  - Low.
+  - Main QA is confirming the clear control is now visible/usable on Safari/iPhone and that `Generate Auto Art` beats metadata artwork only when intended.
+- QA completed:
+  - `npm run typecheck`
+- QA still needed:
+  - Confirm the top-right `✕` is visible on armed import audio and artwork lanes in Safari/iPhone.
+  - Confirm tapping `✕` clears the lane without breaking normal browse/drop behavior.
+  - Import an MP3 with embedded artwork, choose `Generate Auto Art`, and confirm auto art is used instead of embedded artwork.
+  - Confirm manual uploaded artwork still overrides `Generate Auto Art`.
+
 **Follow-up diagnosis — 2026-04-11 Codex (Cinema looped-to-looped autoplay still pausing):**
 - user reports a loop-selected track can advance correctly in Cinema Mode, but when the destination track also has an active loop it can still land paused
 - the remaining likely seam is in `retryPendingAutoPlayIfNeeded(...)` inside `src/App.tsx`
