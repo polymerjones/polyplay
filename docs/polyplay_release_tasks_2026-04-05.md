@@ -5229,6 +5229,58 @@ Audit all backup file systems for potential issues.
     - Confirm built-in demo tracks are still not packaged into the full vault.
     - Confirm a demo-only playlist with no imported tracks is still excluded as before.
 
+### 37. Crop actions should allow rename before confirmation
+**Status:** diagnosis in progress
+
+**Observed request:**
+- before `Crop Existing Track` or `Crop to New Track` is confirmed, the user wants a rename field in the crop modal
+- for new-track crops, the user should be able to set the new track name before the cropped track is created
+
+**Desired behavior:**
+- crop modal should include a rename box
+- `Crop Existing Track` should optionally rename the current track if the field is changed
+- `Crop to New Track` should use the entered name for the new cropped track
+
+**Codex notes:**
+- Diagnosis start — 2026-04-12 Codex:
+  - Files inspected:
+    - `src/App.tsx`
+    - `src/lib/db.ts`
+  - Findings:
+    - The existing crop modal in `src/App.tsx` is already the clean confirmation seam.
+    - `replaceAudioInDb(...)` already accepts an optional replacement title.
+    - `duplicateTrackWithAudioInDb(...)` already accepts an optional title override.
+    - That means rename support can be added in the modal without changing the underlying crop/audio pipeline.
+  - Narrow implementation plan:
+    - add one crop-name draft state in `src/App.tsx`
+    - seed it from the current track title when opening the crop prompt
+    - pass the trimmed value into existing/new-track crop actions
+  - Exact fix made:
+    - Added `cropRenameValue` state in `src/App.tsx`.
+    - The crop modal now seeds that field from the current track title when opened.
+    - Added a `Track Name` input to the existing crop confirmation modal in `src/App.tsx`.
+    - `Crop Existing Track` now passes the trimmed rename value into `replaceAudioInDb(...)`, falling back to the current title when left unchanged/blank.
+    - `Crop to New Track` now passes the trimmed rename value into `duplicateTrackWithAudioInDb(...)`, falling back to the existing `${currentTrack.title} (Loop Crop)` naming when blank.
+    - Added matching crop-rename input styling in `styles.css`.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Why this was the safest implementation:
+    - It reuses the existing crop modal and the title override support already present in the DB helpers.
+    - It does not alter crop audio generation, playback logic, or artwork behavior.
+    - It keeps the rename step exactly at the existing user confirmation seam.
+  - Regression risk:
+    - Low.
+    - Main QA is confirming blank/unchanged values still preserve the old behavior and that both crop actions use the entered title correctly.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Open the crop modal and confirm the rename field is prefilled with the current track title.
+    - Use `Crop Existing Track` with a changed title and confirm the current track is renamed after cropping.
+    - Use `Crop to New Track` with a changed title and confirm the new track is created with that title.
+    - Leave the field unchanged/blank and confirm the previous default naming behavior still works.
+
 **Follow-up diagnosis — 2026-04-11 Codex (Cinema looped-to-looped autoplay still pausing):**
 - user reports a loop-selected track can advance correctly in Cinema Mode, but when the destination track also has an active loop it can still land paused
 - the remaining likely seam is in `retryPendingAutoPlayIfNeeded(...)` inside `src/App.tsx`

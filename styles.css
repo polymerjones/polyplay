@@ -6854,6 +6854,38 @@ html[data-theme="light"] .playlist-selector select {
   align-items: center;
 }
 
+.crop-audio-card__rename {
+  display: grid;
+  gap: 6px;
+}
+
+.crop-audio-card__rename-label {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: rgba(223, 232, 246, 0.76);
+}
+
+.crop-audio-card__rename-input {
+  width: 100%;
+  min-height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 214, 122, 0.22);
+  background: rgba(10, 14, 24, 0.84);
+  color: rgba(247, 250, 255, 0.95);
+  padding: 0 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.crop-audio-card__rename-input::placeholder {
+  color: rgba(206, 214, 228, 0.42);
+}
+
+.crop-audio-card__rename-input:focus {
+  border-color: rgba(255, 214, 122, 0.52);
+  box-shadow: 0 0 0 3px rgba(255, 214, 122, 0.14);
+}
+
 .crop-audio-card__actions {
   display: flex;
   flex-wrap: wrap;

@@ -417,6 +417,7 @@ export default function App() {
   const [overlayPage, setOverlayPage] = useState<"settings" | "vault" | "playlists" | null>(null);
   const [isCropAudioPromptOpen, setIsCropAudioPromptOpen] = useState(false);
   const [isCropAudioBusy, setIsCropAudioBusy] = useState(false);
+  const [cropRenameValue, setCropRenameValue] = useState("");
   const [isFullscreenCinemaMode, setIsFullscreenCinemaMode] = useState(false);
   const [settingsPanelMode, setSettingsPanelMode] = useState<"upload" | "manage">("upload");
   const [isSettingsFrameLoading, setIsSettingsFrameLoading] = useState(false);
@@ -1263,6 +1264,12 @@ export default function App() {
     setOverlayPage(null);
     setIsTipsOpen(false);
     setShowOpenState(false);
+    setLastLoadedVaultName(null);
+    try {
+      localStorage.removeItem(LAST_LOADED_VAULT_NAME_KEY);
+    } catch {
+      // Ignore localStorage failures.
+    }
     clearActivePlaylistDirty();
     logAudioDebug("nukeAppData:end");
   };
@@ -3609,12 +3616,14 @@ export default function App() {
       return;
     }
     fireLightHaptic();
+    setCropRenameValue(currentTrack?.title?.trim() || "");
     setIsFullscreenPlayerOpen(false);
     setIsCropAudioPromptOpen(true);
   };
 
   const closeCropAudioPrompt = () => {
     if (isCropAudioBusy) return;
+    setCropRenameValue("");
     setIsCropAudioPromptOpen(false);
   };
 
@@ -3633,11 +3642,12 @@ export default function App() {
       setIsCropAudioBusy(true);
       const targetTrackId = currentTrackId;
       const cropped = await cropCurrentLoopToWav();
-      await replaceAudioInDb(targetTrackId, cropped, currentTrack.title);
+      await replaceAudioInDb(targetTrackId, cropped, cropRenameValue.trim() || currentTrack.title);
       resetLoopStateForTrack(targetTrackId);
       setCurrentTime(0);
       setDuration(0);
       await refreshTracks({ allowEmptyDemoFallback: false });
+      setCropRenameValue("");
       setIsCropAudioPromptOpen(false);
       markActivePlaylistDirty();
       fireSuccessHaptic();
@@ -3655,11 +3665,12 @@ export default function App() {
       setIsCropAudioBusy(true);
       const cropped = await cropCurrentLoopToWav();
       const nextTrackId = await duplicateTrackWithAudioInDb(currentTrackId, cropped, {
-        title: `${currentTrack.title} (Loop Crop)`,
+        title: cropRenameValue.trim() || `${currentTrack.title} (Loop Crop)`,
         sub: currentTrack.sub || "Imported"
       });
       await refreshTracks({ allowEmptyDemoFallback: false });
       playTrack(nextTrackId, true);
+      setCropRenameValue("");
       setIsCropAudioPromptOpen(false);
       fireSuccessHaptic();
       setVaultStatus("Created a new cropped track from the selected loop.", "success");
@@ -4936,7 +4947,18 @@ export default function App() {
           <div className="hint">
             {hasTracks
               ? lastLoadedVaultName
-                ? `Vault loaded: ${lastLoadedVaultName}`
+                ? (
+                  <span className="vault-loaded-pill" aria-label={`Vault loaded: ${lastLoadedVaultName}`}>
+                    <span className="vault-loaded-pill__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" className="vault-loaded-pill__icon-svg">
+                        <path d="M5.5 5.5h13v13h-13z" />
+                        <path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z" />
+                        <path d="M12 10v4M10 12h4" />
+                      </svg>
+                    </span>
+                    <span className="vault-loaded-pill__label">{lastLoadedVaultName}</span>
+                  </span>
+                )
                 : "Tap track to play • Tap playbar art for fullscreen"
               : "Create/select a playlist, then import tracks."}
           </div>
@@ -5564,6 +5586,17 @@ export default function App() {
                   Loop end <strong>{formatTime(currentLoop.end)}</strong>
                 </span>
               </div>
+              <label className="crop-audio-card__rename">
+                <span className="crop-audio-card__rename-label">Track Name</span>
+                <input
+                  type="text"
+                  value={cropRenameValue}
+                  onChange={(event) => setCropRenameValue(event.currentTarget.value)}
+                  placeholder="Enter track name"
+                  disabled={isCropAudioBusy}
+                  className="crop-audio-card__rename-input"
+                />
+              </label>
               <div className="crop-audio-card__actions">
                 <button
                   type="button"
