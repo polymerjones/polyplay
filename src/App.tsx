@@ -417,6 +417,7 @@ export default function App() {
   const [overlayPage, setOverlayPage] = useState<"settings" | "vault" | "playlists" | null>(null);
   const [isCropAudioPromptOpen, setIsCropAudioPromptOpen] = useState(false);
   const [isCropAudioBusy, setIsCropAudioBusy] = useState(false);
+  const [isFullscreenCinemaMode, setIsFullscreenCinemaMode] = useState(false);
   const [settingsPanelMode, setSettingsPanelMode] = useState<"upload" | "manage">("upload");
   const [isSettingsFrameLoading, setIsSettingsFrameLoading] = useState(false);
   const [isTipsOpen, setIsTipsOpen] = useState(false);
@@ -2518,9 +2519,16 @@ export default function App() {
   );
   const isCropWorkflowActive = useMemo(
     () =>
-      hasCroppableLoop && (currentLoop.editing || isFullscreenPlayerOpen || isCropAudioPromptOpen),
-    [currentLoop.editing, hasCroppableLoop, isCropAudioPromptOpen, isFullscreenPlayerOpen]
+      hasCroppableLoop &&
+      (currentLoop.editing || isCropAudioPromptOpen || (isFullscreenPlayerOpen && !isFullscreenCinemaMode)),
+    [currentLoop.editing, hasCroppableLoop, isCropAudioPromptOpen, isFullscreenCinemaMode, isFullscreenPlayerOpen]
   );
+
+  useEffect(() => {
+    if (!isFullscreenPlayerOpen) {
+      setIsFullscreenCinemaMode(false);
+    }
+  }, [isFullscreenPlayerOpen]);
 
   const getSafeActiveLoopStart = () => {
     if (currentLoopMode !== "region" || !currentLoop.active || currentLoop.end <= currentLoop.start) return null;
@@ -5106,6 +5114,7 @@ export default function App() {
           onFinishLoopAdjustment={finishLoopAdjustment}
           canCropAudio={hasCroppableLoop}
           onOpenCropAudioPrompt={openCropAudioPrompt}
+          onCinemaModeChange={setIsFullscreenCinemaMode}
           onAuraUp={() => {
             if (!currentTrackId) return;
             handleAuraUp(currentTrackId);

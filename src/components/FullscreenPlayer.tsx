@@ -56,6 +56,7 @@ type Props = {
   onFinishLoopAdjustment: () => void;
   canCropAudio?: boolean;
   onOpenCropAudioPrompt?: () => void;
+  onCinemaModeChange?: (isCinemaMode: boolean) => void;
   onAuraUp: () => void;
   onSkip: (delta: number) => void;
 };
@@ -94,6 +95,7 @@ export function FullscreenPlayer({
   onFinishLoopAdjustment,
   canCropAudio = false,
   onOpenCropAudioPrompt,
+  onCinemaModeChange,
   onAuraUp,
   onSkip
 }: Props) {
@@ -146,6 +148,10 @@ export function FullscreenPlayer({
   useEffect(() => {
     setIsArtworkVideoReady(false);
   }, [track.artVideoUrl, track.id]);
+
+  useEffect(() => {
+    onCinemaModeChange?.(isCinemaMode);
+  }, [isCinemaMode, onCinemaModeChange]);
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;

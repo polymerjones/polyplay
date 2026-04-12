@@ -4940,6 +4940,35 @@ Audit all backup file systems for potential issues.
     - Open the crop prompt and confirm playback does not eject the user to the next track.
     - Outside crop workflow, confirm a loop-selected playlist track still advances normally at loop end.
 
+**Follow-up diagnosis — 2026-04-11 Codex (Cinema Mode wrongly treated as crop workflow):**
+- the first crop-workflow guard used `isFullscreenPlayerOpen` as part of the blocking condition
+- that was too broad, because Cinema Mode is entered inside fullscreen but should still behave like normal playback and advance to the next track
+- the narrowest safe correction is to distinguish fullscreen Cinema Mode from fullscreen crop-ready state, then only suppress advance for non-cinema crop workflow
+
+**Follow-up fix implemented — 2026-04-11 Codex (Cinema Mode exception for crop-workflow guard):**
+- Exact fix made:
+  - Added an `onCinemaModeChange` callback to `src/components/FullscreenPlayer.tsx` so fullscreen can report whether it is currently in Cinema Mode.
+  - Added `isFullscreenCinemaMode` state in `src/App.tsx`.
+  - Narrowed `isCropWorkflowActive` so fullscreen only blocks playlist advance when it is non-cinema fullscreen with a croppable loop, plus the existing editing / crop-prompt cases.
+  - Added a reset so `isFullscreenCinemaMode` clears when fullscreen closes.
+- Exact files changed:
+  - `src/App.tsx`
+  - `src/components/FullscreenPlayer.tsx`
+  - `docs/polyplay_release_tasks_2026-04-05.md`
+- Why this was the safest implementation:
+  - It preserves the earlier crop-workflow containment fix.
+  - It adds only one small lifted UI-state signal instead of redesigning fullscreen or loop ownership.
+  - It restores the intended distinction: Cinema Mode is playback mode, not crop workflow.
+- Regression risk:
+  - Low.
+  - Main QA is just confirming the two fullscreen states now diverge correctly at loop end.
+- QA completed:
+  - `npm run typecheck`
+- QA still needed:
+  - In Cinema Mode on a loop-selected track, confirm playback advances to the next track normally.
+  - In non-cinema fullscreen with `Crop Audio` still available, confirm playback stays on the same track at loop end.
+  - In active loop editing, confirm playback stays on the same track at loop end.
+
 ---
 
 ## End-of-day wrap
