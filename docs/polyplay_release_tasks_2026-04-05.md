@@ -5027,6 +5027,103 @@ Audit all backup file systems for potential issues.
     - In `Update Artwork`, select a destination track and a source track, without uploading a file, and confirm artwork copies over.
     - Confirm `Update Artwork` with a manually uploaded file still behaves unchanged.
 
+### 34. Vault loaded label should clear on reset and render more discreetly
+**Status:** diagnosis in progress
+
+**Observed request:**
+- after factory reset, the header can still show a stale `Vault loaded: ...` label, which is inaccurate
+- the current vault label is too visually prominent in the main header
+
+**Desired behavior:**
+- full reset should clear any persisted loaded-vault label
+- when shown, the vault label should read as a smaller, more discreet trust hint
+
+**Codex notes:**
+- Diagnosis start — 2026-04-12 Codex:
+  - Files inspected:
+    - `src/App.tsx`
+    - `styles.css`
+  - Findings:
+    - `lastLoadedVaultName` is initialized from `LAST_LOADED_VAULT_NAME_KEY` and updated on successful vault import.
+    - The full reset path in `nukeAppData()` does not clear that state or its localStorage key, so stale vault labels can survive a factory reset.
+    - The vault label currently reuses the generic `.hint` text render with full-sentence copy, so a smaller inline badge treatment can be added without introducing a new UI surface.
+  - Narrow implementation plan:
+    - clear `lastLoadedVaultName` and `LAST_LOADED_VAULT_NAME_KEY` inside the full reset path
+    - keep the label in the existing hint slot, but render it as a smaller vault-badge style
+  - Exact fix made:
+    - Updated `nukeAppData()` in `src/App.tsx` to clear `lastLoadedVaultName` state and remove `LAST_LOADED_VAULT_NAME_KEY` from localStorage during full reset.
+    - Updated the main header hint render in `src/App.tsx` so the loaded-vault state now appears as a smaller inline vault pill with iconography instead of sentence-style helper copy.
+    - Added matching vault-pill styles in `styles.css`.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Why this was the safest implementation:
+    - It reuses the existing persisted vault-name key and existing header hint slot.
+    - It does not alter vault import/export logic.
+    - It fixes the inaccurate reset state and presentation layer only.
+  - Regression risk:
+    - Low.
+    - Main QA is confirming reset clears the badge and that vault import still restores it correctly.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Import a vault and confirm the smaller vault badge appears with the correct file name.
+    - Run factory reset and confirm the vault badge disappears immediately and stays cleared after reload.
+    - Confirm the normal helper text still appears when there is no loaded vault name.
+
+### 35. Import dropzones should allow clearing armed files
+**Status:** diagnosis in progress
+
+**Observed request:**
+- once import audio or import artwork is armed in its dropzone, the user has no direct way to clear that slot
+- this blocks trustful fallback behavior, such as removing embedded artwork so the user can use auto art instead
+
+**Desired behavior:**
+- import audio and import artwork dropzones should expose a clear affordance when armed
+- clearing the slot should remove the loaded file from that lane without resetting unrelated form state
+
+**Codex notes:**
+- Diagnosis start — 2026-04-12 Codex:
+  - Files inspected:
+    - `src/admin/TransferLaneDropZone.tsx`
+    - `src/admin/AdminApp.tsx`
+    - `styles.css`
+  - Findings:
+    - `TransferLaneDropZone` already knows when a lane is armed, but it has no optional clear action.
+    - The import form already has narrow clear handlers available through `onPickUploadAudio(null)` and `onPickUploadArtwork(null)`.
+    - The safest seam is a small optional clear button rendered inside the dropzone only when the caller opts in.
+  - Narrow implementation plan:
+    - add optional clear props to `TransferLaneDropZone`
+    - render a top-right clear button only when armed and enabled
+    - wire it only to the import audio and import artwork lanes for this pass
+  - Exact fix made:
+    - Added optional `onClearRequest` / `clearLabel` props to `src/admin/TransferLaneDropZone.tsx`.
+    - Added a top-right `✕` clear control inside the dropzone when a lane is armed and clearable.
+    - Wired the clear control only to the import audio and import artwork lanes in `src/admin/AdminApp.tsx`.
+    - Clearing import audio now runs the existing `onPickUploadAudio(null)` path.
+    - Clearing import artwork now runs the existing `onPickUploadArtwork(null)` path, which lets the user remove embedded/loaded artwork and fall back to auto art or another artwork source.
+    - Added matching clear-button styling in `styles.css`.
+  - Exact files changed:
+    - `src/admin/TransferLaneDropZone.tsx`
+    - `src/admin/AdminApp.tsx`
+    - `styles.css`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Why this was the safest implementation:
+    - It reuses existing null-file clear paths instead of inventing new import state behavior.
+    - It only adds a lane-local clear affordance and does not redesign the import form.
+    - It is scoped to the two trust-critical import lanes requested in this pass.
+  - Regression risk:
+    - Low.
+    - Main QA is confirming the clear button does not interfere with normal dropzone click/pick behavior and that clearing artwork really restores the auto-art path.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Arm import audio, tap the `✕`, and confirm the audio slot clears cleanly.
+    - Arm import artwork, tap the `✕`, and confirm the artwork slot clears cleanly.
+    - Import an MP3 with embedded artwork, clear the artwork slot, and confirm the track can fall back to auto art.
+    - Confirm normal dropzone click/browse behavior still works on both lanes.
+
 **Follow-up diagnosis — 2026-04-11 Codex (Cinema looped-to-looped autoplay still pausing):**
 - user reports a loop-selected track can advance correctly in Cinema Mode, but when the destination track also has an active loop it can still land paused
 - the remaining likely seam is in `retryPendingAutoPlayIfNeeded(...)` inside `src/App.tsx`

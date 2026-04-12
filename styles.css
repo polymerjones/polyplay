@@ -452,6 +452,48 @@ main,
   user-select: none;
 }
 
+.vault-loaded-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: min(100%, 320px);
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(14, 20, 30, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+}
+
+.vault-loaded-pill__icon {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(193, 221, 255, 0.72);
+  flex: 0 0 auto;
+}
+
+.vault-loaded-pill__icon-svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.45;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.vault-loaded-pill__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .gear-link,
 .back-link {
   width: 36px;
@@ -5572,6 +5614,34 @@ body.mute-freeze .track-backdrop {
   display: grid;
   gap: 4px;
   transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.transfer-lane__clear-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 14, 22, 0.84);
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.24),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  z-index: 2;
+}
+
+.transfer-lane__clear-btn:hover {
+  background: rgba(20, 28, 40, 0.94);
+}
+
+.transfer-lane__clear-btn:active {
+  transform: scale(0.96);
 }
 
 .transfer-lane__zone::after {

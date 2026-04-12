@@ -11,6 +11,8 @@ type Props = {
   disabled?: boolean;
   busy?: boolean;
   armed?: boolean;
+  onClearRequest?: () => void | Promise<void>;
+  clearLabel?: string;
   onPickRequest?: (fallbackPick: () => void) => void | Promise<void>;
   onFileSelected: (file: File | null) => void | Promise<void>;
 };
@@ -26,6 +28,8 @@ export function TransferLaneDropZone({
   disabled = false,
   busy = false,
   armed,
+  onClearRequest,
+  clearLabel,
   onPickRequest,
   onFileSelected
 }: Props) {
@@ -113,6 +117,20 @@ export function TransferLaneDropZone({
         onDrop={(event) => void onDrop(event)}
         disabled={disabled || busy}
       >
+        {isArmed && onClearRequest && !disabled && !busy && (
+          <button
+            type="button"
+            className="transfer-lane__clear-btn"
+            aria-label={clearLabel || `Clear ${label}`}
+            title={clearLabel || `Clear ${label}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              void onClearRequest();
+            }}
+          >
+            ✕
+          </button>
+        )}
         <span className="transfer-lane__icon-bg" aria-hidden="true">
           {iconType === "audio" ? (
             <svg viewBox="0 0 24 24" className="transfer-lane__icon-svg">

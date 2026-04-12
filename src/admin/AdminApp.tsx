@@ -2806,6 +2806,8 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
               accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,.wav,.mp3,.m4a,.aac,.mp4,.mov"
               selectedFileName={uploadAudio?.name}
               armed={Boolean(uploadAudio)}
+              onClearRequest={() => void onPickUploadAudio(null)}
+              clearLabel="Clear import audio"
               onPickRequest={CAN_USE_IOS_NATIVE_AUDIO_IMPORT ? (fallbackPick) => void onPickUploadAudioNative(fallbackPick) : undefined}
               onFileSelected={(file) => void onPickUploadAudio(file)}
             />
@@ -2877,6 +2879,8 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
               accept="image/*,video/mp4,video/quicktime,.mov"
               selectedFileName={uploadArt?.name}
               armed={Boolean(uploadArt)}
+              onClearRequest={() => void onPickUploadArtwork(null)}
+              clearLabel="Clear import artwork"
               onPickRequest={CAN_USE_IOS_NATIVE_ARTWORK_IMPORT ? (fallbackPick) => void onPickUploadArtworkNative(fallbackPick) : undefined}
               onFileSelected={(file) => void onPickUploadArtwork(file)}
             />
