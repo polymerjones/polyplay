@@ -5349,6 +5349,96 @@ Audit all backup file systems for potential issues.
     - Tap the reused-artwork dropdown directly and confirm it still opens normally.
     - Confirm `Update Artwork` still works from both file upload and reused-artwork selection paths.
 
+### 39. Safari desktop input polish: journal save, escape stack, repeat FX parity
+**Status:** diagnosis in progress
+
+**Observed request:**
+- in Gratitude Journal on Safari desktop, `Shift+Enter` should save and close an open note
+- pressing `Escape` from the journal/gratitude flow should return the user to fullscreen player instead of dropping all the way back to the playlist page
+- desktop repeat FX should only flash when repeat returns to `off`
+
+**Desired behavior:**
+- `Shift+Enter` saves journal compose/edit textareas
+- overlay/modal `Escape` handling should not also close fullscreen underneath
+- repeat should not show the old repeat-3 activation flash on desktop
+
+**Codex notes:**
+- Diagnosis start — 2026-04-12 Codex:
+  - Files inspected:
+    - `src/App.tsx`
+    - `src/components/JournalModal.tsx`
+    - `src/components/PlayerControls.tsx`
+  - Findings:
+    - Journal textareas currently only suppress Enter; they do not expose a keyboard save shortcut.
+    - The global `Escape` handler in `src/App.tsx` always closes fullscreen immediately, even when journal/gratitude is the topmost surface and should consume Escape first.
+    - `src/components/PlayerControls.tsx` still contains a local repeat-3 activation animation path, which conflicts with the requested “flash only on return to off” behavior.
+  - Narrow implementation plan:
+    - add `Shift+Enter` save behavior to journal composer and edit textareas
+    - gate the global fullscreen-closing Escape path while journal/gratitude is open
+    - remove the repeat-3 activation animation path from `PlayerControls`
+  - Exact fix made:
+    - Updated the global `Escape` handler in `src/App.tsx` so it now leaves fullscreen alone while journal or gratitude is open, allowing the topmost surface to consume Escape first.
+    - Added `Shift+Enter` save behavior to the Gratitude Journal composer and entry-edit textareas in `src/components/JournalModal.tsx`.
+    - Removed the remaining local repeat-3 activation animation path from `src/components/PlayerControls.tsx`, leaving repeat flash behavior driven only by the off-state flash tick from `src/App.tsx`.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `src/components/JournalModal.tsx`
+    - `src/components/PlayerControls.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Why this was the safest implementation:
+    - It stays inside existing keyboard handlers and existing repeat presentation logic.
+    - It does not redesign journal flow, modal stack, or repeat mode sequencing.
+    - It fixes the exact desktop behavior seams only.
+  - Regression risk:
+    - Low.
+    - Main QA is confirming Escape now respects surface order and that Shift+Enter only saves when the textarea has content.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - In Gratitude Journal composer on Safari desktop, press `Shift+Enter` and confirm it saves/closes.
+    - Edit an existing Gratitude Journal note, press `Shift+Enter`, and confirm it saves/closes.
+    - Open journal or gratitude from fullscreen, press `Escape`, and confirm the app returns to fullscreen instead of the main playlist page.
+    - On desktop, cycle repeat and confirm the flash appears only when returning to `off`.
+
+### 40. Import Return/Enter should submit more reliably across the import form
+**Status:** diagnosis in progress
+
+**Observed request:**
+- Enter/Return currently seems to activate import only when the track title field is focused
+
+**Desired behavior:**
+- when the import form is armed, Enter/Return should submit reliably from the import form’s normal text-entry context, not just one field
+
+**Codex notes:**
+- Diagnosis start — 2026-04-12 Codex:
+  - Files inspected:
+    - `src/admin/AdminApp.tsx`
+  - Findings:
+    - The import form already has a shared `requestUploadSubmitFromKeyboard(...)` helper.
+    - The title and artist inputs also call that helper directly.
+    - The safest remaining seam is event timing/propagation across the import form, so the narrowest fix is to catch Enter earlier at the form level rather than widening field-specific logic again.
+  - Narrow implementation plan:
+    - move the import form keyboard-submit hook from bubble phase to capture phase
+    - keep the same exclusions for textarea/range/file/tip controls
+  - Exact fix made:
+    - Updated the import form in `src/admin/AdminApp.tsx` to use `onKeyDownCapture={requestUploadSubmitFromKeyboard}` instead of bubble-phase `onKeyDown`.
+    - Kept the same keyboard-submit helper and the same exclusions for textarea/range/file/tip controls.
+  - Exact files changed:
+    - `src/admin/AdminApp.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Why this was the safest implementation:
+    - It improves reliability at the form event seam without widening field-specific special cases again.
+    - It does not change import behavior, only when the shared submit helper can intercept Enter/Return.
+  - Regression risk:
+    - Low.
+    - Main QA is confirming Return now works from the broader import form without creating accidental submits from excluded controls.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - With the import form armed, press Enter/Return from Title and confirm Import runs.
+    - Press Enter/Return from Artist and confirm Import runs.
+    - Confirm excluded controls like artwork frame slider/file paths still do not trigger accidental submit.
+
 **Follow-up diagnosis — 2026-04-11 Codex (Cinema looped-to-looped autoplay still pausing):**
 - user reports a loop-selected track can advance correctly in Cinema Mode, but when the destination track also has an active loop it can still land paused
 - the remaining likely seam is in `retryPendingAutoPlayIfNeeded(...)` inside `src/App.tsx`

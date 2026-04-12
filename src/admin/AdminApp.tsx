@@ -2780,7 +2780,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
         <form
           ref={uploadFormRef}
           onSubmit={onUpload}
-          onKeyDown={requestUploadSubmitFromKeyboard}
+          onKeyDownCapture={requestUploadSubmitFromKeyboard}
           className="admin-v1-card rounded-2xl border border-slate-300/20 bg-slate-900/70 p-3"
         >
           <h2 className="mb-2 text-base font-semibold text-slate-100">Import Track</h2>
