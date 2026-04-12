@@ -18,6 +18,7 @@ export type DbTrackRecord = {
   sub?: string;
   aura?: number;
   artUrl?: string | null;
+  artVideoUrl?: string | null;
   audioKey?: string | null;
   artKey?: string | null;
   artVideoKey?: string | null;
@@ -762,6 +763,25 @@ export async function updateArtworkInDb(
     await deleteBlob(oldArtVideoKey);
     revokeMediaUrl(oldArtVideoKey);
   }
+}
+
+export async function getTrackArtworkPayloadFromDb(
+  trackId: string
+): Promise<{ artPoster: Blob | null; artVideo: Blob | null }> {
+  await maybeMigrateLegacyTracks();
+  const library = loadLibrary();
+  const track = library.tracksById[trackId];
+  if (!track) throw new Error("Track not found");
+
+  const [artPoster, artVideo] = await Promise.all([
+    track.artKey ? getBlob(track.artKey).catch(() => null) : Promise.resolve(null),
+    track.artVideoKey ? getBlob(track.artVideoKey).catch(() => null) : Promise.resolve(null)
+  ]);
+
+  return {
+    artPoster,
+    artVideo
+  };
 }
 
 export async function replaceAudioInDb(trackId: string, audio: Blob, userProvidedTitle?: string | null): Promise<void> {

@@ -9,6 +9,7 @@ import {
   clearPlaylistInDb,
   createPlaylistInDb,
   deletePlaylistInDb,
+  getTrackArtworkPayloadFromDb,
   getStorageUsageSummary,
   getPlaylistsFromDb,
   regenerateAutoArtworkForThemeChangeInDb,
@@ -542,6 +543,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
   const [artistMemoryValue, setArtistMemoryValue] = useState(() => getStoredArtistName());
   const [uploadAudio, setUploadAudio] = useState<File | null>(null);
   const [uploadArt, setUploadArt] = useState<File | null>(null);
+  const [uploadArtworkSourceTrackId, setUploadArtworkSourceTrackId] = useState("");
   const [uploadArtSource, setUploadArtSource] = useState<UploadArtworkSource>("manual");
   const [uploadArtPreviewUrl, setUploadArtPreviewUrl] = useState("");
   const [uploadArtDuration, setUploadArtDuration] = useState(0);
@@ -745,6 +747,13 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
 
   const trackOptions = useMemo(
     () => tracks.map((track) => ({ value: String(track.id), label: formatTrackOptionLabel(track) })),
+    [tracks]
+  );
+  const importArtworkSourceOptions = useMemo(
+    () =>
+      tracks
+        .filter((track) => Boolean(track.artUrl || track.artVideoUrl))
+        .map((track) => ({ value: String(track.id), label: formatTrackOptionLabel(track) })),
     [tracks]
   );
   const storageUsedBytes = Math.max(0, storageUsage?.totalBytes ?? 0);
@@ -1765,9 +1774,15 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
     showImportNotice("IMPORTING TRACK...");
 
     try {
-      const artwork = await buildArtworkPayload(uploadArt, uploadArtPosterBlob, uploadArtFrameTime, uploadArtSource);
+      const artwork =
+        uploadArt || !uploadArtworkSourceTrackId
+          ? await buildArtworkPayload(uploadArt, uploadArtPosterBlob, uploadArtFrameTime, uploadArtSource)
+          : { ...(await getTrackArtworkPayloadFromDb(uploadArtworkSourceTrackId)), posterCaptureFailed: false };
       if (uploadArt && !artwork.artPoster && !artwork.artVideo) {
         throw new Error("Armed artwork could not be prepared for import.");
+      }
+      if (!uploadArt && uploadArtworkSourceTrackId && !artwork.artPoster && !artwork.artVideo) {
+        throw new Error("Selected artwork source track has no reusable artwork.");
       }
       await addTrackToDb({
         title: derivedTitle,
@@ -1784,6 +1799,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
       setUploadArtistValue("");
       setUploadAudio(null);
       setUploadArtworkFile(null);
+      setUploadArtworkSourceTrackId("");
       setIgnoreUploadMetadata(false);
       setUploadMetadataResult(createUploadMetadataResult("idle"));
       uploadTitleTouchedRef.current = false;
@@ -2846,6 +2862,27 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
               onPickRequest={CAN_USE_IOS_NATIVE_ARTWORK_IMPORT ? (fallbackPick) => void onPickUploadArtworkNative(fallbackPick) : undefined}
               onFileSelected={(file) => void onPickUploadArtwork(file)}
             />
+            <label className="grid gap-1 text-sm text-slate-300">
+              Reuse artwork from existing track
+              <select
+                value={uploadArtworkSourceTrackId}
+                onChange={(event) => setUploadArtworkSourceTrackId(event.currentTarget.value)}
+                disabled={importArtworkSourceOptions.length === 0}
+                className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
+              >
+                <option value="">No reused artwork</option>
+                {importArtworkSourceOptions.map((option) => (
+                  <option key={`import-art-${option.value}`} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-slate-400">
+                {uploadArt
+                  ? "Manual artwork is currently selected and will override reused artwork."
+                  : "Optional: copy stored artwork from another track instead of uploading it again."}
+              </span>
+            </label>
             <label className="flex items-center gap-2 text-sm text-slate-300">
               <input
                 type="checkbox"

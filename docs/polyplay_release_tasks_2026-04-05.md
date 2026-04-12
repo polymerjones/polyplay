@@ -4639,6 +4639,224 @@ Audit all backup file systems for potential issues.
     - Confirm blurred backdrop / now-playing artwork also refresh if they depend on the current track art.
     - Confirm updating artwork on a non-playing track does not disrupt current playback.
 
+### 28. Playlist autoplay behavior for cropped/loop-selected tracks
+**Status:** fix implemented, awaiting QA
+
+**Observed request:**
+- when playlist playback reaches a cropped-loop new track, it waits for the user to press play instead of autoplaying
+- when a track has a loop selected, it should behave like a normal playlist track with a different start/end span instead of looping forever
+
+**Desired behavior:**
+- crop-to-new-track outputs should enter playback through the same autoplay path as any other track
+- loop-selected tracks in playlist playback should play from loop start to loop end, then advance like normal tracks
+
+**Codex notes:**
+- Diagnosis start — 2026-04-11 Codex:
+  - Files inspected:
+    - `src/App.tsx`
+    - `src/lib/db.ts`
+  - Findings:
+    - `handleCropToNewTrack()` currently switches to the newly created crop with `setCurrentTrackId(nextTrackId)` instead of the normal `playTrack(nextTrackId, true)` path, which bypasses pending autoplay setup.
+    - Region loops are currently implemented as true repeat loops: both `onTime` and `onEnded` force playback back to `loopRegion.start` whenever `currentLoopMode === "region"`.
+    - That means a loop-selected track does not currently behave like a bounded playlist span; it behaves like an infinite replay until the user changes state manually.
+  - Narrow implementation plan:
+    - Route crop-to-new-track handoff through the existing autoplay path.
+    - Add a narrow playlist-playback guard so region loops can behave like bounded track spans during playlist navigation, without redesigning the broader loop editor/state model.
+    - Keep this scoped to playback behavior only.
+  - Exact fix made:
+    - Updated `handleCropToNewTrack()` in `src/App.tsx` to switch to the new cropped track via `playTrack(nextTrackId, true)` instead of direct `setCurrentTrackId(...)`, so it uses the normal pending-autoplay path.
+    - Added a shared `advancePlaybackAfterTrackCompletion()` helper inside the audio listener effect in `src/App.tsx`.
+    - Updated region-loop handling so when playlist navigation has more than one track, a region loop behaves like a bounded span:
+      - playback seeks to loop start on autoplay as before
+      - reaching `loopRegion.end` advances to the next/shuffle track instead of replaying forever
+      - single-track loop behavior remains unchanged
+  - Exact files changed:
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Why this was the safest implementation:
+    - It keeps the existing loop editor and stored loop state intact.
+    - It limits the behavior change to playlist playback with more than one navigation target.
+    - It uses the app’s existing next-track/autoplay path rather than inventing a new crop handoff path.
+  - Regression risk:
+    - Low to medium.
+    - The main risk is making sure multi-track playlist playback gets the new bounded-span behavior while single-track loop use still retains the old repeat-loop behavior.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Create a crop-to-new-track item and confirm it starts playing immediately after creation.
+    - Let playlist playback reach a cropped-loop new track and confirm it autoplay starts.
+    - On a multi-track playlist, set a loop region on one track and confirm it plays from loop start to loop end, then advances normally.
+    - Confirm shuffle still advances from a loop-selected track.
+    - Confirm a single-track loop still repeats as before when there is no next playlist track context.
+
+**Follow-up diagnosis — 2026-04-11 Codex (looped next-track autoplay still missing):**
+- looped autoplay intentionally defers actual `play()` until the `loadedmetadata` / `durationchange` / `canplay` retry path so it can seek to loop start first
+- that retry path depends on media events, but those events can already have fired by the time the fresh listener set for the new current track is attached
+- the narrowest safe fix is to trigger one immediate retry after attaching listeners, so a loop-selected next track can still autoplay even if the key media event already happened
+
+**Follow-up fix implemented — 2026-04-11 Codex (looped next-track autoplay retry seam):**
+- Exact fix made:
+  - Added an immediate `retryPendingAutoPlayIfNeeded("canplay")` call right after the new audio listener set is attached in `src/App.tsx`.
+  - This preserves the existing deferred loop-start seek behavior, but closes the timing seam where `loadedmetadata` / `durationchange` / `canplay` could fire before the fresh listeners were attached for the new current track.
+- Exact files changed:
+  - `src/App.tsx`
+  - `docs/polyplay_release_tasks_2026-04-05.md`
+- Why this was the safest implementation:
+  - It does not redesign autoplay, loop storage, or playlist navigation.
+  - It keeps the existing pending-autoplay guardrails intact and only adds one contained retry at listener-attach time.
+  - It is scoped specifically to loop-selected track transitions that were already relying on the deferred autoplay path.
+- Regression risk:
+  - Low.
+  - The main risk is just confirming non-looped track autoplay remains unchanged and that the retry does not double-start playback.
+- QA completed:
+  - `npm run typecheck`
+- QA still needed:
+  - Advance from a normal playlist track into a next track with an active loop and confirm it starts automatically.
+  - Confirm the looped next track still begins from its loop start.
+  - Confirm manual next/prev into a looped track also starts cleanly.
+  - Confirm non-looped autoplay behavior is unchanged.
+
+### 29. Repeat-button flash should only fire on return to off
+**Status:** fix implemented, awaiting QA
+
+**Observed request:**
+- the repeat flash is not correct
+- the intended behavior is a simple flash only when the repeat button returns to its default off state
+
+**Desired behavior:**
+- repeat should not flash/sparkle on every state change
+- repeat should only flash when cycling back to `off`
+
+**Codex notes:**
+- Diagnosis start — 2026-04-11 Codex:
+  - Files inspected:
+    - `src/App.tsx`
+    - `src/components/PlayerControls.tsx`
+    - `src/components/player.css`
+  - Findings:
+    - `src/components/PlayerControls.tsx` currently calls `emitPinkSparkle(...)` on every repeat click.
+    - `src/App.tsx` currently triggers the repeat flash tick when landing on `repeat-3`, not when returning to `off`.
+    - The current implementation therefore gives the broad “parity on every change” behavior from the earlier polish pass, which conflicts with the new requested behavior.
+  - Narrow implementation plan:
+    - Remove the per-click repeat sparkle path.
+    - Trigger the dedicated repeat flash only when repeat cycles back to `off`.
+    - Leave repeat mode behavior unchanged.
+  - Exact fix made:
+    - Removed the per-click repeat sparkle path from `src/components/PlayerControls.tsx`, so repeat no longer emits the broader sparkle treatment on every state change.
+    - Updated `src/App.tsx` so the repeat flash tick now fires when repeat returns to `off`, instead of when landing on `repeat-3`.
+    - Updated the repeat button class gating in `src/components/PlayerControls.tsx` so the flash animation can render on the default/off button state.
+    - Preserved the separate special `repeat-3` activation styling.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `src/components/PlayerControls.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Why this was the safest implementation:
+    - It changes only repeat-button presentation feedback.
+    - It does not alter repeat mode sequencing or playback behavior.
+    - It narrows the earlier parity pass back to the explicitly requested off-state flash behavior.
+  - Regression risk:
+    - Low.
+    - The only intended behavior change is when the repeat flash appears.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Cycle repeat through all states and confirm there is no sparkle/flash on intermediate states.
+    - Confirm a flash appears only when the control returns to `off`.
+    - Confirm `repeat-3` activation styling still appears normally.
+
+### 30. Show loaded vault name in main header hint
+**Status:** fix implemented, awaiting QA
+
+**Observed request:**
+- after the first run, the helper text area that currently says `Tap track to play...` should show the loaded vault name so the user knows which vault file is active
+
+**Desired behavior:**
+- when a vault has been imported successfully, the main header hint should show `Vault loaded: <vault name>`
+- if no imported vault name is known yet, the existing helper text can remain
+
+**Codex notes:**
+- Diagnosis start — 2026-04-11 Codex:
+  - Files inspected:
+    - `src/App.tsx`
+    - `styles.css`
+  - Findings:
+    - The helper text is rendered in the main header in `src/App.tsx`.
+    - There is no existing persisted `loaded vault name` field.
+    - Successful vault import already has access to the source `File`, so the imported vault filename is available at the narrowest trust/UI seam.
+  - Narrow implementation plan:
+    - Persist the successfully imported vault filename in localStorage/state.
+    - Reuse the existing header hint area to show `Vault loaded: <name>` when present.
+    - Keep this UI-only and avoid widening into vault import behavior changes.
+  - Exact fix made:
+    - Added a persisted `LAST_LOADED_VAULT_NAME_KEY` in `src/App.tsx`.
+    - Added local state for `lastLoadedVaultName`, initialized from localStorage.
+    - On successful full-vault import, the app now stores `file.name` as the loaded vault name.
+    - Updated the existing header hint so when tracks exist and a loaded vault name is known, it shows `Vault loaded: <name>` instead of the generic play/fullscreen helper text.
+  - Exact files changed:
+    - `src/App.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Why this was the safest implementation:
+    - It reuses existing UI real estate instead of adding a new surface.
+    - It only persists a small trust-oriented label from the already selected import file.
+    - It does not change vault import behavior, storage, or playback state.
+  - Regression risk:
+    - Low.
+    - The only real behavior change is the header hint copy after successful vault import.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Import a full vault and confirm the main header hint shows `Vault loaded: <filename>`.
+    - Reload the app and confirm the hint persists.
+    - Confirm when no vault has been imported yet, the original helper text still appears.
+
+### 31. Reuse existing track artwork on new imports
+**Status:** fix implemented, awaiting QA
+
+**Observed request:**
+- the user wants a quick way to reuse artwork from an existing track on a newly imported track instead of reuploading the same file repeatedly
+
+**Desired behavior:**
+- the import form should offer an optional way to pick artwork from an existing track
+- that reused artwork should apply to the new import without changing the original source track
+
+**Codex notes:**
+- Diagnosis start — 2026-04-11 Codex:
+  - Files inspected:
+    - `src/admin/AdminApp.tsx`
+    - `src/lib/db.ts`
+  - Findings:
+    - The import form already supports optional manual artwork through the existing upload artwork lane.
+    - The DB layer already stores poster/video artwork blobs per track, but there is no small helper to retrieve them as reusable payload for another import.
+    - The safest seam is to add a source-track artwork picker to the import form and feed those blobs into the existing `addTrackToDb(...)` import path when no manual artwork file is armed.
+  - Narrow implementation plan:
+    - Add a DB helper to retrieve stored artwork blobs for a source track.
+    - Add an optional import-form picker listing tracks that already have artwork.
+    - On import, if no manual artwork file is selected but a source track is chosen, reuse that source track’s stored artwork payload.
+  - Exact fix made:
+    - Added `getTrackArtworkPayloadFromDb(...)` in `src/lib/db.ts` to retrieve stored poster/video artwork blobs for a source track.
+    - Added `uploadArtworkSourceTrackId` state plus `importArtworkSourceOptions` in `src/admin/AdminApp.tsx`.
+    - Added an optional `Reuse artwork from existing track` picker to the import form.
+    - Updated the import path so when no manual artwork file is selected but a source track is chosen, the new import reuses that source track’s stored artwork payload.
+    - Kept manual artwork upload higher priority: if a manual artwork file is selected, it overrides the reused-artwork picker.
+  - Exact files changed:
+    - `src/lib/db.ts`
+    - `src/admin/AdminApp.tsx`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Why this was the safest implementation:
+    - It reuses the existing import path and artwork storage model.
+    - It avoids redesigning the artwork system or adding any new asset library.
+    - It keeps the feature optional and scoped to new imports only.
+  - Regression risk:
+    - Low.
+    - The main risk is only confirming manual artwork still wins when both inputs are set and that reused artwork copies correctly for both image and video-art cases.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Import a new track using `Reuse artwork from existing track` and confirm the new track gets the copied artwork.
+    - Confirm manual artwork upload still overrides reused artwork when both are set.
+    - Confirm the source track’s own artwork remains unchanged.
+    - Confirm reused video artwork still carries over a usable poster/frame.
+
 ---
 
 ## End-of-day wrap

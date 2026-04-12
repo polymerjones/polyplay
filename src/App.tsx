@@ -149,6 +149,7 @@ const HAS_ONBOARDED_KEY = "polyplay_hasOnboarded_v1";
 const ACTIVE_PLAYLIST_DIRTY_KEY = "polyplay_activePlaylistDirty_v1";
 const LAST_EXPORTED_PLAYLIST_ID_KEY = "polyplay_lastExportedPlaylistId";
 const LAST_EXPORTED_AT_KEY = "polyplay_lastExportedAt";
+const LAST_LOADED_VAULT_NAME_KEY = "polyplay_lastLoadedVaultName_v1";
 const FULLSCREEN_ART_HINT_SEEN_KEY = "polyplay_hasSeenFullscreenArtHint_v1";
 const PLAYER_COMPACT_HINT_SEEN_KEY = "polyplay_hasSeenPlayerCompactHint_v1";
 const PLAYER_VIBE_HINT_SEEN_KEY = "polyplay_hasSeenPlayerVibeHint_v1";
@@ -575,6 +576,13 @@ export default function App() {
   const [lastExportedAt, setLastExportedAt] = useState<string | null>(() => {
     try {
       return localStorage.getItem(LAST_EXPORTED_AT_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const [lastLoadedVaultName, setLastLoadedVaultName] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(LAST_LOADED_VAULT_NAME_KEY);
     } catch {
       return null;
     }
@@ -2922,10 +2930,43 @@ export default function App() {
       return true;
     };
 
+    const advancePlaybackAfterTrackCompletion = () => {
+      if (repeatTrackMode !== "off" && currentLoopMode === "off") {
+        if (handleThreepeatReplay(0)) {
+          return;
+        }
+        if (handlePlainRepeatReplay(0)) {
+          return;
+        }
+      }
+      if (isShuffleEnabled) {
+        const nextId = pickAuraWeightedTrack(
+          playbackNavigationTracks,
+          currentTrackId,
+          lastPlayedAtByTrackRef.current,
+          Date.now()
+        );
+        if (nextId) {
+          playTrack(nextId, true);
+          return;
+        }
+      }
+      const nextId = getAdjacentTrackId(playbackNavigationTracks, currentTrackId, 1, true);
+      if (nextId) {
+        playTrack(nextId, true);
+        return;
+      }
+      setIsPlaying(false);
+    };
+
     const onTime = () => {
       const nextTime = audio.currentTime || 0;
       const loopRegion = currentTrackId ? loopByTrack[currentTrackId] : undefined;
       if (currentLoopMode === "region" && loopRegion && loopRegion.end > loopRegion.start) {
+        if (playbackNavigationTracks.length > 1 && nextTime >= loopRegion.end) {
+          advancePlaybackAfterTrackCompletion();
+          return;
+        }
         if (nextTime >= loopRegion.end || nextTime < loopRegion.start) {
           if (handleThreepeatReplay(loopRegion.start)) {
             return;
@@ -2995,6 +3036,10 @@ export default function App() {
     const onEnded = () => {
       const loopRegion = currentTrackId ? loopByTrack[currentTrackId] : undefined;
       if (currentLoopMode === "region" && loopRegion && loopRegion.end > loopRegion.start) {
+        if (playbackNavigationTracks.length > 1) {
+          advancePlaybackAfterTrackCompletion();
+          return;
+        }
         if (handleThreepeatReplay(loopRegion.start)) {
           return;
         }
@@ -3004,32 +3049,7 @@ export default function App() {
         void audio.play().catch(() => setIsPlaying(false));
         return;
       }
-      if (repeatTrackMode !== "off" && currentLoopMode === "off") {
-        if (handleThreepeatReplay(0)) {
-          return;
-        }
-        if (handlePlainRepeatReplay(0)) {
-          return;
-        }
-      }
-      if (isShuffleEnabled) {
-        const nextId = pickAuraWeightedTrack(
-          playbackNavigationTracks,
-          currentTrackId,
-          lastPlayedAtByTrackRef.current,
-          Date.now()
-        );
-        if (nextId) {
-          playTrack(nextId, true);
-          return;
-        }
-      }
-      const nextId = getAdjacentTrackId(playbackNavigationTracks, currentTrackId, 1, true);
-      if (nextId) {
-        playTrack(nextId, true);
-        return;
-      }
-      setIsPlaying(false);
+      advancePlaybackAfterTrackCompletion();
     };
 
     audio.addEventListener("timeupdate", onTime);
@@ -3040,6 +3060,7 @@ export default function App() {
     audio.addEventListener("pause", onPause);
     audio.addEventListener("error", onError);
     audio.addEventListener("ended", onEnded);
+    retryPendingAutoPlayIfNeeded("canplay");
     logAudioDebug("listeners attached", {
       listeners: ["timeupdate", "loadedmetadata", "durationchange", "canplay", "play", "pause", "error", "ended"]
     });
@@ -3576,7 +3597,7 @@ export default function App() {
         sub: currentTrack.sub || "Imported"
       });
       await refreshTracks({ allowEmptyDemoFallback: false });
-      setCurrentTrackId(nextTrackId);
+      playTrack(nextTrackId, true);
       setIsCropAudioPromptOpen(false);
       fireSuccessHaptic();
       setVaultStatus("Created a new cropped track from the selected loop.", "success");
@@ -3644,9 +3665,6 @@ export default function App() {
       if (isCountRepeatMode(next)) {
         threepeatRemainingRef.current = nextRemaining;
         setThreepeatDisplayCount(nextRemaining);
-        if (next === "repeat-3") {
-          setThreepeatFlashTick((prev) => prev + 1);
-        }
         fireHeavyHaptic();
         showFxToast(
           next === "repeat-1"
@@ -3663,6 +3681,7 @@ export default function App() {
       } else {
         threepeatRemainingRef.current = 0;
         setThreepeatDisplayCount(0);
+        setThreepeatFlashTick((prev) => prev + 1);
         fireLightHaptic();
         showFxToast("Repeat disabled");
       }
@@ -4349,6 +4368,14 @@ export default function App() {
       await refreshTracks();
       await refreshVaultInspector();
       clearActivePlaylistDirty();
+      const importedVaultName = file.name?.trim() || null;
+      setLastLoadedVaultName(importedVaultName);
+      try {
+        if (importedVaultName) localStorage.setItem(LAST_LOADED_VAULT_NAME_KEY, importedVaultName);
+        else localStorage.removeItem(LAST_LOADED_VAULT_NAME_KEY);
+      } catch {
+        // Ignore localStorage failures.
+      }
       setVaultStatus(
         `Vault imported. Restored ${summary.restoredTracks} tracks and ${summary.restoredMediaFiles} media files.`,
         "success"
@@ -4845,7 +4872,11 @@ export default function App() {
             </button>
           </div>
           <div className="hint">
-            {hasTracks ? "Tap track to play • Tap playbar art for fullscreen" : "Create/select a playlist, then import tracks."}
+            {hasTracks
+              ? lastLoadedVaultName
+                ? `Vault loaded: ${lastLoadedVaultName}`
+                : "Tap track to play • Tap playbar art for fullscreen"
+              : "Create/select a playlist, then import tracks."}
           </div>
         </header>
 
