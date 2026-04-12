@@ -5609,7 +5609,7 @@ body.mute-freeze .track-backdrop {
     radial-gradient(circle at 16% 14%, rgba(var(--aura-rgb, 188, 132, 255), 0.2), transparent 54%),
     rgba(9, 13, 22, 0.72);
   color: #f5ebff;
-  padding: 14px 12px;
+  padding: 14px 38px 14px 12px;
   text-align: left;
   display: grid;
   gap: 4px;
@@ -5618,26 +5618,30 @@ body.mute-freeze .track-backdrop {
 
 .transfer-lane__clear-btn {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 28px;
-  height: 28px;
-  border: 0;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(10, 14, 22, 0.84);
-  color: rgba(255, 255, 255, 0.9);
-  box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.24),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  padding: 0;
+  background: rgba(9, 14, 22, 0.28);
+  color: rgba(255, 245, 226, 0.68);
+  font-size: 11px;
+  line-height: 1;
+  box-shadow: none;
   cursor: pointer;
   z-index: 2;
+  opacity: 0.78;
 }
 
 .transfer-lane__clear-btn:hover {
-  background: rgba(20, 28, 40, 0.94);
+  background: rgba(14, 20, 30, 0.46);
+  color: rgba(255, 249, 236, 0.88);
+  opacity: 1;
 }
 
 .transfer-lane__clear-btn:active {

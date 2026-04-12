@@ -5153,6 +5153,82 @@ Audit all backup file systems for potential issues.
   - Import an MP3 with embedded artwork, choose `Generate Auto Art`, and confirm auto art is used instead of embedded artwork.
   - Confirm manual uploaded artwork still overrides `Generate Auto Art`.
 
+**Follow-up diagnosis — 2026-04-12 Codex (clear control visually too loud / poorly placed):**
+- the user-facing problem is now cosmetic rather than behavioral
+- the clear control reads like part of the dropzone content instead of a subtle corner affordance
+- the narrowest safe fix is CSS-only:
+  - reserve a little top-right space inside the lane
+  - reduce the button size/contrast
+  - keep it visually anchored to the corner
+
+**Follow-up fix implemented — 2026-04-12 Codex (subtle corner clear affordance):**
+- Exact fix made:
+  - Updated `styles.css` so the dropzone reserves right-side space for the clear control.
+  - Reduced the clear control to a smaller, lower-contrast corner pill.
+  - Kept it anchored to the top-right corner with quieter hover emphasis.
+- Exact files changed:
+  - `styles.css`
+  - `docs/polyplay_release_tasks_2026-04-05.md`
+- Why this was the safest implementation:
+  - CSS-only.
+  - No behavior or form-state logic changed.
+  - It corrects the visual hierarchy without touching the earlier clear-slot functionality.
+- Regression risk:
+  - Low.
+  - Main QA is just confirming the `✕` now reads as a subtle corner affordance and does not overlap the lane copy.
+- QA completed:
+  - `npm run typecheck`
+- QA still needed:
+  - Confirm the `✕` now sits cleanly in the dropzone corner on iPhone.
+  - Confirm the lane title/copy no longer visually collides with it.
+  - Confirm tapping it still clears the lane normally.
+
+### 36. Demo Playlist with user tracks should survive full vault export/import
+**Status:** diagnosis in progress
+
+**Observed request:**
+- if the user has a playlist named `Demo Playlist` containing imported user tracks, full vault backup/import currently does not restore that playlist
+- the original intent was only to avoid backing up the built-in demo tracks, not to drop user data because of the playlist name
+
+**Desired behavior:**
+- built-in demo tracks should still be excluded from full vault backup
+- a Demo Playlist containing non-demo/user tracks should export and restore like a normal playlist
+
+**Codex notes:**
+- Diagnosis start — 2026-04-12 Codex:
+  - Files inspected:
+    - `src/lib/backup.ts`
+  - Findings:
+    - `sanitizeLibraryForFullBackup(...)` strips built-in demo tracks correctly.
+    - But it also currently drops any playlist whose id is `polyplaylist-demo` or whose normalized name is `demo playlist` before it evaluates the playlist’s remaining non-demo track ids.
+    - Import uses the same sanitizer on the restored library payload, so the playlist is lost on both export and restore for the same reason.
+  - Narrow implementation plan:
+    - keep filtering out built-in demo tracks
+    - stop dropping demo-identity playlists up front
+    - only drop a demo-identity playlist when, after filtering, it contains no remaining non-demo tracks
+  - Exact fix made:
+    - Updated `sanitizeLibraryForFullBackup(...)` in `src/lib/backup.ts`.
+    - The sanitizer still removes built-in demo tracks from `tracksById`.
+    - Playlist `trackIds` are now filtered against the remaining non-demo tracks first.
+    - A demo-identity playlist (`polyplaylist-demo` or normalized `demo playlist`) is now only dropped when it ends up with zero remaining non-demo tracks after that filtering.
+    - This preserves the original backup-size intent while allowing a Demo Playlist that contains imported user tracks to export and restore like a normal playlist.
+  - Exact files changed:
+    - `src/lib/backup.ts`
+    - `docs/polyplay_release_tasks_2026-04-05.md`
+  - Why this was the safest implementation:
+    - It stays entirely inside the full-backup sanitizer used by both export and import.
+    - It does not redesign playlist identity, backup format, or demo-seed behavior.
+    - It preserves the existing exclusion of built-in demo tracks.
+  - Regression risk:
+    - Low.
+    - Main QA is confirming demo-only playlists still stay excluded while user-populated Demo Playlists now survive full vault round-trip.
+  - QA completed:
+    - `npm run typecheck`
+  - QA still needed:
+    - Create or use a playlist named `Demo Playlist`, add at least one imported non-demo track, export a full vault, re-import it, and confirm the playlist restores with that track.
+    - Confirm built-in demo tracks are still not packaged into the full vault.
+    - Confirm a demo-only playlist with no imported tracks is still excluded as before.
+
 **Follow-up diagnosis — 2026-04-11 Codex (Cinema looped-to-looped autoplay still pausing):**
 - user reports a loop-selected track can advance correctly in Cinema Mode, but when the destination track also has an active loop it can still land paused
 - the remaining likely seam is in `retryPendingAutoPlayIfNeeded(...)` inside `src/App.tsx`
