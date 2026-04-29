@@ -11,9 +11,19 @@ type Props = {
   dimMode: DimMode;
   onSelectTrack: (trackId: string) => void;
   onAuraUp: (trackId: string) => void;
+  onOpenFullscreen: (trackId: string) => void;
 };
 
-export function TrackGrid({ tracks, currentTrackId, isPlaying, layoutMode, dimMode, onSelectTrack, onAuraUp }: Props) {
+export function TrackGrid({
+  tracks,
+  currentTrackId,
+  isPlaying,
+  layoutMode,
+  dimMode,
+  onSelectTrack,
+  onAuraUp,
+  onOpenFullscreen
+}: Props) {
   const realTracks = useMemo(
     () => tracks.filter((track): track is Track => Boolean(track && (track as Track).id !== undefined)),
     [tracks]
@@ -44,6 +54,7 @@ export function TrackGrid({ tracks, currentTrackId, isPlaying, layoutMode, dimMo
               dimMode={dimMode}
               onSelectTrack={(trackId) => onSelectTrack(String(trackId))}
               onAuraUp={(trackId) => onAuraUp(String(trackId))}
+              onOpenFullscreen={(trackId) => onOpenFullscreen(String(trackId))}
             />
           );
         })}
@@ -66,6 +77,7 @@ export function TrackGrid({ tracks, currentTrackId, isPlaying, layoutMode, dimMo
             isPlaying={isPlaying}
             onSelectTrack={onSelectTrack}
             onAuraUp={onAuraUp}
+            onOpenFullscreen={onOpenFullscreen}
           />
         );
       })}

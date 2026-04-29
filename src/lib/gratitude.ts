@@ -205,7 +205,7 @@ export function updateGratitudeEntry(entryId: string, newText: string): void {
 
 export function formatGratitudeExport(entries: GratitudeEntry[]): string {
   if (!entries.length) return "No gratitude entries yet.";
-  const lines: string[] = ["Polyplay Gratitude Journal", ""];
+  const lines: string[] = ["PolyPlay Gratitude Journal", ""];
   for (const entry of entries) {
     const localDate = new Date(entry.createdAt);
     const heading = Number.isFinite(localDate.getTime())

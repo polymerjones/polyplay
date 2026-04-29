@@ -2323,6 +2323,25 @@ export default function App() {
   const canCreatePolyplaylist = newPlaylistName.trim().length > 0;
   const currentAudioUrl = currentTrack?.audioUrl ?? null;
 
+  const refreshCurrentTrackMedia = useCallback(
+    async (trackId: string, options?: { forceUrlRefresh?: boolean }) => {
+      const media = await getTrackPlaybackMediaFromDb(trackId, options).catch(
+        (): { audioUrl?: string; artBlob?: Blob; artUrl?: string; artVideoUrl?: string; missingAudio?: boolean } => ({})
+      );
+      if (currentTrackIdRef.current !== trackId) return null;
+      setHydratedCurrentTrackMedia({
+        trackId,
+        audioUrl: media.audioUrl,
+        artBlob: media.artBlob,
+        artUrl: media.artUrl,
+        artVideoUrl: media.artVideoUrl,
+        missingAudio: media.missingAudio
+      });
+      return media;
+    },
+    []
+  );
+
   useEffect(() => {
     let cancelled = false;
     if (!currentTrackId) {
@@ -2331,23 +2350,13 @@ export default function App() {
     }
     setHydratedCurrentTrackMedia((current) => (current.trackId === currentTrackId ? current : { trackId: currentTrackId }));
     void (async () => {
-      const media = await getTrackPlaybackMediaFromDb(currentTrackId).catch(
-        (): { audioUrl?: string; artBlob?: Blob; artUrl?: string; artVideoUrl?: string; missingAudio?: boolean } => ({})
-      );
+      await refreshCurrentTrackMedia(currentTrackId);
       if (cancelled) return;
-      setHydratedCurrentTrackMedia({
-        trackId: currentTrackId,
-        audioUrl: media.audioUrl,
-        artBlob: media.artBlob,
-        artUrl: media.artUrl,
-        artVideoUrl: media.artVideoUrl,
-        missingAudio: media.missingAudio
-      });
     })();
     return () => {
       cancelled = true;
     };
-  }, [currentTrackId, currentTrackMediaRefreshKey]);
+  }, [currentTrackId, currentTrackMediaRefreshKey, refreshCurrentTrackMedia]);
 
   useEffect(() => {
     const rootStyle = document.documentElement.style;
@@ -2814,7 +2823,49 @@ export default function App() {
 
     playbackResyncInFlightRef.current = true;
     try {
-      const hasTrackSource = Boolean(currentTrack?.audioUrl && audioSrcRef.current);
+      const activeTrackId = currentTrackIdRef.current;
+      let resolvedAudioUrl = currentTrack?.audioUrl ?? null;
+      const shouldRepairSource =
+        Boolean(activeTrackId && resolvedAudioUrl) &&
+        (
+          audioSrcRef.current !== resolvedAudioUrl ||
+          !audio.currentSrc ||
+          audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE ||
+          (audio.readyState < HTMLMediaElement.HAVE_METADATA &&
+            (!Number.isFinite(audio.duration) || audio.duration <= 0))
+        );
+
+      if (activeTrackId && shouldRepairSource) {
+        const refreshedMedia = await refreshCurrentTrackMedia(activeTrackId, { forceUrlRefresh: true }).catch(() => null);
+        if (currentTrackIdRef.current !== activeTrackId) return;
+        if (refreshedMedia?.audioUrl) {
+          resolvedAudioUrl = refreshedMedia.audioUrl;
+        }
+      }
+
+      if (resolvedAudioUrl && (audioSrcRef.current !== resolvedAudioUrl || !audio.currentSrc)) {
+        logAudioDebug("resync:src-repair", {
+          reason,
+          expectedSrc: resolvedAudioUrl,
+          actualSrc: audioSrcRef.current,
+          readyState: audio.readyState,
+          networkState: audio.networkState
+        });
+        audio.pause();
+        audio.src = resolvedAudioUrl;
+        audioSrcRef.current = resolvedAudioUrl;
+        audio.load();
+      } else if (resolvedAudioUrl && audio.readyState < HTMLMediaElement.HAVE_METADATA) {
+        logAudioDebug("resync:load-refresh", {
+          reason,
+          readyState: audio.readyState,
+          networkState: audio.networkState,
+          currentSrc: audio.currentSrc
+        });
+        audio.load();
+      }
+
+      const hasTrackSource = Boolean(resolvedAudioUrl && audioSrcRef.current);
       const nextDuration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
       const nextTime = Number.isFinite(audio.currentTime) ? Math.max(0, audio.currentTime) : 0;
       setDuration(nextDuration);
@@ -2897,7 +2948,7 @@ export default function App() {
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, [currentTrack?.audioUrl, isIOS]);
+  }, [currentTrack?.audioUrl, isIOS, refreshCurrentTrackMedia]);
 
   useEffect(() => {
     const onWindowFocus = () => {
@@ -2905,7 +2956,7 @@ export default function App() {
     };
     window.addEventListener("focus", onWindowFocus);
     return () => window.removeEventListener("focus", onWindowFocus);
-  }, [currentTrack?.audioUrl, isIOS]);
+  }, [currentTrack?.audioUrl, isIOS, refreshCurrentTrackMedia]);
 
   useEffect(() => {
     return () => {
@@ -4398,9 +4449,7 @@ export default function App() {
     });
   }, [isAppSettledForSettingsOpen]);
 
-  const openFullscreenFromPlaybarArt = () => {
-    if (!currentTrack) return;
-    setIsFullscreenPlayerOpen(true);
+  const markFullscreenHintSeen = () => {
     if (hasSeenFullscreenArtHint) return;
     setHasSeenFullscreenArtHint(true);
     try {
@@ -4408,6 +4457,22 @@ export default function App() {
     } catch {
       // Ignore non-critical onboarding persistence failures.
     }
+  };
+
+  const openFullscreenForTrack = (trackId: string) => {
+    if (isFullscreenPlayerOpen) return;
+    const targetTrack = allTracksRef.current.find((track) => track.id === trackId);
+    if (!targetTrack) return;
+    if (currentTrackId !== trackId) {
+      playTrack(trackId, true);
+    }
+    setIsFullscreenPlayerOpen(true);
+    markFullscreenHintSeen();
+  };
+
+  const openFullscreenFromPlaybarArt = () => {
+    if (!currentTrack) return;
+    openFullscreenForTrack(currentTrack.id);
   };
 
   const markPlayerCompactHintSeen = () => {
@@ -5140,6 +5205,7 @@ export default function App() {
             dimMode={dimMode}
             onSelectTrack={(trackId) => playTrack(trackId, true)}
             onAuraUp={handleAuraUp}
+            onOpenFullscreen={openFullscreenForTrack}
           />
         ) : null}
       </div>

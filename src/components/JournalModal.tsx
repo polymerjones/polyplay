@@ -1169,7 +1169,18 @@ export function JournalModal({ open, onClose }: Props) {
                   value={newEntryText}
                   onChange={(event) => setNewEntryText(event.currentTarget.value)}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter") event.stopPropagation();
+                    if (event.key !== "Enter") return;
+                    event.stopPropagation();
+                    if (!event.shiftKey) return;
+                    event.preventDefault();
+                    const trimmed = newEntryText.trim();
+                    if (!trimmed) return;
+                    createEntry(trimmed, currentVerse);
+                    setEntries(listEntries());
+                    setExpandedEntryId(null);
+                    setNewEntryText("");
+                    setIsComposerOpen(false);
+                    setMiniToast("Saved");
                   }}
                 />
                 <div className="journal-entry__editor-actions">
@@ -1331,7 +1342,12 @@ export function JournalModal({ open, onClose }: Props) {
                           saveEditedEntry(entry.id);
                         }}
                         onKeyDown={(event) => {
-                          if (event.key === "Enter") event.stopPropagation();
+                          if (event.key !== "Enter") return;
+                          event.stopPropagation();
+                          if (!event.shiftKey) return;
+                          event.preventDefault();
+                          if (draftText.trim().length === 0) return;
+                          saveEditedEntry(entry.id);
                         }}
                         rows={4}
                       />

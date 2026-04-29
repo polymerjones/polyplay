@@ -148,6 +148,15 @@ async function urlToDataUrl(url: string): Promise<string | undefined> {
   return await imageToJpegDataUrl(image);
 }
 
+export async function getNowPlayingArtworkDataUrl(options: {
+  artBlob?: Blob;
+  artUrl?: string;
+}): Promise<string | undefined> {
+  if (options.artBlob) return await blobToDataUrl(options.artBlob);
+  if (options.artUrl) return await urlToDataUrl(options.artUrl).catch(() => undefined);
+  return undefined;
+}
+
 export async function setIosNowPlayingItem(options: {
   title: string;
   subtitle?: string;
@@ -156,9 +165,7 @@ export async function setIosNowPlayingItem(options: {
 }): Promise<void> {
   const plugin = getNowPlayingPlugin();
   if (!plugin) return;
-  const artworkDataUrl = options.artBlob
-    ? await blobToDataUrl(options.artBlob)
-    : (options.artUrl ? await urlToDataUrl(options.artUrl).catch(() => undefined) : undefined);
+  const artworkDataUrl = await getNowPlayingArtworkDataUrl(options);
   await plugin.setNowPlayingItem({
     title: options.title,
     subtitle: options.subtitle,

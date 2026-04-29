@@ -100,6 +100,7 @@ export function FullscreenPlayer({
   onSkip
 }: Props) {
   const FULLSCREEN_AURA_FLASH_COOLDOWN_MS = 220;
+  const FULLSCREEN_ENTRY_GUARD_MS = 360;
   const FULLSCREEN_SWIPE_CLOSE_DISTANCE_PX = 140;
   const CINEMA_EXIT_SWIPE_DISTANCE_PX = 96;
   const FULLSCREEN_SWIPE_CLOSE_MAX_SIDEWAYS_PX = 72;
@@ -115,6 +116,7 @@ export function FullscreenPlayer({
   const lastCinemaOutsideTapAtRef = useRef(0);
   const loopGestureActiveRef = useRef(false);
   const loopGestureSuppressUntilRef = useRef(0);
+  const entryGuardUntilRef = useRef(0);
   const artStyle = track.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
     : ({ backgroundImage: track.artGrad || `url('${DEFAULT_ARTWORK_URL}')` } as CSSProperties);
@@ -138,12 +140,25 @@ export function FullscreenPlayer({
   });
   const [isArtworkVideoReady, setIsArtworkVideoReady] = useState(false);
   const [isCinemaMode, setIsCinemaMode] = useState(false);
+  const [isEntryGuardActive, setIsEntryGuardActive] = useState(true);
   const cinemaVisualizerVibeLevel = isCinemaMode ? (noveltyMode === "dim" ? 2 : noveltyMode === "mute" ? 3 : null) : null;
   const themeKey =
     typeof document === "undefined"
       ? "dark"
       : `${document.documentElement.getAttribute("data-theme") ?? "dark"}:${document.documentElement.getAttribute("data-theme-slot") ?? ""}`;
   const waveformPalette = useMemo(() => getWaveformThemePalette(), [themeKey]);
+
+  useEffect(() => {
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    entryGuardUntilRef.current = now + FULLSCREEN_ENTRY_GUARD_MS;
+    setIsEntryGuardActive(true);
+    const timeoutId = window.setTimeout(() => {
+      setIsEntryGuardActive(false);
+    }, FULLSCREEN_ENTRY_GUARD_MS);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [track.id]);
 
   useEffect(() => {
     setIsArtworkVideoReady(false);
@@ -367,6 +382,10 @@ export function FullscreenPlayer({
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
     return loopGestureActiveRef.current || now < loopGestureSuppressUntilRef.current;
   };
+  const isEntryGuardWindowActive = () => {
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    return now < entryGuardUntilRef.current;
+  };
   const shouldBlockGestureDismiss = loopRegion.editing || isLoopGestureSuppressed();
   const exitHintText = "Exit Fullscreen";
 
@@ -429,6 +448,7 @@ export function FullscreenPlayer({
   };
 
   const handleCinemaOutsidePointerUp = (event: ReactPointerEvent<HTMLElement>) => {
+    if (isEntryGuardWindowActive()) return;
     if (loopRegion.editing) return;
     if (!isCinemaMode) return;
     const target = event.target as HTMLElement | null;
@@ -486,6 +506,18 @@ export function FullscreenPlayer({
       }}
       onPointerUp={handleCinemaOutsidePointerUp}
     >
+      {isEntryGuardActive && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 30,
+            pointerEvents: "auto",
+            background: "transparent"
+          }}
+        />
+      )}
       <div className="fullscreen-player-shell__bg" style={artStyle} aria-hidden="true" />
       {cinemaVisualizerVibeLevel && (
         <div className="fullscreen-player-shell__bg-visualizer" aria-hidden="true">

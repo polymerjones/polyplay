@@ -136,7 +136,9 @@ export function TransferLaneDropZone({
               void onClearRequest();
             }}
           >
-            ✕
+            <svg viewBox="0 0 12 12" className="transfer-lane__clear-icon" aria-hidden="true">
+              <path d="M3 3l6 6M9 3 3 9" />
+            </svg>
           </button>
         )}
         <span className="transfer-lane__icon-bg" aria-hidden="true">

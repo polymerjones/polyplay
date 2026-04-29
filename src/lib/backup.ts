@@ -130,17 +130,21 @@ function sanitizeLibraryForFullBackup(library: LibraryState): LibraryState {
 
   const playlistsById = Object.fromEntries(
     Object.entries(library.playlistsById || {})
+      .map(([playlistId, playlist]) => {
+        const filteredTrackIds = (playlist.trackIds || []).filter((trackId) => Boolean(nonDemoTracksById[trackId]));
+        return [
+          playlistId,
+          {
+            ...playlist,
+            trackIds: filteredTrackIds
+          }
+        ] as const;
+      })
       .filter(([playlistId, playlist]) => {
         const normalizedName = (playlist.name || "").trim().toLowerCase();
-        return playlistId !== DEMO_PLAYLIST_ID && normalizedName !== DEMO_PLAYLIST_NAME;
+        const isDemoIdentityPlaylist = playlistId === DEMO_PLAYLIST_ID || normalizedName === DEMO_PLAYLIST_NAME;
+        return !isDemoIdentityPlaylist || playlist.trackIds.length > 0;
       })
-      .map(([playlistId, playlist]) => [
-        playlistId,
-        {
-          ...playlist,
-          trackIds: (playlist.trackIds || []).filter((trackId) => Boolean(nonDemoTracksById[trackId]))
-        }
-      ])
   );
 
   const reachableTrackIds = new Set(
@@ -1237,7 +1241,7 @@ function parseZipEntries(buffer: ArrayBuffer): Map<string, Uint8Array> {
     const dataStart = localHeaderOffset + 30 + localFileNameLength + localExtraLength;
 
     if (compressionMethod !== 0) {
-      throw new Error("Unsupported ZIP compression in file. Please import a Polyplay-generated backup.");
+      throw new Error("Unsupported ZIP compression in file. Please import a PolyPlay-generated backup.");
     }
 
     const dataEnd = dataStart + compressedSize;

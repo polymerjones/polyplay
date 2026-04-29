@@ -531,6 +531,15 @@ function getPreferredCurrentTrackId(rows: DbTrackRecord[]): string {
   return String(rows[0].id);
 }
 
+function getStoredCurrentTrackId(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return localStorage.getItem(CURRENT_TRACK_ID_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
 export function AdminApp() {
   const SETTINGS_HERO_SWIPE_CLOSE_DISTANCE_PX = 120;
   const SETTINGS_HERO_SWIPE_CLOSE_MAX_SIDEWAYS_PX = 72;
@@ -648,6 +657,9 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
   const [editingTrackTitle, setEditingTrackTitle] = useState("");
   const [editingTrackArtist, setEditingTrackArtist] = useState("");
+  const [currentTrackId, setCurrentTrackId] = useState<string>(() => getStoredCurrentTrackId());
+  const [quickRenameTitle, setQuickRenameTitle] = useState("");
+  const [quickRenameArtist, setQuickRenameArtist] = useState("");
   const [renamingTrackId, setRenamingTrackId] = useState<string | null>(null);
   const [removingTrackIds, setRemovingTrackIds] = useState<string[]>([]);
   const [infoModal, setInfoModal] = useState<{ title: string; message: string; openManageStorage?: boolean } | null>(
@@ -809,11 +821,21 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
     tracks.forEach((track) => push(track.artist));
     return suggestions;
   }, [artistMemoryValue, tracks]);
+  const currentTrack = useMemo(
+    () => (currentTrackId ? tracks.find((track) => track.id === currentTrackId) ?? null : null),
+    [currentTrackId, tracks]
+  );
 
   const refreshTracks = async () => {
     try {
       const rows = await getTrackRowsFromDb();
       setTracks(rows);
+      setCurrentTrackId((prev) => {
+        const stored = getStoredCurrentTrackId();
+        if (stored && rows.some((track) => track.id === stored)) return stored;
+        if (prev && rows.some((track) => track.id === prev)) return prev;
+        return "";
+      });
       if (!rows.length) {
         setSelectedArtworkTrackId("");
         setSelectedAudioTrackId("");
@@ -869,6 +891,32 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
     })();
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!currentTrack) {
+      setQuickRenameTitle("");
+      setQuickRenameArtist("");
+      return;
+    }
+    setQuickRenameTitle(currentTrack.title?.trim() || "");
+    setQuickRenameArtist(currentTrack.artist?.trim() || "");
+  }, [currentTrack?.id, currentTrack?.title, currentTrack?.artist]);
+
+  useEffect(() => {
+    const syncCurrentTrackId = () => {
+      const stored = getStoredCurrentTrackId();
+      setCurrentTrackId((prev) => (stored === prev ? prev : stored));
+    };
+    syncCurrentTrackId();
+    window.addEventListener("focus", syncCurrentTrackId);
+    window.addEventListener("storage", syncCurrentTrackId);
+    document.addEventListener("visibilitychange", syncCurrentTrackId);
+    return () => {
+      window.removeEventListener("focus", syncCurrentTrackId);
+      window.removeEventListener("storage", syncCurrentTrackId);
+      document.removeEventListener("visibilitychange", syncCurrentTrackId);
     };
   }, []);
 
@@ -2675,6 +2723,34 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
     }
   };
 
+  const onSaveCurrentTrackRename = async () => {
+    if (!currentTrack) {
+      setStatus("No current track is active.");
+      return;
+    }
+    const trimmedTitle = quickRenameTitle.trim();
+    const trimmedArtist = quickRenameArtist.trim();
+    if (!trimmedTitle) {
+      setStatus("Title can't be empty.");
+      return;
+    }
+    setRenamingTrackId(currentTrack.id);
+    try {
+      await updateTrackTextMetadataInDb(currentTrack.id, {
+        title: trimmedTitle,
+        artist: trimmedArtist || null
+      });
+      setStatus("Current track renamed.");
+      await refreshTracks();
+      await refreshStorage();
+      emitLibraryUpdated();
+    } catch (error) {
+      setStatus(`Track rename failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      setRenamingTrackId(null);
+    }
+  };
+
   const visibleTrackStorageRows = useMemo(() => {
     const next = trackStorageRows.slice();
     if (sortLargestFirst) return next.sort((a, b) => b.totalBytes - a.totalBytes);
@@ -3023,6 +3099,46 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
           <h2 className="mb-2 text-base font-semibold text-slate-100">Track Operations</h2>
 
           <div className="admin-v1-fields grid gap-2">
+            <div className="grid gap-2 rounded-2xl border border-amber-300/20 bg-slate-950/55 p-3 text-sm text-slate-300">
+              <div>
+                <div className="text-sm font-semibold text-slate-100">Rename Current Track</div>
+                <div className="text-xs text-slate-400">
+                  {currentTrack ? "Edits the active now-playing track directly." : "No current track is active right now."}
+                </div>
+              </div>
+              <input
+                type="text"
+                value={quickRenameTitle}
+                placeholder="Current track title"
+                disabled={!currentTrack || renamingTrackId === currentTrack.id}
+                className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
+                onChange={(event) => setQuickRenameTitle(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void onSaveCurrentTrackRename();
+                  }
+                }}
+              />
+              <input
+                type="text"
+                value={quickRenameArtist}
+                placeholder="Artist"
+                disabled={!currentTrack || renamingTrackId === currentTrack.id}
+                className="rounded-xl border border-slate-300/20 bg-slate-950/70 px-3 py-2 text-slate-100"
+                onChange={(event) => setQuickRenameArtist(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void onSaveCurrentTrackRename();
+                  }
+                }}
+              />
+              <Button variant="primary" onClick={() => void onSaveCurrentTrackRename()} disabled={!currentTrack}>
+                Save Current Track Name
+              </Button>
+            </div>
+
             <div className="grid gap-1 text-sm text-slate-300">
               <div>Update artwork</div>
               <select

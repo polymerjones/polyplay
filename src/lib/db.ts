@@ -430,7 +430,8 @@ export async function getTracksByIdsFromDb(trackIds: string[], options?: TrackHy
 }
 
 export async function getTrackPlaybackMediaFromDb(
-  trackId: string
+  trackId: string,
+  options?: { forceUrlRefresh?: boolean }
 ): Promise<{ audioUrl?: string; artBlob?: Blob; artUrl?: string; artVideoUrl?: string; missingAudio?: boolean }> {
   await maybeMigrateLegacyTracks();
   const library = loadLibrary();
@@ -438,6 +439,11 @@ export async function getTrackPlaybackMediaFromDb(
   if (!record) return {};
   const effectiveAudioKey = record.audioKey || (record.isDemo ? record.artVideoKey || null : null);
   const hasAudioSource = Boolean(record.bundledAudioUrl || effectiveAudioKey);
+  if (options?.forceUrlRefresh) {
+    if (!record.bundledAudioUrl) revokeMediaUrl(effectiveAudioKey);
+    if (!record.bundledArtUrl) revokeMediaUrl(record.artKey);
+    if (!record.bundledArtVideoUrl) revokeMediaUrl(record.artVideoKey);
+  }
   const artBlob = record.artKey ? await getBlob(record.artKey) : null;
   const audioUrl = record.bundledAudioUrl || (await getMediaUrl(effectiveAudioKey));
   const artUrl = record.bundledArtUrl || (await getMediaUrl(record.artKey));

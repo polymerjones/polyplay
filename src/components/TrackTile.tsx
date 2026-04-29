@@ -1,7 +1,21 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type TouchEvent } from "react";
 import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
 import type { DimMode, Track } from "../types";
 import { BorderTrail } from "./BorderTrail";
+
+const REPEAT_TAP_MAX_DELAY_MS = 280;
+const REPEAT_TAP_MAX_TRAVEL_PX = 18;
+const INTERACTIVE_EXCLUSION_SELECTOR = [
+  "button",
+  "[role='button']",
+  "a",
+  "input",
+  "select",
+  "textarea",
+  "label",
+  "[role='menuitem']",
+  ".ytm-aura"
+].join(", ");
 
 function appendRetryParam(src: string, key: string, value: string): string {
   if (!src || src.startsWith("data:")) return src;
@@ -18,6 +32,7 @@ type Props = {
   active: boolean;
   onSelectTrack: (trackId: string) => void;
   onAuraUp: (trackId: string) => void;
+  onOpenFullscreen: (trackId: string) => void;
   isCurrentTrack: boolean;
   isPlaying: boolean;
   dimMode: DimMode;
@@ -29,6 +44,7 @@ export function TrackTile({
   active,
   onSelectTrack,
   onAuraUp,
+  onOpenFullscreen,
   isCurrentTrack,
   isPlaying,
   dimMode
@@ -37,6 +53,8 @@ export function TrackTile({
   const [artFailed, setArtFailed] = useState(false);
   const [resolvedDemoArtSrc, setResolvedDemoArtSrc] = useState<string | null>(null);
   const coverRef = useRef<HTMLDivElement | null>(null);
+  const repeatTapRef = useRef<{ at: number; x: number; y: number } | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const artSrc = track.isDemo
     ? resolvedDemoArtSrc || DEFAULT_ARTWORK_URL
     : (!artFailed && track.artUrl ? track.artUrl : DEFAULT_ARTWORK_URL);
@@ -92,6 +110,60 @@ export function TrackTile({
     return () => window.removeEventListener("polyplay:aura-art-hit", onAuraArtHit as EventListener);
   }, [trackId]);
 
+  const isInteractiveTarget = (target: EventTarget | null, root: HTMLElement | null): boolean => {
+    const element = target as HTMLElement | null;
+    if (!element) return false;
+    const interactive = element.closest(INTERACTIVE_EXCLUSION_SELECTOR);
+    return Boolean(interactive && interactive !== root);
+  };
+
+  const openFullscreenFromRepeatTap = () => {
+    onOpenFullscreen(trackId);
+  };
+
+  const onRepeatTouchStart = (event: TouchEvent<HTMLButtonElement>) => {
+    if (event.touches.length !== 1) {
+      touchStartRef.current = null;
+      return;
+    }
+    const touch = event.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const onRepeatTouchEnd = (event: TouchEvent<HTMLButtonElement>) => {
+    const root = event.currentTarget;
+    if (isInteractiveTarget(event.target, root)) {
+      touchStartRef.current = null;
+      repeatTapRef.current = null;
+      return;
+    }
+    const touch = event.changedTouches[0];
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!touch || !start) return;
+    if (Math.hypot(touch.clientX - start.x, touch.clientY - start.y) > REPEAT_TAP_MAX_TRAVEL_PX) {
+      repeatTapRef.current = null;
+      return;
+    }
+    const now = Date.now();
+    const previousTap = repeatTapRef.current;
+    if (
+      previousTap &&
+      now - previousTap.at <= REPEAT_TAP_MAX_DELAY_MS &&
+      Math.hypot(touch.clientX - previousTap.x, touch.clientY - previousTap.y) <= REPEAT_TAP_MAX_TRAVEL_PX
+    ) {
+      repeatTapRef.current = null;
+      openFullscreenFromRepeatTap();
+      return;
+    }
+    repeatTapRef.current = { at: now, x: touch.clientX, y: touch.clientY };
+  };
+
+  const onRepeatDoubleClick = (event: MouseEvent<HTMLButtonElement>) => {
+    if (isInteractiveTarget(event.target, event.currentTarget)) return;
+    openFullscreenFromRepeatTap();
+  };
+
   return (
     <article
       className={`ytm-tile ${active ? "is-active" : ""} ${track.aura > 0 ? "has-aura" : ""}`.trim()}
@@ -103,6 +175,12 @@ export function TrackTile({
         type="button"
         className="ytm-tile-hit"
         onClick={() => onSelectTrack(trackId)}
+        onDoubleClick={onRepeatDoubleClick}
+        onTouchStart={onRepeatTouchStart}
+        onTouchEnd={onRepeatTouchEnd}
+        onTouchCancel={() => {
+          touchStartRef.current = null;
+        }}
         aria-label={`Play ${track.title}`}
       >
         <div ref={coverRef} className={`ytm-cover ${isFallback ? "is-fallback" : ""}`.trim()} aria-hidden="true">

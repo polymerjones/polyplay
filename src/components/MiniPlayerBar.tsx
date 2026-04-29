@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type MouseEvent, type TouchEvent } from "react";
 import type { CSSProperties } from "react";
 import { formatTime } from "../lib/time";
 import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
@@ -10,6 +10,26 @@ import { PlayerControls } from "./PlayerControls";
 const MINI_PLAYER_SWIPE_TOGGLE_DISTANCE_PX = 96;
 const MINI_PLAYER_SWIPE_TOGGLE_MAX_SIDEWAYS_PX = 72;
 const MINI_PLAYER_SWIPE_TOGGLE_MIN_VELOCITY = 0.42;
+const REPEAT_TAP_MAX_DELAY_MS = 280;
+const REPEAT_TAP_MAX_TRAVEL_PX = 18;
+const INTERACTIVE_EXCLUSION_SELECTOR = [
+  "button",
+  "[role='button']",
+  "a",
+  "input",
+  "select",
+  "textarea",
+  "label",
+  "[role='menuitem']",
+  ".mini-player-bar__aura-toggle",
+  ".mini-player-bar__loop-clear",
+  ".mini-player-bar__compact-toggle",
+  ".mini-player-bar__art",
+  ".pc-btn",
+  ".pc-transport-btn",
+  ".pc-range",
+  ".pc-progress"
+].join(", ");
 
 type Props = {
   track: Track | null;
@@ -101,6 +121,8 @@ export function MiniPlayerBar({
 }: Props) {
   const artRef = useRef<HTMLButtonElement | null>(null);
   const swipeStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
+  const repeatTapRef = useRef<{ at: number; x: number; y: number } | null>(null);
+  const repeatTapStartRef = useRef<{ x: number; y: number } | null>(null);
   const artist = track?.artist?.trim();
   const artStyle = track?.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
@@ -167,6 +189,57 @@ export function MiniPlayerBar({
     return Boolean(element.closest(".mini-player-bar__meta, .mini-player-bar__header"));
   };
 
+  const isInteractiveTarget = (target: EventTarget | null, root: HTMLElement | null) => {
+    const element = target as HTMLElement | null;
+    if (!element) return false;
+    const interactive = element.closest(INTERACTIVE_EXCLUSION_SELECTOR);
+    return Boolean(interactive && interactive !== root);
+  };
+
+  const onHeaderRepeatTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length !== 1 || !canStartSwipeToggle(event.target)) {
+      repeatTapStartRef.current = null;
+      return;
+    }
+    const touch = event.touches[0];
+    repeatTapStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const onHeaderRepeatTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
+    const root = event.currentTarget;
+    if (!track || isInteractiveTarget(event.target, root) || !canStartSwipeToggle(event.target)) {
+      repeatTapStartRef.current = null;
+      repeatTapRef.current = null;
+      return;
+    }
+    const touch = event.changedTouches[0];
+    const start = repeatTapStartRef.current;
+    repeatTapStartRef.current = null;
+    if (!touch || !start) return;
+    if (Math.hypot(touch.clientX - start.x, touch.clientY - start.y) > REPEAT_TAP_MAX_TRAVEL_PX) {
+      repeatTapRef.current = null;
+      return;
+    }
+    const now = Date.now();
+    const previousTap = repeatTapRef.current;
+    if (
+      previousTap &&
+      now - previousTap.at <= REPEAT_TAP_MAX_DELAY_MS &&
+      Math.hypot(touch.clientX - previousTap.x, touch.clientY - previousTap.y) <= REPEAT_TAP_MAX_TRAVEL_PX
+    ) {
+      repeatTapRef.current = null;
+      onOpenFullscreen();
+      return;
+    }
+    repeatTapRef.current = { at: now, x: touch.clientX, y: touch.clientY };
+  };
+
+  const onHeaderRepeatDoubleClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (!track || isInteractiveTarget(event.target, event.currentTarget)) return;
+    if (!canToggleCompactFromDesktopHeader(event.target)) return;
+    onOpenFullscreen();
+  };
+
   return (
     <section
       id="polyPlayer"
@@ -183,6 +256,7 @@ export function MiniPlayerBar({
       <div
         className="mini-player-bar__header"
         onTouchStart={(event) => {
+          onHeaderRepeatTouchStart(event);
           if (event.touches.length !== 1) {
             swipeStartRef.current = null;
             return;
@@ -195,6 +269,7 @@ export function MiniPlayerBar({
         }}
         onTouchEnd={(event) => {
           const touch = event.changedTouches[0];
+          onHeaderRepeatTouchEnd(event);
           if (!touch) return;
           endSwipeToggle(touch);
         }}
@@ -207,11 +282,9 @@ export function MiniPlayerBar({
         }}
         onTouchCancel={() => {
           swipeStartRef.current = null;
+          repeatTapStartRef.current = null;
         }}
-        onDoubleClick={(event) => {
-          if (!canToggleCompactFromDesktopHeader(event.target)) return;
-          onToggleCompact();
-        }}
+        onDoubleClick={onHeaderRepeatDoubleClick}
       >
         <button
           type="button"

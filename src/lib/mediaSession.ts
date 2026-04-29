@@ -1,4 +1,5 @@
 import type { Track } from "../types";
+import { getNowPlayingArtworkDataUrl } from "./iosNowPlaying";
 
 type MediaSessionWithPosition = MediaSession & {
   setPositionState?: (state?: MediaPositionState) => void;
@@ -17,7 +18,7 @@ function getMediaMetadataCtor(): typeof MediaMetadata | null {
 }
 
 export async function syncMediaSessionItem(
-  track: Pick<Track, "title" | "artist" | "artUrl" | "missingAudio" | "audioUrl"> | null
+  track: Pick<Track, "title" | "artist" | "artBlob" | "artUrl" | "missingAudio" | "audioUrl"> | null
 ): Promise<void> {
   const mediaSession = getMediaSession();
   const MediaMetadataCtor = getMediaMetadataCtor();
@@ -28,13 +29,17 @@ export async function syncMediaSessionItem(
     return;
   }
 
-  const artwork = track.artUrl
+  const artworkUrl = await getNowPlayingArtworkDataUrl({
+    artBlob: track.artBlob,
+    artUrl: track.artUrl
+  });
+  const artwork = artworkUrl
     ? [
-        { src: track.artUrl, sizes: "96x96", type: "image/png" },
-        { src: track.artUrl, sizes: "128x128", type: "image/png" },
-        { src: track.artUrl, sizes: "192x192", type: "image/png" },
-        { src: track.artUrl, sizes: "256x256", type: "image/png" },
-        { src: track.artUrl, sizes: "512x512", type: "image/png" }
+        { src: artworkUrl, sizes: "96x96", type: "image/jpeg" },
+        { src: artworkUrl, sizes: "128x128", type: "image/jpeg" },
+        { src: artworkUrl, sizes: "192x192", type: "image/jpeg" },
+        { src: artworkUrl, sizes: "256x256", type: "image/jpeg" },
+        { src: artworkUrl, sizes: "512x512", type: "image/jpeg" }
       ]
     : [];
 
