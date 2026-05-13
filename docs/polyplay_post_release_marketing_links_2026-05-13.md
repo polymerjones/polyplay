@@ -7,6 +7,7 @@ Small post-release UI update for PolyPlay Audio. This was a narrow product/marke
 ## Changes
 
 - Added an App Store badge link to the desktop main toolbar.
+- Added a mobile-browser fallback placement for the App Store badge in the second toolbar row, where there is more space.
 - Added a footer section at the bottom of the Settings content with:
   - official "Download on the App Store" badge
   - Instagram icon link
@@ -30,12 +31,14 @@ Small post-release UI update for PolyPlay Audio. This was a narrow product/marke
   - Avoids navigating the Settings iframe directly to external sites.
 - `src/App.tsx`
   - Adds desktop toolbar App Store badge.
+  - Adds mobile-only toolbar App Store badge in the second controls row.
   - Handles `polyplay:open-external-url` messages from the Settings iframe.
   - Uses Capacitor Browser when available and falls back to opening a new browser context.
 - `src/index.css`
   - Adds Settings footer, App Store badge, and social icon styling.
 - `styles.css`
-  - Adds desktop toolbar badge sizing and mobile hiding.
+  - Adds desktop toolbar badge sizing.
+  - Hides the primary-row badge on mobile and shows the second-row mobile badge instead.
 
 ## QA Completed
 

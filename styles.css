@@ -6393,6 +6393,10 @@ body.nuke-flash::after {
   height: auto;
 }
 
+.app-store-toolbar-badge--mobile {
+  display: none;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .app-store-toolbar-badge:hover {
     transform: translateY(-1px);
@@ -7175,8 +7179,14 @@ html[data-theme="light"] .playlist-selector select {
     grid-template-columns: auto 1fr auto;
   }
 
-  .app-store-toolbar-badge {
+  .app-store-toolbar-badge--primary {
     display: none;
+  }
+
+  .app-store-toolbar-badge--mobile {
+    display: inline-flex;
+    width: 112px;
+    align-self: center;
   }
 
   .topbar-title {

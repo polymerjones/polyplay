@@ -4989,7 +4989,7 @@ export default function App() {
               onClick={handleExternalLinkClick(APP_STORE_URL)}
               target="_blank"
               rel="noopener noreferrer"
-              className="app-store-toolbar-badge"
+              className="app-store-toolbar-badge app-store-toolbar-badge--primary"
               aria-label="PolyPlay Audio on the App Store"
               title="PolyPlay Audio on the App Store"
             >
@@ -5132,6 +5132,17 @@ export default function App() {
                 {layoutMode === "grid" ? "≡" : "▦"}
               </span>
             </button>
+            <a
+              href={APP_STORE_URL}
+              onClick={handleExternalLinkClick(APP_STORE_URL)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="app-store-toolbar-badge app-store-toolbar-badge--mobile"
+              aria-label="PolyPlay Audio on the App Store"
+              title="PolyPlay Audio on the App Store"
+            >
+              <img src={APP_STORE_BADGE_URL} alt="Download on the App Store" loading="lazy" />
+            </a>
           </div>
           <div className="hint">
             {hasTracks
