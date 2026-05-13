@@ -50,6 +50,91 @@ body.admin-frame-body .admin-content {
   overflow-x: hidden;
 }
 
+.admin-settings-footer {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 10px 0 calc(env(safe-area-inset-bottom, 0px) + 8px);
+}
+
+.admin-settings-footer__app-store {
+  display: inline-flex;
+  width: min(172px, 84vw);
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.22);
+  line-height: 0;
+  text-decoration: none;
+}
+
+.admin-settings-footer__app-store img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.admin-settings-footer__socials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.admin-settings-footer__social-link {
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid rgba(226, 232, 240, 0.2);
+  background: rgba(15, 23, 42, 0.72);
+  color: #f8fafc;
+  box-shadow: 0 10px 20px rgba(2, 6, 23, 0.18);
+  text-decoration: none;
+}
+
+.admin-settings-footer__social-link svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.admin-settings-footer__social-link:last-child svg {
+  fill: currentColor;
+  stroke: none;
+}
+
+.admin-settings-footer__legal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.2);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.6);
+  color: #e2e8f0;
+  padding: 8px 12px;
+  font-size: 14px;
+  backdrop-filter: blur(8px);
+}
+
+.admin-settings-footer__legal a {
+  border-radius: 8px;
+  color: #f8fafc;
+  font-weight: 600;
+  padding: 8px 10px;
+  text-decoration: underline;
+  text-decoration-color: rgba(148, 163, 184, 0.7);
+  text-underline-offset: 4px;
+}
+
 .admin-v1-card,
 .admin-v1-fields,
 .admin-v1 label,
@@ -1693,6 +1778,24 @@ html[data-theme="light"] body.admin-frame-body .admin-v1 {
     radial-gradient(circle at 16% 12%, rgba(207, 111, 130, 0.08), transparent 32%),
     radial-gradient(circle at 80% 18%, rgba(255, 214, 166, 0.1), transparent 28%),
     linear-gradient(180deg, rgba(251, 245, 248, 0.98), rgba(244, 237, 244, 0.98));
+}
+
+html[data-theme="light"] body.admin-frame-body .admin-settings-footer__app-store,
+html[data-theme="light"] body.admin-frame-body .admin-settings-footer__social-link,
+html[data-theme="light"] body.admin-frame-body .admin-settings-footer__legal {
+  border-color: rgba(124, 58, 237, 0.16);
+  background: rgba(255, 255, 255, 0.74);
+  color: #4c1d95;
+  box-shadow: 0 12px 24px rgba(126, 84, 108, 0.1);
+}
+
+html[data-theme="light"] body.admin-frame-body .admin-settings-footer__app-store {
+  background: transparent;
+}
+
+html[data-theme="light"] body.admin-frame-body .admin-settings-footer__legal a {
+  color: #4c1d95;
+  text-decoration-color: rgba(124, 58, 237, 0.42);
 }
 
 body.theme-dark .admin-v1-card,

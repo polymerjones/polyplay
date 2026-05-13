@@ -6375,6 +6375,32 @@ body.nuke-flash::after {
   gap: 8px;
 }
 
+.app-store-toolbar-badge {
+  display: inline-flex;
+  width: 126px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  box-shadow: 0 10px 22px rgba(4, 4, 9, 0.28);
+  line-height: 1;
+  text-decoration: none;
+  transition: transform 150ms ease, filter 150ms ease, box-shadow 180ms ease;
+}
+
+.app-store-toolbar-badge img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .app-store-toolbar-badge:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+    box-shadow: 0 12px 24px rgba(4, 4, 9, 0.36), 0 0 16px rgba(var(--aura-rgb, 188, 132, 255), 0.2);
+  }
+}
+
 .topbar-title {
   display: flex;
   flex-direction: column;
@@ -7147,6 +7173,10 @@ html[data-theme="light"] .playlist-selector select {
 
   .topbar-tier--primary {
     grid-template-columns: auto 1fr auto;
+  }
+
+  .app-store-toolbar-badge {
+    display: none;
   }
 
   .topbar-title {

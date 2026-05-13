@@ -104,6 +104,10 @@ const LOOP_MODE_KEY = "polyplay_loopModeByTrack";
 const PRIVACY_POLICY_URL = "/privacy-policy.html";
 const TERMS_AND_CONDITIONS_URL = "/terms-and-conditions.html";
 const SUPPORT_URL = "/support.html";
+const APP_STORE_URL = "https://apps.apple.com/us/app/polyplay-audio/id6760799840";
+const APP_STORE_BADGE_URL = "https://upload.wikimedia.org/wikipedia/commons/3/3c/Download_on_the_App_Store_Badge.svg";
+const INSTAGRAM_URL = "https://www.instagram.com/polyplayaudio/";
+const TIKTOK_URL = "https://www.tiktok.com/@polyplayaudio";
 const CAN_USE_IOS_NATIVE_AUDIO_IMPORT = canUseIosNativeAudioImport();
 const CAN_USE_IOS_NATIVE_ARTWORK_IMPORT = canUseIosNativeAudioImport();
 const ARTIST_MEMORY_KEY = "polyplay_importArtist_v1";
@@ -186,6 +190,13 @@ function getCapacitorBrowserPlugin(): CapacitorBrowserPlugin | null {
   return (capacitor.Plugins?.Browser ?? null) as CapacitorBrowserPlugin | null;
 }
 
+function openExternalBrowserFallback(url: string) {
+  const opened = window.open(url, "_blank");
+  if (opened) {
+    opened.opener = null;
+  }
+}
+
 function openAdminExternalUrl(url: string) {
   if (typeof window === "undefined") return;
   let resolvedUrl = url;
@@ -207,12 +218,18 @@ function openAdminExternalUrl(url: string) {
     window.location.assign(resolvedUrl);
     return;
   }
-  const plugin = getCapacitorBrowserPlugin();
-  if (plugin?.open) {
-    void plugin.open({ url: resolvedUrl });
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: "polyplay:open-external-url", url: resolvedUrl }, window.location.origin);
     return;
   }
-  window.open(resolvedUrl, "_blank", "noopener,noreferrer");
+  const plugin = getCapacitorBrowserPlugin();
+  if (plugin?.open) {
+    void plugin.open({ url: resolvedUrl }).catch(() => {
+      openExternalBrowserFallback(resolvedUrl);
+    });
+    return;
+  }
+  openExternalBrowserFallback(resolvedUrl);
 }
 
 function markAdminImportCompleted() {
@@ -3945,8 +3962,47 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
       <p className="mt-3 rounded-xl border border-slate-300/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-200">
         {status || "Ready."}
       </p>
-      <div className="mt-4 flex justify-center pb-[calc(env(safe-area-inset-bottom,0px)+8px)] pt-2">
-        <div className="flex flex-wrap items-center justify-center gap-2 rounded-xl border border-slate-300/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 backdrop-blur-sm">
+      <footer className="admin-settings-footer" aria-label="PolyPlay links">
+        <a
+          href={APP_STORE_URL}
+          onClick={handleAdminLinkClick(APP_STORE_URL)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="admin-settings-footer__app-store"
+        >
+          <img src={APP_STORE_BADGE_URL} alt="Download on the App Store" loading="lazy" />
+        </a>
+        <div className="admin-settings-footer__socials" aria-label="PolyPlay social links">
+          <a
+            href={INSTAGRAM_URL}
+            onClick={handleAdminLinkClick(INSTAGRAM_URL)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="admin-settings-footer__social-link"
+            aria-label="PolyPlay Audio on Instagram"
+            title="Instagram"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
+              <circle cx="12" cy="12" r="4" />
+              <circle cx="17.2" cy="6.8" r="1.1" />
+            </svg>
+          </a>
+          <a
+            href={TIKTOK_URL}
+            onClick={handleAdminLinkClick(TIKTOK_URL)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="admin-settings-footer__social-link"
+            aria-label="PolyPlay Audio on TikTok"
+            title="TikTok"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M14 3v11.1a4.8 4.8 0 1 1-4.8-4.8c.4 0 .8.05 1.2.16v3.08a2 2 0 1 0 .8 1.6V3h2.8c.34 2.3 1.74 3.92 4.2 4.64v3.05A7.2 7.2 0 0 1 14 8.86Z" />
+            </svg>
+          </a>
+        </div>
+        <div className="admin-settings-footer__legal">
           <a
             href={PRIVACY_POLICY_URL}
             onClick={handleAdminLinkClick(PRIVACY_POLICY_URL)}
@@ -3975,7 +4031,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
             Support
           </a>
         </div>
-      </div>
+      </footer>
       </div>
       </>
       )}

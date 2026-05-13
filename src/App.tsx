@@ -181,6 +181,8 @@ const FX_MODE_KEY = "polyplay_fxMode_v1";
 const FX_QUALITY_KEY = "polyplay_fxQuality_v1";
 const CURRENT_TRACK_ID_KEY = "polyplay_currentTrackId_v1";
 const IOS_NOW_PLAYING_APP_TITLE = "PolyPlay Audio";
+const APP_STORE_URL = "https://apps.apple.com/us/app/polyplay-audio/id6760799840";
+const APP_STORE_BADGE_URL = "https://upload.wikimedia.org/wikipedia/commons/3/3c/Download_on_the_App_Store_Badge.svg";
 const FX_INTERACTIVE_GUARD_SELECTORS = [
   "button",
   "a",
@@ -221,6 +223,55 @@ const EDGE_PLAYLIST_ZONE_PX = 80;
 const EDGE_PLAYLIST_HOLD_MS = 600;
 const EDGE_PLAYLIST_SWIPE_THRESHOLD = 48;
 const EDGE_PLAYLIST_DIRECTION_RATIO = 1.25;
+
+type CapacitorBrowserPlugin = {
+  open: (options: { url: string }) => Promise<void>;
+};
+
+function getCapacitorBrowserPlugin(): CapacitorBrowserPlugin | null {
+  if (typeof window === "undefined") return null;
+  const capacitor = (window as Window & {
+    Capacitor?: {
+      registerPlugin?: <T>(name: string) => T;
+      Plugins?: Record<string, unknown>;
+    };
+  }).Capacitor;
+  if (!capacitor) return null;
+  if (typeof capacitor.registerPlugin === "function") {
+    try {
+      return capacitor.registerPlugin<CapacitorBrowserPlugin>("Browser");
+    } catch {
+      // Fall through to legacy plugin lookup.
+    }
+  }
+  return (capacitor.Plugins?.Browser ?? null) as CapacitorBrowserPlugin | null;
+}
+
+function openExternalBrowserFallback(url: string) {
+  const opened = window.open(url, "_blank");
+  if (opened) {
+    opened.opener = null;
+  }
+}
+
+function openExternalUrl(url: string) {
+  if (typeof window === "undefined") return;
+  const plugin = getCapacitorBrowserPlugin();
+  if (plugin?.open) {
+    void plugin.open({ url }).catch(() => {
+      openExternalBrowserFallback(url);
+    });
+    return;
+  }
+  openExternalBrowserFallback(url);
+}
+
+function handleExternalLinkClick(url: string) {
+  return (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    openExternalUrl(url);
+  };
+}
 
 function clampAura(value: number): number {
   return Math.max(0, Math.min(10, Math.round(value)));
@@ -2000,6 +2051,18 @@ export default function App() {
       }
       if (type === "polyplay:close-settings") {
         setOverlayPage(null);
+        return;
+      }
+      if (type === "polyplay:open-external-url") {
+        const url = event.data?.url;
+        if (typeof url !== "string") return;
+        try {
+          const parsedUrl = new URL(url);
+          if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") return;
+          openExternalUrl(parsedUrl.toString());
+        } catch {
+          // Ignore malformed external URLs.
+        }
         return;
       }
       if (type === "polyplay:user-imported") {
@@ -4921,6 +4984,17 @@ export default function App() {
             <span className="topbar-title__sub">{headerVersion}</span>
           </div>
           <div className="topbar-primary-actions">
+            <a
+              href={APP_STORE_URL}
+              onClick={handleExternalLinkClick(APP_STORE_URL)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="app-store-toolbar-badge"
+              aria-label="PolyPlay Audio on the App Store"
+              title="PolyPlay Audio on the App Store"
+            >
+              <img src={APP_STORE_BADGE_URL} alt="Download on the App Store" loading="lazy" />
+            </a>
               <button
                 type="button"
                 className="upload-link upload-link--icon nav-action-btn"
