@@ -151,6 +151,44 @@ body.admin-frame-body .admin-content {
   max-width: 100%;
 }
 
+.admin-header-logo-shell {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 24% 18%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0) 48%),
+    linear-gradient(145deg, #f4efdf, #dfd6c4);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.62),
+    0 10px 20px rgba(2, 6, 23, 0.22);
+}
+
+.admin-header-logo-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 24% 22%, rgba(126, 87, 194, 0.16), transparent 42%),
+    radial-gradient(circle at 82% 76%, rgba(88, 42, 152, 0.1), transparent 48%);
+}
+
+.admin-header-logo-text {
+  position: relative;
+  z-index: 1;
+  color: #5a35a2;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 0.76;
+  text-align: center;
+  letter-spacing: -0.06em;
+  text-transform: lowercase;
+}
+
 .tile-hit {
   border: 0;
   background: transparent;

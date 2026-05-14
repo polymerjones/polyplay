@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
-import logo from "../logo.png";
 import { quickTipsContent } from "./content/quickTips";
 import { APP_TITLE, APP_VERSION } from "./config/version";
 import heroLogo from "./assets/polyplay-hero-logo.png";
@@ -18,6 +17,7 @@ import { TextShimmer } from "./components/TextShimmer";
 import {
   duplicateTrackWithAudioInDb,
   getAllTracksFromDb,
+  getStorageUsageSummary,
   getTrackAudioBlobFromDb,
   getTrackPlaybackMediaFromDb,
   getTracksByIdsFromDb,
@@ -25,7 +25,8 @@ import {
   regenerateAutoArtworkForThemeChangeInDb,
   replaceAudioInDb,
   saveAuraToDb,
-  setPlaylistThemeSelectionInDb
+  setPlaylistThemeSelectionInDb,
+  type StorageUsageSummary
 } from "./lib/db";
 import {
   BackupSizeError,
@@ -183,6 +184,7 @@ const CURRENT_TRACK_ID_KEY = "polyplay_currentTrackId_v1";
 const IOS_NOW_PLAYING_APP_TITLE = "PolyPlay Audio";
 const APP_STORE_URL = "https://apps.apple.com/us/app/polyplay-audio/id6760799840";
 const APP_STORE_BADGE_URL = "https://upload.wikimedia.org/wikipedia/commons/3/3c/Download_on_the_App_Store_Badge.svg";
+const STORAGE_LED_BAR_COUNT = 5;
 const FX_INTERACTIVE_GUARD_SELECTORS = [
   "button",
   "a",
@@ -218,6 +220,16 @@ const FX_INTERACTIVE_GUARD_SELECTORS = [
   ".bubble-layer",
   "[data-bubble-safe='off']"
 ].join(", ");
+
+function getStorageFreeBarCount(summary: StorageUsageSummary | null): number {
+  if (!summary || summary.capBytes <= 0) return STORAGE_LED_BAR_COUNT;
+  const freeRatio = Math.max(0, Math.min(1, (summary.capBytes - summary.totalBytes) / summary.capBytes));
+  if (freeRatio > 0.8) return 5;
+  if (freeRatio > 0.6) return 4;
+  if (freeRatio > 0.4) return 3;
+  if (freeRatio > 0.2) return 2;
+  return 1;
+}
 
 const EDGE_PLAYLIST_ZONE_PX = 80;
 const EDGE_PLAYLIST_HOLD_MS = 600;
@@ -625,6 +637,7 @@ export default function App() {
   } | null>(null);
   const [showMissingIds, setShowMissingIds] = useState(false);
   const [runtimeLibrary, setRuntimeLibrary] = useState<LibraryState | null>(null);
+  const [storageUsageSummary, setStorageUsageSummary] = useState<StorageUsageSummary | null>(null);
   const runtimeLibraryRef = useRef<LibraryState | null>(null);
   const activePlaylistIdRef = useRef<string | null>(null);
   const [lastExportedAt, setLastExportedAt] = useState<string | null>(() => {
@@ -1029,7 +1042,10 @@ export default function App() {
       librarySnapshot = ensured.library;
       if (ensured.changed) setLibrary(librarySnapshot);
       const playlistIds = Object.keys(librarySnapshot.playlistsById || {});
-      const allTracks = await getAllTracksFromDb({ includeMediaUrls: false, includeBlobs: false });
+      const [allTracks, storageSummary] = await Promise.all([
+        getAllTracksFromDb({ includeMediaUrls: false, includeBlobs: false }),
+        getStorageUsageSummary().catch(() => null)
+      ]);
       if (requestSeq !== refreshTracksRequestSeqRef.current) return false;
       const allTracksById = allTracks.reduce<Record<string, Track>>((acc, track) => {
         acc[track.id] = track;
@@ -1075,13 +1091,14 @@ export default function App() {
       const hydratedLoaded = loaded.length
         ? await getTracksByIdsFromDb(
             loaded.map((track) => track.id),
-            { includeMediaUrls: true, includeAudioUrl: false, includeArtworkUrls: true, includeBlobs: false }
+            { includeMediaUrls: true, includeAudioUrl: true, includeArtworkUrls: true, includeBlobs: false }
           )
         : [];
       if (requestSeq !== refreshTracksRequestSeqRef.current) return false;
       allTracksRef.current = allTracks;
       setAllTracksCatalog(allTracks);
       setRuntimeLibrary(librarySnapshot);
+      setStorageUsageSummary(storageSummary);
       setTracks(hydratedLoaded);
       setIsPlaylistRequired(playlistIds.length === 0);
       if (playlistIds.length === 0) {
@@ -2342,6 +2359,11 @@ export default function App() {
       .filter(Boolean) as Track[];
   }, [allTracksCatalog, currentTrackId, playbackPlaylistId, runtimeLibrary, tracks]);
   const hasTracks = tracks.length > 0;
+  const storageFreeBytes = storageUsageSummary
+    ? Math.max(0, storageUsageSummary.capBytes - storageUsageSummary.totalBytes)
+    : 0;
+  const storageFreeLabel = storageUsageSummary ? formatByteCount(storageFreeBytes) : "Storage";
+  const storageFreeBars = getStorageFreeBarCount(storageUsageSummary);
   const isInitialDemoFirstRunState = useMemo(() => {
     if (hasOnboarded) return false;
     const activePlaylist =
@@ -2387,7 +2409,7 @@ export default function App() {
   const currentAudioUrl = currentTrack?.audioUrl ?? null;
 
   const refreshCurrentTrackMedia = useCallback(
-    async (trackId: string, options?: { forceUrlRefresh?: boolean }) => {
+    async (trackId: string, options?: { forceUrlRefresh?: boolean; forceAudioUrlRefresh?: boolean; forceArtworkUrlRefresh?: boolean }) => {
       const media = await getTrackPlaybackMediaFromDb(trackId, options).catch(
         (): { audioUrl?: string; artBlob?: Blob; artUrl?: string; artVideoUrl?: string; missingAudio?: boolean } => ({})
       );
@@ -2899,7 +2921,7 @@ export default function App() {
         );
 
       if (activeTrackId && shouldRepairSource) {
-        const refreshedMedia = await refreshCurrentTrackMedia(activeTrackId, { forceUrlRefresh: true }).catch(() => null);
+        const refreshedMedia = await refreshCurrentTrackMedia(activeTrackId, { forceAudioUrlRefresh: true }).catch(() => null);
         if (currentTrackIdRef.current !== activeTrackId) return;
         if (refreshedMedia?.audioUrl) {
           resolvedAudioUrl = refreshedMedia.audioUrl;
@@ -3375,6 +3397,42 @@ export default function App() {
     });
   };
 
+  const playCurrentTrackAfterMediaRefresh = async (trackId: string) => {
+    pendingAutoPlayRef.current = true;
+    pendingAutoPlayTrackIdRef.current = trackId;
+    const media = await refreshCurrentTrackMedia(trackId, { forceAudioUrlRefresh: true });
+    if (currentTrackIdRef.current !== trackId) return;
+    const audioUrl = media?.audioUrl;
+    const audio = audioRef.current;
+    if (!audioUrl || !audio) return;
+
+    try {
+      await ensurePlaybackGainRouting(true);
+      if (audioSrcRef.current !== audioUrl) {
+        logAudioDebug("pause() called", { reason: "same-track-media-refresh-src" });
+        audio.pause();
+        audio.src = audioUrl;
+        audioSrcRef.current = audioUrl;
+        setCurrentTime(getSafeActiveLoopStart() ?? 0);
+        setDuration(0);
+      }
+      pendingAutoPlayRef.current = false;
+      pendingAutoPlayTrackIdRef.current = null;
+      logAudioDebug("play() called", { reason: "same-track-media-refresh", readyState: audio.readyState });
+      await audio.play();
+      logAudioDebug("play() resolved", { reason: "same-track-media-refresh" });
+      setIsPlaying(true);
+    } catch (error) {
+      logAudioDebug("play() rejected", { reason: "same-track-media-refresh", error: String(error) });
+      if (isIOS && currentTrackIdRef.current === trackId) {
+        pendingAutoPlayRef.current = true;
+        pendingAutoPlayTrackIdRef.current = trackId;
+        return;
+      }
+      setIsPlaying(false);
+    }
+  };
+
   const playTrack = (trackId: string, autoPlay = true) => {
     logAudioDebug("playTrack() called", { trackId, autoPlay });
     dismissOpenState();
@@ -3388,7 +3446,11 @@ export default function App() {
     if (trackId === currentTrackId) {
       if (autoPlay && canPlay) {
         if (audio && audio.paused) {
-          void resumeCurrentTrackPlayback("same-track");
+          if (currentTrack?.audioUrl) {
+            void resumeCurrentTrackPlayback("same-track");
+          } else {
+            void playCurrentTrackAfterMediaRefresh(trackId);
+          }
         }
       }
       return;
@@ -3446,15 +3508,13 @@ export default function App() {
         audio.pause();
         audio.src = currentTrack.audioUrl;
         audioSrcRef.current = currentTrack.audioUrl;
-        audio.load();
       } else if (!audio.currentSrc || audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-        logAudioDebug("resume:load-refresh", {
+        logAudioDebug("resume:play-through-pending-load", {
           reason,
           readyState: audio.readyState,
           networkState: audio.networkState,
           currentSrc: audio.currentSrc
         });
-        audio.load();
       }
 
       const safeLoopStart = getSafeActiveLoopStart();
@@ -4947,7 +5007,9 @@ export default function App() {
         <header className="topbar topbar--two-tier">
         <div className="topbar-tier topbar-tier--primary">
           <div className="brand">
-            <img className="brand-logo" src={logo} alt="PolyPlay logo" />
+            <span className="brand-logo-shell" role="img" aria-label="PolyPlay logo">
+              <span className="brand-logo-text" aria-hidden="true">poly<br />play</span>
+            </span>
           </div>
           <div className="topbar-title">
             <button
@@ -5132,17 +5194,19 @@ export default function App() {
                 {layoutMode === "grid" ? "≡" : "▦"}
               </span>
             </button>
-            <a
-              href={APP_STORE_URL}
-              onClick={handleExternalLinkClick(APP_STORE_URL)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="app-store-toolbar-badge app-store-toolbar-badge--mobile"
-              aria-label="PolyPlay Audio on the App Store"
-              title="PolyPlay Audio on the App Store"
-            >
-              <img src={APP_STORE_BADGE_URL} alt="Download on the App Store" loading="lazy" />
-            </a>
+            {storageUsageSummary && (
+              <div className="storage-led" aria-label={`Import storage: ${storageFreeLabel} free`}>
+                <span className="storage-led__label">{storageFreeLabel} free</span>
+                <span className="storage-led__bars" aria-hidden="true">
+                  {Array.from({ length: STORAGE_LED_BAR_COUNT }, (_, index) => (
+                    <span
+                      key={index}
+                      className={`storage-led__bar ${index < storageFreeBars ? "is-filled" : ""}`.trim()}
+                    />
+                  ))}
+                </span>
+              </div>
+            )}
           </div>
           <div className="hint">
             {hasTracks

@@ -434,14 +434,53 @@ main,
   user-select: none;
 }
 
-.brand-logo {
+.brand-logo,
+.brand-logo-shell {
   width: 64px;
   height: 64px;
   border-radius: 10px;
+}
+
+.brand-logo {
   object-fit: cover;
   box-shadow:
     0 6px 14px rgba(20, 10, 36, 0.35),
     inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.brand-logo-shell {
+  position: relative;
+  flex: 0 0 64px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 24% 18%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0) 48%),
+    linear-gradient(145deg, #f4efdf, #dfd6c4);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.62),
+    0 6px 14px rgba(20, 10, 36, 0.35);
+}
+
+.brand-logo-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 24% 22%, rgba(126, 87, 194, 0.16), transparent 42%),
+    radial-gradient(circle at 82% 76%, rgba(88, 42, 152, 0.1), transparent 48%);
+}
+
+.brand-logo-text {
+  position: relative;
+  z-index: 1;
+  color: #5a35a2;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 0.84;
+  text-align: center;
+  letter-spacing: -0.06em;
+  text-transform: lowercase;
 }
 .hint {
   color: rgba(255, 255, 255, 0.74);
@@ -604,9 +643,18 @@ main,
     text-overflow: ellipsis;
   }
 
-  .brand-logo {
+  .brand-logo,
+  .brand-logo-shell {
     width: 48px;
     height: 48px;
+  }
+
+  .brand-logo-shell {
+    flex-basis: 48px;
+  }
+
+  .brand-logo-text {
+    font-size: 13px;
   }
 
   .top-actions {
@@ -6393,8 +6441,38 @@ body.nuke-flash::after {
   height: auto;
 }
 
-.app-store-toolbar-badge--mobile {
+.storage-led {
   display: none;
+}
+
+.storage-led__bars {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.storage-led__bar {
+  width: 7px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid rgba(226, 217, 255, 0.42);
+  background: rgba(16, 17, 28, 0.58);
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
+}
+
+.storage-led__bar.is-filled {
+  border-color: rgba(236, 228, 255, 0.72);
+  background: linear-gradient(180deg, rgba(238, 232, 255, 0.9), rgba(172, 148, 224, 0.76));
+  box-shadow: 0 0 8px rgba(167, 131, 255, 0.24), inset 0 0 5px rgba(255, 255, 255, 0.16);
+}
+
+.storage-led__label {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.05;
+  color: rgba(245, 241, 255, 0.82);
+  white-space: nowrap;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -6566,9 +6644,18 @@ body.nuke-flash::after {
   }
 }
 
-.topbar--two-tier .brand-logo {
+.topbar--two-tier .brand-logo,
+.topbar--two-tier .brand-logo-shell {
   width: clamp(42px, 4.2vw, 54px);
   height: clamp(42px, 4.2vw, 54px);
+}
+
+.topbar--two-tier .brand-logo-shell {
+  flex-basis: clamp(42px, 4.2vw, 54px);
+}
+
+.topbar--two-tier .brand-logo-text {
+  font-size: clamp(12px, 1.18vw, 15px);
 }
 
 .topbar-tier--controls {
@@ -7183,12 +7270,6 @@ html[data-theme="light"] .playlist-selector select {
     display: none;
   }
 
-  .app-store-toolbar-badge--mobile {
-    display: inline-flex;
-    width: 112px;
-    align-self: center;
-  }
-
   .topbar-title {
     text-align: left;
     font-size: 16px;
@@ -7206,6 +7287,24 @@ html[data-theme="light"] .playlist-selector select {
   .topbar-tier--controls {
     justify-content: start;
     grid-template-columns: repeat(auto-fit, minmax(36px, max-content));
+  }
+
+  .storage-led {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    width: 84px;
+    min-width: 84px;
+    min-height: 42px;
+    padding: 4px 7px;
+    border: 1px solid rgba(154, 138, 211, 0.34);
+    border-radius: 13px;
+    background: linear-gradient(180deg, rgba(33, 31, 52, 0.72), rgba(14, 15, 25, 0.62));
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+      0 10px 20px rgba(2, 3, 9, 0.2);
   }
 
   .track-grid-page {

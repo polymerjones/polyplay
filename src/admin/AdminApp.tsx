@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import { parseBuffer, type IPicture } from "music-metadata-browser";
-import logo from "../../logo.png";
 import { TransferLaneDropZone } from "./TransferLaneDropZone";
 import { GratitudeEntriesModal } from "./GratitudeEntriesModal";
 import { GratitudeHubPanel } from "./GratitudeHubPanel";
@@ -2831,11 +2830,9 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
         }}
       >
         <div className="flex min-w-0 items-center gap-2">
-          <img
-            src={logo}
-            alt="PolyPlay logo"
-            className="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-300/20"
-          />
+          <span className="admin-header-logo-shell" role="img" aria-label="PolyPlay logo">
+            <span className="admin-header-logo-text" aria-hidden="true">poly<br />play</span>
+          </span>
           <div className="min-w-0">
             <h1 className="truncate text-lg font-semibold text-slate-100">PolyPlay Admin</h1>
             <p className="truncate text-xs text-slate-400">
