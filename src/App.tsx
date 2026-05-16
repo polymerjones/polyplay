@@ -1113,7 +1113,7 @@ export default function App() {
         if (prev) {
           teardownCurrentAudio();
         }
-        return hydratedLoaded[0]?.id ?? null;
+        return null;
       });
       return true;
     } finally {
@@ -2049,12 +2049,16 @@ export default function App() {
         markActivePlaylistDirty();
         void refreshTracks();
 
-        try {
-          const audio = new Audio("/hyper-notif.wav");
-          audio.volume = 0.85;
-          void audio.play();
-        } catch {
-          // Ignore notification sound failures.
+        if (isIOS) {
+          fireSuccessHaptic();
+        } else {
+          try {
+            const audio = new Audio("/hyper-notif.wav");
+            audio.volume = 0.85;
+            void audio.play();
+          } catch {
+            // Ignore notification sound failures.
+          }
         }
         return;
       }
