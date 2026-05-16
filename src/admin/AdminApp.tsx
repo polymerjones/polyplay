@@ -3392,7 +3392,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
               label="Artwork (Image or Video Artwork Loop)"
               tooltip="Drop images or short video loops here to set artwork for the selected track."
               iconType="artwork"
-              hint="Video loops ≤20s • ≤60MB mobile"
+              hint="Video loops up to 60s at 720p - <=60MB mobile"
               accept="image/*,video/mp4,video/quicktime,.mov,.jpg,.jpeg,.png,.webp"
               selectedFileName={selectedArtworkFile?.name || uploadArt?.name}
               busy={isArtworkLaneBusy}

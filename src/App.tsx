@@ -1020,6 +1020,26 @@ export default function App() {
     });
   };
 
+  const getAudioDebugState = (audio: HTMLAudioElement | null = audioRef.current): Record<string, unknown> => ({
+    pendingAutoPlay: pendingAutoPlayRef.current,
+    pendingAutoPlayTrackId: pendingAutoPlayTrackIdRef.current,
+    audioPaused: audio?.paused ?? null,
+    audioEnded: audio?.ended ?? null,
+    readyState: audio?.readyState ?? null,
+    networkState: audio?.networkState ?? null,
+    currentSrc: audio?.currentSrc || null,
+    audioSrcRef: audioSrcRef.current
+  });
+
+  const setIsPlayingDebug = (next: boolean, label: string, details?: Record<string, unknown>) => {
+    logAudioDebug(`isPlaying:set-${next ? "true" : "false"}`, {
+      label,
+      ...getAudioDebugState(),
+      ...details
+    });
+    setIsPlaying(next);
+  };
+
   const beginAppSettleTask = () => {
     pendingAppSettleCountRef.current += 1;
     setPendingAppSettleCount((current) => current + 1);
@@ -1312,9 +1332,19 @@ export default function App() {
     logAudioDebug("src cleared");
     audio.removeAttribute("src");
     audio.load();
+    logAudioDebug("audioSrcRef:write", {
+      reason: "teardownCurrentAudio",
+      nextAudioSrcRef: null,
+      ...getAudioDebugState(audio)
+    });
     audioSrcRef.current = null;
+    logAudioDebug("pendingAutoPlay:write", {
+      reason: "teardownCurrentAudio",
+      nextPendingAutoPlayTrackId: null,
+      ...getAudioDebugState(audio)
+    });
     pendingAutoPlayTrackIdRef.current = null;
-    setIsPlaying(false);
+    setIsPlayingDebug(false, "teardownCurrentAudio");
     setCurrentTime(0);
     setDuration(0);
     logAudioDebug("teardown:end");
@@ -1351,6 +1381,11 @@ export default function App() {
     isNukingRef.current = true;
     nukeFinalizeStartedRef.current = false;
     teardownCurrentAudio();
+    logAudioDebug("pendingAutoPlay:write", {
+      reason: "nuke",
+      nextPendingAutoPlay: false,
+      ...getAudioDebugState()
+    });
     pendingAutoPlayRef.current = false;
     setIsNuking(true);
     const prefersReducedMotion =
@@ -1376,7 +1411,7 @@ export default function App() {
     setCurrentTrackId(null);
     setCurrentTime(0);
     setDuration(0);
-    setIsPlaying(false);
+    setIsPlayingDebug(false, "playlist-nuke");
     setIsFullscreenPlayerOpen(false);
     setShowOpenState(false);
     setIsPlaylistNuking(true);
@@ -2232,6 +2267,11 @@ export default function App() {
         setShowSplash(true);
         setIsSplashDismissing(false);
         teardownCurrentAudio();
+        logAudioDebug("pendingAutoPlay:write", {
+          reason: "full-reset",
+          nextPendingAutoPlay: false,
+          ...getAudioDebugState()
+        });
         pendingAutoPlayRef.current = false;
         void (async () => {
           revokeAllMediaUrls();
@@ -2240,7 +2280,7 @@ export default function App() {
           setCurrentTrackId(null);
           setCurrentTime(0);
           setDuration(0);
-          setIsPlaying(false);
+          setIsPlayingDebug(false, "full-reset");
           setLoopByTrack({});
           setLoopModeByTrack({});
           syncPlayerStateFromStorage();
@@ -2582,7 +2622,7 @@ export default function App() {
       loopDragResumeTimeoutRef.current = null;
       void ensurePlaybackGainRouting(true);
       logAudioDebug("play() called", { reason: "loop-drag-end" });
-      void audio.play().catch(() => setIsPlaying(false));
+      void audio.play().catch(() => setIsPlayingDebug(false, "loop-drag-resume-rejected", { audio }));
     }, 90);
   };
 
@@ -2741,8 +2781,13 @@ export default function App() {
       logAudioDebug("src cleared");
       audio.removeAttribute("src");
       audio.load();
+      logAudioDebug("audioSrcRef:write", {
+        reason: "effect-no-src",
+        nextAudioSrcRef: null,
+        ...getAudioDebugState(audio)
+      });
       audioSrcRef.current = null;
-      setIsPlaying(false);
+      setIsPlayingDebug(false, "effect-no-src", { audio });
       setCurrentTime(0);
       setDuration(0);
       return;
@@ -2756,6 +2801,11 @@ export default function App() {
       audioInstanceIdRef.current = audioInstanceSeqRef.current;
       logAudioDebug("new src assigned", { src: nextUrl });
       audio.load();
+      logAudioDebug("audioSrcRef:write", {
+        reason: "switch-src",
+        nextAudioSrcRef: nextUrl,
+        ...getAudioDebugState(audio)
+      });
       audioSrcRef.current = nextUrl;
       setCurrentTime(getSafeActiveLoopStart() ?? 0);
       setDuration(0);
@@ -2764,11 +2814,23 @@ export default function App() {
     if (pendingAutoPlayRef.current) {
       const targetTrackId = currentTrackId;
       const shouldDeferLoopedAutoplay = hasActiveRegionLoop;
+      logAudioDebug("pendingAutoPlay:read", {
+        reason: "source-effect",
+        targetTrackId,
+        shouldDeferLoopedAutoplay,
+        ...getAudioDebugState(audio)
+      });
       const attemptPlay = (reason: "pending-autoplay") => {
         logAudioDebug("play() called", { reason, targetTrackId, readyState: audio.readyState });
         return audio.play();
       };
       const finalizePendingAutoPlay = () => {
+        logAudioDebug("pendingAutoPlay:write", {
+          reason: "finalize",
+          nextPendingAutoPlay: false,
+          nextPendingAutoPlayTrackId: null,
+          ...getAudioDebugState(audio)
+        });
         pendingAutoPlayRef.current = false;
         pendingAutoPlayTrackIdRef.current = null;
       };
@@ -2783,14 +2845,25 @@ export default function App() {
           }
           commitUiCurrentTime(safeLoopStart, { force: true });
         }
+        logAudioDebug("pendingAutoPlay:write", {
+          reason: "defer-looped-autoplay",
+          nextPendingAutoPlay: false,
+          nextPendingAutoPlayTrackId: targetTrackId,
+          ...getAudioDebugState(audio)
+        });
         pendingAutoPlayRef.current = false;
         pendingAutoPlayTrackIdRef.current = targetTrackId;
         if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
+          logAudioDebug("pendingAutoPlay:write", {
+            reason: "metadata-ready",
+            nextPendingAutoPlayTrackId: null,
+            ...getAudioDebugState(audio)
+          });
           pendingAutoPlayTrackIdRef.current = null;
           void attemptPlay("pending-autoplay")
             .then(() => {
               logAudioDebug("play() resolved", { reason: "pending-autoplay", targetTrackId });
-              setIsPlaying(true);
+              setIsPlayingDebug(true, "pending-autoplay-resolved-deferred", { audio, targetTrackId });
             })
             .catch((error) => {
               logAudioDebug("play() rejected", {
@@ -2800,10 +2873,15 @@ export default function App() {
                 error: String(error)
               });
               if (isIOS && currentTrackId === targetTrackId) {
+                logAudioDebug("pendingAutoPlay:write", {
+                  reason: "deferred-ios-retry",
+                  nextPendingAutoPlayTrackId: targetTrackId,
+                  ...getAudioDebugState(audio)
+                });
                 pendingAutoPlayTrackIdRef.current = targetTrackId;
                 return;
               }
-              setIsPlaying(false);
+              setIsPlayingDebug(false, "pending-autoplay-rejected-deferred", { audio, targetTrackId });
             });
         }
         return;
@@ -2813,7 +2891,7 @@ export default function App() {
       void attemptPlay("pending-autoplay")
         .then(() => {
           logAudioDebug("play() resolved", { reason: "pending-autoplay", targetTrackId });
-          setIsPlaying(true);
+          setIsPlayingDebug(true, "pending-autoplay-resolved", { audio, targetTrackId });
         })
         .catch((error) => {
           logAudioDebug("play() rejected", {
@@ -2823,9 +2901,14 @@ export default function App() {
             error: String(error)
           });
           if (!isIOS || !targetTrackId || currentTrackId !== targetTrackId) {
-            setIsPlaying(false);
+            setIsPlayingDebug(false, "pending-autoplay-rejected", { audio, targetTrackId });
             return;
           }
+          logAudioDebug("pendingAutoPlay:write", {
+            reason: "ios-retry",
+            nextPendingAutoPlayTrackId: targetTrackId,
+            ...getAudioDebugState(audio)
+          });
           pendingAutoPlayTrackIdRef.current = targetTrackId;
         });
     }
@@ -2942,6 +3025,11 @@ export default function App() {
         });
         audio.pause();
         audio.src = resolvedAudioUrl;
+        logAudioDebug("audioSrcRef:write", {
+          reason: "resync-src-repair",
+          nextAudioSrcRef: resolvedAudioUrl,
+          ...getAudioDebugState(audio)
+        });
         audioSrcRef.current = resolvedAudioUrl;
         audio.load();
       } else if (resolvedAudioUrl && audio.readyState < HTMLMediaElement.HAVE_METADATA) {
@@ -2961,7 +3049,17 @@ export default function App() {
       commitUiCurrentTime(nextTime, { force: true });
 
       if (!hasTrackSource) {
-        setIsPlaying(false);
+        if (!audio.paused && !audio.ended) {
+          logAudioDebug("resync:inactive-playing-guard", {
+            reason,
+            paused: audio.paused,
+            ended: audio.ended,
+            currentTime: nextTime,
+            ...getAudioDebugState(audio)
+          });
+          return;
+        }
+        setIsPlayingDebug(false, "resync-inactive", { audio, reason });
         logAudioDebug("resync:inactive", { reason, paused: audio.paused, currentTime: nextTime });
         return;
       }
@@ -2976,7 +3074,7 @@ export default function App() {
         if (!routingReady) {
           logAudioDebug("resync:routing-unavailable", { reason, currentTime: nextTime });
           audio.pause();
-          setIsPlaying(false);
+          setIsPlayingDebug(false, "resync-routing-unavailable", { audio, reason });
           return;
         }
         try {
@@ -2986,14 +3084,18 @@ export default function App() {
         } catch (error) {
           logAudioDebug("play() rejected", { reason: `resync-${reason}`, error: String(error) });
           audio.pause();
-          setIsPlaying(false);
+          setIsPlayingDebug(false, "resync-play-rejected", { audio, reason });
           return;
         }
       }
 
       const syncedTime = Number.isFinite(audio.currentTime) ? Math.max(0, audio.currentTime) : nextTime;
       commitUiCurrentTime(syncedTime, { force: true });
-      setIsPlaying(!audio.paused && !audio.ended && (!isIOS || routingReady));
+      setIsPlayingDebug(!audio.paused && !audio.ended && (!isIOS || routingReady), "resync-complete", {
+        audio,
+        reason,
+        routingReady
+      });
       lastPlaybackResyncAtRef.current = typeof performance !== "undefined" ? performance.now() : Date.now();
       logAudioDebug("resync:complete", {
         reason,
@@ -3150,7 +3252,7 @@ export default function App() {
             audio.currentTime = restartAt;
             setCurrentTime(restartAt);
             commitUiCurrentTime(restartAt, { force: true });
-            setIsPlaying(false);
+            setIsPlayingDebug(false, "threepeat-replay-rejected", { audio });
           });
         return true;
       }
@@ -3175,13 +3277,13 @@ export default function App() {
       applyDimMode(audio, dimMode);
       void Promise.resolve(audio.play())
         .then(() => {
-          setIsPlaying(true);
+          setIsPlayingDebug(true, "plain-repeat-replay-resolved", { audio });
         })
         .catch(() => {
           audio.currentTime = restartAt;
           setCurrentTime(restartAt);
           commitUiCurrentTime(restartAt, { force: true });
-          setIsPlaying(false);
+          setIsPlayingDebug(false, "plain-repeat-replay-rejected", { audio });
         });
       return true;
     };
@@ -3212,7 +3314,7 @@ export default function App() {
         playTrack(nextId, true);
         return;
       }
-      setIsPlaying(false);
+      setIsPlayingDebug(false, "advance-complete-no-next", { audio });
     };
 
     const onTime = () => {
@@ -3241,6 +3343,11 @@ export default function App() {
     };
     const retryPendingAutoPlayIfNeeded = (reason: "loadedmetadata" | "durationchange" | "canplay") => {
       const pendingTrackId = pendingAutoPlayTrackIdRef.current;
+      logAudioDebug("pendingAutoPlay:read", {
+        reason: `retry-${reason}`,
+        pendingTrackId,
+        ...getAudioDebugState(audio)
+      });
       if (!pendingTrackId || pendingTrackId !== currentTrackId) return;
       if (audioSrcRef.current !== currentAudioUrl || !currentAudioUrl) return;
       if (audio.readyState < HTMLMediaElement.HAVE_METADATA) return;
@@ -3255,16 +3362,26 @@ export default function App() {
         }
         commitUiCurrentTime(safeLoopStart, { force: true });
       }
+      logAudioDebug("pendingAutoPlay:write", {
+        reason: `retry-${reason}`,
+        nextPendingAutoPlayTrackId: null,
+        ...getAudioDebugState(audio)
+      });
       pendingAutoPlayTrackIdRef.current = null;
       logAudioDebug("play() called", { reason: `pending-autoplay-${reason}`, readyState: audio.readyState, pendingTrackId });
       void audio.play()
         .then(() => {
           clearPendingAutoPlayRetryTimeout();
           logAudioDebug("play() resolved", { reason: `pending-autoplay-${reason}`, pendingTrackId });
-          setIsPlaying(true);
+          setIsPlayingDebug(true, `pending-autoplay-${reason}-resolved`, { audio, pendingTrackId });
         })
         .catch((error) => {
           if (isIOS && pendingTrackId && currentTrackId === pendingTrackId) {
+            logAudioDebug("pendingAutoPlay:write", {
+              reason: `retry-${reason}-ios-reschedule`,
+              nextPendingAutoPlayTrackId: pendingTrackId,
+              ...getAudioDebugState(audio)
+            });
             pendingAutoPlayTrackIdRef.current = pendingTrackId;
             schedulePendingAutoPlayRetry(pendingTrackId);
           }
@@ -3274,7 +3391,7 @@ export default function App() {
             readyState: audio.readyState,
             error: String(error)
           });
-          setIsPlaying(false);
+          setIsPlayingDebug(false, `pending-autoplay-${reason}-rejected`, { audio, pendingTrackId });
         });
     };
     const onMeta = () => {
@@ -3287,14 +3404,29 @@ export default function App() {
       retryPendingAutoPlayIfNeeded("durationchange");
     };
     const onPlay = () => {
-      setIsPlaying(true);
+      logAudioDebug("audio-event:play", getAudioDebugState(audio));
+      setIsPlayingDebug(true, "audio-event-play", { audio });
       if (currentTrackId) {
         lastPlayedAtByTrackRef.current[currentTrackId] = Date.now();
       }
     };
-    const onPause = () => setIsPlaying(false);
-    const onError = () => setIsPlaying(false);
+    const onPlaying = () => {
+      logAudioDebug("audio-event:playing", getAudioDebugState(audio));
+      setIsPlayingDebug(true, "audio-event-playing", { audio });
+      if (currentTrackId) {
+        lastPlayedAtByTrackRef.current[currentTrackId] = Date.now();
+      }
+    };
+    const onPause = () => {
+      logAudioDebug("audio-event:pause", getAudioDebugState(audio));
+      setIsPlayingDebug(false, "audio-event-pause", { audio });
+    };
+    const onError = () => {
+      logAudioDebug("audio-event:error", getAudioDebugState(audio));
+      setIsPlayingDebug(false, "audio-event-error", { audio });
+    };
     const onEnded = () => {
+      logAudioDebug("audio-event:ended", getAudioDebugState(audio));
       const loopRegion = currentTrackId ? loopByTrack[currentTrackId] : undefined;
       if (currentLoopMode === "region" && loopRegion && loopRegion.end > loopRegion.start) {
         if (!isCropWorkflowActive && playbackNavigationTracks.length > 1) {
@@ -3307,7 +3439,7 @@ export default function App() {
         audio.currentTime = loopRegion.start;
         setCurrentTime(loopRegion.start);
         applyDimMode(audio, dimMode);
-        void audio.play().catch(() => setIsPlaying(false));
+        void audio.play().catch(() => setIsPlayingDebug(false, "region-loop-replay-rejected", { audio }));
         return;
       }
       advancePlaybackAfterTrackCompletion();
@@ -3318,12 +3450,14 @@ export default function App() {
     audio.addEventListener("durationchange", onDurationChangeWithRetry);
     audio.addEventListener("canplay", onCanPlay);
     audio.addEventListener("play", onPlay);
+    audio.addEventListener("playing", onPlaying);
     audio.addEventListener("pause", onPause);
     audio.addEventListener("error", onError);
     audio.addEventListener("ended", onEnded);
     retryPendingAutoPlayIfNeeded("canplay");
     logAudioDebug("listeners attached", {
-      listeners: ["timeupdate", "loadedmetadata", "durationchange", "canplay", "play", "pause", "error", "ended"]
+      listeners: ["timeupdate", "loadedmetadata", "durationchange", "canplay", "play", "playing", "pause", "error", "ended"],
+      ...getAudioDebugState(audio)
     });
 
     const detachListeners = () => {
@@ -3332,11 +3466,13 @@ export default function App() {
       audio.removeEventListener("durationchange", onDurationChangeWithRetry);
       audio.removeEventListener("canplay", onCanPlay);
       audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("playing", onPlaying);
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("error", onError);
       audio.removeEventListener("ended", onEnded);
       logAudioDebug("listeners detached", {
-        listeners: ["timeupdate", "loadedmetadata", "durationchange", "canplay", "play", "pause", "error", "ended"]
+        listeners: ["timeupdate", "loadedmetadata", "durationchange", "canplay", "play", "playing", "pause", "error", "ended"],
+        ...getAudioDebugState(audio)
       });
     };
     teardownAudioListenersRef.current = detachListeners;
@@ -3402,6 +3538,12 @@ export default function App() {
   };
 
   const playCurrentTrackAfterMediaRefresh = async (trackId: string) => {
+    logAudioDebug("pendingAutoPlay:write", {
+      reason: "same-track-media-refresh-start",
+      nextPendingAutoPlay: true,
+      nextPendingAutoPlayTrackId: trackId,
+      ...getAudioDebugState()
+    });
     pendingAutoPlayRef.current = true;
     pendingAutoPlayTrackIdRef.current = trackId;
     const media = await refreshCurrentTrackMedia(trackId, { forceAudioUrlRefresh: true });
@@ -3416,24 +3558,41 @@ export default function App() {
         logAudioDebug("pause() called", { reason: "same-track-media-refresh-src" });
         audio.pause();
         audio.src = audioUrl;
+        logAudioDebug("audioSrcRef:write", {
+          reason: "same-track-media-refresh-src",
+          nextAudioSrcRef: audioUrl,
+          ...getAudioDebugState(audio)
+        });
         audioSrcRef.current = audioUrl;
         setCurrentTime(getSafeActiveLoopStart() ?? 0);
         setDuration(0);
       }
+      logAudioDebug("pendingAutoPlay:write", {
+        reason: "same-track-media-refresh-before-play",
+        nextPendingAutoPlay: false,
+        nextPendingAutoPlayTrackId: null,
+        ...getAudioDebugState(audio)
+      });
       pendingAutoPlayRef.current = false;
       pendingAutoPlayTrackIdRef.current = null;
       logAudioDebug("play() called", { reason: "same-track-media-refresh", readyState: audio.readyState });
       await audio.play();
       logAudioDebug("play() resolved", { reason: "same-track-media-refresh" });
-      setIsPlaying(true);
+      setIsPlayingDebug(true, "same-track-media-refresh-resolved", { audio, trackId });
     } catch (error) {
       logAudioDebug("play() rejected", { reason: "same-track-media-refresh", error: String(error) });
       if (isIOS && currentTrackIdRef.current === trackId) {
+        logAudioDebug("pendingAutoPlay:write", {
+          reason: "same-track-media-refresh-ios-retry",
+          nextPendingAutoPlay: true,
+          nextPendingAutoPlayTrackId: trackId,
+          ...getAudioDebugState(audio)
+        });
         pendingAutoPlayRef.current = true;
         pendingAutoPlayTrackIdRef.current = trackId;
         return;
       }
-      setIsPlaying(false);
+      setIsPlayingDebug(false, "same-track-media-refresh-rejected", { audio, trackId });
     }
   };
 
@@ -3473,6 +3632,14 @@ export default function App() {
     }
 
     teardownCurrentAudio();
+    logAudioDebug("pendingAutoPlay:write", {
+      reason: "playTrack",
+      nextPendingAutoPlay: autoPlay && canPlay,
+      nextPendingAutoPlayTrackId: pendingAutoPlayTrackIdRef.current,
+      selectedTrackHasAudioSource: selectedTrack?.hasAudioSource ?? null,
+      selectedTrackMissingAudio: selectedTrack?.missingAudio ?? null,
+      ...getAudioDebugState(audio)
+    });
     pendingAutoPlayRef.current = autoPlay && canPlay;
     setPlaybackPlaylistId(activePlaylistIdRef.current);
     setCurrentTrackId(trackId);
@@ -3511,6 +3678,11 @@ export default function App() {
         logAudioDebug("resume:src-repair", { reason, expectedSrc: currentTrack.audioUrl, actualSrc: audioSrcRef.current });
         audio.pause();
         audio.src = currentTrack.audioUrl;
+        logAudioDebug("audioSrcRef:write", {
+          reason: `resume-${reason}-src-repair`,
+          nextAudioSrcRef: currentTrack.audioUrl,
+          ...getAudioDebugState(audio)
+        });
         audioSrcRef.current = currentTrack.audioUrl;
       } else if (!audio.currentSrc || audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
         logAudioDebug("resume:play-through-pending-load", {
@@ -3533,14 +3705,14 @@ export default function App() {
       logAudioDebug("play() called", { reason, readyState: audio.readyState });
       await audio.play();
       logAudioDebug("play() resolved", { reason });
-      setIsPlaying(true);
+      setIsPlayingDebug(true, `resume-${reason}-resolved`, { audio });
       return;
     } catch (error) {
       logAudioDebug("play() rejected", { reason, error: String(error) });
     }
 
     if (!isIOS) {
-      setIsPlaying(false);
+      setIsPlayingDebug(false, `resume-${reason}-rejected-non-ios`, { audio });
       return;
     }
 
@@ -3554,6 +3726,11 @@ export default function App() {
       });
       audio.pause();
       audio.src = currentTrack.audioUrl;
+      logAudioDebug("audioSrcRef:write", {
+        reason: `resume-${reason}-ios-recovery`,
+        nextAudioSrcRef: currentTrack.audioUrl,
+        ...getAudioDebugState(audio)
+      });
       audioSrcRef.current = currentTrack.audioUrl;
       audio.load();
 
@@ -3606,10 +3783,10 @@ export default function App() {
       logAudioDebug("play() called", { reason: `${reason}-recovery`, readyState: audio.readyState });
       await audio.play();
       logAudioDebug("play() resolved", { reason: `${reason}-recovery` });
-      setIsPlaying(true);
+      setIsPlayingDebug(true, `resume-${reason}-recovery-resolved`, { audio });
     } catch (recoveryError) {
       logAudioDebug("play() rejected", { reason: `${reason}-recovery`, error: String(recoveryError) });
-      setIsPlaying(false);
+      setIsPlayingDebug(false, `resume-${reason}-recovery-rejected`, { audio });
     }
   };
 
@@ -4667,12 +4844,17 @@ export default function App() {
         setVaultStatus(progress.label);
       });
       teardownCurrentAudio();
+      logAudioDebug("pendingAutoPlay:write", {
+        reason: "import-vault",
+        nextPendingAutoPlay: false,
+        ...getAudioDebugState()
+      });
       pendingAutoPlayRef.current = false;
       revokeAllMediaUrls();
       setCurrentTrackId(null);
       setCurrentTime(0);
       setDuration(0);
-      setIsPlaying(false);
+      setIsPlayingDebug(false, "import-vault");
       exitFreshUserOnboardingState();
       window.dispatchEvent(new CustomEvent("polyplay:library-updated"));
       syncPlayerStateFromStorage();
