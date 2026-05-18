@@ -749,6 +749,7 @@ export default function App() {
   const lastUiCurrentTimeCommitAtRef = useRef(0);
   const lastUiCurrentTimeValueRef = useRef(0);
   const currentTrackIdRef = useRef<string | null>(null);
+  const currentAudioUrlRef = useRef<string | null>(null);
   const themeModeRef = useRef<ThemeMode>("dark");
   const customThemeSlotRef = useRef<CustomThemeSlot>("crimson");
   const allTracksRef = useRef<Track[]>([]);
@@ -1319,6 +1320,10 @@ export default function App() {
   const teardownCurrentAudio = () => {
     const audio = audioRef.current;
     if (!audio) return;
+    logAudioDebug("diagnostic:teardownCurrentAudio:start", {
+      currentTrackAudioUrl: currentTrack?.audioUrl ?? null,
+      ...getAudioDebugState(audio)
+    });
     logAudioDebug("teardown:start");
     teardownAudioListenersRef.current?.();
     teardownAudioListenersRef.current = null;
@@ -1347,6 +1352,10 @@ export default function App() {
     setIsPlayingDebug(false, "teardownCurrentAudio");
     setCurrentTime(0);
     setDuration(0);
+    logAudioDebug("diagnostic:teardownCurrentAudio:end-state", {
+      currentTrackAudioUrl: currentTrack?.audioUrl ?? null,
+      ...getAudioDebugState(audio)
+    });
     logAudioDebug("teardown:end");
   };
 
@@ -2451,6 +2460,7 @@ export default function App() {
   }, [quickTourPhase]);
   const canCreatePolyplaylist = newPlaylistName.trim().length > 0;
   const currentAudioUrl = currentTrack?.audioUrl ?? null;
+  currentAudioUrlRef.current = currentAudioUrl;
 
   const refreshCurrentTrackMedia = useCallback(
     async (trackId: string, options?: { forceUrlRefresh?: boolean; forceAudioUrlRefresh?: boolean; forceArtworkUrlRefresh?: boolean }) => {
@@ -3016,6 +3026,27 @@ export default function App() {
       }
 
       if (resolvedAudioUrl && (audioSrcRef.current !== resolvedAudioUrl || !audio.currentSrc)) {
+        const liveTrackId = currentTrackIdRef.current;
+        const closureTrackId = currentTrack?.id ?? null;
+        const liveExpectedSrc = currentAudioUrlRef.current;
+        const isStaleSrcRepair =
+          (activeTrackId !== liveTrackId) ||
+          (closureTrackId !== null && closureTrackId !== liveTrackId) ||
+          (liveExpectedSrc !== null && resolvedAudioUrl !== liveExpectedSrc);
+        if (isStaleSrcRepair) {
+          logAudioDebug("resync:src-repair-aborted", {
+            reason,
+            activeTrackId,
+            liveTrackId,
+            closureTrackId,
+            expectedSrc: resolvedAudioUrl,
+            liveExpectedSrc,
+            actualSrc: audioSrcRef.current,
+            readyState: audio.readyState,
+            networkState: audio.networkState
+          });
+          return;
+        }
         logAudioDebug("resync:src-repair", {
           reason,
           expectedSrc: resolvedAudioUrl,
@@ -3343,6 +3374,14 @@ export default function App() {
     };
     const retryPendingAutoPlayIfNeeded = (reason: "loadedmetadata" | "durationchange" | "canplay") => {
       const pendingTrackId = pendingAutoPlayTrackIdRef.current;
+      logAudioDebug("diagnostic:pendingAutoPlayRetry:event-fired", {
+        reason,
+        pendingAutoPlay: pendingAutoPlayRef.current,
+        pendingAutoPlayTrackId: pendingTrackId,
+        currentAudioUrl,
+        currentTrackAudioUrl: currentTrack?.audioUrl ?? null,
+        ...getAudioDebugState(audio)
+      });
       logAudioDebug("pendingAutoPlay:read", {
         reason: `retry-${reason}`,
         pendingTrackId,
@@ -3598,6 +3637,15 @@ export default function App() {
 
   const playTrack = (trackId: string, autoPlay = true) => {
     logAudioDebug("playTrack() called", { trackId, autoPlay });
+    logAudioDebug("diagnostic:playTrack:called-state", {
+      trackId,
+      autoPlay,
+      pendingAutoPlay: pendingAutoPlayRef.current,
+      pendingAutoPlayTrackId: pendingAutoPlayTrackIdRef.current,
+      currentTrackAudioUrl: currentTrack?.audioUrl ?? null,
+      audioSrcRef: audioSrcRef.current,
+      ...getAudioDebugState()
+    });
     dismissOpenState();
     const selectedTrack = allTracksRef.current.find((track) => track.id === trackId) ?? null;
     const canPlay = Boolean(selectedTrack?.hasAudioSource) && !selectedTrack?.missingAudio;
@@ -3632,15 +3680,17 @@ export default function App() {
     }
 
     teardownCurrentAudio();
+    const shouldAutoPlaySelectedTrack = autoPlay && canPlay;
     logAudioDebug("pendingAutoPlay:write", {
       reason: "playTrack",
-      nextPendingAutoPlay: autoPlay && canPlay,
-      nextPendingAutoPlayTrackId: pendingAutoPlayTrackIdRef.current,
+      nextPendingAutoPlay: shouldAutoPlaySelectedTrack,
+      nextPendingAutoPlayTrackId: shouldAutoPlaySelectedTrack ? trackId : null,
       selectedTrackHasAudioSource: selectedTrack?.hasAudioSource ?? null,
       selectedTrackMissingAudio: selectedTrack?.missingAudio ?? null,
       ...getAudioDebugState(audio)
     });
-    pendingAutoPlayRef.current = autoPlay && canPlay;
+    pendingAutoPlayRef.current = shouldAutoPlaySelectedTrack;
+    pendingAutoPlayTrackIdRef.current = shouldAutoPlaySelectedTrack ? trackId : null;
     setPlaybackPlaylistId(activePlaylistIdRef.current);
     setCurrentTrackId(trackId);
   };
