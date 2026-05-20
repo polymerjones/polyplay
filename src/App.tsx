@@ -3444,7 +3444,6 @@ export default function App() {
     };
     const onPlay = () => {
       logAudioDebug("audio-event:play", getAudioDebugState(audio));
-      setIsPlayingDebug(true, "audio-event-play", { audio });
       if (currentTrackId) {
         lastPlayedAtByTrackRef.current[currentTrackId] = Date.now();
       }
