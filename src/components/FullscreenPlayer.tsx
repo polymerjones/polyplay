@@ -123,6 +123,7 @@ export function FullscreenPlayer({
   const artist = track.artist?.trim();
   const cinemaStillSrc = track.artUrl || DEFAULT_ARTWORK_URL;
   const hasArtworkVideo = Boolean(track.artVideoUrl);
+  const hasArtworkGif = !hasArtworkVideo && Boolean(track.artGifUrl);
   // Stabilization: keep auto-generated poster art visually stable in fullscreen.
   // Explicit regeneration still happens through theme-change flows in db.ts.
   const shouldAnimateGenerated = false;
@@ -570,10 +571,10 @@ export function FullscreenPlayer({
             </>
           )}
           <div className="fullscreen-player-shell__art-media">
-            {!hasArtworkVideo && isCinemaMode && (
+            {!hasArtworkVideo && (hasArtworkGif || isCinemaMode) && (
               <img
                 className="fullscreen-player-shell__art-image"
-                src={cinemaStillSrc}
+                src={hasArtworkGif ? track.artGifUrl || cinemaStillSrc : cinemaStillSrc}
                 alt={`${track.title} artwork`}
                 draggable={false}
               />

@@ -11,6 +11,7 @@ export type TrackRecord = {
   aura: number;
   audioKey: string | null;
   artKey: string | null;
+  artGifKey?: string | null;
   artVideoKey?: string | null;
   bundledAudioUrl?: string | null;
   bundledArtUrl?: string | null;
@@ -78,6 +79,7 @@ export function migrateLibraryIfNeeded(input: unknown): LibraryState {
       aura: Math.max(0, Math.min(10, Math.round(Number(t.aura ?? 0)))),
       audioKey: t.audioKey || null,
       artKey: t.artKey || null,
+      artGifKey: t.artGifKey || null,
       artVideoKey: t.artVideoKey || null,
       bundledAudioUrl: typeof t.bundledAudioUrl === "string" ? t.bundledAudioUrl : null,
       bundledArtUrl: typeof t.bundledArtUrl === "string" ? t.bundledArtUrl : null,

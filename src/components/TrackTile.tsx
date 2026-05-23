@@ -51,18 +51,22 @@ export function TrackTile({
 }: Props) {
   const showTrail = isCurrentTrack;
   const [artFailed, setArtFailed] = useState(false);
+  const [gifFailed, setGifFailed] = useState(false);
   const [resolvedDemoArtSrc, setResolvedDemoArtSrc] = useState<string | null>(null);
   const coverRef = useRef<HTMLDivElement | null>(null);
   const repeatTapRef = useRef<{ at: number; x: number; y: number } | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
-  const artSrc = track.isDemo
+  const shouldAnimateGif = isCurrentTrack && isPlaying && Boolean(track.artGifUrl) && !gifFailed;
+  const posterArtSrc = track.isDemo
     ? resolvedDemoArtSrc || DEFAULT_ARTWORK_URL
     : (!artFailed && track.artUrl ? track.artUrl : DEFAULT_ARTWORK_URL);
+  const artSrc = shouldAnimateGif ? track.artGifUrl || posterArtSrc : posterArtSrc;
   const isFallback = artSrc === DEFAULT_ARTWORK_URL;
   const auraLevel = Math.max(0, Math.min(1, (track.aura || 0) / 10));
 
   useEffect(() => {
     setArtFailed(false);
+    setGifFailed(false);
     if (!track.isDemo) {
       setResolvedDemoArtSrc(null);
       return;
@@ -93,7 +97,7 @@ export function TrackTile({
     return () => {
       cancelled = true;
     };
-  }, [track.artUrl, track.id, track.isDemo]);
+  }, [track.artGifUrl, track.artUrl, track.id, track.isDemo]);
 
   useEffect(() => {
     const onAuraArtHit = (event: Event) => {
@@ -190,6 +194,10 @@ export function TrackTile({
             src={artSrc}
             alt={track.title}
             onError={() => {
+              if (shouldAnimateGif) {
+                setGifFailed(true);
+                return;
+              }
               if (track.isDemo) {
                 setResolvedDemoArtSrc(null);
                 return;

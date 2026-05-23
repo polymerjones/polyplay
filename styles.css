@@ -1245,6 +1245,33 @@ main,
   color: rgba(255, 228, 186, 0.48);
 }
 
+.vault-save-name-composite {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.vault-save-name-input--base {
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.vault-save-name-suffix {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  border: 1px solid rgba(255, 214, 146, 0.28);
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+  background: rgba(33, 25, 20, 0.82);
+  color: rgba(255, 236, 206, 0.84);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
 .vault-warning__actions {
   display: flex;
   gap: 8px;
@@ -5169,6 +5196,21 @@ body.mute-freeze .track-backdrop {
     width: 100%;
   }
 
+  .gratitude-modal.is-keyboard-active {
+    place-items: start center;
+    overflow-y: auto;
+  }
+
+  .gratitude-modal.is-keyboard-active .gratitude-modal__card {
+    min-height: auto;
+    max-height: calc(100dvh - 120px);
+    overflow-y: auto;
+  }
+
+  .gratitude-modal.is-keyboard-active .gratitude-modal__textarea {
+    min-height: 100px;
+  }
+
   .transfer-lane__zone {
     padding: 10px;
   }
@@ -6818,6 +6860,18 @@ html[data-theme="light"] .playlist-selector select {
   animation: onboarding-tooltip-float 2.8s ease-in-out infinite;
 }
 
+.playlist-selector__tutorial-tip--portal {
+  position: fixed;
+  top: auto;
+  left: auto;
+  bottom: auto;
+  min-width: 140px;
+  z-index: 9999;
+  transform: translateX(-100%) translateY(0) translateZ(0) scale(0.985);
+  transform-origin: top right;
+  animation: onboarding-tooltip-float-portal 2.8s ease-in-out infinite;
+}
+
 .playlist-selector__tutorial-tip::before {
   content: "";
   position: absolute;
@@ -6838,6 +6892,16 @@ html[data-theme="light"] .playlist-selector select {
   }
   50% {
     transform: translateX(-50%) translateY(-3px) scale(1);
+  }
+}
+
+@keyframes onboarding-tooltip-float-portal {
+  0%,
+  100% {
+    transform: translateX(-100%) translateY(0) scale(0.985);
+  }
+  50% {
+    transform: translateX(-100%) translateY(-3px) scale(1);
   }
 }
 
@@ -7252,6 +7316,22 @@ html[data-theme="light"] .playlist-selector select {
     transform: translateX(-50%) rotate(45deg);
   }
 
+  .playlist-selector__tutorial-tip--portal {
+    bottom: auto;
+    transform: translateX(-100%) translateY(0) scale(0.985);
+    transform-origin: top right;
+    animation: onboarding-tooltip-float-portal 2.8s ease-in-out infinite;
+  }
+
+  .playlist-selector__tutorial-tip--portal::before {
+    top: -6px;
+    bottom: auto;
+    border-left: 1px solid rgba(244, 193, 103, 0.34);
+    border-top: 1px solid rgba(244, 193, 103, 0.34);
+    border-right: none;
+    border-bottom: none;
+  }
+
   @keyframes onboarding-tooltip-float-mobile {
     0%,
     100% {
@@ -7281,7 +7361,17 @@ html[data-theme="light"] .playlist-selector select {
   }
 
   .playlist-selector__controls {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+
+  .playlist-selector select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .playlist-selector__action-wrap {
+    flex-wrap: nowrap;
+    gap: 6px;
   }
 
   .topbar-tier--controls {

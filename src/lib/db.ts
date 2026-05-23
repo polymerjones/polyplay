@@ -18,9 +18,11 @@ export type DbTrackRecord = {
   sub?: string;
   aura?: number;
   artUrl?: string | null;
+  artGifUrl?: string | null;
   artVideoUrl?: string | null;
   audioKey?: string | null;
   artKey?: string | null;
+  artGifKey?: string | null;
   artVideoKey?: string | null;
   bundledAudioUrl?: string | null;
   bundledArtUrl?: string | null;
@@ -44,6 +46,7 @@ type LegacyDbTrackRecord = {
   aura?: number;
   audio?: Blob;
   art?: Blob | null;
+  artGif?: Blob | null;
   artVideo?: Blob | null;
   createdAt?: number;
 };
@@ -261,6 +264,7 @@ async function maybeMigrateLegacyTracks(): Promise<void> {
     const createdAt = row.createdAt ?? now();
     let audioKey: string | null = null;
     let artKey: string | null = null;
+    let artGifKey: string | null = null;
     let artVideoKey: string | null = null;
 
     if (row.audio) {
@@ -294,6 +298,7 @@ async function maybeMigrateLegacyTracks(): Promise<void> {
       aura: clampAura(row.aura ?? 0),
       audioKey,
       artKey,
+      artGifKey,
       artVideoKey,
       audioBytes: row.audio?.size ?? 0,
       posterBytes: row.art?.size ?? 0,
@@ -367,6 +372,7 @@ async function toTrack(record: TrackRecord, options?: TrackHydrationOptions): Pr
 
   const audioUrl = includeAudioUrl ? record.bundledAudioUrl || (await getMediaUrl(effectiveAudioKey)) : record.bundledAudioUrl || undefined;
   const artUrl = includeArtworkUrls ? record.bundledArtUrl || (await getMediaUrl(record.artKey)) : record.bundledArtUrl || undefined;
+  const artGifUrl = includeArtworkUrls ? await getMediaUrl(record.artGifKey) : undefined;
   const artVideoUrl = includeArtworkUrls
     ? record.bundledArtVideoUrl || (await getMediaUrl(record.artVideoKey))
     : record.bundledArtVideoUrl || undefined;
@@ -374,7 +380,9 @@ async function toTrack(record: TrackRecord, options?: TrackHydrationOptions): Pr
   const missingArt =
     !record.bundledArtUrl &&
     !record.bundledArtVideoUrl &&
-    ((Boolean(record.artKey) && !artUrl && !artBlob) || (Boolean(record.artVideoKey) && !artVideoUrl));
+    ((Boolean(record.artKey) && !artUrl && !artBlob) ||
+      (Boolean(record.artGifKey) && !artGifUrl) ||
+      (Boolean(record.artVideoKey) && !artVideoUrl));
 
   return {
     id: record.id,
@@ -388,6 +396,7 @@ async function toTrack(record: TrackRecord, options?: TrackHydrationOptions): Pr
       DEMO_WAVEFORM_PEAKS_BY_ID[record.demoId ?? ""] || DEMO_WAVEFORM_PEAKS_BY_ID[record.id] || undefined,
     audioUrl,
     artUrl,
+    artGifUrl,
     artVideoUrl,
     audioBlob: audioBlob ?? undefined,
     artBlob: artBlob ?? undefined,
@@ -432,7 +441,7 @@ export async function getTracksByIdsFromDb(trackIds: string[], options?: TrackHy
 export async function getTrackPlaybackMediaFromDb(
   trackId: string,
   options?: { forceUrlRefresh?: boolean; forceAudioUrlRefresh?: boolean; forceArtworkUrlRefresh?: boolean }
-): Promise<{ audioUrl?: string; artBlob?: Blob; artUrl?: string; artVideoUrl?: string; missingAudio?: boolean }> {
+): Promise<{ audioUrl?: string; artBlob?: Blob; artUrl?: string; artGifUrl?: string; artVideoUrl?: string; missingAudio?: boolean }> {
   await maybeMigrateLegacyTracks();
   const library = loadLibrary();
   const record = library.tracksById[trackId];
@@ -444,16 +453,19 @@ export async function getTrackPlaybackMediaFromDb(
   }
   if (options?.forceUrlRefresh || options?.forceArtworkUrlRefresh) {
     if (!record.bundledArtUrl) revokeMediaUrl(record.artKey);
+    revokeMediaUrl(record.artGifKey);
     if (!record.bundledArtVideoUrl) revokeMediaUrl(record.artVideoKey);
   }
   const artBlob = record.artKey ? await getBlob(record.artKey) : null;
   const audioUrl = record.bundledAudioUrl || (await getMediaUrl(effectiveAudioKey));
   const artUrl = record.bundledArtUrl || (await getMediaUrl(record.artKey));
+  const artGifUrl = await getMediaUrl(record.artGifKey);
   const artVideoUrl = record.bundledArtVideoUrl || (await getMediaUrl(record.artVideoKey));
   return {
     audioUrl: audioUrl ?? undefined,
     artBlob: artBlob ?? undefined,
     artUrl: artUrl ?? undefined,
+    artGifUrl: artGifUrl ?? undefined,
     artVideoUrl: artVideoUrl ?? undefined,
     missingAudio: hasAudioSource ? !audioUrl : true
   };
@@ -481,12 +493,15 @@ export async function getTrackRowsFromDb(): Promise<DbTrackRecord[]> {
 
   const rows = await Promise.all(
     records.map(async (record) => {
-      const [audioBlob, artBlob, artVideoBlob] = await Promise.all([
+      const [audioBlob, artBlob, artGifBlob, artVideoBlob] = await Promise.all([
         record.audioKey ? getBlob(record.audioKey) : Promise.resolve(null),
         record.artKey ? getBlob(record.artKey) : Promise.resolve(null),
+        record.artGifKey ? getBlob(record.artGifKey) : Promise.resolve(null),
         record.artVideoKey ? getBlob(record.artVideoKey) : Promise.resolve(null)
       ]);
       const artUrl = record.bundledArtUrl || (await getMediaUrl(record.artKey));
+      const artGifUrl = await getMediaUrl(record.artGifKey);
+      const artVideoUrl = record.bundledArtVideoUrl || (await getMediaUrl(record.artVideoKey));
       return {
         id: record.id,
         demoId: record.demoId ?? null,
@@ -496,8 +511,11 @@ export async function getTrackRowsFromDb(): Promise<DbTrackRecord[]> {
         sub: record.sub === "Uploaded" ? "Imported" : (record.sub || "Imported"),
         aura: clampAura(record.aura),
         artUrl,
+        artGifUrl,
+        artVideoUrl,
         audioKey: record.audioKey,
         artKey: record.artKey,
+        artGifKey: record.artGifKey || null,
         artVideoKey: record.artVideoKey || null,
         bundledAudioUrl: record.bundledAudioUrl || null,
         bundledArtUrl: record.bundledArtUrl || null,
@@ -512,7 +530,9 @@ export async function getTrackRowsFromDb(): Promise<DbTrackRecord[]> {
         missingArt:
           !record.bundledArtUrl &&
           !record.bundledArtVideoUrl &&
-          ((Boolean(record.artKey) && !artBlob) || (Boolean(record.artVideoKey) && !artVideoBlob))
+          ((Boolean(record.artKey) && !artBlob) ||
+            (Boolean(record.artGifKey) && !artGifBlob) ||
+            (Boolean(record.artVideoKey) && !artVideoBlob))
       } satisfies DbTrackRecord;
     })
   );
@@ -530,6 +550,7 @@ export async function addTrackToDb(params: {
   sub?: string;
   audio: Blob;
   artPoster?: Blob | null;
+  artGif?: Blob | null;
   artVideo?: Blob | null;
 }): Promise<void> {
   console.debug("[demo-seed]", {
@@ -545,8 +566,9 @@ export async function addTrackToDb(params: {
   const trackId = params.trackId?.trim() || makeId();
   const audioKey = makeId();
   const audioBytes = params.audio.size || 0;
+  const artGifBytes = params.artGif?.size || 0;
   const artVideoBytes = params.artVideo?.size || 0;
-  const shouldEvaluateLongIosAudioGuard = isIosSafari() && !params.artPoster && !params.artVideo;
+  const shouldEvaluateLongIosAudioGuard = isIosSafari() && !params.artPoster && !params.artGif && !params.artVideo;
   const longIosAudioBySize = shouldEvaluateLongIosAudioGuard && audioBytes > IOS_LONG_AUDIO_AUTO_ARTWORK_SKIP_BYTES;
   const audioDurationSec =
     shouldEvaluateLongIosAudioGuard && !longIosAudioBySize ? await getAudioDurationFromBlob(params.audio) : null;
@@ -556,6 +578,7 @@ export async function addTrackToDb(params: {
     (audioDurationSec ?? 0) > IOS_LONG_AUDIO_AUTO_ARTWORK_SKIP_DURATION_SEC;
   const skipWaveformArtworkForLongIosAudio = longIosAudioBySize || longIosAudioByDuration;
   let artKey: string | null = null;
+  let artGifKey: string | null = null;
   let artVideoKey: string | null = null;
   let artworkSource: "auto" | "user" = "user";
   let artPoster = params.artPoster ?? null;
@@ -580,7 +603,7 @@ export async function addTrackToDb(params: {
     if (artPoster) artworkSource = "auto";
   }
   posterBytes = artPoster?.size || 0;
-  await ensureStorageCapacity(audioBytes + artVideoBytes + posterBytes);
+  await ensureStorageCapacity(audioBytes + artGifBytes + artVideoBytes + posterBytes);
   const createdBlobKeys = new Set<string>();
   try {
     await putBlob(audioKey, params.audio, { type: "audio", createdAt: ts });
@@ -590,12 +613,17 @@ export async function addTrackToDb(params: {
       await putBlob(artKey, artPoster, { type: "image", createdAt: ts });
       createdBlobKeys.add(artKey);
     }
+    if (params.artGif) {
+      artGifKey = makeId();
+      await putBlob(artGifKey, params.artGif, { type: "image", createdAt: ts });
+      createdBlobKeys.add(artGifKey);
+    }
     if (params.artVideo) {
       artVideoKey = makeId();
       await putBlob(artVideoKey, params.artVideo, { type: "video", createdAt: ts });
       createdBlobKeys.add(artVideoKey);
     }
-    if (!artKey && !artVideoKey && !skipWaveformArtworkForLongIosAudio) {
+    if (!artKey && !artGifKey && !artVideoKey && !skipWaveformArtworkForLongIosAudio) {
       const generatedPoster = await generateWaveformArtwork({
         audioBlob: params.audio,
         themeSelection: getStoredArtworkThemeSelection(),
@@ -646,10 +674,11 @@ export async function addTrackToDb(params: {
     aura: 0,
     audioKey,
     artKey,
+    artGifKey,
     artVideoKey,
     audioBytes,
     posterBytes,
-    artworkBytes: posterBytes + artVideoBytes,
+    artworkBytes: posterBytes + artGifBytes + artVideoBytes,
     artworkSource,
     createdAt: ts,
     updatedAt: ts
@@ -681,7 +710,7 @@ export async function addTrackToDb(params: {
     });
   } catch (error) {
     await Promise.allSettled(
-      [audioKey, artKey, artVideoKey]
+      [audioKey, artKey, artGifKey, artVideoKey]
         .filter((key): key is string => Boolean(key))
         .map(async (key) => {
           await deleteBlob(key).catch(() => undefined);
@@ -713,6 +742,7 @@ export async function updateArtworkInDb(
   trackId: string,
   artwork: {
     artPoster: Blob | null;
+    artGif?: Blob | null;
     artVideo?: Blob | null;
   }
 ): Promise<void> {
@@ -722,11 +752,13 @@ export async function updateArtworkInDb(
   if (!track) throw new Error("Track not found");
 
   const oldArtKey = track.artKey;
+  const oldArtGifKey = track.artGifKey || null;
   const oldArtVideoKey = track.artVideoKey || null;
   const oldArtworkBytes = track.artworkBytes ?? 0;
   const ts = now();
 
   let nextArtKey: string | null = null;
+  let nextArtGifKey: string | null = null;
   let nextArtVideoKey: string | null = null;
   let nextArtPoster = artwork.artPoster;
   if (!nextArtPoster && artwork.artVideo) {
@@ -743,12 +775,17 @@ export async function updateArtworkInDb(
     }
   }
   const nextPosterBytes = nextArtPoster?.size ?? 0;
+  const nextGifBytes = artwork.artGif?.size ?? 0;
   const nextVideoBytes = artwork.artVideo?.size ?? 0;
-  const deltaBytes = nextPosterBytes + nextVideoBytes - oldArtworkBytes;
+  const deltaBytes = nextPosterBytes + nextGifBytes + nextVideoBytes - oldArtworkBytes;
   await ensureStorageCapacity(deltaBytes);
   if (nextArtPoster) {
     nextArtKey = makeId();
     await putBlob(nextArtKey, nextArtPoster, { type: "image", createdAt: ts });
+  }
+  if (artwork.artGif) {
+    nextArtGifKey = makeId();
+    await putBlob(nextArtGifKey, artwork.artGif, { type: "image", createdAt: ts });
   }
   if (artwork.artVideo) {
     nextArtVideoKey = makeId();
@@ -756,9 +793,10 @@ export async function updateArtworkInDb(
   }
 
   track.artKey = nextArtKey;
+  track.artGifKey = nextArtGifKey;
   track.artVideoKey = nextArtVideoKey;
   track.posterBytes = nextPosterBytes;
-  track.artworkBytes = nextPosterBytes + nextVideoBytes;
+  track.artworkBytes = nextPosterBytes + nextGifBytes + nextVideoBytes;
   track.artworkSource = "user";
   track.updatedAt = ts;
   saveLibrary(library);
@@ -766,6 +804,10 @@ export async function updateArtworkInDb(
   if (oldArtKey) {
     await deleteBlob(oldArtKey);
     revokeMediaUrl(oldArtKey);
+  }
+  if (oldArtGifKey) {
+    await deleteBlob(oldArtGifKey);
+    revokeMediaUrl(oldArtGifKey);
   }
   if (oldArtVideoKey) {
     await deleteBlob(oldArtVideoKey);
@@ -775,19 +817,21 @@ export async function updateArtworkInDb(
 
 export async function getTrackArtworkPayloadFromDb(
   trackId: string
-): Promise<{ artPoster: Blob | null; artVideo: Blob | null }> {
+): Promise<{ artPoster: Blob | null; artGif: Blob | null; artVideo: Blob | null }> {
   await maybeMigrateLegacyTracks();
   const library = loadLibrary();
   const track = library.tracksById[trackId];
   if (!track) throw new Error("Track not found");
 
-  const [artPoster, artVideo] = await Promise.all([
+  const [artPoster, artGif, artVideo] = await Promise.all([
     track.artKey ? getBlob(track.artKey).catch(() => null) : Promise.resolve(null),
+    track.artGifKey ? getBlob(track.artGifKey).catch(() => null) : Promise.resolve(null),
     track.artVideoKey ? getBlob(track.artVideoKey).catch(() => null) : Promise.resolve(null)
   ]);
 
   return {
     artPoster,
+    artGif,
     artVideo
   };
 }
@@ -834,6 +878,7 @@ export async function duplicateTrackWithAudioInDb(
 
   const shouldPreserveExplicitArtwork = source.artworkSource !== "auto";
   const artPoster = shouldPreserveExplicitArtwork && source.artKey ? await getBlob(source.artKey) : null;
+  const artGif = shouldPreserveExplicitArtwork && source.artGifKey ? await getBlob(source.artGifKey) : null;
   const artVideo = shouldPreserveExplicitArtwork && source.artVideoKey ? await getBlob(source.artVideoKey) : null;
   const nextTrackId = makeId();
 
@@ -844,6 +889,7 @@ export async function duplicateTrackWithAudioInDb(
     sub: options?.sub?.trim() || source.sub || "Imported",
     audio,
     artPoster,
+    artGif,
     artVideo
   });
 
@@ -856,7 +902,7 @@ export async function removeTrackFromDb(trackId: string): Promise<void> {
   const track = library.tracksById[trackId];
   if (!track) return;
 
-  const keys = [track.audioKey, track.artKey, track.artVideoKey].filter(Boolean) as string[];
+  const keys = [track.audioKey, track.artKey, track.artGifKey, track.artVideoKey].filter(Boolean) as string[];
   for (const key of keys) {
     await deleteBlob(key);
     revokeMediaUrl(key);
@@ -934,7 +980,7 @@ export async function clearTracksInDb(): Promise<void> {
   await maybeMigrateLegacyTracks();
   const library = loadLibrary();
   const keys = Object.values(library.tracksById)
-    .flatMap((track) => [track.audioKey, track.artKey, track.artVideoKey])
+    .flatMap((track) => [track.audioKey, track.artKey, track.artGifKey, track.artVideoKey])
     .filter(Boolean) as string[];
 
   for (const key of keys) {
@@ -955,7 +1001,7 @@ export async function hardResetLibraryInDb(): Promise<void> {
   await maybeMigrateLegacyTracks();
   const library = loadLibrary();
   const keys = Object.values(library.tracksById)
-    .flatMap((track) => [track.audioKey, track.artKey, track.artVideoKey])
+    .flatMap((track) => [track.audioKey, track.artKey, track.artGifKey, track.artVideoKey])
     .filter(Boolean) as string[];
 
   for (const key of keys) {
@@ -991,7 +1037,7 @@ export async function removeDemoTracksInDb(): Promise<number> {
   const keys = demoTrackIds
     .flatMap((trackId) => {
       const track = library.tracksById[trackId];
-      return track ? [track.audioKey, track.artKey, track.artVideoKey] : [];
+      return track ? [track.audioKey, track.artKey, track.artGifKey, track.artVideoKey] : [];
     })
     .filter(Boolean) as string[];
   for (const key of keys) {
@@ -1184,7 +1230,7 @@ export async function deletePlaylistInDb(playlistId: string): Promise<DeletePlay
     if (refs.has(trackId)) continue;
     const track = library.tracksById[trackId];
     if (!track) continue;
-    const keys = [track.audioKey, track.artKey, track.artVideoKey].filter(Boolean) as string[];
+    const keys = [track.audioKey, track.artKey, track.artGifKey, track.artVideoKey].filter(Boolean) as string[];
     for (const key of keys) {
       await deleteBlob(key);
       revokeMediaUrl(key);
@@ -1224,7 +1270,7 @@ export async function clearPlaylistInDb(playlistId: string): Promise<ClearPlayli
     if (refs.has(trackId)) continue;
     const track = library.tracksById[trackId];
     if (!track) continue;
-    const keys = [track.audioKey, track.artKey, track.artVideoKey].filter(Boolean) as string[];
+    const keys = [track.audioKey, track.artKey, track.artGifKey, track.artVideoKey].filter(Boolean) as string[];
     for (const key of keys) {
       await deleteBlob(key);
       revokeMediaUrl(key);

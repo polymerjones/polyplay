@@ -929,10 +929,25 @@ html[data-theme="light"] .mini-player-bar::before {
   overflow: hidden;
 }
 
+.mini-player-bar__art-media {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
 .mini-player-bar__art::after {
   content: "";
   position: absolute;
   inset: -26%;
+  z-index: 2;
   pointer-events: none;
   opacity: 0;
   background:

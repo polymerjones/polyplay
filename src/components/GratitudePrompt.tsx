@@ -27,15 +27,47 @@ export function GratitudePrompt({
   const [text, setText] = useState("");
   const [pulseMode, setPulseMode] = useState<"save" | "skip" | null>(null);
   const [isKeyPulseActive, setIsKeyPulseActive] = useState(false);
+  const [isKeyboardOverlayActive, setIsKeyboardOverlayActive] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setText("");
       setPulseMode(null);
+      setIsKeyboardOverlayActive(false);
       return;
     }
     setText("");
     setPulseMode(null);
+    setIsKeyboardOverlayActive(false);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const viewport = typeof window !== "undefined" ? window.visualViewport : null;
+    const recomputeKeyboardState = () => {
+      const focusedEditable = document.activeElement === textareaRef.current;
+      const visibleHeight = viewport?.height ?? window.innerHeight;
+      const keyboardLikelyOpen = focusedEditable && visibleHeight < window.innerHeight - 120;
+      setIsKeyboardOverlayActive(keyboardLikelyOpen);
+    };
+    const onFocusChange = () => {
+      window.setTimeout(recomputeKeyboardState, 0);
+    };
+
+    recomputeKeyboardState();
+    document.addEventListener("focusin", onFocusChange);
+    document.addEventListener("focusout", onFocusChange);
+    viewport?.addEventListener("resize", recomputeKeyboardState);
+    viewport?.addEventListener("scroll", recomputeKeyboardState);
+    window.addEventListener("resize", recomputeKeyboardState);
+
+    return () => {
+      document.removeEventListener("focusin", onFocusChange);
+      document.removeEventListener("focusout", onFocusChange);
+      viewport?.removeEventListener("resize", recomputeKeyboardState);
+      viewport?.removeEventListener("scroll", recomputeKeyboardState);
+      window.removeEventListener("resize", recomputeKeyboardState);
+    };
   }, [open]);
 
   useEffect(() => {
@@ -105,7 +137,12 @@ export function GratitudePrompt({
   };
 
   return (
-    <section className="gratitude-modal" role="dialog" aria-modal="true" aria-label="Gratitude prompt">
+    <section
+      className={`gratitude-modal ${isKeyboardOverlayActive ? "is-keyboard-active" : ""}`.trim()}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Gratitude prompt"
+    >
       <div
         className={`gratitude-modal__card ${pulseMode ? `is-pulse-${pulseMode}` : ""} ${
           isKeyPulseActive ? "is-keypress-pulse" : ""

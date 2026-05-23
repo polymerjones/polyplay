@@ -176,7 +176,7 @@ function pickCanonicalDemoTrack(candidates: TrackRecord[], canonicalId: string):
 }
 
 async function deleteTrackArtifacts(track: TrackRecord): Promise<void> {
-  const keys = [track.audioKey, track.artKey, track.artVideoKey].filter(Boolean) as string[];
+  const keys = [track.audioKey, track.artKey, track.artGifKey, track.artVideoKey].filter(Boolean) as string[];
   for (const key of keys) {
     await deleteBlob(key).catch(() => undefined);
   }

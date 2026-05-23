@@ -1,4 +1,4 @@
-import { useRef, type MouseEvent, type TouchEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type TouchEvent } from "react";
 import type { CSSProperties } from "react";
 import { formatTime } from "../lib/time";
 import { DEFAULT_ARTWORK_URL } from "../lib/defaultArtwork";
@@ -123,14 +123,20 @@ export function MiniPlayerBar({
   const swipeStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
   const repeatTapRef = useRef<{ at: number; x: number; y: number } | null>(null);
   const repeatTapStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [gifFailed, setGifFailed] = useState(false);
   const artist = track?.artist?.trim();
   const artStyle = track?.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
     : ({ backgroundImage: track?.artGrad || `url('${DEFAULT_ARTWORK_URL}')` } as CSSProperties);
+  const shouldAnimateGif = Boolean(track?.artGifUrl && isPlaying && !gifFailed);
   const classes = ["mini-player-bar"];
   if (loopRegion.active) classes.push("is-loop-active");
   if (loopRegion.editing) classes.push("is-loop-editing");
   if (isCompact) classes.push("is-compact");
+
+  useEffect(() => {
+    setGifFailed(false);
+  }, [track?.artGifUrl, track?.id]);
 
   const triggerArtworkFlash = () => {
     const art = artRef.current;
@@ -293,7 +299,18 @@ export function MiniPlayerBar({
           style={artStyle}
           aria-label="Open fullscreen player"
           onClick={onOpenFullscreen}
-        />
+        >
+          {shouldAnimateGif && (
+            <img
+              className="mini-player-bar__art-media"
+              src={track?.artGifUrl || ""}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+              onError={() => setGifFailed(true)}
+            />
+          )}
+        </button>
         <div className="mini-player-bar__meta">
           <div className="mini-player-bar__title">{track?.title ?? "Select a track"}</div>
           {artist && <div className="mini-player-bar__sub">{artist}</div>}

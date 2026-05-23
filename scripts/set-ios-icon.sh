@@ -24,11 +24,31 @@ if ! command -v sips >/dev/null 2>&1; then
 fi
 
 TMP_ICON="$(mktemp /tmp/polyplay-icon.XXXXXX.png)"
-trap 'rm -f "$TMP_ICON"' EXIT
+TMP_FLAT="$(mktemp /tmp/polyplay-icon-flat.XXXXXX.png)"
+TMP_JPEG="$(mktemp /tmp/polyplay-icon-flat.XXXXXX.jpg)"
+trap 'rm -f "$TMP_ICON" "$TMP_FLAT" "$TMP_JPEG"' EXIT
 
 # Normalize to exact 1024x1024 PNG for Xcode AppIcon slot.
 sips -s format png -z 1024 1024 "$SRC_ICON" --out "$TMP_ICON" >/dev/null
-cp "$TMP_ICON" "$DEST_ICON"
+
+# App Store Connect rejects large app icons with transparency or alpha channels.
+if python3 - "$TMP_ICON" "$TMP_FLAT" <<'PY' >/dev/null 2>&1
+import sys
+from PIL import Image
+
+src, dest = sys.argv[1], sys.argv[2]
+im = Image.open(src).convert("RGBA")
+bg = Image.new("RGBA", im.size, (255, 255, 255, 255))
+bg.alpha_composite(im)
+bg.convert("RGB").save(dest, "PNG")
+PY
+then
+  cp "$TMP_FLAT" "$DEST_ICON"
+else
+  # Fallback for Macs without Pillow: round-trip through JPEG to force opacity.
+  sips -s format jpeg "$TMP_ICON" --out "$TMP_JPEG" >/dev/null
+  sips -s format png "$TMP_JPEG" --out "$DEST_ICON" >/dev/null
+fi
 
 echo "[ios:icon] Updated iOS app icon: $DEST_ICON"
 echo "[ios:icon] Next: npm run ios:open (or rebuild in Xcode)"

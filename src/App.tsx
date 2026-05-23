@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import { quickTipsContent } from "./content/quickTips";
 import { APP_TITLE, APP_VERSION } from "./config/version";
 import heroLogo from "./assets/polyplay-hero-logo.png";
@@ -124,6 +125,7 @@ type LogoSparkle = {
   coreColor: string;
 };
 type FxToastPlacement = "default" | "theme";
+type PortalTipPosition = { top: number; left: number };
 const MIN_LOOP_REGION_SECONDS = 0.5;
 const EMPTY_LOOP: LoopRegion = { start: 0, end: 0, active: false, editing: false };
 const SPLASH_SEEN_KEY = "polyplay_hasSeenSplash";
@@ -151,6 +153,7 @@ const ACTIVE_PLAYLIST_DIRTY_KEY = "polyplay_activePlaylistDirty_v1";
 const LAST_EXPORTED_PLAYLIST_ID_KEY = "polyplay_lastExportedPlaylistId";
 const LAST_EXPORTED_AT_KEY = "polyplay_lastExportedAt";
 const LAST_LOADED_VAULT_NAME_KEY = "polyplay_lastLoadedVaultName_v1";
+const POLYPLAYLIST_EXPORT_SUFFIX = "-polyplaylist.zip";
 const FULLSCREEN_ART_HINT_SEEN_KEY = "polyplay_hasSeenFullscreenArtHint_v1";
 const PLAYER_COMPACT_HINT_SEEN_KEY = "polyplay_hasSeenPlayerCompactHint_v1";
 const PLAYER_VIBE_HINT_SEEN_KEY = "polyplay_hasSeenPlayerVibeHint_v1";
@@ -171,6 +174,20 @@ const UI_CURRENT_TIME_THROTTLE_MS = 80;
 const UI_CURRENT_TIME_MIN_DELTA_SEC = 0.08;
 const DEFAULT_SET_LOOP_SPAN_MIN_SECONDS = 6;
 const DEFAULT_SET_LOOP_SPAN_MAX_SECONDS = 12;
+
+function getPolyplaylistExportNameBase(filename: string): string {
+  const trimmed = filename.trim();
+  return trimmed.toLowerCase().endsWith(POLYPLAYLIST_EXPORT_SUFFIX)
+    ? trimmed.slice(0, -POLYPLAYLIST_EXPORT_SUFFIX.length).trim()
+    : trimmed;
+}
+
+function normalizePolyplaylistExportFilename(rawName: string, fallbackFilename: string): string | null {
+  const fallbackBase = getPolyplaylistExportNameBase(fallbackFilename);
+  const rawBase = getPolyplaylistExportNameBase(rawName);
+  const normalizedBase = normalizeSaveFilename(rawBase, fallbackBase);
+  return normalizedBase ? `${normalizedBase}${POLYPLAYLIST_EXPORT_SUFFIX}` : null;
+}
 const DEFAULT_SET_LOOP_SPAN_RATIO = 0.18;
 const LONG_TRACK_LOOP_SPAN_THRESHOLD_SECONDS = 20 * 60;
 const LONG_TRACK_LOOP_SPAN_MIN_SECONDS = 45;
@@ -611,6 +628,7 @@ export default function App() {
     audioUrl?: string;
     artBlob?: Blob;
     artUrl?: string;
+    artGifUrl?: string;
     artVideoUrl?: string;
     missingAudio?: boolean;
   }>({ trackId: null });
@@ -703,6 +721,7 @@ export default function App() {
       return false;
     }
   });
+  const [uploadTipPosition, setUploadTipPosition] = useState<PortalTipPosition | null>(null);
   const [isCreatePlaylistModalOpen, setIsCreatePlaylistModalOpen] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [isPlaylistRequired, setIsPlaylistRequired] = useState(false);
@@ -720,6 +739,7 @@ export default function App() {
   const activeScratchRef = useRef<HTMLAudioElement | null>(null);
   const importUniverseInputRef = useRef<HTMLInputElement | null>(null);
   const importPlaylistBackupInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadTutorialButtonRef = useRef<HTMLButtonElement | null>(null);
   const pendingAutoPlayRef = useRef(false);
   const pendingAutoPlayTrackIdRef = useRef<string | null>(null);
   const audioSrcRef = useRef<string | null>(null);
@@ -2091,6 +2111,8 @@ export default function App() {
         dismissOpenState();
         setOverlayPage(null);
         markActivePlaylistDirty();
+        pendingAutoPlayRef.current = false;
+        pendingAutoPlayTrackIdRef.current = null;
         void refreshTracks();
 
         if (isIOS) {
@@ -2139,6 +2161,8 @@ export default function App() {
         markHasOnboarded();
         dismissOpenState();
         markActivePlaylistDirty();
+        pendingAutoPlayRef.current = false;
+        pendingAutoPlayTrackIdRef.current = null;
         void refreshTracks();
         return;
       }
@@ -2384,6 +2408,7 @@ export default function App() {
       audioUrl: hydratedCurrentTrackMedia.audioUrl ?? baseTrack.audioUrl,
       artBlob: hydratedCurrentTrackMedia.artBlob,
       artUrl: hydratedCurrentTrackMedia.artUrl ?? baseTrack.artUrl,
+      artGifUrl: hydratedCurrentTrackMedia.artGifUrl ?? baseTrack.artGifUrl,
       artVideoUrl: hydratedCurrentTrackMedia.artVideoUrl ?? baseTrack.artVideoUrl,
       missingAudio: hydratedCurrentTrackMedia.missingAudio ?? baseTrack.missingAudio
     } satisfies Track;
@@ -2396,6 +2421,7 @@ export default function App() {
     return [
       baseTrack.id,
       baseTrack.artUrl ?? "",
+      baseTrack.artGifUrl ?? "",
       baseTrack.artVideoUrl ?? "",
       baseTrack.artGrad ?? "",
       baseTrack.missingAudio ? "missing-audio" : "has-audio"
@@ -2465,7 +2491,7 @@ export default function App() {
   const refreshCurrentTrackMedia = useCallback(
     async (trackId: string, options?: { forceUrlRefresh?: boolean; forceAudioUrlRefresh?: boolean; forceArtworkUrlRefresh?: boolean }) => {
       const media = await getTrackPlaybackMediaFromDb(trackId, options).catch(
-        (): { audioUrl?: string; artBlob?: Blob; artUrl?: string; artVideoUrl?: string; missingAudio?: boolean } => ({})
+        (): { audioUrl?: string; artBlob?: Blob; artUrl?: string; artGifUrl?: string; artVideoUrl?: string; missingAudio?: boolean } => ({})
       );
       if (currentTrackIdRef.current !== trackId) return null;
       setHydratedCurrentTrackMedia({
@@ -2473,6 +2499,7 @@ export default function App() {
         audioUrl: media.audioUrl,
         artBlob: media.artBlob,
         artUrl: media.artUrl,
+        artGifUrl: media.artGifUrl,
         artVideoUrl: media.artVideoUrl,
         missingAudio: media.missingAudio
       });
@@ -4662,10 +4689,7 @@ export default function App() {
   const finishPlaylistBackupSave = async (blob: Blob, filename: string, playlistName?: string): Promise<boolean> => {
     const saveMode = await saveBlobWithBestEffort(blob, filename, {
       description: "Playlist Backup Export",
-      accept: {
-        "application/zip": [".polyplaylist", ".zip"],
-        "application/octet-stream": [".polyplaylist"]
-      }
+      accept: { "application/zip": [".zip"] }
     });
     setVaultStatus(
       saveMode === "shared"
@@ -4939,16 +4963,21 @@ export default function App() {
       const defaultFilename = getPolyplaylistFilename(result.playlistName);
       if (shouldUseInlineSaveNameStep()) {
         setPendingPlaylistBackupBlob(result.blob);
-        setPendingPlaylistBackupName(defaultFilename);
+        setPendingPlaylistBackupName(getPolyplaylistExportNameBase(defaultFilename));
         setVaultStatus("Playlist backup is ready. Name it, then tap Save Backup.", "info");
         return;
       }
-      const filename = promptForSaveFilename(defaultFilename, {
-        message: "Name this playlist backup before saving.",
-        requiredExtension: ".polyplaylist"
+      const filenameBase = promptForSaveFilename(getPolyplaylistExportNameBase(defaultFilename), {
+        message: "Name this playlist backup before saving. The -polyplaylist.zip suffix will be added automatically."
       });
-      if (!filename) {
+      if (!filenameBase) {
         setVaultStatus("Playlist backup export canceled.", "info");
+        schedulePlaybackResync("vault-save-return");
+        return;
+      }
+      const filename = normalizePolyplaylistExportFilename(filenameBase, defaultFilename);
+      if (!filename) {
+        setVaultStatus("Enter a playlist backup filename first.", "error");
         schedulePlaybackResync("vault-save-return");
         return;
       }
@@ -4961,10 +4990,9 @@ export default function App() {
 
   const onConfirmPendingPlaylistBackup = async () => {
     if (!pendingPlaylistBackupBlob) return;
-    const filename = normalizeSaveFilename(
+    const filename = normalizePolyplaylistExportFilename(
       pendingPlaylistBackupName,
-      getPolyplaylistFilename(activePlaylistName || "playlist"),
-      ".polyplaylist"
+      getPolyplaylistFilename(activePlaylistName || "playlist")
     );
     if (!filename) {
       setVaultStatus("Enter a playlist backup filename first.", "error");
@@ -5148,8 +5176,66 @@ export default function App() {
       ? "upload-track"
       : "pre-tour";
 
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    const viewport = window.visualViewport;
+    let frameId: number | null = null;
+
+    const updatePosition = () => {
+      frameId = null;
+      const button = uploadTutorialButtonRef.current;
+      if (!shouldShowUploadHint || !button) {
+        setUploadTipPosition(null);
+        return;
+      }
+      const rect = button.getBoundingClientRect();
+      setUploadTipPosition({
+        top: rect.bottom + 10,
+        left: rect.right
+      });
+    };
+
+    const scheduleUpdate = () => {
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(updatePosition);
+    };
+
+    scheduleUpdate();
+    window.addEventListener("resize", scheduleUpdate);
+    window.addEventListener("orientationchange", scheduleUpdate);
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    viewport?.addEventListener("resize", scheduleUpdate);
+    viewport?.addEventListener("scroll", scheduleUpdate);
+    return () => {
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+      window.removeEventListener("resize", scheduleUpdate);
+      window.removeEventListener("orientationchange", scheduleUpdate);
+      window.removeEventListener("scroll", scheduleUpdate);
+      viewport?.removeEventListener("resize", scheduleUpdate);
+      viewport?.removeEventListener("scroll", scheduleUpdate);
+    };
+  }, [shouldShowUploadHint]);
+
   return (
     <>
+      {shouldShowUploadHint &&
+        uploadTipPosition &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="playlist-selector__tutorial-tip playlist-selector__tutorial-tip--portal onboarding-tooltip"
+            role="note"
+            style={
+              {
+                top: `${uploadTipPosition.top}px`,
+                left: `${uploadTipPosition.left}px`
+              } as CSSProperties
+            }
+          >
+            Import an audio file to get started.
+          </div>,
+          document.body
+        )}
       <div
         className="playlist-edge-swipe-indicator"
         data-edge={edgeSwipeIndicator ?? undefined}
@@ -5309,6 +5395,7 @@ export default function App() {
               {showHeaderUploadButton && (
                 <div className="playlist-selector__tutorial-anchor">
                   <button
+                    ref={uploadTutorialButtonRef}
                     type="button"
                     className={`upload-link nav-action-btn onboarding-action ${
                       shouldShowUploadHint ? "guided-cta is-onboarding-target" : ""
@@ -5319,11 +5406,6 @@ export default function App() {
                   >
                     Import
                   </button>
-                  {shouldShowUploadHint && (
-                    <div className="playlist-selector__tutorial-tip onboarding-tooltip" role="note">
-                      Tap Import, choose your audio file first, then review title or artwork if needed.
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -5939,16 +6021,21 @@ export default function App() {
               {pendingPlaylistBackupBlob && (
                 <div className="vault-warning vault-save-name-card" role="group" aria-label="Name playlist backup file">
                   <p>Name this playlist backup before saving.</p>
-                  <input
-                    type="text"
-                    value={pendingPlaylistBackupName}
-                    onChange={(event) => setPendingPlaylistBackupName(event.currentTarget.value)}
-                    className="vault-save-name-input"
-                    placeholder="Playlist backup"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                  />
+                  <div className="vault-save-name-composite">
+                    <input
+                      type="text"
+                      value={pendingPlaylistBackupName}
+                      onChange={(event) => setPendingPlaylistBackupName(getPolyplaylistExportNameBase(event.currentTarget.value))}
+                      className="vault-save-name-input vault-save-name-input--base"
+                      placeholder="Playlist backup"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                    <span className="vault-save-name-suffix" aria-hidden="true">
+                      {POLYPLAYLIST_EXPORT_SUFFIX}
+                    </span>
+                  </div>
                   <div className="vault-warning__actions">
                     <button type="button" className="vault-btn vault-btn--primary" onClick={() => void onConfirmPendingPlaylistBackup()}>
                       Save backup

@@ -33,7 +33,9 @@ import {
   type DbTrackRecord
 } from "../lib/db";
 import { generateVideoPoster } from "../lib/artwork/videoPoster";
+import { generateGifPoster } from "../lib/artwork/gifPoster";
 import { normalizeStillImage } from "../lib/artwork/normalizeStillImage";
+import { validateGifArtworkFile } from "../lib/artwork/gifValidation";
 import { validateVideoArtworkFile } from "../lib/artwork/videoValidation";
 import { restoreDemoTracks } from "../lib/demoSeed";
 import {
@@ -473,6 +475,12 @@ function isVideoArtwork(file: File | null): boolean {
   return Boolean(file?.type?.startsWith("video/"));
 }
 
+function isGifArtwork(file: File | null): boolean {
+  const type = (file?.type || "").toLowerCase();
+  const name = (file?.name || "").toLowerCase();
+  return type === "image/gif" || name.endsWith(".gif");
+}
+
 function isSupportedTrackFile(file: File | null): file is File {
   if (!file) return false;
   const type = (file.type || "").toLowerCase();
@@ -782,14 +790,14 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
   const importArtworkSourceOptions = useMemo(
     () =>
       tracks
-        .filter((track) => Boolean(track.artUrl || track.artVideoUrl))
+        .filter((track) => Boolean(track.artUrl || track.artGifUrl || track.artVideoUrl))
         .map((track) => ({ value: String(track.id), label: formatTrackOptionLabel(track) })),
     [tracks]
   );
   const updateArtworkSourceOptions = useMemo(
     () =>
       tracks
-        .filter((track) => track.id !== selectedArtworkTrackId && Boolean(track.artUrl || track.artVideoUrl))
+        .filter((track) => track.id !== selectedArtworkTrackId && Boolean(track.artUrl || track.artGifUrl || track.artVideoUrl))
         .map((track) => ({ value: String(track.id), label: formatTrackOptionLabel(track) })),
     [selectedArtworkTrackId, tracks]
   );
@@ -1561,6 +1569,16 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
         setUploadArtworkFile(null);
         return;
       }
+    } else if (isGifArtwork(file)) {
+      const validation = await validateGifArtworkFile(file);
+      if (!validation.ok) {
+        setInfoModal({
+          title: "Artwork GIF Limit",
+          message: validation.reason
+        });
+        setUploadArtworkFile(null);
+        return;
+      }
     }
     uploadArtworkAutofilledRef.current = false;
     setUploadArtworkFile(file);
@@ -1598,6 +1616,16 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
       if (!validation.ok) {
         setInfoModal({
           title: "Artwork Video Limit",
+          message: validation.reason
+        });
+        setSelectedArtworkAssetFile(null);
+        return;
+      }
+    } else if (isGifArtwork(file)) {
+      const validation = await validateGifArtworkFile(file);
+      if (!validation.ok) {
+        setInfoModal({
+          title: "Artwork GIF Limit",
           message: validation.reason
         });
         setSelectedArtworkAssetFile(null);
@@ -1755,6 +1783,12 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
         setInfoModal({ title: "Artwork Video Limit", message: validation.reason });
         return;
       }
+    } else if (isGifArtwork(file)) {
+      const validation = await validateGifArtworkFile(file);
+      if (!validation.ok) {
+        setInfoModal({ title: "Artwork GIF Limit", message: validation.reason });
+        return;
+      }
     }
     setLaneToast("Applying artwork...");
     setIsArtworkLaneBusy(true);
@@ -1791,8 +1825,16 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
     posterBlob: Blob | null,
     frameTimeSec?: number | null,
     source: UploadArtworkSource = "manual"
-  ): Promise<{ artPoster: Blob | null; artVideo: Blob | null; posterCaptureFailed: boolean }> => {
-    if (!file) return { artPoster: null, artVideo: null, posterCaptureFailed: false };
+  ): Promise<{ artPoster: Blob | null; artGif: Blob | null; artVideo: Blob | null; posterCaptureFailed: boolean }> => {
+    if (!file) return { artPoster: null, artGif: null, artVideo: null, posterCaptureFailed: false };
+    if (isGifArtwork(file)) {
+      const validation = await validateGifArtworkFile(file);
+      if (!validation.ok) {
+        throw new Error(validation.reason);
+      }
+      const posterBlob = await generateGifPoster(file, validation.posterMaxEdge);
+      return { artPoster: posterBlob, artGif: file, artVideo: null, posterCaptureFailed: false };
+    }
     if (!isVideoArtwork(file)) {
       if (source === "metadata") {
         console.debug("[artwork:metadata-import]", {
@@ -1802,7 +1844,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
           finalMime: file.type || null,
           finalBytes: file.size || 0
         });
-        return { artPoster: file, artVideo: null, posterCaptureFailed: false };
+        return { artPoster: file, artGif: null, artVideo: null, posterCaptureFailed: false };
       }
       const normalizedPoster = await normalizeStillImage(file).catch(() => file);
       console.debug("[artwork:metadata-import]", {
@@ -1814,7 +1856,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
         finalMime: normalizedPoster.type || null,
         finalBytes: normalizedPoster.size || 0
       });
-      return { artPoster: normalizedPoster, artVideo: null, posterCaptureFailed: false };
+      return { artPoster: normalizedPoster, artGif: null, artVideo: null, posterCaptureFailed: false };
     }
     let effectivePoster = posterBlob;
     if (!effectivePoster) {
@@ -1822,7 +1864,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
         Number.isFinite(frameTimeSec) && (frameTimeSec ?? 0) >= 0 ? Number(frameTimeSec) : 0.45;
       effectivePoster = await capturePosterFrame(file, requestedFrameTime).catch(() => null);
     }
-    return { artPoster: effectivePoster ?? null, artVideo: file, posterCaptureFailed: !effectivePoster };
+    return { artPoster: effectivePoster ?? null, artGif: null, artVideo: file, posterCaptureFailed: !effectivePoster };
   };
 
   const onUpload = async (event: FormEvent) => {
@@ -1861,14 +1903,14 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
       );
       const artwork =
         shouldUseAutoArt
-          ? { artPoster: null, artVideo: null, posterCaptureFailed: false }
+          ? { artPoster: null, artGif: null, artVideo: null, posterCaptureFailed: false }
           : shouldUseReusedArtwork
           ? { ...(await getTrackArtworkPayloadFromDb(uploadArtworkSourceTrackId)), posterCaptureFailed: false }
           : await buildArtworkPayload(uploadArt, uploadArtPosterBlob, uploadArtFrameTime, uploadArtSource)
-      if (!shouldUseAutoArt && !shouldUseReusedArtwork && uploadArt && !artwork.artPoster && !artwork.artVideo) {
+      if (!shouldUseAutoArt && !shouldUseReusedArtwork && uploadArt && !artwork.artPoster && !artwork.artGif && !artwork.artVideo) {
         throw new Error("Armed artwork could not be prepared for import.");
       }
-      if (shouldUseReusedArtwork && !artwork.artPoster && !artwork.artVideo) {
+      if (shouldUseReusedArtwork && !artwork.artPoster && !artwork.artGif && !artwork.artVideo) {
         throw new Error("Selected artwork source track has no reusable artwork.");
       }
       await addTrackToDb({
@@ -1877,6 +1919,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
         sub: "Imported",
         audio: uploadAudio,
         artPoster: artwork.artPoster,
+        artGif: artwork.artGif,
         artVideo: artwork.artVideo
       });
       markAdminImportCompleted();
@@ -1957,7 +2000,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
       const artwork = shouldUseReusedArtwork
         ? { ...(await getTrackArtworkPayloadFromDb(selectedArtworkSourceTrackId)), posterCaptureFailed: false }
         : await buildArtworkPayload(selectedArtworkFile, selectedArtPosterBlob, selectedArtFrameTime);
-      if (shouldUseReusedArtwork && !artwork.artPoster && !artwork.artVideo) {
+      if (shouldUseReusedArtwork && !artwork.artPoster && !artwork.artGif && !artwork.artVideo) {
         throw new Error("Selected artwork source track has no reusable artwork.");
       }
       await updateArtworkInDb(selectedArtworkTrackId, artwork);
@@ -2978,7 +3021,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
               tooltip="Optional artwork for this import."
               iconType="artwork"
               hint="Optional: add image or video artwork, or let PolyPlay keep the existing auto-art flow."
-              accept="image/*,video/mp4,video/quicktime,.mov"
+              accept="image/*,image/gif,.gif,video/mp4,video/quicktime,.mov"
               selectedFileName={uploadArt?.name}
               armed={Boolean(uploadArt)}
               onClearRequest={() => void onPickUploadArtwork(null)}
@@ -3171,7 +3214,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
                 label="New artwork file"
                 tooltip="Manual replace: choose artwork for the selected track."
                 iconType="artwork"
-                accept="image/*,video/mp4,video/quicktime,.mov"
+                accept="image/*,image/gif,.gif,video/mp4,video/quicktime,.mov"
                 compact
                 selectedFileName={selectedArtworkFile?.name}
                 armed={Boolean(selectedArtworkFile)}
@@ -3393,7 +3436,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
               tooltip="Drop images or short video loops here to set artwork for the selected track."
               iconType="artwork"
               hint="Video loops up to 60s at 720p - <=60MB mobile"
-              accept="image/*,video/mp4,video/quicktime,.mov,.jpg,.jpeg,.png,.webp"
+              accept="image/*,image/gif,.gif,video/mp4,video/quicktime,.mov,.jpg,.jpeg,.png,.webp"
               selectedFileName={selectedArtworkFile?.name || uploadArt?.name}
               busy={isArtworkLaneBusy}
               onPickRequest={

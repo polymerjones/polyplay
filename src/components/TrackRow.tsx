@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type MouseEvent, type TouchEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type TouchEvent } from "react";
 import type { DimMode, Track } from "../types";
 import { BorderTrail } from "./BorderTrail";
 
@@ -31,16 +31,22 @@ export function TrackRow({ track, active, isPlaying, dimMode, onSelectTrack, onA
   const thumbRef = useRef<HTMLDivElement | null>(null);
   const repeatTapRef = useRef<{ at: number; x: number; y: number } | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [gifFailed, setGifFailed] = useState(false);
   const rowFallbackArtwork =
     "radial-gradient(140px 120px at 22% 18%, rgba(150,108,244,.52), rgba(150,108,244,0) 62%), radial-gradient(160px 130px at 84% 82%, rgba(88,176,255,.34), rgba(88,176,255,0) 64%), linear-gradient(145deg, #1a2133, #0f1522)";
   const artStyle = track.artUrl
     ? ({ backgroundImage: `url('${track.artUrl}')` } as CSSProperties)
     : ({ backgroundImage: track.artGrad || rowFallbackArtwork } as CSSProperties);
+  const shouldAnimateGif = active && isPlaying && Boolean(track.artGifUrl) && !gifFailed;
   const auraLevel = Math.max(0, Math.min(1, track.aura / 10));
   const hasAura = track.aura > 0;
   const artist = track.artist?.trim();
   const sourceLabel = (track.sub || "").trim();
   const displaySub = sourceLabel && sourceLabel !== "Imported" ? sourceLabel : "";
+
+  useEffect(() => {
+    setGifFailed(false);
+  }, [track.artGifUrl, track.id]);
 
   useEffect(() => {
     const onAuraArtHit = (event: Event) => {
@@ -132,7 +138,18 @@ export function TrackRow({ track, active, isPlaying, dimMode, onSelectTrack, onA
         }}
         aria-label={`Play ${track.title}`}
       >
-        <div ref={thumbRef} className="trackRow__thumb" style={artStyle} />
+        <div ref={thumbRef} className="trackRow__thumb" style={artStyle}>
+          {shouldAnimateGif && (
+            <img
+              className="trackRow__thumb-media"
+              src={track.artGifUrl || ""}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+              onError={() => setGifFailed(true)}
+            />
+          )}
+        </div>
         <div className="trackRow__artBadges" aria-hidden="true">
           {track.isDemo && <div className="track-art-badge track-art-badge--row track-art-badge--demo">DEMO</div>}
           {track.artworkSource === "auto" && <div className="track-art-badge track-art-badge--row track-art-badge--auto">AUTO</div>}

@@ -166,11 +166,16 @@ public class MediaImportPlugin: CAPPlugin, UIDocumentPickerDelegate, PHPickerVie
         var candidateTypes: [UTType] = [
             .quickTimeMovie,
             .mpeg4Movie,
-            .movie,
+            .movie
+        ]
+        if let gifType = UTType(filenameExtension: "gif") {
+            candidateTypes.append(gifType)
+        }
+        candidateTypes.append(contentsOf: [
             .image,
             .png,
             .jpeg
-        ]
+        ])
         if let webpType = UTType(filenameExtension: "webp") {
             candidateTypes.append(webpType)
         }
@@ -315,6 +320,8 @@ public class MediaImportPlugin: CAPPlugin, UIDocumentPickerDelegate, PHPickerVie
             return "image/jpeg"
         case "png":
             return "image/png"
+        case "gif":
+            return "image/gif"
         case "webp":
             return "image/webp"
         default:

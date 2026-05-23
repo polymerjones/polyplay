@@ -410,6 +410,7 @@ function getMimeFromPath(path: string): string {
   if (lower.endsWith(".flac")) return "audio/flac";
   if (lower.endsWith(".ogg")) return "audio/ogg";
   if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".gif")) return "image/gif";
   if (lower.endsWith(".png")) return "image/png";
   if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
   if (lower.endsWith(".mov")) return "video/quicktime";
@@ -427,6 +428,7 @@ function extFromMime(mime: string, fallback: string): string {
   if (normalized.includes("flac")) return "flac";
   if (normalized.includes("ogg")) return "ogg";
   if (normalized.includes("webp")) return "webp";
+  if (normalized.includes("gif")) return "gif";
   if (normalized.includes("png")) return "png";
   if (normalized.includes("jpeg") || normalized.includes("jpg")) return "jpg";
   if (normalized.includes("quicktime")) return "mov";
@@ -472,6 +474,7 @@ function inferMimeFromBytes(
   if (kind === "artwork") {
     if (bytesStartWith(bytes, [0x89, 0x50, 0x4e, 0x47])) return "image/png";
     if (bytesStartWith(bytes, [0xff, 0xd8, 0xff])) return "image/jpeg";
+    if (asciiFromBytes(bytes, 0, 4) === "GIF8") return "image/gif";
     if (asciiFromBytes(bytes, 0, 4) === "RIFF" && asciiFromBytes(bytes, 8, 4) === "WEBP") return "image/webp";
     return null;
   }
@@ -606,7 +609,7 @@ function slugifyName(input: string): string {
 
 export function getPolyplaylistFilename(playlistName = "playlist"): string {
   const slug = slugifyName(playlistName) || "playlist";
-  return `${slug}-${formatStamp()}-polyplay.polyplaylist`;
+  return `${slug}-${formatStamp()}-polyplaylist.zip`;
 }
 
 export function serializeConfig(config = buildConfigSnapshot()): string {
@@ -1315,7 +1318,9 @@ async function buildTrackMediaEntries(
           ? `audio.${ext}`
           : kind === "video"
             ? `artwork-video.${ext}`
-            : `artwork.${ext}`;
+            : fallbackExt === "gif"
+              ? `artwork-gif.${ext}`
+              : `artwork.${ext}`;
       entries.push({
         path: `${rootPath}/media/${track.id}/${filename}`,
         bytes
@@ -1326,6 +1331,7 @@ async function buildTrackMediaEntries(
 
     await collect(track.audioKey, "audio", "bin");
     await collect(track.artKey, "artwork", "png");
+    await collect(track.artGifKey, "artwork", "gif");
     await collect(track.artVideoKey, "video", "mp4");
   }
 
@@ -1610,6 +1616,21 @@ export async function importPolyplaylist(file: File): Promise<ImportPolyplaylist
       importedMediaFiles += 1;
     }
 
+    const artGifEntry = findEntryByPrefixes(zipEntries, [
+      `${POLYPLAYLIST_ROOT}/media/${sourceTrackId}/artwork-gif.`,
+      `${POLYPLAYLIST_ROOT}/media/${legacyTrackId}/artwork-gif.`,
+      `media/${sourceTrackId}/artwork-gif.`,
+      `media/${legacyTrackId}/artwork-gif.`
+    ]);
+    if (artGifEntry) {
+      const blob = new Blob([uint8ToArrayBuffer(artGifEntry.data)], { type: getMimeFromPath(artGifEntry.path) });
+      const key = makeBlobKey();
+      await putBlob(key, blob, { type: "image" });
+      nextTrack.artGifKey = key;
+      nextTrack.artworkBytes = (nextTrack.artworkBytes ?? 0) + blob.size;
+      importedMediaFiles += 1;
+    }
+
     const artVideoEntry = findEntryByPrefixes(zipEntries, [
       `${POLYPLAYLIST_ROOT}/media/${sourceTrackId}/artwork-video.`,
       `${POLYPLAYLIST_ROOT}/media/${legacyTrackId}/artwork-video.`,
@@ -1669,6 +1690,7 @@ function sanitizeTrackForRestore(base: TrackRecord): TrackRecord {
     aura: clampAura(base.aura),
     audioKey: null,
     artKey: null,
+    artGifKey: null,
     artVideoKey: null,
     audioBytes: 0,
     artworkBytes: 0,
@@ -1742,6 +1764,17 @@ export async function importFullBackup(
         restoredMediaFiles += 1;
       }
 
+      const artGifEntry = findEntryByPrefix(zipEntries, `${BACKUP_ROOT}/media/${trackId}/artwork-gif.`);
+      if (artGifEntry) {
+        const blob = new Blob([uint8ToArrayBuffer(artGifEntry.data)], { type: getMimeFromPath(artGifEntry.path) });
+        const key = makeBlobKey();
+        await putBlob(key, blob, { type: "image" });
+        stagedBlobKeys.push(key);
+        nextTrack.artGifKey = key;
+        nextTrack.artworkBytes = (nextTrack.artworkBytes ?? 0) + blob.size;
+        restoredMediaFiles += 1;
+      }
+
       const artVideoEntry = findEntryByPrefix(zipEntries, `${BACKUP_ROOT}/media/${trackId}/artwork-video.`);
       if (artVideoEntry) {
         const blob = new Blob([uint8ToArrayBuffer(artVideoEntry.data)], { type: getMimeFromPath(artVideoEntry.path) });
@@ -1779,7 +1812,7 @@ export async function importFullBackup(
   const summary = applyImportedConfig(importedConfig);
 
   const restoredBlobKeys = new Set(
-    Object.values(restoredTracks).flatMap((track) => [track.audioKey, track.artKey, track.artVideoKey]).filter(Boolean) as string[]
+    Object.values(restoredTracks).flatMap((track) => [track.audioKey, track.artKey, track.artGifKey, track.artVideoKey]).filter(Boolean) as string[]
   );
   const obsoleteBlobKeys = existingBlobKeys.filter((key) => !restoredBlobKeys.has(key));
   await clearStoredBlobs(obsoleteBlobKeys);

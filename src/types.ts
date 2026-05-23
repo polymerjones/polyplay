@@ -11,6 +11,7 @@ export type Track = {
   waveformPeaks?: number[];
   audioUrl?: string;
   artUrl?: string;
+  artGifUrl?: string | null;
   artVideoUrl?: string;
   artGrad?: string;
   audioBlob?: Blob;
