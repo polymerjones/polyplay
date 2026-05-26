@@ -2119,13 +2119,16 @@ export default function App() {
         if (isIOS) {
           fireSuccessHaptic();
         } else if (!hadPendingAutoPlayAtImportComplete) {
-          try {
-            const audio = new Audio("/hyper-notif.wav");
-            audio.volume = 0.85;
-            void audio.play();
-          } catch {
-            // Ignore notification sound failures.
-          }
+          window.setTimeout(() => {
+            if (pendingAutoPlayRef.current) return;
+            try {
+              const audio = new Audio("/hyper-notif.wav");
+              audio.volume = 0.85;
+              void audio.play();
+            } catch {
+              // Ignore notification sound failures.
+            }
+          }, 300);
         }
         return;
       }
@@ -2916,6 +2919,7 @@ export default function App() {
                   nextPendingAutoPlayTrackId: targetTrackId,
                   ...getAudioDebugState(audio)
                 });
+                pendingAutoPlayRef.current = true;
                 pendingAutoPlayTrackIdRef.current = targetTrackId;
                 return;
               }
@@ -2944,6 +2948,7 @@ export default function App() {
               nextPendingAutoPlayTrackId: targetTrackId,
               ...getAudioDebugState(audio)
             });
+            pendingAutoPlayRef.current = true;
             pendingAutoPlayTrackIdRef.current = targetTrackId;
             return;
           }
@@ -3276,7 +3281,7 @@ export default function App() {
     };
 
     const schedulePendingAutoPlayRetry = (pendingTrackId: string) => {
-      if (!isIOS || pendingAutoPlayRetryTimeoutId !== null) return;
+      if (pendingAutoPlayRetryTimeoutId !== null) return;
       pendingAutoPlayRetryTimeoutId = window.setTimeout(() => {
         pendingAutoPlayRetryTimeoutId = null;
         if (pendingAutoPlayTrackIdRef.current !== pendingTrackId) return;
@@ -3443,7 +3448,7 @@ export default function App() {
           setIsPlayingDebug(true, `pending-autoplay-${reason}-resolved`, { audio, pendingTrackId });
         })
         .catch((error) => {
-          if (isIOS && pendingTrackId && currentTrackId === pendingTrackId) {
+          if (pendingTrackId && currentTrackId === pendingTrackId) {
             logAudioDebug("pendingAutoPlay:write", {
               reason: `retry-${reason}-ios-reschedule`,
               nextPendingAutoPlayTrackId: pendingTrackId,
