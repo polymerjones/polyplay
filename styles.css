@@ -6446,7 +6446,7 @@ body.nuke-flash::after {
     clamp(10px, 1.2vw, 16px)
     clamp(10px, 1.2vw, 16px);
   min-height: unset;
-  max-height: min(25vh, 220px);
+  max-height: none;
 }
 
 .topbar-tier {
@@ -6493,7 +6493,24 @@ body.nuke-flash::after {
 }
 
 .storage-led {
-  display: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  max-width: 100px;
+  min-width: 0;
+  min-height: 42px;
+  overflow: hidden;
+  padding: 4px 7px;
+  border: 1px solid rgba(154, 138, 211, 0.34);
+  border-radius: 13px;
+  background: linear-gradient(180deg, rgba(33, 31, 52, 0.72), rgba(14, 15, 25, 0.62));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 10px 20px rgba(2, 3, 9, 0.2);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .storage-led__bars {
@@ -7399,25 +7416,6 @@ html[data-theme="light"] .playlist-selector select {
     overflow: hidden;
   }
 
-  .storage-led {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    max-width: 100px;
-    min-width: 0;
-    min-height: 42px;
-    overflow: hidden;
-    padding: 4px 7px;
-    border: 1px solid rgba(154, 138, 211, 0.34);
-    border-radius: 13px;
-    background: linear-gradient(180deg, rgba(33, 31, 52, 0.72), rgba(14, 15, 25, 0.62));
-    box-shadow:
-      inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-      0 10px 20px rgba(2, 3, 9, 0.2);
-  }
-
   .storage-led__label {
     font-size: 10px;
     max-width: 100%;
@@ -7443,6 +7441,7 @@ html[data-theme="light"] .playlist-selector select {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   width: 100%;
+  align-content: start;
   padding: 12px 16px 16px;
   max-width: 980px;
   margin: 0 auto;
