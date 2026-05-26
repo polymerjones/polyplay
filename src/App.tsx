@@ -2102,6 +2102,7 @@ export default function App() {
       if (event.origin !== window.location.origin) return;
       const type = event.data?.type;
       if (type === "polyplay:import-complete") {
+        const hadPendingAutoPlayAtImportComplete = pendingAutoPlayRef.current;
         try {
           localStorage.setItem(HAS_IMPORTED_KEY, "true");
         } catch {
@@ -2117,7 +2118,7 @@ export default function App() {
 
         if (isIOS) {
           fireSuccessHaptic();
-        } else {
+        } else if (!hadPendingAutoPlayAtImportComplete) {
           try {
             const audio = new Audio("/hyper-notif.wav");
             audio.volume = 0.85;
@@ -2909,7 +2910,7 @@ export default function App() {
                 readyState: audio.readyState,
                 error: String(error)
               });
-              if (isIOS && currentTrackId === targetTrackId) {
+              if (currentTrackId === targetTrackId) {
                 logAudioDebug("pendingAutoPlay:write", {
                   reason: "deferred-ios-retry",
                   nextPendingAutoPlayTrackId: targetTrackId,
@@ -2937,16 +2938,16 @@ export default function App() {
             readyState: audio.readyState,
             error: String(error)
           });
-          if (!isIOS || !targetTrackId || currentTrackId !== targetTrackId) {
-            setIsPlayingDebug(false, "pending-autoplay-rejected", { audio, targetTrackId });
+          if (targetTrackId && currentTrackId === targetTrackId) {
+            logAudioDebug("pendingAutoPlay:write", {
+              reason: "ios-retry",
+              nextPendingAutoPlayTrackId: targetTrackId,
+              ...getAudioDebugState(audio)
+            });
+            pendingAutoPlayTrackIdRef.current = targetTrackId;
             return;
           }
-          logAudioDebug("pendingAutoPlay:write", {
-            reason: "ios-retry",
-            nextPendingAutoPlayTrackId: targetTrackId,
-            ...getAudioDebugState(audio)
-          });
-          pendingAutoPlayTrackIdRef.current = targetTrackId;
+          setIsPlayingDebug(false, "pending-autoplay-rejected", { audio, targetTrackId });
         });
     }
   }, [currentTrackId, currentAudioUrl, hasActiveRegionLoop, currentLoop.active, currentLoop.end, currentLoop.start, currentLoopMode, duration]);

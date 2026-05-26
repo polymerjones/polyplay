@@ -6477,6 +6477,13 @@ body.nuke-flash::after {
   transition: transform 150ms ease, filter 150ms ease, box-shadow 180ms ease;
 }
 
+.app-store-toolbar-badge,
+.app-store-toolbar-badge * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
 .app-store-toolbar-badge img {
   display: block;
   width: 100%;
@@ -7832,5 +7839,6 @@ body.theme-custom.theme-custom-amber .ytm-tile.is-active::after {
 
   .ytm-tile {
     aspect-ratio: 1 / 0.88;
+    min-height: 0;
   }
 }
