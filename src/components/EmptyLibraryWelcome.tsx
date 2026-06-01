@@ -31,7 +31,7 @@ export function EmptyLibraryWelcome({
       <button type="button" className="empty-library-card__close" aria-label="Close welcome" onClick={onClose}>
         ✕
       </button>
-      <h2 className="empty-library-card__title">Hey new person! Welcome to PolyPlay.</h2>
+      <h2 className="empty-library-card__title">Welcome to PolyPlay.</h2>
       <p className="empty-library-card__body">{bodyText}</p>
       {showPrimaryButton && (
         <div className="empty-library-card__actions">

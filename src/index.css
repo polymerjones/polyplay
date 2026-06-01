@@ -1178,6 +1178,7 @@ body.theme-dark .rowAuraGlow {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
+  width: 100%;
   justify-content: center;
 }
 
@@ -1203,7 +1204,9 @@ body.theme-dark .rowAuraGlow {
 }
 
 .empty-library-card__primary {
+  width: 100%;
   min-height: 44px;
+  text-align: left;
   border-radius: 14px;
   font-size: 13px;
   font-weight: 600;
@@ -1242,7 +1245,6 @@ body.theme-dark .rowAuraGlow {
   .empty-library-card--pre-tour .empty-library-card__actions,
   .empty-library-card--upload-track .empty-library-card__actions {
     margin-top: 8px;
-    width: auto;
   }
 
   .empty-library-card--pre-tour .empty-library-card__primary,

@@ -1,6 +1,6 @@
 {
   "name": "polyplay",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,10 +14,18 @@
     "push xcode": "npm run build && npm run ios:sync && npm run ios:open",
     "ios:update": "npm run build && npm run ios:sync",
     "ios:run": "npm run ios:update && npm run ios:open",
-    "ios:icon": "bash ./scripts/set-ios-icon.sh"
+    "ios:icon": "bash ./scripts/set-ios-icon.sh",
+    "android:copy": "npx cap copy android",
+    "android:sync": "npx cap sync android",
+    "android:open": "npx cap open android",
+    "android:update": "npm run build && npm run android:sync",
+    "android:debug": "npm run android:update && JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" ./android/gradlew -p android assembleDebug",
+    "android:bundle": "npm run android:update && JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" ./android/gradlew -p android bundleRelease"
   },
   "dependencies": {
-    "@capacitor/core": "^8.1.0",
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
     "@capacitor/haptics": "^8.0.2",
     "music-metadata-browser": "^2.5.11",
     "react": "^18.3.1",

@@ -1061,6 +1061,22 @@ export default function App() {
     setIsPlaying(next);
   };
 
+  const setIsPlayingIfAudioActuallyPlaying = (
+    audio: HTMLAudioElement | null,
+    label: string,
+    details?: Record<string, unknown>
+  ) => {
+    if (!audio || audio.paused || audio.ended) {
+      logAudioDebug("isPlaying:set-true-skipped", {
+        label,
+        ...getAudioDebugState(audio),
+        ...details
+      });
+      return;
+    }
+    setIsPlayingDebug(true, label, { audio, ...details });
+  };
+
   const beginAppSettleTask = () => {
     pendingAppSettleCountRef.current += 1;
     setPendingAppSettleCount((current) => current + 1);
@@ -2904,7 +2920,7 @@ export default function App() {
           void attemptPlay("pending-autoplay")
             .then(() => {
               logAudioDebug("play() resolved", { reason: "pending-autoplay", targetTrackId });
-              setIsPlayingDebug(true, "pending-autoplay-resolved-deferred", { audio, targetTrackId });
+              setIsPlayingIfAudioActuallyPlaying(audio, "pending-autoplay-resolved-deferred", { targetTrackId });
             })
             .catch((error) => {
               logAudioDebug("play() rejected", {
@@ -2933,7 +2949,7 @@ export default function App() {
       void attemptPlay("pending-autoplay")
         .then(() => {
           logAudioDebug("play() resolved", { reason: "pending-autoplay", targetTrackId });
-          setIsPlayingDebug(true, "pending-autoplay-resolved", { audio, targetTrackId });
+          setIsPlayingIfAudioActuallyPlaying(audio, "pending-autoplay-resolved", { targetTrackId });
         })
         .catch((error) => {
           logAudioDebug("play() rejected", {
@@ -3341,7 +3357,7 @@ export default function App() {
       applyDimMode(audio, dimMode);
       void Promise.resolve(audio.play())
         .then(() => {
-          setIsPlayingDebug(true, "plain-repeat-replay-resolved", { audio });
+          setIsPlayingIfAudioActuallyPlaying(audio, "plain-repeat-replay-resolved");
         })
         .catch(() => {
           audio.currentTime = restartAt;
@@ -3445,7 +3461,7 @@ export default function App() {
         .then(() => {
           clearPendingAutoPlayRetryTimeout();
           logAudioDebug("play() resolved", { reason: `pending-autoplay-${reason}`, pendingTrackId });
-          setIsPlayingDebug(true, `pending-autoplay-${reason}-resolved`, { audio, pendingTrackId });
+          setIsPlayingIfAudioActuallyPlaying(audio, `pending-autoplay-${reason}-resolved`, { pendingTrackId });
         })
         .catch((error) => {
           if (pendingTrackId && currentTrackId === pendingTrackId) {
@@ -3649,7 +3665,7 @@ export default function App() {
       logAudioDebug("play() called", { reason: "same-track-media-refresh", readyState: audio.readyState });
       await audio.play();
       logAudioDebug("play() resolved", { reason: "same-track-media-refresh" });
-      setIsPlayingDebug(true, "same-track-media-refresh-resolved", { audio, trackId });
+      setIsPlayingIfAudioActuallyPlaying(audio, "same-track-media-refresh-resolved", { trackId });
     } catch (error) {
       logAudioDebug("play() rejected", { reason: "same-track-media-refresh", error: String(error) });
       if (isIOS && currentTrackIdRef.current === trackId) {
@@ -3787,7 +3803,7 @@ export default function App() {
       logAudioDebug("play() called", { reason, readyState: audio.readyState });
       await audio.play();
       logAudioDebug("play() resolved", { reason });
-      setIsPlayingDebug(true, `resume-${reason}-resolved`, { audio });
+      setIsPlayingIfAudioActuallyPlaying(audio, `resume-${reason}-resolved`);
       return;
     } catch (error) {
       logAudioDebug("play() rejected", { reason, error: String(error) });
@@ -3865,7 +3881,7 @@ export default function App() {
       logAudioDebug("play() called", { reason: `${reason}-recovery`, readyState: audio.readyState });
       await audio.play();
       logAudioDebug("play() resolved", { reason: `${reason}-recovery` });
-      setIsPlayingDebug(true, `resume-${reason}-recovery-resolved`, { audio });
+      setIsPlayingIfAudioActuallyPlaying(audio, `resume-${reason}-recovery-resolved`);
     } catch (recoveryError) {
       logAudioDebug("play() rejected", { reason: `${reason}-recovery`, error: String(recoveryError) });
       setIsPlayingDebug(false, `resume-${reason}-recovery-rejected`, { audio });
@@ -5659,7 +5675,7 @@ export default function App() {
                 ? "Create your first PolyPlaylist to get started."
                 : welcomePhase === "upload-track"
                   ? "Tap Import, choose your audio file, then review the details and tap Import again."
-                  : "Take a quick tour to create your first PolyPlaylist, then use Import to add your own music."
+                  : "Create a new PolyPlaylist, then use Import to add your own audio files from your device."
             }
             primaryButtonClassName={
               shouldHighlightQuickTourStart || shouldHighlightWelcomeUpload ? "is-onboarding-target" : undefined

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PolyPlay</string>
+    <string name="title_activity_main">PolyPlay</string>
+    <string name="package_name">com.paulfisher.polyplay</string>
+    <string name="custom_url_scheme">com.paulfisher.polyplay</string>
+</resources>

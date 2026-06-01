@@ -3638,21 +3638,59 @@ body.mute-freeze .track-backdrop {
   background: rgba(255, 90, 90, 0.12);
 }
 
+html.modal-open,
+html.modal-open body {
+  overflow: hidden !important;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+}
+
 .gratitude-modal {
   position: fixed;
-  inset: 0;
+  top: env(safe-area-inset-top, 0px);
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 90;
   display: grid;
   place-items: center;
-  padding: max(14px, env(safe-area-inset-top, 0px)) 14px max(14px, env(safe-area-inset-bottom, 0px));
+  padding: 14px 14px max(14px, env(safe-area-inset-bottom, 0px));
   background: rgba(4, 7, 12, 0.52);
   backdrop-filter: blur(6px);
+  overflow: hidden;
+  touch-action: none;
+  transition: bottom 160ms ease;
+}
+
+.gratitude-modal::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.82);
+  opacity: 0;
+}
+
+.gratitude-modal.is-dismiss-flash::before {
+  animation: gratitude-dismiss-flash 150ms ease-out;
+}
+
+.gratitude-modal.is-writing-mode {
+  bottom: max(env(safe-area-inset-bottom, 0px), var(--gratitude-keyboard-offset, 0px));
+  place-items: stretch center;
+  padding-top: 10px;
+  overflow: hidden;
 }
 
 .gratitude-modal__card {
   position: relative;
-  width: min(620px, 100%);
-  min-height: min(72vh, 640px);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(460px, 100%);
+  min-height: 0;
   border-radius: 18px;
   border: 1px solid rgba(255, 210, 140, 0.28);
   background:
@@ -3664,6 +3702,26 @@ body.mute-freeze .track-backdrop {
     0 0 32px rgba(255, 191, 104, 0.14),
     0 20px 40px rgba(0, 0, 0, 0.42);
   padding: 14px;
+  overflow: hidden;
+  touch-action: none;
+  transition:
+    width 180ms ease,
+    min-height 180ms ease,
+    max-height 180ms ease,
+    border-radius 180ms ease;
+}
+
+.gratitude-modal.is-compact-mode .gratitude-modal__card {
+  gap: 12px;
+  min-height: auto;
+}
+
+.gratitude-modal.is-writing-mode .gratitude-modal__card {
+  width: min(700px, 100%);
+  height: 100%;
+  min-height: 0;
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - var(--gratitude-keyboard-offset, 0px) - 20px);
+  border-radius: 18px;
   overflow: hidden;
 }
 
@@ -3762,6 +3820,12 @@ body.mute-freeze .track-backdrop {
   100% { opacity: 0; transform: scale(1); }
 }
 
+@keyframes gratitude-dismiss-flash {
+  0% { opacity: 0; }
+  28% { opacity: 0.76; }
+  100% { opacity: 0; }
+}
+
 @keyframes gratitude-keypress-pulse {
   0% {
     border-color: rgba(255, 210, 140, 0.28);
@@ -3797,11 +3861,40 @@ body.mute-freeze .track-backdrop {
   text-shadow: 0 0 14px rgba(255, 196, 112, 0.14);
 }
 
+.gratitude-modal__tap-input {
+  position: relative;
+  width: 100%;
+  min-height: 50px;
+  border-radius: 12px;
+  border: 1px solid rgba(198, 154, 255, 0.52);
+  background: rgba(8, 12, 18, 0.72);
+  color: rgba(242, 234, 255, 0.62);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  text-align: left;
+  padding: 0 13px;
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.06),
+    0 0 18px rgba(153, 102, 240, 0.12);
+}
+
+.gratitude-modal__tap-input:focus {
+  outline: none;
+  border-color: rgba(198, 154, 255, 0.76);
+  box-shadow:
+    0 0 0 1px rgba(198, 154, 255, 0.48),
+    0 0 18px rgba(153, 102, 240, 0.24);
+}
+
 .gratitude-modal__textarea {
   margin-top: 12px;
   width: 100%;
+  flex: 1 1 auto;
+  min-height: 180px;
+  overflow: auto;
+  touch-action: auto;
   resize: vertical;
-  min-height: 190px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(8, 12, 18, 0.72);
@@ -3809,6 +3902,12 @@ body.mute-freeze .track-backdrop {
   font: inherit;
   line-height: 1.35;
   padding: 10px 12px;
+}
+
+.gratitude-modal.is-writing-mode .gratitude-modal__textarea {
+  flex: 1 1 0;
+  min-height: 80px;
+  resize: none;
 }
 
 .gratitude-modal__textarea:focus {
@@ -3826,6 +3925,19 @@ body.mute-freeze .track-backdrop {
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.gratitude-modal.is-compact-mode .gratitude-modal__footer {
+  margin-top: 0;
+  justify-content: flex-end;
+}
+
+.gratitude-modal__choices {
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .gratitude-modal__privacy {
@@ -5189,24 +5301,43 @@ body.mute-freeze .track-backdrop {
 }
 
 @media (max-width: 520px) {
+  .gratitude-modal {
+    top: env(safe-area-inset-top, 0px);
+    padding: 12px 12px max(12px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .gratitude-modal.is-writing-mode {
+    bottom: max(env(safe-area-inset-bottom, 0px), var(--gratitude-keyboard-offset, 0px));
+    padding-top: 8px;
+  }
+
+  .gratitude-modal.is-compact-mode .gratitude-modal__card {
+    width: min(100%, 390px);
+  }
+
+  .gratitude-modal.is-writing-mode .gratitude-modal__card {
+    width: 100%;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - var(--gratitude-keyboard-offset, 0px) - 16px);
+  }
+
+  .gratitude-modal__title {
+    font-size: clamp(18px, 5vw, 23px);
+    line-height: 1.18;
+  }
+
   .gratitude-modal__footer {
     display: grid;
     grid-template-columns: 1fr;
   }
 
+  .gratitude-modal__choices {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
   .gratitude-modal__continue {
     width: 100%;
-  }
-
-  .gratitude-modal.is-keyboard-active {
-    place-items: start center;
-    overflow-y: auto;
-  }
-
-  .gratitude-modal.is-keyboard-active .gratitude-modal__card {
-    min-height: auto;
-    max-height: calc(100dvh - 120px);
-    overflow-y: auto;
   }
 
   .gratitude-modal.is-keyboard-active .gratitude-modal__textarea {
@@ -7062,6 +7193,11 @@ html[data-theme="light"] .playlist-selector select {
   .empty-library-card__body {
     max-width: 40ch;
   }
+
+  .empty-library-card__actions,
+  .empty-library-card__primary {
+    width: 100%;
+  }
 }
 
 .playlist-create-card {
@@ -7378,7 +7514,7 @@ html[data-theme="light"] .playlist-selector select {
   }
 
   .topbar-tier--primary {
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
   .app-store-toolbar-badge--primary {
@@ -7410,7 +7546,7 @@ html[data-theme="light"] .playlist-selector select {
   }
 
   .topbar-tier--controls {
-    justify-content: start;
+    justify-content: flex-end;
     grid-template-columns: repeat(auto-fit, minmax(36px, max-content));
     max-width: 100%;
     overflow: hidden;
@@ -7423,8 +7559,8 @@ html[data-theme="light"] .playlist-selector select {
     text-overflow: ellipsis;
   }
 
-  @media (max-width: 360px) {
-    .storage-led__label {
+  @media (max-width: 400px) {
+    .storage-led {
       display: none;
     }
   }
