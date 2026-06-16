@@ -191,6 +191,14 @@ function getCapacitorBrowserPlugin(): CapacitorBrowserPlugin | null {
   return (capacitor.Plugins?.Browser ?? null) as CapacitorBrowserPlugin | null;
 }
 
+function isAndroidNativeApp(): boolean {
+  if (typeof window === "undefined") return false;
+  const capacitor = (window as Window & {
+    Capacitor?: { getPlatform?: () => string };
+  }).Capacitor;
+  return capacitor?.getPlatform?.() === "android";
+}
+
 function openExternalBrowserFallback(url: string) {
   const opened = window.open(url, "_blank");
   if (opened) {
@@ -4003,6 +4011,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
         {status || "Ready."}
       </p>
       <footer className="admin-settings-footer" aria-label="PolyPlay links">
+        {!isAndroidNativeApp() && (
         <a
           href={APP_STORE_URL}
           onClick={handleAdminLinkClick(APP_STORE_URL)}
@@ -4012,6 +4021,7 @@ const SETTINGS_HERO_SWIPE_CLOSE_MIN_DISTANCE_FOR_VELOCITY_PX = 72;
         >
           <img src={APP_STORE_BADGE_URL} alt="Download on the App Store" loading="lazy" />
         </a>
+        )}
         <div className="admin-settings-footer__socials" aria-label="PolyPlay social links">
           <a
             href={INSTAGRAM_URL}

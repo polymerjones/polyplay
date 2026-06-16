@@ -276,6 +276,14 @@ function getCapacitorBrowserPlugin(): CapacitorBrowserPlugin | null {
   return (capacitor.Plugins?.Browser ?? null) as CapacitorBrowserPlugin | null;
 }
 
+function isAndroidNativeApp(): boolean {
+  if (typeof window === "undefined") return false;
+  const capacitor = (window as Window & {
+    Capacitor?: { getPlatform?: () => string };
+  }).Capacitor;
+  return capacitor?.getPlatform?.() === "android";
+}
+
 function openExternalBrowserFallback(url: string) {
   const opened = window.open(url, "_blank");
   if (opened) {
@@ -588,6 +596,8 @@ export default function App() {
   const isIOS =
     typeof navigator !== "undefined" &&
     /iPad|iPhone|iPod/.test(navigator.userAgent);
+  // Android Google Play build hides iOS-only affordances (App Store badge, Poly Oracle orb).
+  const isAndroidApp = isAndroidNativeApp();
   const splashSkipLabel = isIOS ? "Double Tap to Skip" : "Double Click to Skip";
   const headerVersion = APP_VERSION;
   const [hasOnboarded, setHasOnboarded] = useState<boolean>(() => {
@@ -5389,6 +5399,7 @@ export default function App() {
             <span className="topbar-title__sub">{headerVersion}</span>
           </div>
           <div className="topbar-primary-actions">
+            {!isAndroidApp && (
             <a
               href={APP_STORE_URL}
               onClick={handleExternalLinkClick(APP_STORE_URL)}
@@ -5400,6 +5411,7 @@ export default function App() {
             >
               <img src={APP_STORE_BADGE_URL} alt="Download on the App Store" loading="lazy" />
             </a>
+            )}
               <button
                 type="button"
                 className="upload-link upload-link--icon nav-action-btn"
@@ -5516,7 +5528,7 @@ export default function App() {
                 </svg>
               </span>
             </button>
-            <PolyOracleOrb />
+            {!isAndroidApp && <PolyOracleOrb />}
             <button
               type="button"
               className={`layout-link nav-action-btn onboarding-action ${shouldShowLayoutToggleHint ? "has-onboarding-hint" : ""}`.trim()}
