@@ -263,6 +263,24 @@ class AmbientFxEngine {
     this.rafId = window.requestAnimationFrame(this.tick);
   }
 
+  // The frame loop sleeps once every particle has expired (see tick), so an idle
+  // screen schedules no frames and the canvas stops being recomposited. Anything
+  // that spawns particles must call wake().
+  private wake(): void {
+    if (!this.running || this.rafId !== null) return;
+    this.lastTs = 0;
+    this.rafId = window.requestAnimationFrame(this.tick);
+  }
+
+  private hasActiveContent(): boolean {
+    return (
+      this.gravityBubbles.length > 0 ||
+      this.popBubbles.length > 0 ||
+      this.splatters.length > 0 ||
+      this.sparks.length > 0
+    );
+  }
+
   stop(): void {
     this.running = false;
     if (this.rafId !== null) window.cancelAnimationFrame(this.rafId);
@@ -315,6 +333,11 @@ class AmbientFxEngine {
   }
 
   onTap(x: number, y: number, now = performance.now()): void {
+    this.handleTap(x, y, now);
+    this.wake();
+  }
+
+  private handleTap(x: number, y: number, now: number): void {
     this.tapStamps = this.tapStamps.filter((stamp) => now - stamp <= TAP_WINDOW_MS);
     this.tapStamps.push(now);
     const intensity = clamp(this.tapStamps.length / 8, 0, 1);
@@ -386,6 +409,7 @@ class AmbientFxEngine {
       const { x, y } = this.pickMericaAccentBurstPosition();
       this.spawnMericaFireworks(x, y, intensity);
       this.trimCaps();
+      this.wake();
     }, delayMs);
     this.mericaAccentTimeouts.push(timeoutId);
   }
@@ -763,6 +787,12 @@ class AmbientFxEngine {
       this.lastTs = ts;
       this.update(dtMs, performance.now());
       this.render();
+    }
+    // Content only empties inside update(), which is always followed by render(),
+    // so the canvas is already cleared when we go to sleep here.
+    if (!this.hasActiveContent()) {
+      this.rafId = null;
+      return;
     }
     this.rafId = window.requestAnimationFrame(this.tick);
   };

@@ -31,7 +31,7 @@ States: **A** = playing, screen on · **B** = playing, screen locked/backgrounde
 
 | # | Source | Mechanism | Gated by | A | B | C | D | Verdict |
 |---|---|---|---|---|---|---|---|---|
-| 1 | `BubbleLayer.tsx:84-104`, mounted `App.tsx:5298` with **`paused={false}` hardcoded** | rAF + **React `setBubbles` every 33ms** | only `bubblesEnabled` and reduced-motion | runs | runs if the WebView isn't suspended | **runs** | **runs** | 🔴 Top suspect. About 30 React renders/sec forever, even with zero bubbles on screen |
+| 1 | `BubbleLayer.tsx:84-104`, mounted `App.tsx:5298` with **`paused={false}` hardcoded** | rAF + **React `setBubbles` every 33ms** | only `bubblesEnabled` and reduced-motion | runs | runs if the WebView isn't suspended | **runs** | **runs** | ⚪ **Correction: not active.** `App.tsx:5118` hardcodes `bubblesEnabled = false`, so it never mounts. Latent issue only if bubbles are re-enabled |
 | 2 | `ambientFxEngine.ts:756-767` via `AmbientFxCanvas` | rAF every frame, throttled update/render | `fxAllowed = isMainPlayerView && !isNuking && fxEnabled && isPageVisible` (`App.tsx:5120`) | runs | stops ✅ | **runs** | **runs** | 🟠 Correctly stops when hidden, but never idles while visible and nothing is moving |
 | 3 | `FullscreenPlayer.tsx:280-349` | rAF with frame budget | `shouldAnimateGenerated` | runs when fullscreen | ? | check | n/a | 🟡 Check whether it gates on `isPlaying` |
 | 4 | Root re-render from `currentTime` | `timeupdate` → `setCurrentTime` | playing | runs | runs (JS stays alive with background audio) | – | – | 🟠 Structural. Only the progress UI should re-render |
@@ -42,7 +42,7 @@ States: **A** = playing, screen on · **B** = playing, screen locked/backgrounde
 | 9 | One-shot rAFs (`App.tsx:1863, 1949, 2398, 3630, 4855, 5232`) | layout measurement | events | – | – | – | – | ✅ Fine |
 | 10 | `setInterval` | only the vault-import close poll (`App.tsx:1651`) and admin nuke timers | modal open | – | – | – | – | ✅ Fine if cleared (verify) |
 
-**Battery likely comes down to #1 + #2 + #7 together on an idle visible screen,** with #4 adding cost during playback. That still needs confirming on a device.
+**Confirmed on device (§5a):** #2 was the cause of the idle/paused full-rate redraws. `render()` ran `clearRect` on the full-screen canvas about 30 times/sec even when empty, which kept the display compositing at 120 Hz. Fixed in v1.0.9 fix #1 (the engine sleeps when it has no particles). Paused: 7,110 → 2 surface swaps per 60 s.
 
 ---
 
@@ -59,8 +59,8 @@ States: **A** = playing, screen on · **B** = playing, screen locked/backgrounde
 ## 4. Ranked recommendations
 
 ### Quick wins (low risk, candidate for a v1.0.9)
-1. **BubbleLayer:** pass a real `paused` (`!isPageVisible || !isPlaying || !isMainPlayerView`), stop the loop when `bubbles.length === 0`, and restart it on spawn. *Biggest expected win.*
-2. **AmbientFxEngine:** sleep when there are no active particles and it isn't playing. Wake on play, tap, or theme change. Add `isPlaying` to the engine's gating.
+1. ~~BubbleLayer~~: already disabled in release (`bubblesEnabled = false`). Only fix it if bubbles come back.
+2. ✅ **AmbientFxEngine sleeps when there are no particles** and wakes on tap or Merica burst (done, fix #1). *This was the big one.*
 3. **Delete `ControlsVisualizer.tsx`** and the dead Web Audio gain teardown.
 4. **Pause infinite CSS animations** when the page is hidden (e.g. a `body.is-hidden *{animation-play-state:paused}` class toggled from the existing visibility state).
 5. **WaveformLoop:** skip redraws while `document.hidden`.
@@ -84,6 +84,28 @@ States: **A** = playing, screen on · **B** = playing, screen locked/backgrounde
 - **Android:** Android Studio Profiler → CPU + Energy. `chrome://inspect` → Performance.
 - Capture 60 seconds in each of the states **A, B, C, D**, with FX on and off. Record average CPU %, frames/sec of rAF, and React commits/sec (React DevTools profiler in a web build).
 - Pass criteria: in D, **zero rAF callbacks and zero React commits**. In C, the same unless the user is touching the screen. In B, no canvas or FX work.
+
+---
+
+## 5a. Baseline measurements (2026-11-07, before any fixes)
+
+Device: iPhone 14 Pro Max (ProMotion, 120 Hz), iOS 27.2. Build: `main` @ `be4443e` (Debug native shell, production web bundle). Wired, charging, brightness 55%, user's normal FX settings. Recorded with `xctrace` 27.2: Display instrument for 60 s per state, plus Activity Monitor for state B.
+
+| State | Screen redraws/sec (display surface swaps) | Notes |
+|---|---|---|
+| **D** idle (fresh launch, nothing played) | **median ~120** (the max), every second for 60 s | Never rests |
+| **C** paused | **median ~119**, every second for 60 s | Same as idle |
+| **A** playing, screen on | **median ~104** | Near the max. Should be about 1–10/s for a progress bar plus waveform |
+| **B** playing, screen locked | n/a (display off) | WebContent process **5.2% CPU avg (max 11.9%)**. App process 1.7%. System `audiomxd` 11.6% (normal for playback). **WebContent memory footprint 410 MB** |
+
+Takeaways:
+- On a still screen, the display runs at its full 120 Hz in states C and D. This is Apple's "cat's tail" case, and fixes §4 #1–#4 target it.
+- While locked, JS keeps running (about 5% CPU), which is the `timeupdate` → root re-render path (§2 #4) plus any loops not gated on visibility.
+- 410 MB in WebContent is large for a music player. Investigate what's held in memory (object URLs for blobs and artwork, decoded peaks).
+
+Pass criteria for v1.0.9: C and D show about 0–5 redraws/sec once the screen is still. A is well under 60/s. B WebContent CPU falls noticeably.
+
+Note: earlier attempts with Xcode 27.1 against iOS 27.2 truncated after 3–15 s. Recording with the Power Profiler instrument hangs while saving. Use Display or Activity Monitor only.
 
 ---
 
