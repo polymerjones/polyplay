@@ -20,7 +20,9 @@ export function BorderTrail({ variant, isVisible, isPlaying, dimMode }: Props) {
     : isDimmed
       ? "rgba(var(--aura-rgb, 188, 132, 255), 0.3)"
       : "rgba(var(--aura-rgb, 188, 132, 255), 1)";
-  const animationState = isPausedOrMuted ? "paused" : "running";
+  // Every row/tile mounts a trail, but only the current track's is visible. Hidden
+  // trails must stay paused: their SVG dash animations still repaint every frame.
+  const animationState = !isVisible || isPausedOrMuted ? "paused" : "running";
   const strokeWidth = variant === "row" ? 1.6 : 1.8;
   const fallbackRadius = variant === "row" ? 14 : 16;
   const [geometry, setGeometry] = useState(() => ({

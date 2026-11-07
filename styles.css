@@ -7633,13 +7633,21 @@ html[data-theme="light"] .playlist-selector select {
     radial-gradient(circle at 76% 74%, rgba(var(--aura-rgb, 188, 132, 255), 0.18), rgba(var(--aura-rgb, 188, 132, 255), 0) 46%);
 }
 
+/*
+ * Power: these animations repaint (SVG stroke, filter, box-shadow), so each animated
+ * frame costs CPU/GPU and keeps the display at its full refresh rate (120 Hz on
+ * ProMotion). steps() limits them to ~30 updates/sec, which looks the same for a
+ * thin, slow trail. Measured on device before this change: ~80-104 redraws/sec while playing.
+ */
 .track-border-trail.is-active {
   opacity: 1;
-  animation: border-trail-aura-strobe 2400ms ease-in-out infinite;
+  animation: border-trail-aura-strobe 2400ms steps(72, end) infinite;
+  animation-play-state: var(--border-trail-animation-state, running);
 }
 
 .track-border-trail.is-active::after {
-  animation: border-trail-aura-strobe-overlay 2400ms ease-in-out infinite;
+  animation: border-trail-aura-strobe-overlay 2400ms steps(72, end) infinite;
+  animation-play-state: var(--border-trail-animation-state, running);
 }
 
 .track-border-trail__svg {
@@ -7670,7 +7678,7 @@ html[data-theme="light"] .playlist-selector select {
   stroke-dasharray: 0.62 0.38;
   stroke-dashoffset: 0.018;
   opacity: 0.62;
-  animation: border-trail-dash var(--border-trail-duration, 1200ms) linear infinite;
+  animation: border-trail-dash var(--border-trail-duration, 1200ms) steps(45, end) infinite;
   animation-play-state: var(--border-trail-animation-state, running);
 }
 
@@ -7679,7 +7687,7 @@ html[data-theme="light"] .playlist-selector select {
   stroke-dasharray: 0.18 0.82;
   stroke-dashoffset: 0.01;
   opacity: 0.78;
-  animation: border-trail-dash var(--border-trail-duration, 1200ms) linear infinite;
+  animation: border-trail-dash var(--border-trail-duration, 1200ms) steps(45, end) infinite;
   animation-play-state: var(--border-trail-animation-state, running);
 }
 
