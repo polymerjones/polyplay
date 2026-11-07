@@ -7618,7 +7618,6 @@ html[data-theme="light"] .playlist-selector select {
   opacity: 0;
   transition: opacity 140ms ease;
   z-index: 3;
-  contain: paint;
 }
 
 .track-border-trail::after {
@@ -7634,20 +7633,52 @@ html[data-theme="light"] .playlist-selector select {
 }
 
 /*
- * Power: these animations repaint (SVG stroke, filter, box-shadow), so each animated
- * frame costs CPU/GPU and keeps the display at its full refresh rate (120 Hz on
- * ProMotion). steps() limits them to ~30 updates/sec, which looks the same for a
- * thin, slow trail. Measured on device before this change: ~80-104 redraws/sec while playing.
+ * Power: the current-track border used to animate a travelling SVG dash plus a
+ * filter/box-shadow strobe. Both repaint every frame, which kept the iPhone display
+ * at ~65-104 redraws/sec for as long as music played. It is now a still outline
+ * with a slow "breathing" glow that animates opacity only, so the GPU compositor
+ * handles it without repainting.
  */
 .track-border-trail.is-active {
   opacity: 1;
-  animation: border-trail-aura-strobe 2400ms steps(72, end) infinite;
+  box-shadow:
+    0 0 0 1px rgba(var(--aura-rgb, 188, 132, 255), 0.3),
+    0 0 10px 1px rgba(var(--aura-rgb, 188, 132, 255), 0.14);
+}
+
+.track-border-trail::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow:
+    0 0 0 1.5px rgba(var(--aura-rgb, 188, 132, 255), 0.85),
+    0 0 18px 4px rgba(var(--aura-rgb, 188, 132, 255), 0.5),
+    inset 0 0 14px 2px rgba(var(--aura-rgb, 188, 132, 255), 0.3);
+  will-change: opacity;
+}
+
+.track-border-trail.is-active::before {
+  animation: border-trail-breathe 3200ms ease-in-out infinite;
   animation-play-state: var(--border-trail-animation-state, running);
 }
 
 .track-border-trail.is-active::after {
-  animation: border-trail-aura-strobe-overlay 2400ms steps(72, end) infinite;
+  will-change: opacity;
+  animation: border-trail-aura-strobe-overlay 3200ms ease-in-out infinite;
   animation-play-state: var(--border-trail-animation-state, running);
+}
+
+@keyframes border-trail-breathe {
+  0%,
+  100% {
+    opacity: 0.08;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .track-border-trail__svg {
@@ -7673,48 +7704,9 @@ html[data-theme="light"] .playlist-selector select {
   opacity: 0.74;
 }
 
-.track-border-trail__path--tail {
-  stroke-width: calc(var(--border-trail-stroke-width, 1.8px) + 0.2px);
-  stroke-dasharray: 0.62 0.38;
-  stroke-dashoffset: 0.018;
-  opacity: 0.62;
-  animation: border-trail-dash var(--border-trail-duration, 1200ms) steps(45, end) infinite;
-  animation-play-state: var(--border-trail-animation-state, running);
-}
 
-.track-border-trail__path--head {
-  stroke-width: calc(var(--border-trail-stroke-width, 1.8px) + 0.22px);
-  stroke-dasharray: 0.18 0.82;
-  stroke-dashoffset: 0.01;
-  opacity: 0.78;
-  animation: border-trail-dash var(--border-trail-duration, 1200ms) steps(45, end) infinite;
-  animation-play-state: var(--border-trail-animation-state, running);
-}
 
-@keyframes border-trail-dash {
-  from {
-    stroke-dashoffset: 1;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
-}
 
-@keyframes border-trail-aura-strobe {
-  0%,
-  100% {
-    filter: brightness(1) saturate(1);
-    box-shadow:
-      0 0 0 1px rgba(var(--aura-rgb, 188, 132, 255), 0.2),
-      0 0 0 0 rgba(var(--aura-rgb, 188, 132, 255), 0.08);
-  }
-  45% {
-    filter: brightness(1.14) saturate(1.18);
-    box-shadow:
-      0 0 0 1px rgba(var(--aura-rgb, 188, 132, 255), 0.42),
-      0 0 16px 2px rgba(var(--aura-rgb, 188, 132, 255), 0.22);
-  }
-}
 
 @keyframes border-trail-aura-strobe-overlay {
   0%,
@@ -8012,4 +8004,27 @@ body.theme-custom.theme-custom-amber .ytm-tile.is-active::after {
     aspect-ratio: 1 / 0.88;
     min-height: 0;
   }
+}
+
+/*
+ * Power: decorative ambient animations settle after ~10 s without interaction; see
+ * src/lib/useAmbientSettle.ts. Any one of these moving keeps the iPhone display
+ * refreshing at 50-120 Hz. Pausing them is not enough: WebKit keeps refreshing at
+ * 60 Hz while a paused animation exists. So the animations are removed, and a short
+ * transition eases each element back to its resting style.
+ * Measured paused, default theme: ~120 redraws/sec running, 60 paused, 0 removed.
+ */
+body.ambient-settled::before,
+body.ambient-settled::after,
+body.ambient-settled .header-icon-btn--hero::before,
+body.ambient-settled .header-icon-btn--hero::after,
+body.ambient-settled .pp-oracle-orb,
+body.ambient-settled .pp-oracle-orb::before,
+body.ambient-settled .track-border-trail::before,
+body.ambient-settled .track-border-trail::after {
+  animation: none !important;
+  transition:
+    transform 1500ms ease-out,
+    opacity 1500ms ease-out,
+    filter 1500ms ease-out !important;
 }

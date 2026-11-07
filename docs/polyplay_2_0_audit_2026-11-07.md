@@ -42,7 +42,7 @@ States: **A** = playing, screen on · **B** = playing, screen locked/backgrounde
 | 9 | One-shot rAFs (`App.tsx:1863, 1949, 2398, 3630, 4855, 5232`) | layout measurement | events | – | – | – | – | ✅ Fine |
 | 10 | `setInterval` | only the vault-import close poll (`App.tsx:1651`) and admin nuke timers | modal open | – | – | – | – | ✅ Fine if cleared (verify) |
 
-**Confirmed on device (§5a):** #2 was the cause of the idle/paused full-rate redraws. `render()` ran `clearRect` on the full-screen canvas about 30 times/sec even when empty, which kept the display compositing at 120 Hz. Fixed in v1.0.9 fix #1 (the engine sleeps when it has no particles). Paused: 7,110 → 2 surface swaps per 60 s.
+**Confirmed on device (§5a):** #2 was the cause of the idle/paused full-rate redraws. `render()` ran `clearRect` on the full-screen canvas about 30 times/sec even when empty, which kept the display compositing at 120 Hz. Fixed in v1.0.9 fix #1 (the engine sleeps when it has no particles; confirmed on device, no rAF callbacks when idle). **Correction:** the "7,110 → 2 swaps" figure quoted for this fix came from a recording that lost its data. The display stayed at ~120/s until the always-on CSS animations were also handled (see §5b).
 
 ---
 
@@ -60,7 +60,7 @@ States: **A** = playing, screen on · **B** = playing, screen locked/backgrounde
 
 ### Quick wins (low risk, candidate for a v1.0.9)
 1. ~~BubbleLayer~~: already disabled in release (`bubblesEnabled = false`). Only fix it if bubbles come back.
-2. ✅ **AmbientFxEngine sleeps when there are no particles** and wakes on tap or Merica burst (done, fix #1). *This was the big one.*
+2. ✅ **AmbientFxEngine sleeps when there are no particles** and wakes on tap or Merica burst (done, fix #1). 
 3. **Delete `ControlsVisualizer.tsx`** and the dead Web Audio gain teardown.
 4. **Pause infinite CSS animations** when the page is hidden (e.g. a `body.is-hidden *{animation-play-state:paused}` class toggled from the existing visibility state).
 5. **WaveformLoop:** skip redraws while `document.hidden`.
@@ -106,6 +106,37 @@ Takeaways:
 Pass criteria for v1.0.9: C and D show about 0–5 redraws/sec once the screen is still. A is well under 60/s. B WebContent CPU falls noticeably.
 
 Note: earlier attempts with Xcode 27.1 against iOS 27.2 truncated after 3–15 s. Recording with the Power Profiler instrument hangs while saving. Use Display or Activity Monitor only.
+
+---
+
+## 5b. v1.0.9 results (2026-11-07)
+
+Each fix was measured on the same device and recording setup as §5a. "Redraws" means display surface swaps per second.
+
+| Fix | Commit | What it changed |
+|---|---|---|
+| 1. Ambient FX engine sleeps when empty | `0a5222f` | Full-screen canvas no longer cleared/redrawn ~30×/s with nothing on it |
+| 2. Hidden border trails paused | `b892335` | Every track row mounted a BorderTrail. All 15 animated their SVG dash while playing, but only one was visible (30 running → 2) |
+| 3. Border trail → still outline + breathing glow (opacity only); onboarding hint pulses stop after 4 cycles | this commit | Removed the per-frame SVG dash and filter/box-shadow strobe |
+| 4. **Ambient settle** (`src/lib/useAmbientSettle.ts`) | this commit | After 10 s without a touch, decorative animations (theme backgrounds on `body::before/::after`, header glows, oracle orb, track glow) are **removed** and ease to rest over 1.5 s. Touch, scroll, key, track change or play/pause brings them back |
+
+Key finding: **pausing a CSS animation is not enough in WebKit.** With all decorative animations *paused*, the display still refreshed at a flat 60/s. With them *removed*, it fell to 0. The page itself was fully idle in both cases (no running animations, no rAF, no DOM mutations, checked with a temporary on-device logger).
+
+| State (default theme) | Before (§5a) | After fixes 1–4 |
+|---|---|---|
+| Paused, untouched | ~120/s | **~0/s** (11 swaps in 60 s) |
+| Playing, untouched | ~104/s | not yet re-measured; expected ~5/s (progress bar + waveform; ~5/s measured with all CSS frozen) |
+| Home screen (system floor, for reference) | ~5/s | — |
+
+Other measured costs:
+- The Rasta theme background alone ≈ 60/s.
+- Header glows + orb ≈ 50/s.
+- A playing video artwork is real content and expected at ~24–30/s.
+
+Still to do:
+- Re-measure playing.
+- Measure locked-screen (state B) CPU against the 5.2% baseline.
+- Measure time-to-open and time-to-first-sound. The user reports sluggish launch and play start. Suspects: 410 MB WebContent footprint, the library loader scanning all localStorage keys, and the size of App.tsx.
 
 ---
 

@@ -70,6 +70,7 @@ import {
 } from "./lib/iosNowPlaying";
 import { fireAuraHaptic, fireHeavyHaptic, fireLightHaptic, fireSuccessHaptic } from "./lib/haptics";
 import { bindMediaSessionTransportActions, syncMediaSessionItem, syncMediaSessionPlaybackState } from "./lib/mediaSession";
+import { useAmbientSettle } from "./lib/useAmbientSettle";
 import { revokeAllMediaUrls } from "./lib/player/media";
 import {
   createPlaylistInLibrary,
@@ -2085,6 +2086,8 @@ export default function App() {
       document.body.classList.remove("is-ios");
     };
   }, [isIOS]);
+
+  useAmbientSettle(`${currentTrackId ?? ""}:${isPlaying ? "playing" : "paused"}`);
 
   useEffect(() => {
     const isImportOverlayOpen = overlayPage === "settings" && settingsPanelMode === "upload";

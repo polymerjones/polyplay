@@ -71,7 +71,6 @@ export function BorderTrail({ variant, isVisible, isPlaying, dimMode }: Props) {
         {
           "--border-trail-color": borderColor,
           "--border-trail-animation-state": animationState,
-          "--border-trail-duration": variant === "row" ? "1550ms" : "1450ms",
           "--border-trail-stroke-width": `${strokeWidth}px`
         } as CSSProperties
       }
@@ -79,26 +78,6 @@ export function BorderTrail({ variant, isVisible, isPlaying, dimMode }: Props) {
       <svg className="track-border-trail__svg" viewBox={viewBox} aria-hidden="true">
         <rect
           className="track-border-trail__path track-border-trail__path--base"
-          x={inset}
-          y={inset}
-          width={width}
-          height={height}
-          rx={radius}
-          ry={radius}
-          pathLength="1"
-        />
-        <rect
-          className="track-border-trail__path track-border-trail__path--tail"
-          x={inset}
-          y={inset}
-          width={width}
-          height={height}
-          rx={radius}
-          ry={radius}
-          pathLength="1"
-        />
-        <rect
-          className="track-border-trail__path track-border-trail__path--head"
           x={inset}
           y={inset}
           width={width}

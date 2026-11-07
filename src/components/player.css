@@ -113,7 +113,7 @@ html[data-theme="light"] .pc-dim-btn.is-mute {
 html[data-theme="light"] .pc-dim-btn.is-mute.has-onboarding-hint {
   animation:
     pc-light-mute-pulse 1.35s ease-in-out infinite,
-    pc-art-fullscreen-hint 2400ms ease-in-out infinite;
+    pc-art-fullscreen-hint 2400ms ease-in-out 4;
 }
 
 html[data-theme="light"] .pc-dim-btn.is-active:not(.is-mute) {
@@ -967,7 +967,8 @@ html[data-theme="light"] .mini-player-bar::before {
   box-shadow:
     0 0 0 1px rgba(244, 185, 101, 0.48),
     0 0 0 0 rgba(244, 185, 101, 0.22);
-  animation: pc-art-fullscreen-hint 2400ms ease-in-out infinite;
+  /* Onboarding hints pulse a few times, then rest, so they don't repaint forever. */
+  animation: pc-art-fullscreen-hint 2400ms ease-in-out 4;
 }
 
 .mini-player-bar__art.has-fullscreen-hint::after {
@@ -975,7 +976,7 @@ html[data-theme="light"] .mini-player-bar::before {
   background:
     radial-gradient(circle at 32% 24%, rgba(255, 214, 140, 0.36), rgba(255, 214, 140, 0) 36%),
     radial-gradient(circle at 72% 74%, rgba(238, 161, 72, 0.26), rgba(238, 161, 72, 0) 46%);
-  animation: pc-art-fullscreen-hint-overlay 2400ms ease-in-out infinite;
+  animation: pc-art-fullscreen-hint-overlay 2400ms ease-in-out 4;
 }
 
 .pc-btn.has-onboarding-hint,
@@ -985,7 +986,7 @@ html[data-theme="light"] .mini-player-bar::before {
   box-shadow:
     0 0 0 1px rgba(244, 185, 101, 0.48),
     0 0 0 0 rgba(244, 185, 101, 0.22);
-  animation: pc-art-fullscreen-hint 2400ms ease-in-out infinite;
+  animation: pc-art-fullscreen-hint 2400ms ease-in-out 4;
 }
 
 .pc-btn.has-onboarding-hint::after,
@@ -1000,7 +1001,7 @@ html[data-theme="light"] .mini-player-bar::before {
   background:
     radial-gradient(circle at 32% 24%, rgba(255, 214, 140, 0.36), rgba(255, 214, 140, 0) 36%),
     radial-gradient(circle at 72% 74%, rgba(238, 161, 72, 0.26), rgba(238, 161, 72, 0) 46%);
-  animation: pc-art-fullscreen-hint-overlay 2400ms ease-in-out infinite;
+  animation: pc-art-fullscreen-hint-overlay 2400ms ease-in-out 4;
 }
 
 @keyframes pc-art-fullscreen-hint {
